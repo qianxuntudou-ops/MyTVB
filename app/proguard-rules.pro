@@ -39,6 +39,9 @@
 # Model classes
 -keep class com.tutu.myblbl.model.** { *; }
 
+# SponsorBlock / 空降助手
+-keep class com.tutu.myblbl.feature.player.sponsor.** { *; }
+
 # Koin DI
 -keep class com.tutu.myblbl.di.** { *; }
 -keep class com.tutu.myblbl.repository.** { *; }
