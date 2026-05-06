@@ -79,7 +79,7 @@ val repositoryModule = module {
     single { SeriesRepository(get()) }
     single { VideoRepository(get(), get()) }
     single { UserRepository(get(), get(), get()) }
-    single { RecommendFeedRepository(get(), androidContext(), get()) }
+    single { RecommendFeedRepository(get(), androidContext()) }
     single { HotFeedRepository(get()) }
     single { HomeLaneFeedRepository(get()) }
 }

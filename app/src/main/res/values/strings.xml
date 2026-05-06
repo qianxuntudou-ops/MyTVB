@@ -81,7 +81,6 @@
     <string name="default_audio_track">默认音轨</string>
     <string name="default_play_speed">默认播放速度</string>
     <string name="default_start_page">默认启动页面</string>
-    <string name="feed_mode">推荐流模式</string>
     <string name="default_video_quality">默认画质</string>
     <string name="device_info">设备信息</string>
     <string name="dm_">%s条弹幕</string>

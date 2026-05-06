@@ -2,7 +2,6 @@ package com.tutu.myblbl.feature.home
 
 import android.content.Context
 import android.os.SystemClock
-import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.log.HomeVideoCardDebugLogger
 import com.tutu.myblbl.core.ui.image.ImageLoader
@@ -12,8 +11,7 @@ import com.tutu.myblbl.repository.cache.HomeCacheStore
 
 class RecommendFeedRepository(
     private val videoRepository: VideoRepository,
-    context: Context,
-    private val appSettings: AppSettingsDataStore
+    context: Context
 ) {
 
     private val appContext = context.applicationContext
@@ -24,21 +22,15 @@ class RecommendFeedRepository(
         private const val MAX_CACHED_RECOMMEND_ITEMS = 24
         private const val PRELOAD_PAGE_SIZE = 12
         private const val COVER_PREFETCH_COUNT = 8
-        private const val APP_FEED_PRELOAD_SIZE = 28
-        private const val APP_FEED_FIRST_PAGE_SIZE = 28
-        private const val APP_FEED_PAGE_SIZE = 30
-        const val KEY_FEED_MODE = "feed_mode"
     }
 
     @Volatile
     private var preloadedFirstPage: NetworkPage? = null
 
-    private var appFeedIdx = 0
-
     suspend fun preloadFirstPage() {
         val startMs = SystemClock.elapsedRealtime()
-        AppLog.i(TAG, "APP_STARTUP recommend preload start mode=${if (isAppFeedMode()) "app" else "web"}")
-        val preloadSize = if (isAppFeedMode()) APP_FEED_PRELOAD_SIZE else PRELOAD_PAGE_SIZE
+        AppLog.i(TAG, "APP_STARTUP recommend preload start")
+        val preloadSize = PRELOAD_PAGE_SIZE
         loadNetworkPage(page = 1, pageSize = preloadSize, freshIdx = 0)
             .getOrNull()?.let { page ->
                 AppLog.i(TAG, "APP_STARTUP recommend preload got ${page.items.size} items, hasMore=${page.hasMore}")
@@ -90,26 +82,12 @@ class RecommendFeedRepository(
         )
     }
 
-    private fun isAppFeedMode(): Boolean {
-        return appSettings.getCachedString(KEY_FEED_MODE) == "移动端"
-    }
-
     suspend fun loadNetworkPage(
         page: Int,
         pageSize: Int,
         freshIdx: Int
     ): Result<NetworkPage> = runCatching {
-        if (isAppFeedMode()) {
-            val appPageSize = if (page == 1) APP_FEED_FIRST_PAGE_SIZE else APP_FEED_PAGE_SIZE
-            try {
-                loadAppFeedPage(page, appPageSize, freshIdx)
-            } catch (e: Exception) {
-                AppLog.e(TAG, "recommend_app failed, fallback to web: ${e.message}")
-                loadWebFeedPage(page, pageSize, freshIdx)
-            }
-        } else {
-            loadWebFeedPage(page, pageSize, freshIdx)
-        }
+        loadWebFeedPage(page, pageSize, freshIdx)
     }
 
     private suspend fun loadWebFeedPage(
@@ -130,40 +108,6 @@ class RecommendFeedRepository(
         return NetworkPage(
             items = rawItems.filter { it.isSupportedHomeVideoCard },
             hasMore = rawItems.size >= pageSize
-        )
-    }
-
-    private suspend fun loadAppFeedPage(
-        page: Int,
-        pageSize: Int,
-        freshIdx: Int
-    ): NetworkPage {
-        if (page == 1) {
-            appFeedIdx = 0
-        }
-        val idx = appFeedIdx
-        val response = videoRepository.getAppRecommendList(idx, pageSize)
-        if (!response.isSuccess) {
-            error(response.errorMessage.ifBlank { response.message.ifBlank { "推荐加载失败" } })
-        }
-        val rawItems = response.data.orEmpty()
-        // 对齐参考项目: 只保留 goto=="av" 且有有效标识(aid>0 或 bvid 非空)的视频
-        val videoItems = rawItems.filter {
-            it.hasPlaybackIdentity && (it.aid > 0L || it.bvid.isNotBlank())
-        }
-        AppLog.i(TAG, "recommend_app(page=$page,idx=$idx) raw=${rawItems.size} video=${videoItems.size}")
-        HomeVideoCardDebugLogger.logRejectedCards(
-            source = "recommend_app(page=$page,idx=$idx)",
-            items = rawItems
-        )
-        // 对齐参考项目: 只要有视频数据就认为还有更多，idx 始终递增
-        val hasMore = videoItems.isNotEmpty()
-        if (hasMore) {
-            appFeedIdx++
-        }
-        return NetworkPage(
-            items = videoItems,
-            hasMore = hasMore
         )
     }
 

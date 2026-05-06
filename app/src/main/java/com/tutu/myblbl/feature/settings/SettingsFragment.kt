@@ -70,7 +70,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         private const val KEY_CACHE_LIMIT = "cache_limit"
         private const val KEY_DEFAULT_START_PAGE = "default_start_page"
-        private const val KEY_FEED_MODE = "feed_mode"
         private const val KEY_IMAGE_QUALITY = "image_quality"
         private const val KEY_THEME = "theme"
         private const val KEY_FULLSCREEN_APP = "fullscreen_app"
@@ -110,11 +109,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_IPV4_ONLY = "ipv4_only"
         private const val KEY_RESUME_PLAYBACK = "resume_playback"
         private const val KEY_SPONSOR_BLOCK_ENABLED = "sponsor_block_enabled"
-        private const val COMMON_POSITION_RISK_CONTROL = 8
+        private const val COMMON_POSITION_RISK_CONTROL = 7
         private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
         private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视", "动态")
-        private val FEED_MODE_OPTIONS = arrayOf("网页端", "移动端")
     }
 
     private lateinit var commonSettings: MutableList<SettingModel>
@@ -183,7 +181,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.clear_cache), "0.0kb"),
             SettingModel(getString(R.string.cache_limit), "1 GB"),
             SettingModel(getString(R.string.default_start_page), "热门"),
-            SettingModel(getString(R.string.feed_mode), "网页端"),
             SettingModel(getString(R.string.image_quality), "中尺寸"),
             SettingModel(getString(R.string.theme), "黑色"),
             SettingModel(getString(R.string.live_entry), "关"),
@@ -323,26 +320,25 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             0 -> clearCache()
             1 -> showCacheLimitDialog()
             2 -> showCommonChoiceDialog(position, KEY_DEFAULT_START_PAGE, HOME_START_PAGE_OPTIONS)
-            3 -> showCommonChoiceDialog(position, KEY_FEED_MODE, FEED_MODE_OPTIONS)
-            4 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
-            5 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
-            6 -> toggleSetting(commonSettings, 6, KEY_LIVE_ENTRY) { value ->
+            3 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
+            4 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
+            5 -> toggleSetting(commonSettings, 5, KEY_LIVE_ENTRY) { value ->
                 appSettings.putStringAsync(KEY_LIVE_ENTRY, value)
                 val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
                 activity?.applyLiveEntryVisibility()
             }
-            7 -> {
-                val setting = commonSettings.getOrNull(7) ?: return
+            6 -> {
+                val setting = commonSettings.getOrNull(6) ?: return
                 if (setting.info == "开") {
                     showMinorProtectionVerifyDialog {
-                        toggleSetting(commonSettings, 7, KEY_MINOR_PROTECTION) { value ->
+                        toggleSetting(commonSettings, 6, KEY_MINOR_PROTECTION) { value ->
                             appSettings.putStringAsync(KEY_MINOR_PROTECTION, value)
                             val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
                             activity?.applyCategoryEntryVisibility()
                         }
                     }
                 } else {
-                    toggleSetting(commonSettings, 7, KEY_MINOR_PROTECTION) { value ->
+                    toggleSetting(commonSettings, 6, KEY_MINOR_PROTECTION) { value ->
                         appSettings.putStringAsync(KEY_MINOR_PROTECTION, value)
                         val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
                         activity?.applyCategoryEntryVisibility()
@@ -776,15 +772,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         if (commonSettings[2].info !in HOME_START_PAGE_OPTIONS) {
             commonSettings[2].info = HOME_START_PAGE_OPTIONS.first()
         }
-        applySavedValue(commonSettings, 3, KEY_FEED_MODE)
-        if (commonSettings[3].info !in FEED_MODE_OPTIONS) {
-            commonSettings[3].info = FEED_MODE_OPTIONS.first()
-        }
-        applySavedValue(commonSettings, 4, KEY_IMAGE_QUALITY)
+        applySavedValue(commonSettings, 3, KEY_IMAGE_QUALITY)
         val theme = appSettings.getCachedInt("theme", 1)
-        commonSettings[5].info = theme.toThemeName()
-        applySavedValue(commonSettings, 6, KEY_LIVE_ENTRY)
-        applySavedValue(commonSettings, 7, KEY_MINOR_PROTECTION)
+        commonSettings[4].info = theme.toThemeName()
+        applySavedValue(commonSettings, 5, KEY_LIVE_ENTRY)
+        applySavedValue(commonSettings, 6, KEY_MINOR_PROTECTION)
         updateRiskControlStatus()
 
         applySavedValue(playerSettings, 0, KEY_DEFAULT_VIDEO_QUALITY)

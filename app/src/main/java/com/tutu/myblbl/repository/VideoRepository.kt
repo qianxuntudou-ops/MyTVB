@@ -1,6 +1,5 @@
 package com.tutu.myblbl.repository
 
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.common.ArchiveRelationModel
 import com.tutu.myblbl.model.common.CheckGiveCoinModel
@@ -33,20 +32,6 @@ class VideoRepository(
         pageSize: Int
     ): BaseResponse<RecommendListDataModel<VideoModel>> {
         return delegate.getRecommendList(freshIdx, pageSize).getOrThrow()
-    }
-
-    suspend fun getAppRecommendList(idx: Int, pageSize: Int): BaseResponse<List<VideoModel>> {
-        val response = delegate.getAppRecommendList(idx, pageSize).getOrThrow()
-        val rawItems = response.data?.items.orEmpty()
-        val videos = rawItems.mapNotNull { it.toVideoModel() }
-        val dropped = rawItems.size - videos.size
-        if (dropped > 0) {
-            AppLog.i(TAG, "getAppRecommendList: dropped=$dropped non-video items, raw=${rawItems.size} video=${videos.size}")
-        }
-        videos.take(3).forEachIndexed { i, v ->
-            AppLog.i(TAG, "getAppRecommendList video[$i]: aid=${v.aid} bvid=${v.bvid} cid=${v.cid} title=${v.title.take(20)}")
-        }
-        return BaseResponse(code = response.code, message = response.message, data = videos)
     }
 
     suspend fun getHotList(page: Int, pageSize: Int): BaseResponse<List<VideoModel>> {

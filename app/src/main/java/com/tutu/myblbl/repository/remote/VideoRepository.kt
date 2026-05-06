@@ -5,16 +5,13 @@ import com.tutu.myblbl.model.common.ArchiveRelationModel
 import com.tutu.myblbl.model.common.CheckGiveCoinModel
 import com.tutu.myblbl.model.common.GiveCoinResultModel
 import com.tutu.myblbl.model.common.TripleActionResultModel
-import com.tutu.myblbl.model.recommend.AppFeedDataModel
 import com.tutu.myblbl.model.recommend.RecommendListDataModel
 import com.tutu.myblbl.model.video.GetVideoByChannelWrapper
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.WbiGenerator
-import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.response.BaseBaseResponse
-import com.tutu.myblbl.network.security.AppSignUtils
 import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.ListDataModel
@@ -77,44 +74,6 @@ class VideoRepository(
                 freshIdx = freshIdx.coerceAtLeast(1),
                 ps = pageSize
             )
-        }
-
-    suspend fun getAppRecommendList(
-        idx: Int,
-        pageSize: Int
-    ): Result<BaseResponse<AppFeedDataModel>> =
-        runCatching {
-            val accessToken = NetworkManager.getTvAccessToken()
-            val mutableParams = mutableMapOf(
-                "appkey" to AppSignUtils.TV_APP_KEY,
-                "build" to "8430300",
-                "channel" to "master",
-                "platform" to "android",
-                "c_locale" to "zh_CN",
-                "s_locale" to "zh_CN",
-                "mobi_app" to "android",
-                "device" to "android",
-                "idx" to idx.toString(),
-                "pull" to if (idx == 0) "1" else "0",
-                "column" to "4",
-                "flush" to "5",
-                "autoplay_card" to "11",
-                "ps" to pageSize.toString(),
-                "ts" to AppSignUtils.getTimestamp().toString()
-            )
-            if (!accessToken.isNullOrBlank()) {
-                mutableParams["access_key"] = accessToken
-            }
-            val signedParams = AppSignUtils.signForAppApi(mutableParams)
-            AppLog.i(TAG, "getAppRecommendList: idx=$idx ps=$pageSize hasToken=${!accessToken.isNullOrBlank()}")
-            val response = apiService.getAppRecommendList(signedParams)
-            val rawItems = response.data?.items.orEmpty()
-            val gotoCounts = rawItems.groupingBy { it.goto }.eachCount()
-            AppLog.i(TAG, "getAppRecommendList: code=${response.code} msg=${response.message} items=${rawItems.size} gotoTypes=$gotoCounts")
-            rawItems.take(3).forEachIndexed { i, item ->
-                AppLog.i(TAG, "getAppRecommendList item[$i]: goto=${item.goto} param=${item.param} ctime=${item.ctime} pubdate=${item.pubdate} coverLeftText3=${item.coverLeftText3}")
-            }
-            response
         }
 
     suspend fun getHotList(page: Int, pageSize: Int): Result<BaseResponse<List<VideoModel>>> =
