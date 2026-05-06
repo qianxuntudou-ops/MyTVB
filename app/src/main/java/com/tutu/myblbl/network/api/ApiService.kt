@@ -609,13 +609,4 @@ interface ApiService {
     @FormUrlEncoded
     @POST("https://passport.bilibili.com/x/passport-tv-login/qrcode/poll")
     suspend fun pollTvQrCode(@FieldMap params: Map<String, String>): BaseResponse<TvPollData>
-
-    @FormUrlEncoded
-    @POST("https://passport.bilibili.com/x/passport-tv-login/h5/refresh")
-    suspend fun refreshTvToken(@FieldMap params: Map<String, String>): BaseResponse<TvPollData>
-
-    // ==================== APP 播放 API（access_key 签名） ====================
-
-    @GET("https://api.bilibili.com/x/player/playurl")
-    suspend fun getPlayUrlApp(@QueryMap params: Map<String, String>): Base2Response<PlayInfoModel>
 }

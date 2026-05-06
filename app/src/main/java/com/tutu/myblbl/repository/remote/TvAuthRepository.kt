@@ -13,6 +13,8 @@ class TvAuthRepository(
         val params = mutableMapOf(
             "appkey" to AppSignUtils.TV_APP_KEY,
             "local_id" to "0",
+            "platform" to "android",
+            "mobi_app" to "android_hd",
             "ts" to AppSignUtils.getTimestamp().toString()
         )
         val signed = AppSignUtils.signForTvLogin(params)
@@ -28,16 +30,5 @@ class TvAuthRepository(
         )
         val signed = AppSignUtils.signForTvLogin(params)
         return apiService.pollTvQrCode(signed)
-    }
-
-    suspend fun refreshTvToken(accessToken: String, refreshToken: String): BaseResponse<TvPollData> {
-        val params = mutableMapOf(
-            "access_key" to accessToken,
-            "refresh_token" to refreshToken,
-            "appkey" to AppSignUtils.TV_APP_KEY,
-            "ts" to AppSignUtils.getTimestamp().toString()
-        )
-        val signed = AppSignUtils.signForTvLogin(params)
-        return apiService.refreshTvToken(signed)
     }
 }

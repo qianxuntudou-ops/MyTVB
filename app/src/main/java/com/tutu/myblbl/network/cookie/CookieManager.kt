@@ -55,6 +55,11 @@ class CookieManager : CookieJar {
         persistCookieCache()
     }
 
+    fun saveCookieObjects(cookies: List<Cookie>) {
+        cookies.forEach(::upsertCookie)
+        persistCookieCache()
+    }
+
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
         removeExpiredCookies()
         val resultCookies = mutableListOf<Cookie>()

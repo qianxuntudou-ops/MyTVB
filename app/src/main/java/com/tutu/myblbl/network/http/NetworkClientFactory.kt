@@ -8,6 +8,7 @@ import com.tutu.myblbl.BuildConfig
 import com.tutu.myblbl.model.adapter.FlexibleIntAdapter
 import com.tutu.myblbl.model.adapter.FlexibleLongAdapter
 import com.tutu.myblbl.network.interceptor.DeflateInterceptor
+import com.tutu.myblbl.network.interceptor.TvLoginInterceptor
 import com.tutu.myblbl.network.interceptor.HeaderInterceptor
 import com.tutu.myblbl.network.cookie.CookieManager
 import java.io.File
@@ -31,7 +32,8 @@ object NetworkClientFactory {
         userAgentProvider: () -> String,
         acceptLanguageProvider: () -> String,
         cacheDir: File? = null,
-        ipv4OnlyEnabled: () -> Boolean = { true }
+        ipv4OnlyEnabled: () -> Boolean = { true },
+        deviceBuvidProvider: () -> String = { "" }
     ): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .cookieJar(cookieManager)
@@ -42,6 +44,7 @@ object NetworkClientFactory {
                     acceptLanguageProvider = acceptLanguageProvider
                 )
             )
+            .addInterceptor(TvLoginInterceptor(deviceBuvidProvider))
             .addInterceptor(DeflateInterceptor())
             .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
             .retryOnConnectionFailure(true)

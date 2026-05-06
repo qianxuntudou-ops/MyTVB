@@ -15,6 +15,7 @@ import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.cookie.CookieManager
+import okhttp3.Cookie
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.repository.remote.TvAuthRepository
 import com.tutu.myblbl.core.ui.base.BaseFragment
@@ -52,6 +53,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
         binding.progressBar.visibility = android.view.View.VISIBLE
 
         viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { NetworkManager.ensureWebFingerprintCookies() }
             try {
                 val response = tvAuthRepository.generateTvQrCode()
                 binding.progressBar.visibility = android.view.View.GONE
@@ -138,21 +140,29 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
                 response.code == 0 && response.data != null -> {
                     pollingJob?.cancel()
                     val pollData = response.data
-                    // 注入 cookie
+                    // 注入 cookie（直接构建 OkHttp Cookie 对象，保留 httpOnly/secure）
                     pollData.cookieInfo?.cookies?.let { cookies ->
-                        val domains = pollData.cookieInfo.domains ?: listOf(".bilibili.com")
-                        val cookieStrings = cookies.map { cookie ->
-                            val domain = domains.firstOrNull() ?: ".bilibili.com"
-                            "${cookie.name}=${cookie.value}; domain=$domain; path=/; secure"
+                        val nowMs = System.currentTimeMillis()
+                        val cookieObjects = cookies.mapNotNull { c ->
+                            val name = c.name.trim()
+                            val value = c.value.trim()
+                            if (name.isBlank() || value.isBlank()) return@mapNotNull null
+                            val expiresSec = c.expires
+                            val expiresAt = if (expiresSec > 0L) expiresSec * 1000L else (nowMs + 180L * 24 * 60 * 60 * 1000)
+                            Cookie.Builder()
+                                .name(name).value(value)
+                                .domain("bilibili.com").path("/")
+                                .expiresAt(expiresAt)
+                                .apply { if (c.secure == 1) secure() }
+                                .apply { if (c.httpOnly == 1) httpOnly() }
+                                .build()
                         }
-                        if (cookieStrings.isNotEmpty()) {
-                            cookieManager.saveCookies(cookieStrings)
+                        if (cookieObjects.isNotEmpty()) {
+                            cookieManager.saveCookieObjects(cookieObjects)
                         }
                     }
-                    // 保存 TV token
-                    pollData.tokenInfo?.let { info ->
-                        NetworkManager.saveTvTokens(info.accessToken, info.refreshToken)
-                    }
+                    // TV 登录不产生 web refresh_token，清空防止后续刷新用无效 token
+                    NetworkManager.clearWebRefreshToken()
                     Toast.makeText(requireContext(), "登录成功", Toast.LENGTH_SHORT).show()
                     onLoginSuccess()
                 }
@@ -176,6 +186,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
     private fun onLoginSuccess() {
         FileCacheManager.clearUserCaches()
         viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { NetworkManager.activateAfterLogin() }
             userRepository.refreshCurrentUserInfo()
             parentFragmentManager.popBackStackImmediate()
             appEventHub.dispatch(AppEventHub.Event.UserSessionChanged)

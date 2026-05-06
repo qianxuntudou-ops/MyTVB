@@ -12,19 +12,8 @@ data class TvQrCodeData(
 data class TvPollData(
     @SerializedName("mid")
     val mid: Long = 0,
-    @SerializedName("token_info")
-    val tokenInfo: TvTokenInfo? = null,
     @SerializedName("cookie_info")
     val cookieInfo: TvCookieInfo? = null
-)
-
-data class TvTokenInfo(
-    @SerializedName("access_token")
-    val accessToken: String = "",
-    @SerializedName("refresh_token")
-    val refreshToken: String = "",
-    @SerializedName("mid")
-    val mid: Long = 0
 )
 
 data class TvCookieInfo(
@@ -38,5 +27,11 @@ data class TvCookie(
     @SerializedName("name")
     val name: String = "",
     @SerializedName("value")
-    val value: String = ""
+    val value: String = "",
+    @SerializedName("expires")
+    val expires: Long = 0,
+    @SerializedName("http_only")
+    val httpOnly: Int = 0,
+    @SerializedName("secure")
+    val secure: Int = 0
 )

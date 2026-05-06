@@ -32,8 +32,6 @@ object NetworkManager {
     private const val KEY_CURRENT_UA = "currentUA"
     private const val AUTH_INVALID_CODE = -101
     private const val KEY_REFRESH_TOKEN = "bili_refresh_token"
-    private const val KEY_TV_ACCESS_TOKEN = "tv_access_token"
-    private const val KEY_TV_REFRESH_TOKEN = "tv_refresh_token"
     private const val KEY_HTTP_CACHE_SCHEMA = "http_cache_schema"
     /** 修改 HTTP 协商缓存结构时递增此值，可以在用户下次冷启动时一次性清空旧缓存。*/
     private const val HTTP_CACHE_SCHEMA = 1
@@ -61,7 +59,8 @@ object NetworkManager {
             userAgentProvider = { currentUserAgentValue },
             acceptLanguageProvider = { getAcceptLanguage() },
             cacheDir = appContext?.cacheDir,
-            ipv4OnlyEnabled = { settings?.getCachedString("ipv4_only") != "关" }
+            ipv4OnlyEnabled = { settings?.getCachedString("ipv4_only") != "关" },
+            deviceBuvidProvider = { internalCookieManager.getCookieValue("buvid3").orEmpty() }
         )
     }
 
@@ -201,16 +200,6 @@ object NetworkManager {
             hardClearAndNotify("recovery_no_sessdata")
             return false
         }
-        // 优先尝试 TV token refresh
-        val tvAccessToken = getTvAccessToken()
-        val tvRefreshToken = getTvRefreshToken()
-        if (!tvAccessToken.isNullOrBlank() && !tvRefreshToken.isNullOrBlank()) {
-            AppLog.i(TAG, "tryRecoverExpiredSession: trying TV token refresh first")
-            if (tryRecoverViaTvToken(tvAccessToken, tvRefreshToken)) {
-                return true
-            }
-            AppLog.w(TAG, "tryRecoverExpiredSession: TV token refresh failed, falling back to web refresh")
-        }
         if (getRefreshToken().isNullOrBlank()) {
             AppLog.w(TAG, "tryRecoverExpiredSession: no refresh_token, cannot recover")
             hardClearAndNotify("recovery_no_refresh_token")
@@ -256,7 +245,6 @@ object NetworkManager {
         if (clearCookies) {
             internalCookieManager.clearCookies()
             clearRefreshToken()
-            clearTvTokens()
         }
         securityCoordinator.resetRuntimeState()
     }
@@ -281,78 +269,16 @@ object NetworkManager {
         }
     }
 
-    // ==================== TV Token 管理 ====================
-
-    fun saveTvTokens(accessToken: String, refreshToken: String) {
-        runCatching {
-            val ds = KoinPlatform.getKoin().get<AppSettingsDataStore>()
-            ds.putStringAsync(KEY_TV_ACCESS_TOKEN, accessToken)
-            ds.putStringAsync(KEY_TV_REFRESH_TOKEN, refreshToken)
-        }.onFailure {
-            AppLog.e(TAG, "saveTvTokens failed: ${it.message}")
-        }
+    fun clearWebRefreshToken() {
+        clearRefreshToken()
     }
 
-    fun getTvAccessToken(): String? {
-        return runCatching {
-            KoinPlatform.getKoin().get<AppSettingsDataStore>().getCachedString(KEY_TV_ACCESS_TOKEN)
-        }.getOrNull()
+    suspend fun activateAfterLogin() {
+        securityCoordinator.activateAfterLogin()
     }
 
-    fun getTvRefreshToken(): String? {
-        return runCatching {
-            KoinPlatform.getKoin().get<AppSettingsDataStore>().getCachedString(KEY_TV_REFRESH_TOKEN)
-        }.getOrNull()
-    }
-
-    fun hasTvToken(): Boolean {
-        return !getTvAccessToken().isNullOrBlank()
-    }
-
-    private fun clearTvTokens() {
-        runCatching {
-            val ds = KoinPlatform.getKoin().get<AppSettingsDataStore>()
-            ds.putStringAsync(KEY_TV_ACCESS_TOKEN, null)
-            ds.putStringAsync(KEY_TV_REFRESH_TOKEN, null)
-        }
-    }
-
-    private suspend fun tryRecoverViaTvToken(accessToken: String, refreshToken: String): Boolean {
-        return try {
-            val tvAuthRepo = KoinPlatform.getKoin().get<com.tutu.myblbl.repository.remote.TvAuthRepository>()
-            val response = tvAuthRepo.refreshTvToken(accessToken, refreshToken)
-            if (response.code == 0 && response.data != null) {
-                val pollData = response.data
-                // 更新 TV token
-                pollData.tokenInfo?.let { info ->
-                    saveTvTokens(info.accessToken, info.refreshToken)
-                }
-                // 注入 cookie
-                pollData.cookieInfo?.cookies?.let { cookies ->
-                    val domains = pollData.cookieInfo.domains ?: listOf(".bilibili.com")
-                    val cookieStrings = cookies.map { cookie ->
-                        val domain = domains.firstOrNull() ?: ".bilibili.com"
-                        "${cookie.name}=${cookie.value}; domain=$domain; path=/; secure"
-                    }
-                    internalCookieManager.saveCookies(cookieStrings)
-                }
-                // 验证会话
-                val navResponse = apiService.getUserDetailInfo()
-                if (navResponse.isSuccess && navResponse.data != null) {
-                    sessionStore.updateUserSession(navResponse.data)
-                    AppLog.i(TAG, "tryRecoverViaTvToken: session recovered via TV token")
-                    notifySessionChanged()
-                    return true
-                }
-                AppLog.w(TAG, "tryRecoverViaTvToken: nav check failed after TV refresh, code=${navResponse.code}")
-            } else {
-                AppLog.w(TAG, "tryRecoverViaTvToken: TV token refresh failed, code=${response.code}")
-            }
-            false
-        } catch (e: Exception) {
-            AppLog.e(TAG, "tryRecoverViaTvToken: exception", e)
-            false
-        }
+    suspend fun ensureWebFingerprintCookies() {
+        securityCoordinator.ensureWebFingerprintCookies()
     }
 
     fun saveLoginRefreshToken(token: String) {

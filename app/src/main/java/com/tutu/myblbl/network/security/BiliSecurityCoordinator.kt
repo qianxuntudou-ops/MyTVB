@@ -97,6 +97,11 @@ class BiliSecurityCoordinator(
         }
     }
 
+    suspend fun activateAfterLogin() {
+        runCatching { ensureWebFingerprintCookies() }
+        runCatching { ensureBuvidActiveOncePerDay() }
+    }
+
     suspend fun prewarmWebSession(forceUaRefresh: Boolean = false): Boolean {
         return prewarmMutex.withLock {
             val now = System.currentTimeMillis()
@@ -255,7 +260,7 @@ class BiliSecurityCoordinator(
         ensureHealthyForPlay()
     }
 
-    private suspend fun ensureWebFingerprintCookies() {
+    suspend fun ensureWebFingerprintCookies() {
         withContext(Dispatchers.IO) {
             val hasBuvid3 = !cookieManager.getCookieValue("buvid3").isNullOrBlank()
             val hasBNut = !cookieManager.getCookieValue("b_nut").isNullOrBlank()

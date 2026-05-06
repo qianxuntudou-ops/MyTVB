@@ -7,7 +7,7 @@ import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.NetworkManager
-import com.tutu.myblbl.network.security.AppSignUtils
+
 import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.AuthContext
 import com.tutu.myblbl.network.session.NetworkSessionGateway
@@ -124,18 +124,9 @@ class VideoPlayerPlayInfoGateway(
             return (tryLookResult ?: primaryResult)?.copy(vVoucher = extractedVVoucher)
         }
 
-        // 移动端推荐视频: bvid 为空时 web API 无法工作，直接用 APP API + avid + access_key
+        // 移动端推荐视频: bvid 为空时 web API 无法工作，尝试用 avid 换 bvid
         if (resolvedBvid == null && (aid ?: 0L) > 0L) {
-            val appResult = requestAppPlayInfo(
-                aid = aid,
-                bvid = null,
-                cid = cid,
-                qualityId = qualityId
-            )
-            if (appResult != null && hasPlayableMedia(appResult.data)) {
-                AppLog.i(logTag, "requestPlayInfo: APP API fallback success with avid=$aid cid=$cid")
-                return appResult
-            }
+            AppLog.w(logTag, "requestPlayInfo: bvid is empty, avid=$aid cannot be used without access_key, returning primary result")
         }
 
         return primaryResult
@@ -697,28 +688,7 @@ class VideoPlayerPlayInfoGateway(
         if (lastResponse != null) {
         }
 
-        // Web PGC API 画质不足时，尝试 APP API（access_key 签名）
-        val webResult = lastResponse?.toPlayInfoResult()
-        if (webResult != null) {
-            val maxQn = webResult.data?.dash?.video?.maxOfOrNull { it.id } ?: 0
-            if (maxQn <= 32) {
-                AppLog.i(logTag, "requestPgcPlayInfo web API max qn=$maxQn, trying APP API fallback")
-                val appResult = requestAppPlayInfo(
-                    bvid = bvid,
-                    cid = cid,
-                    qualityId = qualityId
-                )
-                if (appResult != null && hasPlayableMedia(appResult.data)) {
-                    val appMaxQn = appResult.data?.dash?.video?.maxOfOrNull { it.id } ?: 0
-                    if (appMaxQn > maxQn) {
-                        AppLog.i(logTag, "requestPgcPlayInfo APP API better: qn=$appMaxQn > $maxQn")
-                        return appResult
-                    }
-                }
-            }
-        }
-
-        return webResult
+        return lastResponse?.toPlayInfoResult()
     }
 
     private fun buildPgcPlayParams(
@@ -817,88 +787,5 @@ class VideoPlayerPlayInfoGateway(
         val md = java.security.MessageDigest.getInstance("MD5")
         val digest = md.digest(raw.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
-    }
-
-    private suspend fun requestAppPlayInfo(
-        aid: Long? = null,
-        bvid: String?,
-        cid: Long,
-        qualityId: Int,
-        allowRetry: Boolean = true
-    ): PlayInfoResult? {
-        val accessToken = NetworkManager.getTvAccessToken()
-        if (accessToken.isNullOrBlank()) return null
-        val hasBvid = !bvid.isNullOrBlank()
-        val hasAid = (aid ?: 0L) > 0L
-        if (!hasBvid && !hasAid) return null
-
-        val params = mutableMapOf(
-            "cid" to cid.toString(),
-            "qn" to qualityId.toString(),
-            "fnval" to "4048",
-            "fnver" to "0",
-            "fourk" to "1",
-            "access_key" to accessToken,
-            "appkey" to AppSignUtils.TV_APP_KEY,
-            "ts" to AppSignUtils.getTimestamp().toString(),
-            "platform" to "android",
-            "mobi_app" to "android_tv_yst",
-            "device" to "android"
-        )
-        if (hasBvid) {
-            params["bvid"] = bvid!!
-        } else {
-            params["avid"] = aid.toString()
-        }
-        val signedParams = AppSignUtils.signForTvLogin(params)
-
-        val response = runCatching {
-            noCookieApiService.getPlayUrlApp(signedParams)
-        }.onFailure { throwable ->
-            AppLog.e(logTag, "requestAppPlayInfo exception: ${throwable.message}", throwable)
-        }.getOrNull()
-
-        if (response != null) {
-            // -101 表示 access_key 过期，尝试刷新 token 后重试
-            if (response.code == -101 && allowRetry) {
-                AppLog.i(logTag, "requestAppPlayInfo access_key invalid (-101), trying refresh")
-                runCatching {
-                    val tvRefreshToken = NetworkManager.getTvRefreshToken()
-                    if (!tvRefreshToken.isNullOrBlank()) {
-                        val tvAuthRepo = org.koin.mp.KoinPlatform.getKoin()
-                            .get<com.tutu.myblbl.repository.remote.TvAuthRepository>()
-                        val refreshResp = tvAuthRepo.refreshTvToken(accessToken, tvRefreshToken)
-                        if (refreshResp.code == 0 && refreshResp.data != null) {
-                            refreshResp.data.tokenInfo?.let { info ->
-                                NetworkManager.saveTvTokens(info.accessToken, info.refreshToken)
-                            }
-                            refreshResp.data.cookieInfo?.cookies?.let { cookies ->
-                                val domains = refreshResp.data.cookieInfo.domains ?: listOf(".bilibili.com")
-                                val cookieStrings = cookies.map { cookie ->
-                                    val domain = domains.firstOrNull() ?: ".bilibili.com"
-                                    "${cookie.name}=${cookie.value}; domain=$domain; path=/; secure"
-                                }
-                                if (cookieStrings.isNotEmpty()) {
-                                    cookieManager.saveCookies(cookieStrings)
-                                }
-                            }
-                            return requestAppPlayInfo(aid = aid, bvid = bvid, cid = cid, qualityId = qualityId, allowRetry = false)
-                        }
-                    }
-                }.onFailure { e ->
-                    AppLog.e(logTag, "requestAppPlayInfo token refresh failed: ${e.message}")
-                }
-            }
-
-            val dashIds = response.result?.dash?.video?.map { it.id }?.distinct()?.sortedDescending()
-            AppLog.i(logTag, "requestAppPlayInfo: code=${response.code}, dashIds=$dashIds")
-
-            return PlayInfoResult(
-                code = response.code,
-                message = response.message,
-                data = response.result
-            )
-        }
-        return null
     }
 }
