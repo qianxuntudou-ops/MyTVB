@@ -282,7 +282,14 @@ open class SimpleRenderer : DanmakuRenderer {
   }
 
   private fun resolveStandardStrokeColor(textColor: Int): Int {
-    return withAlpha(Color.BLACK, 230)
+    val luminance = (0.2126f * Color.red(textColor) +
+      0.7152f * Color.green(textColor) +
+      0.0722f * Color.blue(textColor)) / 255f
+    return if (luminance > 0.5f) {
+      withAlpha(Color.BLACK, 230)
+    } else {
+      withAlpha(Color.WHITE, 210)
+    }
   }
 
   private fun lightenColor(color: Int, amount: Float): Int {
