@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.core.model.id.Cid
+import com.tutu.myblbl.feature.player.settings.AfterPlayMode
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
 import java.util.ArrayDeque
@@ -127,20 +128,53 @@ class PlayerSessionCoordinator {
     }
 
     fun buildContinuationPlan(
-        continuePlaybackAfterFinish: Boolean,
+        afterPlayMode: AfterPlayMode,
         exitPlayerWhenPlaybackFinished: Boolean,
         hasNextEpisode: Boolean,
         nextEpisode: VideoPlayerViewModel.PlayableEpisode?,
         playNextEpisode: () -> Unit,
         playVideo: (VideoModel) -> Unit
     ): ContinuationPlan {
-        if (!continuePlaybackAfterFinish) {
+        if (afterPlayMode == AfterPlayMode.NOTHING) {
             return if (exitPlayerWhenPlaybackFinished) {
                 ContinuationPlan.ExitPlayer
             } else {
                 ContinuationPlan.ShowController
             }
         }
+        if (afterPlayMode == AfterPlayMode.RECOMMEND) {
+            val related = relatedVideos.firstOrNull()
+            if (related != null) {
+                return ContinuationPlan.PlayVideo(
+                    title = related.title,
+                    coverUrl = related.coverUrl,
+                    preloadTarget = related.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
+                    perform = { playVideo(related) }
+                )
+            }
+            return if (exitPlayerWhenPlaybackFinished) {
+                ContinuationPlan.ExitPlayer
+            } else {
+                ContinuationPlan.ShowController
+            }
+        }
+        if (afterPlayMode == AfterPlayMode.PLAY_QUEUE) {
+            val queuedVideo = launchQueue.pollFirst()
+            if (queuedVideo != null) {
+                return ContinuationPlan.PlayVideo(
+                    title = queuedVideo.title,
+                    coverUrl = queuedVideo.coverUrl,
+                    preloadTarget = queuedVideo.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
+                    perform = { playVideo(queuedVideo) }
+                )
+            }
+            return if (exitPlayerWhenPlaybackFinished) {
+                ContinuationPlan.ExitPlayer
+            } else {
+                ContinuationPlan.ShowController
+            }
+        }
+        // NEXT_EPISODE: 优先播合集下一集，然后播队列，最后播推荐
         if (hasNextEpisode && nextEpisode != null) {
             return ContinuationPlan.PlayNextEpisode(
                 title = nextEpisode.title,

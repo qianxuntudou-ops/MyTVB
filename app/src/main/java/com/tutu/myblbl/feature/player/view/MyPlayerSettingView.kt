@@ -16,6 +16,7 @@ import android.widget.ImageView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.feature.player.settings.AfterPlayMode
 import com.tutu.myblbl.feature.player.LiveQualityInfo
 import com.tutu.myblbl.model.dm.DmScreenArea
 import com.tutu.myblbl.model.subtitle.SubtitleInfoModel
@@ -64,6 +65,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val ITEM_MAIN_MENU = 0
         internal const val ITEM_VIDEO_QUALITY = 1
         internal const val ITEM_PLAYBACK_SPEED = 2
+        internal const val ITEM_AFTER_PLAY = 10
         internal const val ITEM_SUBTITLE = 3
         internal const val ITEM_VIDEO_CODEC = 4
         internal const val ITEM_AUDIO_QUALITY = 5
@@ -316,6 +318,13 @@ class MyPlayerSettingView @JvmOverloads constructor(
         refreshCurrentMenu()
     }
 
+    fun setAfterPlayMode(mode: AfterPlayMode) {
+        updateState { it.copy(afterPlayMode = mode) }
+        refreshCurrentMenu()
+    }
+
+    fun getAfterPlayMode(): AfterPlayMode = panelState.afterPlayMode
+
     fun showSubtitleMenu() {
         if (!isShowing()) {
             showHide(true)
@@ -425,6 +434,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         when (itemId) {
             ITEM_VIDEO_QUALITY -> showVideoQualityMenu()
             ITEM_PLAYBACK_SPEED -> showPlaybackSpeedMenu()
+            ITEM_AFTER_PLAY -> showAfterPlayMenu()
             ITEM_SUBTITLE -> showSubtitles()
             ITEM_VIDEO_CODEC -> showVideoCodecMenu()
             ITEM_AUDIO_QUALITY -> showAudioQualityMenu()
@@ -474,6 +484,14 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 val selected = panelState.videoCodecs[itemId]
                 updateState { it.copy(currentVideoCodec = selected) }
                 onPlayerSettingChange?.onVideoCodecChange(selected)
+                goBackToMainMenu()
+            }
+
+            adapter.currentMenuKey == ITEM_AFTER_PLAY -> {
+                val options = menuBuilder.AFTER_PLAY_OPTIONS
+                val selected = options.getOrNull(itemId)?.first ?: return
+                updateState { it.copy(afterPlayMode = selected) }
+                onPlayerSettingChange?.onAfterPlayModeChange(selected)
                 goBackToMainMenu()
             }
 
@@ -621,6 +639,10 @@ class MyPlayerSettingView @JvmOverloads constructor(
         showSubMenu(ITEM_AUDIO_QUALITY, menuBuilder.buildAudioQualityMenu(panelState))
     }
 
+    private fun showAfterPlayMenu() {
+        showSubMenu(ITEM_AFTER_PLAY, menuBuilder.buildAfterPlayMenu(panelState))
+    }
+
     private fun showScreenRatioMenu() {
         showSubMenu(ITEM_ASPECT_RATIO, menuBuilder.buildScreenRatioMenu(panelState))
     }
@@ -698,6 +720,11 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 ITEM_VIDEO_CODEC -> showSubMenu(
                     ITEM_VIDEO_CODEC,
                     menuBuilder.buildVideoCodecMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_AFTER_PLAY -> showSubMenu(
+                    ITEM_AFTER_PLAY,
+                    menuBuilder.buildAfterPlayMenu(panelState),
                     animateTransition = false
                 )
                 ITEM_AUDIO_QUALITY -> showSubMenu(

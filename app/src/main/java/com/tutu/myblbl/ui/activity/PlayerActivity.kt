@@ -1503,7 +1503,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun handlePlaybackEnded() {
         when (
             val plan = sessionCoordinator.buildContinuationPlan(
-                continuePlaybackAfterFinish = playerSettings.continuePlaybackAfterFinish,
+                afterPlayMode = playerView.getAfterPlayMode(),
                 exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
                 hasNextEpisode = viewModel.hasNextEpisode(),
                 nextEpisode = viewModel.getNextEpisode(),
@@ -1548,6 +1548,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         playerView.setPersistentBottomProgressEnabled(settings.showBottomProgressBar)
         playerView.showHideFfRe(settings.showRewindFastForward)
         textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, settings.subtitleTextSizePx.toFloat())
+        playerView.setAfterPlayMode(settings.afterPlayMode)
         renderDebugState()
         updateEpisodeNavigationVisibility()
         updateDanmakuSwitchVisibility()

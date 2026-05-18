@@ -2,6 +2,7 @@ package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
 import com.tutu.myblbl.R
+import com.tutu.myblbl.feature.player.settings.AfterPlayMode
 import com.tutu.myblbl.feature.player.LiveQualityInfo
 import com.tutu.myblbl.model.dm.DmScreenArea
 import com.tutu.myblbl.model.subtitle.SubtitleInfoModel
@@ -38,6 +39,7 @@ internal class MyPlayerSettingMenuBuilder(
         val dmMergeDuplicate: Boolean = true,
         val dmSmartShield: Boolean = true,
         val screenMirrorEnabled: Boolean = false,
+        val afterPlayMode: AfterPlayMode = AfterPlayMode.NEXT_EPISODE,
         val liveQualities: List<LiveQualityInfo> = emptyList(),
         val currentLiveQualityQn: Int? = null
     )
@@ -65,6 +67,12 @@ internal class MyPlayerSettingMenuBuilder(
                 iconRes = R.drawable.exo_ic_speed
             ),
             PlayerSettingRow.Item(
+                id = MyPlayerSettingView.ITEM_AFTER_PLAY,
+                title = "播放完成后",
+                value = afterPlayModeLabel(state.afterPlayMode),
+                iconRes = R.drawable.ic_after_play
+            ),
+            PlayerSettingRow.Item(
                 id = MyPlayerSettingView.ITEM_SUBTITLE,
                 title = context.getString(R.string.subtitle),
                 value = subtitleDisplayValue(state.subtitles, state.currentSubtitlePosition),
@@ -75,12 +83,6 @@ internal class MyPlayerSettingMenuBuilder(
                 title = context.getString(R.string.video_codec),
                 value = state.currentVideoCodec?.displayName ?: "HEVC",
                 iconRes = R.drawable.ic_setting
-            ),
-            PlayerSettingRow.Item(
-                id = MyPlayerSettingView.ITEM_AUDIO_QUALITY,
-                title = context.getString(R.string.audioTrack),
-                value = state.currentAudioQuality?.name ?: AudioQuality.AUDIO_192K.name,
-                iconRes = R.drawable.exo_ic_audiotrack
             ),
             PlayerSettingRow.Item(
                 id = MyPlayerSettingView.ITEM_ASPECT_RATIO,
@@ -99,6 +101,12 @@ internal class MyPlayerSettingMenuBuilder(
                 title = context.getString(R.string.dm_setting),
                 value = "",
                 iconRes = if (state.dmEnabled) R.drawable.ic_dm_enable else R.drawable.ic_dm_disable
+            ),
+            PlayerSettingRow.Item(
+                id = MyPlayerSettingView.ITEM_AUDIO_QUALITY,
+                title = context.getString(R.string.audioTrack),
+                value = state.currentAudioQuality?.name ?: AudioQuality.AUDIO_192K.name,
+                iconRes = R.drawable.exo_ic_audiotrack
             )
         )
     }
@@ -377,4 +385,31 @@ internal class MyPlayerSettingMenuBuilder(
     }
 
     private fun Boolean.toOpenCloseLabel(): String = if (this) "开" else "关"
+
+    internal val AFTER_PLAY_OPTIONS = listOf(
+        AfterPlayMode.NOTHING to "什么都不做",
+        AfterPlayMode.RECOMMEND to "播推荐视频",
+        AfterPlayMode.PLAY_QUEUE to "播列表中的下一个",
+        AfterPlayMode.NEXT_EPISODE to "播放合集中的下一个"
+    )
+
+    fun buildAfterPlayMenu(state: PanelState): List<PlayerSettingRow> {
+        val rows = mutableListOf<PlayerSettingRow>(
+            PlayerSettingRow.Header(title = "播放完成后")
+        )
+        val selectedIndex = AFTER_PLAY_OPTIONS.indexOfFirst { it.first == state.afterPlayMode }.coerceAtLeast(0)
+        rows += AFTER_PLAY_OPTIONS.mapIndexed { index, option ->
+            PlayerSettingRow.Item(
+                id = index,
+                title = option.second,
+                checked = index == selectedIndex,
+                showArrow = false
+            )
+        }
+        return rows
+    }
+
+    private fun afterPlayModeLabel(mode: AfterPlayMode): String {
+        return AFTER_PLAY_OPTIONS.firstOrNull { it.first == mode }?.second ?: "什么都不做"
+    }
 }

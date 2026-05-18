@@ -6,12 +6,19 @@ import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 import org.koin.mp.KoinPlatform
 
+enum class AfterPlayMode {
+    NOTHING,
+    RECOMMEND,
+    PLAY_QUEUE,
+    NEXT_EPISODE
+}
+
 data class PlayerSettings(
     val defaultVideoQualityId: Int? = VideoQualityDefaults.DEFAULT_VIDEO_QUALITY_ID,
     val defaultAudioQualityId: Int? = VideoQualityDefaults.DEFAULT_AUDIO_QUALITY_ID,
     val defaultPlaybackSpeed: Float = 1.0f,
     val defaultVideoCodec: VideoCodecEnum? = VideoCodecEnum.HEVC,
-    val continuePlaybackAfterFinish: Boolean = true,
+    val afterPlayMode: AfterPlayMode = AfterPlayMode.NEXT_EPISODE,
     val exitPlayerWhenPlaybackFinished: Boolean = true,
     val showSubtitleByDefault: Boolean = false,
     val subtitleTextSizePx: Int = 45,
@@ -115,10 +122,13 @@ object PlayerSettingsStore {
             defaultVideoCodec = parseVideoCodec(
                 readSetting(KEY_VIDEO_CODEC)
             ),
-            continuePlaybackAfterFinish = when (readSetting(KEY_AFTER_PLAY)) {
-                "什么都不做" -> false
-                null, "" -> true
-                else -> true
+            afterPlayMode = when (readSetting(KEY_AFTER_PLAY)) {
+                "什么都不做" -> AfterPlayMode.NOTHING
+                "播推荐视频" -> AfterPlayMode.RECOMMEND
+                "播列表中的下一个" -> AfterPlayMode.PLAY_QUEUE
+                "播放合集中的下一个" -> AfterPlayMode.NEXT_EPISODE
+                null, "" -> AfterPlayMode.NEXT_EPISODE
+                else -> AfterPlayMode.NEXT_EPISODE
             },
             exitPlayerWhenPlaybackFinished = parseToggle(
                 readSetting(KEY_PLAY_FINISH_EXIT_PLAYER),

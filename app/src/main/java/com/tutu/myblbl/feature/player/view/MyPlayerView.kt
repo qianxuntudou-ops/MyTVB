@@ -1367,6 +1367,14 @@ class MyPlayerView @JvmOverloads constructor(
         specialDanmakuController.updatePlaybackSpeed(speed)
     }
 
+    fun setAfterPlayMode(mode: com.tutu.myblbl.feature.player.settings.AfterPlayMode) {
+        settingView?.setAfterPlayMode(mode)
+    }
+
+    fun getAfterPlayMode(): com.tutu.myblbl.feature.player.settings.AfterPlayMode {
+        return settingView?.getAfterPlayMode() ?: com.tutu.myblbl.feature.player.settings.AfterPlayMode.NEXT_EPISODE
+    }
+
     fun showSubtitleSettingView() {
         controller?.rememberCurrentFocusTarget()
         settingView?.showSubtitleMenu()

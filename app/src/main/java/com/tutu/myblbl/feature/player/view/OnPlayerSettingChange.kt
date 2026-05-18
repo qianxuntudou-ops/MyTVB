@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.player.view
 
+import com.tutu.myblbl.feature.player.settings.AfterPlayMode
 import com.tutu.myblbl.model.video.quality.VideoQuality
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
@@ -13,4 +14,5 @@ interface OnPlayerSettingChange {
     fun onAspectRatioChange(ratio: Int)
     fun onScreenMirrorChange(enabled: Boolean) {}
     fun onLiveQualityChange(qn: Int) {}
+    fun onAfterPlayModeChange(mode: AfterPlayMode) {}
 }

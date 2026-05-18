@@ -366,7 +366,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             0 -> showPlayerChoiceDialog(position, KEY_DEFAULT_VIDEO_QUALITY, arrayOf("自动", "8K", "杜比视界", "HDR Vivid", "HDR", "4K", "1080P60", "1080P+", "智能修复", "1080P", "720P60", "720P", "480P", "360P", "240P"))
             1 -> showPlayerChoiceDialog(position, KEY_DEFAULT_AUDIO_TRACK, arrayOf("192kbps", "132kbps", "64kbps", "杜比全景声", "Hi-Res无损"))
             2 -> showPlayerChoiceDialog(position, KEY_DEFAULT_PLAY_SPEED, arrayOf("0.25", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"))
-            3 -> showPlayerChoiceDialog(position, KEY_AFTER_PLAY, arrayOf("什么都不做", "播推荐视频", "播列表中的下一个", "播剧集和PV中的下一个"))
+            3 -> showPlayerChoiceDialog(position, KEY_AFTER_PLAY, arrayOf("什么都不做", "播推荐视频", "播列表中的下一个", "播放合集中的下一个"))
             4 -> toggleSetting(playerSettings, 4, KEY_PLAY_FINISH_EXIT_PLAYER)
             5 -> showPlayerChoiceDialog(position, KEY_VIDEO_CODEC, arrayOf("AVC", "HEVC", "AV1"))
             6 -> toggleSetting(playerSettings, 6, KEY_SHOW_SUBTITLE_DEFAULT)
