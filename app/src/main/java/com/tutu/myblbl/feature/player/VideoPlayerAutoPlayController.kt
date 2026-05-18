@@ -1,8 +1,10 @@
 package com.tutu.myblbl.feature.player
 
+import android.graphics.Outline
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.TextView
@@ -22,6 +24,15 @@ class VideoPlayerAutoPlayController(
     private val canExecutePendingAction: () -> Boolean,
     private val onPendingActionCleared: () -> Unit = {}
 ) {
+
+    init {
+        imageNext.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, 15f)
+            }
+        }
+        imageNext.clipToOutline = true
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private var pendingAutoPlayAction: (() -> Unit)? = null
