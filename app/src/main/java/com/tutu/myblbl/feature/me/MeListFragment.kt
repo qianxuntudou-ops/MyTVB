@@ -104,7 +104,13 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                     tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
                 },
                 onHistoryRecordDeleted = { deleted ->
-                    removeHistoryRecordFromCache(deleted)
+                    viewModel.removeHistoryVideo(deleted)
+                },
+                onItemDisliked = { item ->
+                    viewModel.removeHistoryVideo(item)
+                },
+                onUpDisliked = { upName ->
+                    viewModel.removeHistoryVideosByUp(upName)
                 }
             )
         } else {
@@ -252,17 +258,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
 
                         is AppEventHub.Event.WatchLaterVideoRemoved -> {
                             if (type == TYPE_LATER) {
-                                videoAdapter?.let { adapter ->
-                                    val snapshot = adapter.getItemsSnapshot()
-                                    val filtered = snapshot.filter {
-                                        it.aid != event.aid || (event.bvid.isNotBlank() && it.bvid != event.bvid)
-                                    }
-                                    if (filtered.size < snapshot.size) {
-                                        adapter.setData(filtered)
-                                        tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
-                                        updateContentState(filtered.isEmpty())
-                                    }
-                                }
+                                viewModel.removeLaterVideo(event.aid, event.bvid)
                             }
                         }
 
@@ -689,15 +685,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         runCatching {
             FileCacheManager.put(HISTORY_CACHE_KEY, videos)
         }
-    }
-
-    private fun removeHistoryRecordFromCache(deleted: HistoryVideoModel) {
-        val deletedKey = historyItemKey(deleted)
-        val remaining = historyAdapter
-            ?.getItemsSnapshot()
-            .orEmpty()
-            .filterNot { historyItemKey(it) == deletedKey }
-        cacheHistoryVideos(remaining)
     }
 
     private fun cacheLaterVideos(videos: List<VideoModel>) {

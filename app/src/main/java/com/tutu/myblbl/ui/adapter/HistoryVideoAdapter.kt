@@ -28,7 +28,9 @@ class HistoryVideoAdapter(
     onItemFocusedWithView: ((View, Int) -> Unit)? = null,
     onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
     onItemsChanged: (() -> Unit)? = null,
-    private val onHistoryRecordDeleted: ((HistoryVideoModel) -> Unit)? = null
+    private val onHistoryRecordDeleted: ((HistoryVideoModel) -> Unit)? = null,
+    private val onItemDisliked: ((HistoryVideoModel) -> Unit)? = null,
+    private val onUpDisliked: ((String) -> Unit)? = null
 ) : BaseVideoAdapter<HistoryVideoModel, HistoryVideoAdapter.ViewHolder>() {
 
     init {
@@ -125,11 +127,10 @@ class HistoryVideoAdapter(
             VideoCardMenuDialog(
                 context = itemView.context,
                 video = video,
-                onDislikeVideo = { removeItems { itemKey(it) == itemKey(item) } },
-                onDislikeUp = { upName -> removeItems { it.displayAuthorName.equals(upName, ignoreCase = true) } },
+                onDislikeVideo = { onItemDisliked?.invoke(item) },
+                onDislikeUp = { upName -> onUpDisliked?.invoke(upName) },
                 onHistoryRecordDeleted = {
                     onHistoryRecordDeleted?.invoke(item)
-                    removeItems { itemKey(it) == itemKey(item) }
                 }
             ).show()
         }

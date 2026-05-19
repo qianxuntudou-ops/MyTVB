@@ -127,6 +127,30 @@ class MeListViewModel(
         }
     }
 
+    fun removeLaterVideo(aid: Long, bvid: String) {
+        val current = _uiState.value.laterVideos
+        _uiState.value = _uiState.value.copy(
+            laterVideos = current.filter {
+                it.aid != aid || (bvid.isNotBlank() && it.bvid != bvid)
+            }
+        )
+    }
+
+    fun removeHistoryVideo(item: com.tutu.myblbl.model.video.HistoryVideoModel) {
+        val key = historyItemKey(item)
+        _uiState.value = _uiState.value.copy(
+            historyVideos = _uiState.value.historyVideos.filter { historyItemKey(it) != key }
+        )
+    }
+
+    fun removeHistoryVideosByUp(upName: String) {
+        _uiState.value = _uiState.value.copy(
+            historyVideos = _uiState.value.historyVideos.filter {
+                !it.displayAuthorName.equals(upName, ignoreCase = true)
+            }
+        )
+    }
+
     fun shouldRefresh(ttlMs: Long): Boolean {
         return System.currentTimeMillis() - lastLoadedAt >= ttlMs
     }
