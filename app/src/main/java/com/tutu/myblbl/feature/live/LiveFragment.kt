@@ -21,6 +21,7 @@ import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import com.tutu.myblbl.core.common.ext.toast
+import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -153,20 +154,29 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     override fun focusEntryFromMainTab(): Boolean {
+        AppLog.d("LiveFocus", "focusEntryFromMainTab: noAnchor")
         return focusEntryFromMainTab(anchorView = null, preferSpatialEntry = false)
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
+        AppLog.d("LiveFocus", "focusEntryFromMainTab: anchor=${anchorView?.javaClass?.simpleName} spatial=$preferSpatialEntry page=${viewPager.currentItem}")
         if (preferSpatialEntry && anchorView != null && isVerticallyAlignedWith(anchorView, tabLayout)) {
-            if (focusCurrentTab(anchorView)) return true
+            if (focusCurrentTab(anchorView)) {
+                AppLog.d("LiveFocus", "focusEntryFromMainTab: spatial→tab OK")
+                return true
+            }
         }
-        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
-            focusCurrentTab(anchorView)
+        val contentHandled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry)
+        AppLog.d("LiveFocus", "focusEntryFromMainTab: contentHandled=$contentHandled")
+        val handled = contentHandled || focusCurrentTab(anchorView)
+        AppLog.d("LiveFocus", "focusEntryFromMainTab: final=$handled")
         return handled
     }
 
     private fun focusCurrentPagePrimaryContent(anchorView: View? = null, preferSpatialEntry: Boolean = false): Boolean {
-        return adapter.getCurrentFragment(viewPager.currentItem)?.focusPrimaryContent(anchorView, preferSpatialEntry) == true
+        val page = adapter.getCurrentFragment(viewPager.currentItem)
+        AppLog.d("LiveFocus", "focusCurrentPagePrimaryContent: page=${page?.javaClass?.simpleName} anchor=${anchorView?.javaClass?.simpleName} spatial=$preferSpatialEntry")
+        return page?.focusPrimaryContent(anchorView, preferSpatialEntry) == true
     }
 
     override fun onDestroyView() {

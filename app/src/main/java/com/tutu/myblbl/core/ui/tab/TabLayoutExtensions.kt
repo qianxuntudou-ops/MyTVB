@@ -1,6 +1,7 @@
 package com.tutu.myblbl.core.ui.tab
 
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.common.log.AppLog
 
 import android.view.KeyEvent
 import android.view.View
@@ -48,12 +49,13 @@ fun TabLayout.enableTouchNavigation(
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                if (onNavigateDown != null) {
+                                val result = if (onNavigateDown != null) {
                                     onNavigateDown.invoke()
-                                    true
                                 } else {
                                     focusViewPagerContent(viewPager)
                                 }
+                                AppLog.d("TabNav", "DPAD_DOWN tab[$index] result=$result")
+                                result
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 if (index == 0) {
@@ -117,12 +119,13 @@ fun TabLayout.enableTouchNavigation(
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                if (onNavigateDown != null) {
+                                val result = if (onNavigateDown != null) {
                                     onNavigateDown.invoke()
-                                    true
                                 } else {
                                     focusViewPagerContent(viewPager)
                                 }
+                                AppLog.d("TabNav", "DPAD_DOWN tab[$index] result=$result")
+                                result
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 if (index == 0) {

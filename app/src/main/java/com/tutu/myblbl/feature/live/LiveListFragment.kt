@@ -18,9 +18,11 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
+import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
 import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
 import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.common.ext.toast
@@ -249,6 +251,34 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()
+    }
+
+    override fun focusPrimaryContent(): Boolean {
+        if (!isAdded || view == null || adapter.itemCount == 0) {
+            AppLog.d("LiveList", "focusPrimaryContent: skipped isAdded=$isAdded itemCount=${adapter.itemCount}")
+            return false
+        }
+        val result = tvFocusController?.focusPrimary() ?: false
+        AppLog.d("LiveList", "focusPrimaryContent: result=$result")
+        return result
+    }
+
+    override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
+        if (preferSpatialEntry && anchorView != null) {
+            val handled = SpatialFocusNavigator.requestBestDescendant(
+                anchorView = anchorView,
+                root = binding.recyclerView,
+                direction = View.FOCUS_RIGHT,
+                fallback = null
+            )
+            AppLog.d("LiveList", "focusPrimaryContent: spatialEntry=$handled anchor=${anchorView.javaClass.simpleName}")
+            if (handled) return true
+        }
+        return focusPrimaryContent()
+    }
+
+    private fun focusTopTab(): Boolean {
+        return (parentFragment as? LiveFragment)?.focusCurrentTab() == true
     }
 
     override fun scrollToTop() {
