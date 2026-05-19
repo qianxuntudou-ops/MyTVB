@@ -70,6 +70,8 @@ class VideoCardMenuDialog(
     init {
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE)
         setContentView(binding.root)
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        window?.setLayout((screenWidth * 0.45).toInt(), android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
         setCanceledOnTouchOutside(true)
         configureContent()
         initListeners()
