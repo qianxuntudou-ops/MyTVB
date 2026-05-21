@@ -2356,8 +2356,8 @@
     <style name="Theme.Blbl" parent="@style/Theme.AppCompat.NoActionBar">
         <item name="android:textColorPrimary">@color/textColor</item>
         <item name="android:textColorSecondary">@color/subTextColor</item>
-        <item name="android:windowBackground">@drawable/bg_splash</item>
-        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@drawable/bg_splash</item>
+        <item name="android:windowBackground">@color/systemBackgroundColor</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/systemBackgroundColor</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@null</item>
         <item name="android:windowAnimationStyle">@style/WindowAnimationTransition</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
@@ -2381,6 +2381,16 @@
         <item name="thirdBackgroundColor">@color/backgroundColor</item>
     </style>
     <style name="Theme.MyBLBL" parent="@style/Theme.Blbl">
+    </style>
+    <style name="Theme.MyBLBL.Launcher" parent="@style/Theme.Blbl">
+        <item name="android:windowBackground">@drawable/bg_splash</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@drawable/bg_splash</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@null</item>
+        <item name="android:windowAnimationStyle">@style/WindowAnimationNone</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="backgroundColor">@color/systemBackgroundColor</item>
     </style>
     <style name="Theme.MaterialComponents" parent="@style/Base.Theme.MaterialComponents">
     </style>
@@ -3502,6 +3512,10 @@
     <style name="WindowAnimationTransition" parent="">
         <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
         <item name="android:windowExitAnimation">@android:anim/fade_out</item>
+    </style>
+    <style name="WindowAnimationNone" parent="">
+        <item name="android:windowEnterAnimation">@null</item>
+        <item name="android:windowExitAnimation">@null</item>
     </style>
     <style name="YTOSecondsTextAppearance" parent="@style/TextAppearance.AppCompat">
         <item name="android:textSize">17sp</item>

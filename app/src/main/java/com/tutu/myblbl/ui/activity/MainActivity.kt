@@ -46,9 +46,12 @@ import com.tutu.myblbl.core.ui.navigation.TabBarView
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.startup.AppStartupScheduler
+import com.tutu.myblbl.core.ui.image.ImageLoader
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.lang.ref.WeakReference
 
@@ -98,7 +101,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     private var startupAvatarRefreshScheduled = false
     private var avatarRefreshJob: Job? = null
     private val activityCreateStartMs = SystemClock.elapsedRealtime()
-    private var lastKnownLoggedIn = sessionGateway.isLoggedIn()
+    private var lastKnownLoggedIn = false
+    private var pendingInitialTabIndex = -1
     private var restoredFromSavedState = false
     private var restoredTabIndex = -1
 
@@ -109,6 +113,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         AppLog.i(STARTUP_TAG, "STARTUP getViewBinding elapsed=${SystemClock.elapsedRealtime() - t0}ms")
         return binding
     }
+
+    override fun deferInitialFullscreenMode(): Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val createStartMs = SystemClock.elapsedRealtime()
@@ -122,6 +128,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val t0 = SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
         AppLog.i(STARTUP_TAG, "STARTUP super.onCreate elapsed=${SystemClock.elapsedRealtime() - t0}ms")
+        lastKnownLoggedIn = sessionGateway.isLoggedIn()
         restoredTabIndex = mainNavigationViewModel.getSavedTabIndex()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -184,16 +191,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (restoredFromSavedState) {
             restoreUiStateAfterRecreation()
         } else {
-            val startPage = appSettings.getCachedString("default_start_page")
-            if (startPage == "动态") {
-                binding.myTabView.selectTab(2)
-            } else {
-                binding.myTabView.selectTab(0)
-            }
+            pendingInitialTabIndex = resolveDefaultMainTabIndex()
+            binding.myTabView.restoreTabHighlight(pendingInitialTabIndex)
+            AppLog.i(STARTUP_TAG, "STARTUP deferInitialMainTab index=$pendingInitialTabIndex")
         }
-        refreshAvatar(allowNetworkFetch = false)
         updateNavigationVisibility()
-        scheduleDeferredStartupTasks()
         scheduleSplashTimeout()
         binding.root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
@@ -212,9 +214,31 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         binding.root.post {
             AppLog.i(STARTUP_TAG, "MainActivity first root post elapsed=${SystemClock.elapsedRealtime() - activityCreateStartMs}ms")
             revealStartupShell("first_root_post")
+            scheduleDeferredStartupTasks()
+            (application as? MyBLBLApplication)?.scheduleStartupFirstPagePreload(delayMillis = 0L)
+            attachInitialMainTabAfterShellDraw()
             showUsageTipIfNeeded()
         }
         AppLog.i(STARTUP_TAG, "MainActivity.initData end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
+    }
+
+    private fun resolveDefaultMainTabIndex(): Int {
+        return if (appSettings.getCachedString("default_start_page") == "动态") {
+            2
+        } else {
+            0
+        }
+    }
+
+    private fun attachInitialMainTabAfterShellDraw() {
+        val index = pendingInitialTabIndex
+        if (index !in fragments.indices) return
+        pendingInitialTabIndex = -1
+        val startMs = SystemClock.elapsedRealtime()
+        AppLog.i(STARTUP_TAG, "STARTUP attachInitialMainTab start index=$index elapsed=${startMs - activityCreateStartMs}ms")
+        showFragment(index)
+        postTabSelectedEvent(index)
+        AppLog.i(STARTUP_TAG, "STARTUP attachInitialMainTab end index=$index elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
     }
 
     private fun restoreUiStateAfterRecreation() {
@@ -226,7 +250,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             currentFragmentIndex = resolvedTabIndex
             binding.myTabView.restoreTabHighlight(resolvedTabIndex)
         } else {
-            binding.myTabView.selectTab(0)
+            pendingInitialTabIndex = 0
+            binding.myTabView.restoreTabHighlight(0)
         }
     }
 
@@ -452,7 +477,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (startupAvatarRefreshScheduled) return
         startupAvatarRefreshScheduled = true
         binding.root.postDelayed({
-            refreshAvatar(allowNetworkFetch = true, forceNetworkFetch = true)
+            lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    (application as? MyBLBLApplication)?.ensureSessionRuntimeReady("startupAvatarCache")
+                }
+                refreshAvatar(allowNetworkFetch = false)
+                withContext(Dispatchers.IO) {
+                    (application as? MyBLBLApplication)?.ensureDataRuntimeReady("startupAvatarNetwork")
+                }
+                refreshAvatar(allowNetworkFetch = true, forceNetworkFetch = true)
+            }
         }, 300L)
     }
 
@@ -478,7 +512,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         startupTasksScheduled = true
         AppStartupScheduler()
             .addTask("refreshAvatar", AppStartupScheduler.Phase.DELAYED, delayMs = 1200L) {
-                refreshAvatar(allowNetworkFetch = true)
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        (application as? MyBLBLApplication)?.ensureDataRuntimeReady("refreshAvatar")
+                    }
+                    refreshAvatar(allowNetworkFetch = true)
+                }
+            }
+            .addTask("imageCdnPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 2500L) {
+                ImageLoader.prewarmCdn()
             }
             .addTask("playerPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 10000L) {
                 PlayerInstancePool.prewarm(this@MainActivity)
@@ -487,7 +529,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 MyBLBLApplication.instance.scheduleDeferredSessionPrewarm(delayMillis = 0L)
             }
             .addTask("wbiKeys", AppStartupScheduler.Phase.IDLE) {
-                lifecycleScope.launch { runCatching { sessionGateway.ensureWbiKeys() } }
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        (application as? MyBLBLApplication)?.ensureDataRuntimeReady("wbiKeys")
+                    }
+                    runCatching { sessionGateway.ensureWbiKeys() }
+                }
             }
             .execute()
     }

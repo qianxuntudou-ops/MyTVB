@@ -83,8 +83,8 @@ class RecommendViewModel(
             if (preloaded != null) {
                 seenBvids.clear()
                 val filterStart = SystemClock.elapsedRealtime()
-                val filteredItems = preloaded.items.filterForDisplay()
-                AppLog.i(TAG, "STARTUP preload filterForDisplay=${SystemClock.elapsedRealtime() - filterStart}ms")
+                val filteredItems = preloaded.items.filterForInitialPreload()
+                AppLog.i(TAG, "STARTUP preload filterForInitial=${SystemClock.elapsedRealtime() - filterStart}ms")
                 filteredItems.mapNotNullTo(seenBvids) { it.bvid.takeIf(String::isNotBlank) }
                 freshIndexTracker.markFirstPageLoaded()
                 currentPage = 1
@@ -160,5 +160,9 @@ class RecommendViewModel(
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             ContentFilter.filterVideos(appContext, this@filterForDisplay)
         }
+    }
+
+    private fun List<VideoModel>.filterForInitialPreload(): List<VideoModel> {
+        return ContentFilter.filterVideos(appContext, this)
     }
 }

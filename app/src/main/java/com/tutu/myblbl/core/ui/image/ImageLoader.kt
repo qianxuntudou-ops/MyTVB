@@ -21,6 +21,7 @@ import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.NetworkManager
 import pl.droidsonroids.gif.GifDrawable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -271,7 +272,15 @@ object ImageLoader {
     }
 
     fun prewarm() {
+        prewarmSettings()
+        prewarmCdn()
+    }
+
+    fun prewarmSettings() {
         resolveImageQualityLevel()
+    }
+
+    fun prewarmCdn() {
         preheatCdnHosts()
     }
 
@@ -356,11 +365,6 @@ object ImageLoader {
         // 同 URL 防复写
         val lastUrl = imageView.getTag(R.id.tag_image_loader_url) as? String
         if (lastUrl == url) {
-            val drawable = imageView.drawable
-            if (drawable != null && drawable !== placeholder) {
-                inFlight.remove(imageView)?.cancel()
-                return
-            }
             val job = inFlight[imageView]
             if (job != null && job.isActive) return
         } else {
@@ -412,6 +416,9 @@ object ImageLoader {
                     }
                 }
             } catch (t: Throwable) {
+                if (t is CancellationException) {
+                    return@launch
+                }
                 val elapsed = SystemClock.elapsedRealtime() - startMs
                 AppLog.w(TAG, "cover error: elapsed=${elapsed}ms url=${url.takeLast(50)}", t)
                 handleLoadError(imageView, url, errorRes, fallbackUrl, circleCrop, cornerRadius, onSuccess, onError)
@@ -439,11 +446,6 @@ object ImageLoader {
 
         val lastUrl = imageView.getTag(R.id.tag_image_loader_url) as? String
         if (lastUrl == url) {
-            val drawable = imageView.drawable
-            if (drawable != null && drawable !== placeholder) {
-                inFlight.remove(imageView)?.cancel()
-                return
-            }
             val job = inFlight[imageView]
             if (job != null && job.isActive) return
         } else {
@@ -486,6 +488,9 @@ object ImageLoader {
                     }
                 }
             } catch (t: Throwable) {
+                if (t is CancellationException) {
+                    return@launch
+                }
                 AppLog.w(TAG, "load failed url=${url.takeLast(50)}", t)
                 if (fallbackUrl != null) {
                     loadIntoDrawable(imageView, fallbackUrl, placeholderDrawable, errorDrawable)
@@ -525,7 +530,7 @@ object ImageLoader {
     private fun prefetch(url: String) {
         if (url.isBlank()) return
         if (cache.get(url) != null) return
-        scope.launch {
+        imageDataScope.launch {
             try {
                 val request = loadImageData(url)
                 val data = request.deferred.await()

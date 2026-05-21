@@ -23,6 +23,7 @@ app/release/
 
 # ========== Gradle 相关 ==========
 .gradle/
+.kotlin/
 .gradle-app.setting
 gradle-app.setting
 local.properties

@@ -2,6 +2,7 @@ package com.tutu.myblbl.feature.home
 
 import android.os.SystemClock
 import android.view.View
+import android.view.ViewTreeObserver
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -21,13 +22,22 @@ import kotlinx.coroutines.launch
 
 abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, MainActivity.OnVideoBlockedListener {
 
+    companion object {
+        private const val INITIAL_REST_BATCH_DELAY_MS = 80L
+    }
+
     protected abstract val feedViewModel: VideoFeedViewModel
     protected abstract val secondaryTabPosition: Int
     protected open val dispatchHomeContentReady: Boolean = false
     protected open val toastNonEmptyError: Boolean = false
+    protected open val deferInitialLoadUntilFirstDraw: Boolean = true
 
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private var pendingScrollToTopAfterRefresh = false
+    private var initialLoadStarted = false
+    private var initialLoadAfterFirstDrawArmed = false
+    private var contentReadyDispatchScheduled = false
+    private var contentReadyDispatched = false
 
     override val autoLoad: Boolean = false
     // TV 项目无触摸下拉刷新，下拉刷新由 MainTabReselected/MenuPressed/BackPressed 等键盘事件触发。
@@ -73,9 +83,62 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
 
     override fun initData() {
         val t0 = SystemClock.elapsedRealtime()
-        showLoading(true)
-        feedViewModel.loadInitial()
+        if (deferInitialLoadUntilFirstDraw && (adapter?.contentCount() ?: 0) == 0) {
+            showContent()
+            showLoading(false)
+            scheduleInitialLoadAfterFirstDraw()
+        } else {
+            startInitialLoad(showLoading = true, reason = "immediate")
+        }
         AppLog.i("STARTUP", "${this::class.java.simpleName}.initData elapsed=${SystemClock.elapsedRealtime() - t0}ms")
+    }
+
+    private fun scheduleInitialLoadAfterFirstDraw() {
+        if (initialLoadStarted || initialLoadAfterFirstDrawArmed) return
+        val root = view ?: rootView ?: return startInitialLoad(showLoading = true, reason = "no_root")
+        val className = this::class.java.simpleName
+        val scheduledAtMs = SystemClock.elapsedRealtime()
+        initialLoadAfterFirstDrawArmed = true
+        AppLog.i("STARTUP", "$className.initialLoad deferUntilFirstDraw armed")
+
+        var fired = false
+        lateinit var listener: ViewTreeObserver.OnPreDrawListener
+
+        fun fire(reason: String) {
+            if (fired) return
+            fired = true
+            if (root.viewTreeObserver.isAlive) {
+                root.viewTreeObserver.removeOnPreDrawListener(listener)
+            }
+            root.post {
+                if (!isAdded || view == null) return@post
+                AppLog.i(
+                    "STARTUP",
+                    "$className.initialLoad afterFirstDraw reason=$reason wait=${SystemClock.elapsedRealtime() - scheduledAtMs}ms"
+                )
+                startInitialLoad(showLoading = true, reason = reason)
+            }
+        }
+
+        listener = ViewTreeObserver.OnPreDrawListener {
+            fire("first_pre_draw")
+            true
+        }
+        root.viewTreeObserver.addOnPreDrawListener(listener)
+        root.postDelayed({ fire("fallback") }, 700L)
+    }
+
+    private fun startInitialLoad(showLoading: Boolean, reason: String) {
+        if (initialLoadStarted) return
+        initialLoadStarted = true
+        initialLoadAfterFirstDrawArmed = false
+        val t0 = SystemClock.elapsedRealtime()
+        if (showLoading) {
+            showLoading(true)
+        }
+        AppLog.i("STARTUP", "${this::class.java.simpleName}.initialLoad start reason=$reason")
+        feedViewModel.loadInitial()
+        AppLog.i("STARTUP", "${this::class.java.simpleName}.initialLoad invoked elapsed=${SystemClock.elapsedRealtime() - t0}ms")
     }
 
     override fun initObserver() {
@@ -205,6 +268,11 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         isLoading = false
         setRefreshing(false)
         val wasPendingScrollToTop = pendingScrollToTopAfterRefresh
+        val isInitialPopulation = (adapter?.contentCount() ?: 0) == 0 && !wasPendingScrollToTop
+        if (isInitialPopulation && videos.size > getSpanCount().coerceAtLeast(1)) {
+            applyInitialVideosInBatches(videos, t0)
+            return
+        }
         val shouldPreserveScroll = (adapter?.contentCount() ?: 0) > 0 &&
             !pendingScrollToTopAfterRefresh &&
             !isTvListFocusEnabled()
@@ -227,13 +295,59 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         if (videos.isNotEmpty()) {
             showContent()
             showLoading(false)
-            dispatchContentReadyIfNeeded()
+            dispatchContentReadyAfterRecyclerDrawIfNeeded("replace")
         } else {
             showEmpty()
         }
         pendingScrollToTopAfterRefresh = false
         feedViewModel.consumeListChange()
         AppLog.i("STARTUP", "T8 applyReplacedVideosNow done count=${videos.size} elapsed=${SystemClock.elapsedRealtime() - t0}ms")
+    }
+
+    private fun applyInitialVideosInBatches(videos: List<VideoModel>, startMs: Long) {
+        val firstBatchSize = getSpanCount().coerceAtLeast(1).coerceAtMost(videos.size)
+        val firstBatch = videos.take(firstBatchSize)
+        val restBatch = videos.drop(firstBatchSize)
+        AppLog.i(
+            "STARTUP",
+            "T8 initialBatch first=${firstBatch.size} rest=${restBatch.size} total=${videos.size}"
+        )
+        adapter?.setShowLoadMore(false)
+        setAdapterData(
+            firstBatch,
+            preserveScrollOffset = false,
+            onComplete = {
+                notifyTvListDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+            }
+        )
+        showContent()
+        showLoading(false)
+        pendingScrollToTopAfterRefresh = false
+        feedViewModel.consumeListChange()
+        dispatchContentReadyAfterRecyclerDrawIfNeeded("initial_batch_first_row")
+        rootView?.postDelayed({
+            if (!isAdded || view == null || restBatch.isEmpty()) {
+                return@postDelayed
+            }
+            val appendStart = SystemClock.elapsedRealtime()
+            AppLog.i("STARTUP", "T8 initialBatch appendRest count=${restBatch.size}")
+            val videoAdapter = adapter as? VideoAdapter
+            if (videoAdapter != null) {
+                videoAdapter.addData(restBatch)
+            } else {
+                setAdapterData(videos, preserveScrollOffset = false)
+            }
+            adapter?.setShowLoadMore(hasMore)
+            notifyTvListDataChanged(TvDataChangeReason.APPEND)
+            AppLog.i(
+                "STARTUP",
+                "T8 initialBatch appendRest done elapsed=${SystemClock.elapsedRealtime() - appendStart}ms"
+            )
+        }, INITIAL_REST_BATCH_DELAY_MS)
+        AppLog.i(
+            "STARTUP",
+            "T8 applyReplacedVideosNow done initialBatch total=${videos.size} elapsed=${SystemClock.elapsedRealtime() - startMs}ms"
+        )
     }
 
     private fun applyAppendedVideos(items: List<VideoModel>) {
@@ -245,7 +359,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
             (adapter as? VideoAdapter)?.addData(newItems)
             showContent()
             showLoading(false)
-            dispatchContentReadyIfNeeded()
+            dispatchContentReadyAfterRecyclerDrawIfNeeded("append")
         }
         if (isTvListFocusEnabled()) {
             notifyTvListDataChanged(TvDataChangeReason.APPEND)
@@ -254,9 +368,44 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
     }
 
     private fun dispatchContentReadyIfNeeded() {
-        if (dispatchHomeContentReady) {
+        if (dispatchHomeContentReady && !contentReadyDispatched) {
+            contentReadyDispatched = true
             mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
         }
+    }
+
+    private fun dispatchContentReadyAfterRecyclerDrawIfNeeded(reason: String) {
+        if (!dispatchHomeContentReady || contentReadyDispatched || contentReadyDispatchScheduled) return
+        val rv = recyclerView ?: return dispatchContentReadyIfNeeded()
+        val className = this::class.java.simpleName
+        val scheduledAtMs = SystemClock.elapsedRealtime()
+        contentReadyDispatchScheduled = true
+        var fired = false
+        lateinit var listener: ViewTreeObserver.OnPreDrawListener
+
+        fun fire(fireReason: String) {
+            if (fired) return
+            fired = true
+            if (rv.viewTreeObserver.isAlive) {
+                rv.viewTreeObserver.removeOnPreDrawListener(listener)
+            }
+            rv.post {
+                if (!isAdded || view == null) return@post
+                contentReadyDispatchScheduled = false
+                AppLog.i(
+                    "STARTUP",
+                    "$className.contentReady afterRecyclerDraw reason=$reason fire=$fireReason wait=${SystemClock.elapsedRealtime() - scheduledAtMs}ms"
+                )
+                dispatchContentReadyIfNeeded()
+            }
+        }
+
+        listener = ViewTreeObserver.OnPreDrawListener {
+            fire("pre_draw")
+            true
+        }
+        rv.viewTreeObserver.addOnPreDrawListener(listener)
+        rv.postDelayed({ fire("fallback") }, 600L)
     }
 
     private fun focusTopTab(): Boolean {
@@ -277,5 +426,11 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
 
     override fun onVideoBlocked(aid: Long, bvid: String) {
         (adapter as? VideoAdapter)?.removeByVideoId(aid, bvid)
+    }
+
+    override fun onDestroyView() {
+        initialLoadAfterFirstDrawArmed = false
+        contentReadyDispatchScheduled = false
+        super.onDestroyView()
     }
 }

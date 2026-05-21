@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import androidx.viewbinding.ViewBinding
@@ -14,30 +15,42 @@ import org.koin.android.ext.android.inject
 abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
 
     protected lateinit var binding: VB
+    private var initialFullscreenModeDeferred = false
 
     abstract fun getViewBinding(): VB
 
     protected val appSettings: AppSettingsDataStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        (application as? MyBLBLApplication)?.ensureUiRuntimeReady("${this::class.java.simpleName}.onCreate")
         applyTheme()
         super.onCreate(savedInstanceState)
-        configureFullscreenWindow()
+        configureWindowChrome()
+        if (deferInitialFullscreenMode()) {
+            initialFullscreenModeDeferred = true
+        } else {
+            applyFullscreenMode()
+        }
         binding = getViewBinding()
         setContentView(binding.root)
         initView()
         initData()
         initObserver()
+        if (initialFullscreenModeDeferred) {
+            applyFullscreenModeAfterFirstDraw()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        applyFullscreenMode()
+        if (!initialFullscreenModeDeferred) {
+            applyFullscreenMode()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
+        if (hasFocus && !initialFullscreenModeDeferred) {
             applyFullscreenMode()
         }
     }
@@ -45,6 +58,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
     open fun initView() {}
     open fun initData() {}
     open fun initObserver() {}
+    protected open fun deferInitialFullscreenMode(): Boolean = false
 
     open fun applyTheme() {
         val themeIndex = appSettings.getCachedInt("theme", 1)
@@ -71,7 +85,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
         }
     }
 
-    private fun configureFullscreenWindow() {
+    private fun configureWindowChrome() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode =
@@ -83,7 +97,22 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
             window.isStatusBarContrastEnforced = false
             window.isNavigationBarContrastEnforced = false
         }
-        applyFullscreenMode()
+    }
+
+    private fun applyFullscreenModeAfterFirstDraw() {
+        val root = binding.root
+        root.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (root.viewTreeObserver.isAlive) {
+                    root.viewTreeObserver.removeOnPreDrawListener(this)
+                }
+                root.post {
+                    initialFullscreenModeDeferred = false
+                    applyFullscreenMode()
+                }
+                return true
+            }
+        })
     }
 
     private fun applyFullscreenMode() {

@@ -37,6 +37,14 @@ object NetworkManager {
     private const val HTTP_CACHE_SCHEMA = 1
 
     private var appContext: Context? = null
+    private val sessionInitLock = Any()
+    private val coreInitLock = Any()
+
+    @Volatile
+    private var sessionInitialized = false
+
+    @Volatile
+    private var coreInitialized = false
 
     private val userAgentStore = DesktopUserAgentStore(
         defaultUserAgent = DEFAULT_UA,
@@ -121,25 +129,43 @@ object NetworkManager {
         )
     }
 
+    fun initSession(context: Context, syncWebViewCookies: Boolean = true) {
+        if (sessionInitialized) return
+        synchronized(sessionInitLock) {
+            if (sessionInitialized) return
+            val startMs = android.os.SystemClock.elapsedRealtime()
+            val applicationContext = context.applicationContext
+            appContext = applicationContext
+            internalCookieManager.init(applicationContext, syncWebViewCookies)
+            userAgentStore.init(applicationContext)
+            sessionStore.initPersistence(
+                applicationContext.getSharedPreferences("network_session_store", Context.MODE_PRIVATE)
+            )
+            sessionInitialized = true
+            AppLog.i(TAG, "initSession elapsed=${android.os.SystemClock.elapsedRealtime() - startMs}ms")
+        }
+    }
+
     fun init(context: Context, syncWebViewCookies: Boolean = true) {
-        val applicationContext = context.applicationContext
-        appContext = applicationContext
-        internalCookieManager.init(applicationContext, syncWebViewCookies)
-        userAgentStore.init(applicationContext)
-        sessionStore.initPersistence(
-            applicationContext.getSharedPreferences("network_session_store", Context.MODE_PRIVATE)
-        )
-        // 在主线程同步构造 OkHttp / Retrofit / ApiService。
-        // 否则后台 warmUp() 协程与主线程上 Koin 注入会争 SynchronizedLazyImpl 的锁，
-        // 实测主线程被阻塞 467ms（debug.txt 里的 Long monitor contention）。
-        // 自身构造耗时只有几十毫秒，提前付清更划算。
-        internalOkHttpClient
-        retrofit
-        apiService
-        BiliClient.init(internalOkHttpClient)
-        // 旧版本（< 这次重构前）的 OkHttp HTTP cache 现已不再使用，残留目录可能占几十 MB。
-        // 异步清理，不阻塞主线程：deleteRecursively 在低端 TV 上同步执行 50~200ms。
-        scheduleHttpCacheCleanup(applicationContext)
+        initSession(context, syncWebViewCookies)
+        if (coreInitialized) return
+        synchronized(coreInitLock) {
+            if (coreInitialized) return
+            val startMs = android.os.SystemClock.elapsedRealtime()
+            val applicationContext = context.applicationContext
+            appContext = applicationContext
+            // 在后台一次性构造 OkHttp / Retrofit / ApiService。
+            // 这样首个真实请求不会和 UI 主线程争 SynchronizedLazyImpl 锁。
+            internalOkHttpClient
+            retrofit
+            apiService
+            BiliClient.init(internalOkHttpClient)
+            // 旧版本（< 这次重构前）的 OkHttp HTTP cache 现已不再使用，残留目录可能占几十 MB。
+            // 异步清理，不阻塞主线程：deleteRecursively 在低端 TV 上同步执行 50~200ms。
+            scheduleHttpCacheCleanup(applicationContext)
+            coreInitialized = true
+            AppLog.i(TAG, "initNetworkCore elapsed=${android.os.SystemClock.elapsedRealtime() - startMs}ms")
+        }
     }
 
     private fun scheduleHttpCacheCleanup(applicationContext: Context) {
