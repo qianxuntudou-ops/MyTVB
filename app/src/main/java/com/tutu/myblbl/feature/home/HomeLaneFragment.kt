@@ -13,7 +13,6 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.base.BaseAdapter
 import com.tutu.myblbl.core.ui.base.BaseListFragment
-import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
@@ -35,8 +34,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
     companion object {
         private const val TAG = "HomeLaneFragment"
         private const val ARG_TYPE = "type"
-        private const val PREFETCH_SECTION_COUNT = 2
-        private const val PREFETCH_PER_SECTION = 8
 
         const val TYPE_ANIMATION = HomeLaneRepository.TYPE_ANIMATION
         const val TYPE_CINEMA = HomeLaneRepository.TYPE_CINEMA
@@ -265,7 +262,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         setRefreshing(false)
         showLoading(false)
         laneAdapter?.setShowLoadMore(hasMore)
-        prefetchFirstScreenCovers(sections)
         adapter?.setData(sections)
         if (sections.isNotEmpty()) {
             showContent()
@@ -392,25 +388,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     private fun focusTopTab(): Boolean {
         return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
-    }
-
-    /**
-     * 番剧/影视 tab 的列表是「纵向 lane，每行内部横向 4 列封面」。HomeLaneAdapter 虽然
-     * 继承了 BaseAdapter，但它的 MODEL 是容器型 [HomeLaneSection]，BaseAdapter 的
-     * 自动 prefetch 钩子拿不到 series 封面 URL，所以这里在 fragment 层面手动把第一屏
-     * 几个 section 的前若干张封面提前下到 Coil 缓存里，让真正 onBind 时秒出图。
-     */
-    private fun prefetchFirstScreenCovers(sections: List<HomeLaneSection>) {
-        if (sections.isEmpty() || !isAdded) return
-        val ctx = context ?: return
-        val urls = sections.asSequence()
-            .filter { it.items.isNotEmpty() }
-            .take(PREFETCH_SECTION_COUNT)
-            .flatMap { it.items.asSequence().take(PREFETCH_PER_SECTION) }
-            .map { it.cover }
-            .toList()
-        if (urls.isEmpty()) return
-        ImageLoader.prefetchSeriesCovers(ctx, urls)
     }
 
     private fun showMyFollowingDialog(followType: Int) {

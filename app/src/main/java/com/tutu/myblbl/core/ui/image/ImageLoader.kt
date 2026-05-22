@@ -114,8 +114,16 @@ object ImageLoader {
         placeholder: Int = 0,
         error: Int = 0
     ) {
+        val optimizedUrl = buildOptimizedAvatarUrl(url)
         val normalizedUrl = normalizeUrl(url)
-        loadInto(imageView, normalizedUrl, placeholder, error, circleCrop = true)
+        loadInto(
+            imageView = imageView,
+            url = optimizedUrl,
+            placeholderRes = placeholder,
+            errorRes = error,
+            circleCrop = true,
+            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null
+        )
     }
 
     fun loadDrawableRes(
@@ -188,6 +196,23 @@ object ImageLoader {
         error: Int = 0
     ) {
         load(imageView, url, placeholder, error)
+    }
+
+    fun loadSmallSquare(
+        imageView: ImageView,
+        url: String?,
+        placeholder: Int = 0,
+        error: Int = 0
+    ) {
+        val optimizedUrl = buildOptimizedSmallSquareImageUrl(url)
+        val normalizedUrl = normalizeUrl(url)
+        loadInto(
+            imageView = imageView,
+            url = optimizedUrl,
+            placeholderRes = placeholder,
+            errorRes = error,
+            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null
+        )
     }
 
     fun loadVideoCover(
@@ -686,6 +711,28 @@ object ImageLoader {
             0 -> "@240w_240h_1c.webp"
             2 -> "@960w_960h_1c.webp"
             else -> "@480w_480h_1c.webp"
+        }
+        return appendImageSuffix(normalized, suffix)
+    }
+
+    private fun buildOptimizedAvatarUrl(url: String?): String {
+        val normalized = normalizeUrl(url)
+        if (!isBilibiliImageUrl(normalized)) return normalized
+        val suffix = when (resolveImageQualityLevel()) {
+            0 -> "@80w_80h_1c.webp"
+            2 -> "@160w_160h_1c.webp"
+            else -> "@100w_100h_1c.webp"
+        }
+        return appendImageSuffix(normalized, suffix)
+    }
+
+    private fun buildOptimizedSmallSquareImageUrl(url: String?): String {
+        val normalized = normalizeUrl(url)
+        if (!isBilibiliImageUrl(normalized)) return normalized
+        val suffix = when (resolveImageQualityLevel()) {
+            0 -> "@80w_80h_1c.webp"
+            2 -> "@240w_240h_1c.webp"
+            else -> "@160w_160h_1c.webp"
         }
         return appendImageSuffix(normalized, suffix)
     }

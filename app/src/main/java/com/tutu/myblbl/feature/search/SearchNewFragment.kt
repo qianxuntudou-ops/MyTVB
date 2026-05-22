@@ -39,6 +39,7 @@ import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.system.ViewUtils
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
+import com.tutu.myblbl.core.common.log.PagePerfLogger
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import com.tutu.myblbl.core.ui.tab.focusSelectedTab
@@ -58,7 +59,7 @@ class SearchNewFragment :
     private val viewModel: SearchViewModel by viewModel()
     private lateinit var hotSearchAdapter: HotSearchAdapter
     private lateinit var centerAdapter: SearchSuggestAdapter
-    private lateinit var resultPagerAdapter: SearchResultPagerAdapter
+    private var resultPagerAdapter: SearchResultPagerAdapter? = null
     private lateinit var historyStore: SearchHistoryStore
     private lateinit var focusCoordinator: SearchFocusCoordinator
     private var tabMediator: TabLayoutMediator? = null
@@ -73,6 +74,8 @@ class SearchNewFragment :
     private var isResultPanelVisible = false
     private var pendingResultFocus = false
     private var pendingOpenKeyword: String? = null
+    private var searchOpenStartMs = 0L
+    private var searchResultStartMs = 0L
     private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
         override fun onPageSelected(position: Int) {
             updateOrderButtonVisibility(position)
@@ -100,6 +103,8 @@ class SearchNewFragment :
     }
 
     override fun initView() {
+        searchOpenStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow("Search", "initView_start")
         historyStore = SearchHistoryStore(requireContext())
         focusCoordinator = SearchFocusCoordinator(
             searchPanelRoots = {
@@ -114,12 +119,16 @@ class SearchNewFragment :
         setupInput()
         setupKeyboard()
         setupKeywordColumns()
-        setupSearchResult()
         setupResultHeader()
         setupOrderButton()
         registerFocusTracking()
         updateOrderText()
         showSearchPanel()
+        binding.root.post {
+            if (isAdded && view != null) {
+                PagePerfLogger.mark("Search", "input_panel_ready", searchOpenStartMs)
+            }
+        }
     }
 
     override fun initData() {
@@ -170,8 +179,9 @@ class SearchNewFragment :
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.searchPageStates.collectLatest { states ->
+                    val adapter = resultPagerAdapter ?: return@collectLatest
                     states.forEach { (type, state) ->
-                        resultPagerAdapter.submitState(type, state.items, state.loading, state.hasMore)
+                        adapter.submitState(type, state.items, state.loading, state.hasMore)
                     }
                     maybeResolvePendingResultFocus()
                 }
@@ -269,20 +279,25 @@ class SearchNewFragment :
         binding.recyclerViewEnd.adapter = hotSearchAdapter
     }
 
-    private fun setupSearchResult() {
-        resultPagerAdapter = SearchResultPagerAdapter(
+    private fun ensureSearchResultSetup(): SearchResultPagerAdapter {
+        resultPagerAdapter?.let { return it }
+
+        val setupStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow("Search", "result_setup_start")
+        val adapter = SearchResultPagerAdapter(
             onItemClick = ::onResultItemClick,
             onLoadMore = ::onResultPageLoadMore,
             onTopEdgeUp = ::focusResultHeader
         )
-        resultPagerAdapter.setPages(emptyList())
-        binding.viewPagerResult.adapter = resultPagerAdapter
+        resultPagerAdapter = adapter
+        adapter.setPages(emptyList())
+        binding.viewPagerResult.adapter = adapter
         binding.viewPagerResult.offscreenPageLimit = 2
         binding.viewPagerResult.registerOnPageChangeCallback(pageChangeCallback)
 
         tabMediator?.detach()
         tabMediator = TabLayoutMediator(binding.tabSearchResult, binding.viewPagerResult) { tab, position ->
-            tab.text = resultPagerAdapter.getPageTitle(position)
+            tab.text = adapter.getPageTitle(position)
         }
         tabMediator?.attach()
         binding.tabSearchResult.enableTouchNavigation(
@@ -291,6 +306,8 @@ class SearchNewFragment :
             onNavigateDown = { focusCurrentResultContent() },
             onNavigateRight = ::focusOrderButton
         )
+        PagePerfLogger.mark("Search", "result_setup_end", setupStartMs)
+        return adapter
     }
 
     private fun setupResultHeader() {
@@ -357,7 +374,11 @@ class SearchNewFragment :
     }
 
     private fun updateOrderButtonVisibility(position: Int = binding.viewPagerResult.currentItem) {
-        val isVideoTab = resultPagerAdapter.getPageType(position) == SearchType.Video
+        val adapter = resultPagerAdapter ?: run {
+            binding.buttonOrder.visibility = View.GONE
+            return
+        }
+        val isVideoTab = adapter.getPageType(position) == SearchType.Video
         binding.buttonOrder.visibility = if (isVideoTab) View.VISIBLE else View.GONE
         if (!isVideoTab && binding.buttonOrder.hasFocus()) {
             binding.tabSearchResult.focusSelectedTab()
@@ -372,15 +393,19 @@ class SearchNewFragment :
         }
 
         currentKeyword = normalized
+        searchResultStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow("Search", "perform_search", "keywordLen=${normalized.length}")
         pendingHistoryKeyword = null
         pendingResultFocus = true
         updateEditText(normalized, triggerSuggest = false)
         binding.textResultKeyword.text = normalized
+        val adapter = ensureSearchResultSetup()
         showResultPanel()
-        resultPagerAdapter.clearResults()
+        PagePerfLogger.mark("Search", "result_panel_visible", searchResultStartMs)
+        adapter.clearResults()
 
         if (ContentFilter.isSearchKeywordBlocked(requireContext(), normalized)) {
-            resultPagerAdapter.setPages(emptyList())
+            adapter.setPages(emptyList())
             binding.tabSearchResult.isVisible = false
             binding.viewPagerResult.isVisible = false
             binding.textSearchEmpty.isVisible = true
@@ -560,19 +585,27 @@ class SearchNewFragment :
         focusCoordinator.unregister(view)
         tabMediator?.detach()
         tabMediator = null
-        binding.viewPagerResult.unregisterOnPageChangeCallback(pageChangeCallback)
+        if (resultPagerAdapter != null) {
+            binding.viewPagerResult.unregisterOnPageChangeCallback(pageChangeCallback)
+            binding.viewPagerResult.adapter = null
+            resultPagerAdapter = null
+        }
         super.onDestroyView()
     }
 
     private fun applySearchCategories(categories: List<SearchCategoryItem>) {
+        if (currentKeyword.isBlank() && resultPagerAdapter == null) {
+            return
+        }
+        val adapter = ensureSearchResultSetup()
         val pageStates = viewModel.searchPageStates.value
         val initialItems = pageStates.mapValues { (_, state) -> state.items }
         val initialLoading = pageStates.mapValues { (_, state) -> state.loading }
         val initialHasMore = pageStates.mapValues { (_, state) -> state.hasMore }
-        resultPagerAdapter.setPages(categories, initialItems, initialLoading, initialHasMore)
+        adapter.setPages(categories, initialItems, initialLoading, initialHasMore)
         tabMediator?.detach()
         tabMediator = TabLayoutMediator(binding.tabSearchResult, binding.viewPagerResult) { tab, position ->
-            tab.text = resultPagerAdapter.getPageTitle(position)
+            tab.text = adapter.getPageTitle(position)
         }
         tabMediator?.attach()
         binding.tabSearchResult.enableTouchNavigation(
@@ -582,13 +615,19 @@ class SearchNewFragment :
             onNavigateRight = ::focusOrderButton
         )
         viewModel.searchPageStates.value.forEach { (type, state) ->
-            resultPagerAdapter.submitState(type, state.items, state.loading, state.hasMore)
+            adapter.submitState(type, state.items, state.loading, state.hasMore)
         }
         val hasCategories = categories.isNotEmpty()
         binding.tabSearchResult.isVisible = hasCategories
         binding.viewPagerResult.isVisible = hasCategories
         val searchCompleted = viewModel.searchOverview.value != null
         binding.textSearchEmpty.isVisible = !hasCategories && searchCompleted
+        PagePerfLogger.mark(
+            "Search",
+            "categories_applied",
+            searchResultStartMs,
+            "categories=${categories.size} completed=$searchCompleted"
+        )
 
         if (hasCategories) {
             binding.viewPagerResult.setCurrentItem(0, false)
@@ -608,7 +647,8 @@ class SearchNewFragment :
         if (currentKeyword.isBlank()) {
             return
         }
-        val type = resultPagerAdapter.getPageType(position) ?: return
+        val adapter = resultPagerAdapter ?: return
+        val type = adapter.getPageType(position) ?: return
         val state = viewModel.searchPageStates.value[type]
         if (forceRefresh || state == null || state.items.isEmpty()) {
             viewModel.loadSearchPage(type, currentKeyword, pageSize, currentOrder, forceRefresh)
@@ -697,8 +737,9 @@ class SearchNewFragment :
     }
 
     private fun focusCurrentResultContent(anchorView: View? = view?.findFocus()): Boolean {
-        return resultPagerAdapter.focusPrimaryContent(
-            type = resultPagerAdapter.getPageType(binding.viewPagerResult.currentItem),
+        val adapter = resultPagerAdapter ?: return false
+        return adapter.focusPrimaryContent(
+            type = adapter.getPageType(binding.viewPagerResult.currentItem),
             anchorView = anchorView
         )
     }
@@ -805,7 +846,8 @@ class SearchNewFragment :
     }
 
     private fun currentResultPageHasItems(): Boolean {
-        val type = resultPagerAdapter.getPageType(binding.viewPagerResult.currentItem) ?: return false
+        val adapter = resultPagerAdapter ?: return false
+        val type = adapter.getPageType(binding.viewPagerResult.currentItem) ?: return false
         return viewModel.searchPageStates.value[type]?.items?.isNotEmpty() == true
     }
 }

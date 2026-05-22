@@ -22,15 +22,11 @@ import kotlinx.coroutines.launch
 
 abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, MainActivity.OnVideoBlockedListener {
 
-    companion object {
-        private const val INITIAL_REST_BATCH_DELAY_MS = 80L
-    }
-
     protected abstract val feedViewModel: VideoFeedViewModel
     protected abstract val secondaryTabPosition: Int
     protected open val dispatchHomeContentReady: Boolean = false
     protected open val toastNonEmptyError: Boolean = false
-    protected open val deferInitialLoadUntilFirstDraw: Boolean = true
+    protected open val deferInitialLoadUntilFirstDraw: Boolean = false
 
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private var pendingScrollToTopAfterRefresh = false
@@ -40,6 +36,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
     private var contentReadyDispatched = false
 
     override val autoLoad: Boolean = false
+    override val initialViewHolderPrewarmCount: Int = 0
     // TV 项目无触摸下拉刷新，下拉刷新由 MainTabReselected/MenuPressed/BackPressed 等键盘事件触发。
     // 关掉可省 setupSwipeRefresh 里的 view tree 重排（removeView + addView 两次）+ 多一层 measure。
     override val enableSwipeRefresh: Boolean = false
@@ -78,7 +75,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
 
     override fun initView() {
         super.initView()
-        adapter?.setShowLoadMore(true)
+        adapter?.setShowLoadMore(false)
     }
 
     override fun initData() {
@@ -208,7 +205,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         isLoading = state.loadingInitial || state.refreshing || state.appending
         hasMore = state.hasMore
         setRefreshing(state.refreshing)
-        adapter?.setShowLoadMore(state.hasMore)
+        adapter?.setShowLoadMore(false)
 
         if (state.loadingInitial && state.items.isEmpty()) {
             showLoading(true)
@@ -268,11 +265,6 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         isLoading = false
         setRefreshing(false)
         val wasPendingScrollToTop = pendingScrollToTopAfterRefresh
-        val isInitialPopulation = (adapter?.contentCount() ?: 0) == 0 && !wasPendingScrollToTop
-        if (isInitialPopulation && videos.size > getSpanCount().coerceAtLeast(1)) {
-            applyInitialVideosInBatches(videos, t0)
-            return
-        }
         val shouldPreserveScroll = (adapter?.contentCount() ?: 0) > 0 &&
             !pendingScrollToTopAfterRefresh &&
             !isTvListFocusEnabled()
@@ -302,52 +294,6 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         pendingScrollToTopAfterRefresh = false
         feedViewModel.consumeListChange()
         AppLog.i("STARTUP", "T8 applyReplacedVideosNow done count=${videos.size} elapsed=${SystemClock.elapsedRealtime() - t0}ms")
-    }
-
-    private fun applyInitialVideosInBatches(videos: List<VideoModel>, startMs: Long) {
-        val firstBatchSize = getSpanCount().coerceAtLeast(1).coerceAtMost(videos.size)
-        val firstBatch = videos.take(firstBatchSize)
-        val restBatch = videos.drop(firstBatchSize)
-        AppLog.i(
-            "STARTUP",
-            "T8 initialBatch first=${firstBatch.size} rest=${restBatch.size} total=${videos.size}"
-        )
-        adapter?.setShowLoadMore(false)
-        setAdapterData(
-            firstBatch,
-            preserveScrollOffset = false,
-            onComplete = {
-                notifyTvListDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
-            }
-        )
-        showContent()
-        showLoading(false)
-        pendingScrollToTopAfterRefresh = false
-        feedViewModel.consumeListChange()
-        dispatchContentReadyAfterRecyclerDrawIfNeeded("initial_batch_first_row")
-        rootView?.postDelayed({
-            if (!isAdded || view == null || restBatch.isEmpty()) {
-                return@postDelayed
-            }
-            val appendStart = SystemClock.elapsedRealtime()
-            AppLog.i("STARTUP", "T8 initialBatch appendRest count=${restBatch.size}")
-            val videoAdapter = adapter as? VideoAdapter
-            if (videoAdapter != null) {
-                videoAdapter.addData(restBatch)
-            } else {
-                setAdapterData(videos, preserveScrollOffset = false)
-            }
-            adapter?.setShowLoadMore(hasMore)
-            notifyTvListDataChanged(TvDataChangeReason.APPEND)
-            AppLog.i(
-                "STARTUP",
-                "T8 initialBatch appendRest done elapsed=${SystemClock.elapsedRealtime() - appendStart}ms"
-            )
-        }, INITIAL_REST_BATCH_DELAY_MS)
-        AppLog.i(
-            "STARTUP",
-            "T8 applyReplacedVideosNow done initialBatch total=${videos.size} elapsed=${SystemClock.elapsedRealtime() - startMs}ms"
-        )
     }
 
     private fun applyAppendedVideos(items: List<VideoModel>) {

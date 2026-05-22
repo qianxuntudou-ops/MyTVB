@@ -4,8 +4,6 @@ import android.view.LayoutInflater
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellFollowingBinding
@@ -18,44 +16,56 @@ class DynamicUpAdapter(
     private val onLeftEdge: () -> Boolean = { false },
     private val onRightEdge: () -> Boolean = { false },
     private val debugTag: String? = null
-) : ListAdapter<FollowingModel, DynamicUpAdapter.ViewHolder>(DIFF_CALLBACK) {
+) : RecyclerView.Adapter<DynamicUpAdapter.ViewHolder>() {
 
+    private val items = ArrayList<FollowingModel>()
     private var selectedPosition = 0
+    private var avatarLoadsEnabled = false
 
-    companion object {
-        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<FollowingModel>() {
-            override fun areItemsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
-                return when {
-                    oldItem.mid > 0L && newItem.mid > 0L -> oldItem.mid == newItem.mid
-                    else -> oldItem.uname == newItem.uname
-                }
-            }
-
-            override fun areContentsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
-                return oldItem == newItem
-            }
-        }
+    init {
+        setHasStableIds(true)
     }
 
     fun setData(list: List<FollowingModel>) {
-        submitList(list)
+        items.clear()
+        items.addAll(list)
         selectedPosition = selectedPosition.coerceIn(0, (list.lastIndex).coerceAtLeast(0))
+        notifyDataSetChanged()
     }
 
-    fun getData(): List<FollowingModel> = currentList.toList()
+    fun getData(): List<FollowingModel> = items.toList()
 
     fun setSelectedPosition(position: Int) {
         val oldPosition = selectedPosition
         selectedPosition = position
-        if (oldPosition >= 0) {
+        if (oldPosition in 0 until itemCount) {
             notifyItemChanged(oldPosition)
         }
-        if (position >= 0) {
+        if (position in 0 until itemCount) {
             notifyItemChanged(position)
         }
     }
 
     fun getSelectedPosition(): Int = selectedPosition
+
+    fun setAvatarLoadsEnabled(enabled: Boolean) {
+        if (avatarLoadsEnabled == enabled) return
+        avatarLoadsEnabled = enabled
+        if (itemCount > 0) {
+            notifyItemRangeChanged(0, itemCount)
+        }
+    }
+
+    override fun getItemCount(): Int = items.size
+
+    override fun getItemId(position: Int): Long {
+        val item = items.getOrNull(position) ?: return RecyclerView.NO_ID
+        return when {
+            item.mid > 0L -> item.mid
+            item.uname.isNotBlank() -> item.uname.hashCode().toLong()
+            else -> position.toLong()
+        }
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = CellFollowingBinding.inflate(
@@ -67,7 +77,7 @@ class DynamicUpAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position), position == selectedPosition)
+        holder.bind(items[position], position == selectedPosition)
     }
 
     inner class ViewHolder(
@@ -78,7 +88,7 @@ class DynamicUpAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(currentList[position])
+                    items.getOrNull(position)?.let(onItemClick)
                 }
             }
             binding.root.setOnFocusChangeListener { _, hasFocus ->
@@ -109,16 +119,22 @@ class DynamicUpAdapter(
             }
 
             if (item.mid == 0L) {
+                ImageLoader.clear(binding.imageAvatar)
                 binding.imageAvatar.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
                 binding.imageAvatar.setImageResource(R.drawable.ic_dynamic)
                 binding.imageAvatar.setBadge(officialVerifyType = -1)
             } else {
-                ImageLoader.loadCircle(
-                    imageView = binding.imageAvatar,
-                    url = item.face,
-                    placeholder = R.drawable.default_avatar,
-                    error = R.drawable.default_avatar
-                )
+                if (avatarLoadsEnabled || isSelected) {
+                    ImageLoader.loadCircle(
+                        imageView = binding.imageAvatar,
+                        url = item.face,
+                        placeholder = R.drawable.default_avatar,
+                        error = R.drawable.default_avatar
+                    )
+                } else {
+                    ImageLoader.clear(binding.imageAvatar)
+                    binding.imageAvatar.setImageResource(R.drawable.default_avatar)
+                }
                 binding.imageAvatar.setBadge(
                     officialVerifyType = item.officialVerify?.type ?: -1
                 )

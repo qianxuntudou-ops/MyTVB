@@ -11,14 +11,12 @@ import android.view.ViewOutlineProvider
 import android.view.ViewGroup
 import android.view.ViewConfiguration
 import android.graphics.Outline
-import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellLiveRoomBinding
 import com.tutu.myblbl.databinding.CellMovieBinding
 import com.tutu.myblbl.databinding.CellUserBinding
-import com.tutu.myblbl.databinding.CellVideoBinding
+import com.tutu.myblbl.databinding.CellVideoLightBinding
 import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.search.SearchType
 import com.tutu.myblbl.core.ui.image.ImageLoader
@@ -43,41 +41,50 @@ class SearchItemAdapter(
     private val onItemFocused: ((View, Int) -> Unit)? = null,
     private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
     private val onItemsChanged: (() -> Unit)? = null
-) : ListAdapter<SearchItemModel, RecyclerView.ViewHolder>(DiffCallback), TvFocusableAdapter {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>(), TvFocusableAdapter {
 
     private val portraitDetectedUrls = mutableSetOf<String>()
+    private val items = mutableListOf<SearchItemModel>()
 
     fun setItems(list: List<SearchItemModel>) {
-        submitList(list)
+        if (items.isEmpty() && list.isNotEmpty()) {
+            items.addAll(list)
+            notifyItemRangeInserted(0, list.size)
+            return
+        }
+        items.clear()
+        items.addAll(list)
+        notifyDataSetChanged()
     }
 
     override fun focusableItemCount(): Int = itemCount
 
+    override fun getItemCount(): Int = items.size
+
     override fun stableKeyAt(position: Int): String? {
-        return currentList.getOrNull(position)?.let(::searchItemKey)
+        return items.getOrNull(position)?.let(::searchItemKey)
     }
 
     override fun findPositionByStableKey(key: String): Int {
-        return currentList.indexOfFirst { searchItemKey(it) == key }
+        return items.indexOfFirst { searchItemKey(it) == key }
             .takeIf { it >= 0 }
             ?: RecyclerView.NO_POSITION
     }
 
     private fun removeBlockedItems(blockedName: String) {
-        val filtered = currentList.filter {
+        val filtered = items.filter {
             val authorName = it.author.ifBlank { it.uname }
             !authorName.equals(blockedName, ignoreCase = true)
         }
-        if (filtered.size == currentList.size) return
-        submitList(filtered) {
-            onItemsChanged?.invoke()
-        }
+        if (filtered.size == items.size) return
+        setItems(filtered)
+        onItemsChanged?.invoke()
     }
 
     private fun RecyclerView.ViewHolder.showCardMenu() {
         val position = bindingAdapterPosition
         if (position == RecyclerView.NO_POSITION) return
-        val item = getItem(position)
+        val item = items[position]
         val video = VideoModel(
             aid = item.aid,
             bvid = item.bvid,
@@ -96,11 +103,10 @@ class SearchItemAdapter(
             video = video,
             onDislikeVideo = {
                 val key = searchItemKey(item)
-                val filtered = currentList.filter { searchItemKey(it) != key }
-                if (filtered.size != currentList.size) {
-                    submitList(filtered) {
-                        onItemsChanged?.invoke()
-                    }
+                val filtered = items.filter { searchItemKey(it) != key }
+                if (filtered.size != items.size) {
+                    setItems(filtered)
+                    onItemsChanged?.invoke()
                 }
             },
             onDislikeUp = { upName -> removeBlockedItems(upName) }
@@ -119,8 +125,8 @@ class SearchItemAdapter(
         val inflater = LayoutInflater.from(parent.context)
         return when (viewType) {
             VIEW_TYPE_VIDEO -> VideoViewHolder(
-                VideoCardPerfLogger.measureInflate("SearchItemAdapter") {
-                    CellVideoBinding.inflate(inflater, parent, false)
+                VideoCardPerfLogger.measureInflate("SearchItemAdapter.light") {
+                    CellVideoLightBinding.inflate(inflater, parent, false)
                 }
             )
 
@@ -139,7 +145,7 @@ class SearchItemAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        val item = getItem(position)
+        val item = items[position]
         when (holder) {
             is VideoViewHolder -> holder.bind(item)
             is LiveViewHolder -> holder.bind(item)
@@ -149,7 +155,7 @@ class SearchItemAdapter(
     }
 
     private inner class VideoViewHolder(
-        private val binding: CellVideoBinding
+        private val binding: CellVideoLightBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentItem: SearchItemModel? = null
@@ -353,7 +359,7 @@ class SearchItemAdapter(
             val position = bindingAdapterPosition
             if (position != RecyclerView.NO_POSITION) {
                 onItemFocused?.invoke(view, position)
-                onItemClick(SearchResultEntry(searchType, getItem(position)))
+                onItemClick(SearchResultEntry(searchType, items[position]))
             }
         }
         view.setOnFocusChangeListener { targetView, hasFocus ->
@@ -409,24 +415,9 @@ class SearchItemAdapter(
     }
 
     private companion object {
-        const val VIEW_TYPE_VIDEO = 0
-        const val VIEW_TYPE_LIVE = 1
-        const val VIEW_TYPE_SERIES = 2
-        const val VIEW_TYPE_USER = 3
-
-        private val DiffCallback = object : DiffUtil.ItemCallback<SearchItemModel>() {
-            override fun areItemsTheSame(oldItem: SearchItemModel, newItem: SearchItemModel): Boolean {
-                return when {
-                    oldItem.id != 0L && newItem.id != 0L -> oldItem.id == newItem.id
-                    oldItem.aid != 0L && newItem.aid != 0L -> oldItem.aid == newItem.aid
-                    oldItem.bvid.isNotBlank() && newItem.bvid.isNotBlank() -> oldItem.bvid == newItem.bvid
-                    else -> oldItem.title == newItem.title
-                }
-            }
-
-            override fun areContentsTheSame(oldItem: SearchItemModel, newItem: SearchItemModel): Boolean {
-                return oldItem == newItem
-            }
-        }
+        const val VIEW_TYPE_VIDEO = 0x530100
+        const val VIEW_TYPE_LIVE = 0x530101
+        const val VIEW_TYPE_SERIES = 0x530102
+        const val VIEW_TYPE_USER = 0x530103
     }
 }

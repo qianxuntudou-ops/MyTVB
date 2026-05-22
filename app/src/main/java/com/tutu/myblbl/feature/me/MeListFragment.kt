@@ -22,10 +22,12 @@ import com.tutu.myblbl.ui.adapter.HistoryVideoAdapter
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.BaseListFragment
+import com.tutu.myblbl.core.ui.base.RecyclerViewPoolPrewarmer
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.log.PagePerfLogger
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
@@ -77,6 +79,10 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     private var pendingHistoryScrollToTop = false
     private var lastKnownLoggedIn = false
     private var tvFocusController: TvListFocusController? = null
+    private var currentOpenStartMs = 0L
+    private var latestRequestStartMs = 0L
+    private var cacheRestoreCompleted = false
+    private var pendingLoadAfterCacheRestore = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -141,6 +147,14 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         binding.recyclerView.layoutManager = layoutManager
         binding.recyclerView.adapter = historyAdapter ?: videoAdapter
         binding.recyclerView.setRecycledViewPool(BaseListFragment.sharedVideoPool)
+        (historyAdapter ?: videoAdapter)?.let { adapter ->
+            RecyclerViewPoolPrewarmer.prewarm(
+                recyclerView = binding.recyclerView,
+                adapter = adapter,
+                count = 8,
+                source = "${pageTag()}.initial"
+            )
+        }
         binding.recyclerView.setHasFixedSize(true)
         binding.emptyContainer.visibility = View.GONE
         binding.progressBar.visibility = View.GONE
@@ -185,8 +199,19 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         lastKnownLoggedIn = viewModel.isLoggedIn()
         AppLog.d("MePerf", "MeListFragment.initData: type=$type, start")
         viewLifecycleOwner.lifecycleScope.launch {
-            restoreCachedContentAsync()
-            AppLog.d("MePerf", "MeListFragment.initData: restoreCachedContent完成, type=$type")
+            try {
+                restoreCachedContentAsync()
+            } finally {
+                cacheRestoreCompleted = true
+                AppLog.d("MePerf", "MeListFragment.initData: restoreCachedContent完成, type=$type")
+                if (pendingLoadAfterCacheRestore) {
+                    pendingLoadAfterCacheRestore = false
+                    if (!hasContentItems()) {
+                        currentPage = 1
+                        loadData()
+                    }
+                }
+            }
         }
         // 不在 initData 里直接 loadData()，等 onTabSelected() 触发首次加载，
         // 避免相邻 tab 被预加载时也发起网络请求。
@@ -280,6 +305,12 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private fun loadData() {
+        latestRequestStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow(
+            pageTag(),
+            "request_start",
+            "page=$currentPage source=${if (currentOpenStartMs > 0L) "open" else "refresh"} hasContent=${hasContentItems()}"
+        )
         when (type) {
             TYPE_HISTORY -> viewModel.loadHistory(currentPage, pageSize)
             TYPE_LATER -> viewModel.loadLaterWatch()
@@ -321,6 +352,13 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private suspend fun bindHistoryData(videos: List<HistoryVideoModel>) {
+        val bindStartMs = PagePerfLogger.now()
+        PagePerfLogger.mark(
+            pageTag(),
+            "data_collected",
+            latestRequestStartMs,
+            "raw=${videos.size} page=$currentPage"
+        )
         swipeRefreshLayout?.isRefreshing = false
         val adapter = historyAdapter ?: return
         val ctx = context ?: return
@@ -337,9 +375,23 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                 )
             }
         }
+        PagePerfLogger.mark(
+            pageTag(),
+            "filter_end",
+            bindStartMs,
+            "raw=${videos.size} filtered=${filtered.size}"
+        )
         val shouldRestoreFocus = pendingHistoryReturnRestore && filtered.isNotEmpty()
         val shouldScrollToTop = pendingHistoryScrollToTop && filtered.isNotEmpty()
+        val applyStartMs = PagePerfLogger.now()
         adapter.setData(filtered) {
+            PagePerfLogger.mark(
+                pageTag(),
+                "adapter_commit",
+                applyStartMs,
+                "items=${adapter.contentCount()}"
+            )
+            logMeFirstDraw(adapter.contentCount())
             tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
             when {
                 shouldRestoreFocus -> {
@@ -358,13 +410,35 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private suspend fun bindLaterData(videos: List<VideoModel>) {
+        val bindStartMs = PagePerfLogger.now()
+        PagePerfLogger.mark(
+            pageTag(),
+            "data_collected",
+            latestRequestStartMs,
+            "raw=${videos.size}"
+        )
         swipeRefreshLayout?.isRefreshing = false
         val adapter = videoAdapter ?: return
         val ctx = context ?: return
         val filtered = withContext(Dispatchers.Default) {
             ContentFilter.filterVideos(ctx, videos)
         }
-        adapter.setData(filtered)
+        PagePerfLogger.mark(
+            pageTag(),
+            "filter_end",
+            bindStartMs,
+            "raw=${videos.size} filtered=${filtered.size}"
+        )
+        val applyStartMs = PagePerfLogger.now()
+        adapter.setData(filtered) {
+            PagePerfLogger.mark(
+                pageTag(),
+                "adapter_commit",
+                applyStartMs,
+                "items=${adapter.contentCount()}"
+            )
+            logMeFirstDraw(adapter.contentCount())
+        }
         tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
         withContext(Dispatchers.IO) {
             cacheLaterVideos(videos)
@@ -450,9 +524,20 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         if (!isAdded || view == null || viewModel.loading.value) {
             return
         }
+        currentOpenStartMs = PagePerfLogger.now()
+        val hasContent = hasContentItems()
+        PagePerfLogger.markNow(pageTag(), "tab_selected", "hasContent=$hasContent")
+        if (hasContent) {
+            logMeFirstDraw(currentContentCount(), source = "visible_cache")
+        }
         when (type) {
             TYPE_HISTORY, TYPE_LATER -> {
                 if (!hasContentItems()) {
+                    if (!cacheRestoreCompleted) {
+                        pendingLoadAfterCacheRestore = true
+                        PagePerfLogger.markNow(pageTag(), "wait_cache_restore_before_network")
+                        return
+                    }
                     currentPage = 1
                     loadData()
                 }
@@ -470,6 +555,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         if (!isAdded || view == null || viewModel.loading.value) {
             return
         }
+        currentOpenStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow(pageTag(), "tab_reselected", "hasContent=${hasContentItems()}")
         refresh()
     }
 
@@ -580,6 +667,14 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         }
     }
 
+    private fun currentContentCount(): Int {
+        return when (type) {
+            TYPE_HISTORY -> historyAdapter?.itemCount ?: 0
+            TYPE_LATER -> videoAdapter?.contentCount() ?: 0
+            else -> binding.recyclerView.adapter?.itemCount ?: 0
+        }
+    }
+
     private fun requestItemFocus(position: Int, retries: Int = 6) {
         if (tvFocusController?.requestFocusPosition(position) == true || retries <= 0) {
             return
@@ -663,6 +758,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private suspend fun restoreCachedContentAsync() {
+        val cacheStartMs = PagePerfLogger.now()
         if (!viewModel.isLoggedIn()) return
         val ctx = context ?: return
         when (type) {
@@ -688,6 +784,13 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                         }
                     }
                     historyAdapter?.setData(filtered)
+                    PagePerfLogger.mark(
+                        pageTag(),
+                        "cache_restore_commit",
+                        cacheStartMs,
+                        "raw=${cachedVideos.size} filtered=${filtered.size}"
+                    )
+                    logMeFirstDraw(filtered.size, source = "cache")
                     showContent()
                 }
             }
@@ -704,11 +807,34 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                         ContentFilter.filterVideos(ctx, cachedVideos)
                     }
                     videoAdapter?.setData(filtered)
+                    PagePerfLogger.mark(
+                        pageTag(),
+                        "cache_restore_commit",
+                        cacheStartMs,
+                        "raw=${cachedVideos.size} filtered=${filtered.size}"
+                    )
+                    logMeFirstDraw(filtered.size, source = "cache")
                     showContent()
                 }
             }
         }
     }
+
+    private fun logMeFirstDraw(itemCount: Int, source: String = "network") {
+        val openStart = currentOpenStartMs.takeIf { it > 0L } ?: latestRequestStartMs
+        if (openStart <= 0L || itemCount <= 0) return
+        PagePerfLogger.logRecyclerPreDraw(
+            recyclerView = binding.recyclerView,
+            page = pageTag(),
+            event = "first_cards_draw",
+            startMs = openStart,
+            itemCount = itemCount,
+            extra = "source=$source"
+        )
+        currentOpenStartMs = 0L
+    }
+
+    private fun pageTag(): String = "Me/$type"
 
     private fun cacheHistoryVideos(videos: List<HistoryVideoModel>) {
         runCatching {

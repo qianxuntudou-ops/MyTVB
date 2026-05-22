@@ -1,8 +1,10 @@
 package com.tutu.myblbl.ui.adapter
 
+import android.graphics.Outline
 import android.view.View
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -104,6 +106,13 @@ class FavoriteFolderAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         init {
+            val coverRadiusPx = binding.imageCover.resources.getDimension(R.dimen.px15)
+            binding.imageCover.clipToOutline = true
+            binding.imageCover.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, coverRadiusPx)
+                }
+            }
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {

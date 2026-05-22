@@ -19,6 +19,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
+import com.tutu.myblbl.core.ui.tab.disableAdjacentPagePrefetch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -52,7 +53,7 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
             lifecycle
         )
         viewPager.adapter = adapter
-        viewPager.offscreenPageLimit = 1
+        viewPager.disableAdjacentPagePrefetch()
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.attach()

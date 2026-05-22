@@ -18,6 +18,7 @@ import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.core.common.log.AppLog
+import kotlinx.coroutines.CancellationException
 
 class HomeLaneRepository(
     private val apiService: ApiService,
@@ -38,14 +39,17 @@ class HomeLaneRepository(
         cursor: Long = 0,
         isRefresh: Boolean = true
     ): Result<HomeLanePage> {
-        return runCatching {
-            fetchReferenceAlignedHomeLanes(type = type, cursor = cursor, isRefresh = isRefresh)
-        }.onFailure { throwable ->
+        return try {
+            Result.success(fetchReferenceAlignedHomeLanes(type = type, cursor = cursor, isRefresh = isRefresh))
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Throwable) {
             AppLog.e(
                 TAG,
                 "getHomeLanes failure: type=$type, cursor=$cursor, isRefresh=$isRefresh, message=${throwable.message}",
                 throwable
             )
+            Result.failure(throwable)
         }
     }
 
@@ -61,15 +65,18 @@ class HomeLaneRepository(
 
         val sections = legacyPage.sections.toMutableList()
 
-        val followSection = runCatching {
+        val followSection = try {
             fetchMyFollowingSection(type)
-        }.onFailure { throwable ->
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Throwable) {
             AppLog.e(
                 TAG,
                 "fetchReferenceAlignedHomeLanes follow section failure: type=$type, message=${throwable.message}",
                 throwable
             )
-        }.getOrNull()
+            null
+        }
 
         sections.removeAll { it.isFollowSection() }
 
@@ -78,15 +85,18 @@ class HomeLaneRepository(
         }
 
         if (type == TYPE_ANIMATION) {
-            val timelineSection = runCatching {
+            val timelineSection = try {
                 getAnimationTimelineSection().getOrNull()
-            }.onFailure { throwable ->
+            } catch (throwable: CancellationException) {
+                throw throwable
+            } catch (throwable: Throwable) {
                 AppLog.e(
                     TAG,
                     "fetchReferenceAlignedHomeLanes timeline failure: type=$type, message=${throwable.message}",
                     throwable
                 )
-            }.getOrNull()
+                null
+            }
 
             if (timelineSection != null) {
                 val insertIndex = if (followSection != null) 1 else minOf(1, sections.size)
@@ -98,7 +108,7 @@ class HomeLaneRepository(
     }
 
     suspend fun getAnimationTimelineSection(): Result<HomeLaneSection?> {
-        return runCatching {
+        return try {
             val response = apiService.getSeriesTimeLine(
                 type = SeriesType.ANIME,
                 before = 6,
@@ -107,9 +117,12 @@ class HomeLaneRepository(
             if (response.code != 0) {
                 throw IllegalStateException(response.message)
             }
-            buildTimelineSection(response.result)
-        }.onFailure { throwable ->
+            Result.success(buildTimelineSection(response.result))
+        } catch (throwable: CancellationException) {
+            throw throwable
+        } catch (throwable: Throwable) {
             AppLog.e(TAG, "getAnimationTimelineSection failure: ${throwable.message}", throwable)
+            Result.failure(throwable)
         }
     }
 

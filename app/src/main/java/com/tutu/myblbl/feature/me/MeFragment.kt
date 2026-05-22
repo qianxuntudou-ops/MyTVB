@@ -23,6 +23,7 @@ import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
+import com.tutu.myblbl.core.ui.tab.disableAdjacentPagePrefetch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -69,7 +70,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             lifecycle
         )
         viewPager.adapter = adapter
-        viewPager.offscreenPageLimit = ViewPager2.OFFSCREEN_PAGE_LIMIT_DEFAULT
+        viewPager.disableAdjacentPagePrefetch()
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)?.let(::getString).orEmpty()
         }.attach()

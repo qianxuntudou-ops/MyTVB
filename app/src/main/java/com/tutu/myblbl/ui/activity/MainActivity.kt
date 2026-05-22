@@ -99,6 +99,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     private var startupShellRevealed = false
     private var homeContentReadyLogged = false
     private var startupAvatarRefreshScheduled = false
+    private var postHomeAvatarRefreshScheduled = false
     private var avatarRefreshJob: Job? = null
     private val activityCreateStartMs = SystemClock.elapsedRealtime()
     private var lastKnownLoggedIn = false
@@ -425,6 +426,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             )
         }
         revealStartupShell("home_content_ready")
+        schedulePostHomeAvatarRefresh()
     }
 
     private fun scheduleSplashTimeout() {
@@ -482,12 +484,21 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                     (application as? MyBLBLApplication)?.ensureSessionRuntimeReady("startupAvatarCache")
                 }
                 refreshAvatar(allowNetworkFetch = false)
+            }
+        }, 300L)
+    }
+
+    private fun schedulePostHomeAvatarRefresh() {
+        if (postHomeAvatarRefreshScheduled) return
+        postHomeAvatarRefreshScheduled = true
+        binding.root.postDelayed({
+            lifecycleScope.launch {
                 withContext(Dispatchers.IO) {
-                    (application as? MyBLBLApplication)?.ensureDataRuntimeReady("startupAvatarNetwork")
+                    (application as? MyBLBLApplication)?.ensureDataRuntimeReady("postHomeAvatarNetwork")
                 }
                 refreshAvatar(allowNetworkFetch = true, forceNetworkFetch = true)
             }
-        }, 300L)
+        }, 250L)
     }
 
     private fun setTabBarBadge(info: UserDetailInfoModel?) {
@@ -511,8 +522,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
         startupTasksScheduled = true
         AppStartupScheduler()
-            .addTask("refreshAvatar", AppStartupScheduler.Phase.DELAYED, delayMs = 1200L) {
+            .addTask("refreshAvatar", AppStartupScheduler.Phase.DELAYED, delayMs = 4000L) {
                 lifecycleScope.launch {
+                    if (postHomeAvatarRefreshScheduled) {
+                        return@launch
+                    }
                     withContext(Dispatchers.IO) {
                         (application as? MyBLBLApplication)?.ensureDataRuntimeReady("refreshAvatar")
                     }

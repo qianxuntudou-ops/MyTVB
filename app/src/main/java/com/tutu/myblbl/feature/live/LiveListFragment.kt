@@ -15,7 +15,7 @@ import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.ui.activity.LivePlayerActivity
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.BaseListFragment
-import com.tutu.myblbl.core.ui.image.ImageLoader
+import com.tutu.myblbl.core.ui.base.RecyclerViewPoolPrewarmer
 import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
@@ -24,6 +24,7 @@ import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
 import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
 import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.log.PagePerfLogger
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.common.ext.toast
@@ -48,12 +49,12 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     private var isFirstPageLoad = true
     private var needsLogin = false
     private var tvFocusController: TvListFocusController? = null
+    private var currentOpenStartMs = 0L
 
     companion object {
         private const val ARG_AREA_ID = "area_id"
         private const val ARG_PARENT_AREA_ID = "parent_area_id"
         private const val ARG_TITLE = "title"
-        private const val PREFETCH_COVER_COUNT = 8
 
         fun newAreaInstance(areaId: Long, parentAreaId: Long, title: String): LiveListFragment {
             return LiveListFragment().apply {
@@ -89,6 +90,12 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         binding.recyclerView.itemAnimator = null
         binding.recyclerView.setHasFixedSize(true)
         binding.recyclerView.setRecycledViewPool(BaseListFragment.sharedVideoPool)
+        RecyclerViewPoolPrewarmer.prewarm(
+            recyclerView = binding.recyclerView,
+            adapter = adapter,
+            count = 4,
+            source = "${pageTag()}.initial"
+        )
 
         tvFocusController = TvListFocusController(
             recyclerView = binding.recyclerView,
@@ -156,6 +163,8 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     }
 
     override fun initData() {
+        currentOpenStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow(pageTag(), "initData_start")
         if (!sessionGateway.isLoggedIn()) {
             needsLogin = true
             binding.emptyContainer.visibility = View.VISIBLE
@@ -176,15 +185,20 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.rooms.collectLatest { rawRooms ->
+                    val collectStartMs = PagePerfLogger.now()
+                    PagePerfLogger.mark(pageTag(), "data_collected", currentOpenStartMs, "raw=${rawRooms.size}")
                     val rooms = ContentFilter.filterLiveRooms(requireContext(), rawRooms)
-                    if (rooms.isNotEmpty()) {
-                        ImageLoader.prefetchVideoCovers(
-                            requireContext(),
-                            rooms.asSequence().take(PREFETCH_COVER_COUNT).map { it.cover }.toList()
-                        )
-                    }
+                    PagePerfLogger.mark(
+                        pageTag(),
+                        "filter_end",
+                        collectStartMs,
+                        "raw=${rawRooms.size} filtered=${rooms.size}"
+                    )
                     swipeRefreshLayout?.isRefreshing = false
+                    val applyStartMs = PagePerfLogger.now()
                     adapter.setData(rooms)
+                    PagePerfLogger.mark(pageTag(), "adapter_apply", applyStartMs, "items=${adapter.itemCount}")
+                    logLiveListFirstDraw(rooms.size)
                     if (isFirstPageLoad && rooms.isNotEmpty()) {
                         isFirstPageLoad = false
                         binding.recyclerView.scrollToPosition(0)
@@ -288,9 +302,26 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     }
 
     private fun reload() {
+        currentOpenStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow(pageTag(), "reload_start", "hasContent=${adapter.itemCount > 0}")
         tvFocusController?.clearAnchorForUserRefresh()
         viewModel.startArea(parentAreaId, areaId, preserveExisting = adapter.itemCount > 0)
     }
+
+    private fun logLiveListFirstDraw(itemCount: Int) {
+        val startMs = currentOpenStartMs
+        if (startMs <= 0L || itemCount <= 0) return
+        PagePerfLogger.logRecyclerPreDraw(
+            recyclerView = binding.recyclerView,
+            page = pageTag(),
+            event = "first_cards_draw",
+            startMs = startMs,
+            itemCount = itemCount
+        )
+        currentOpenStartMs = 0L
+    }
+
+    private fun pageTag(): String = "LiveList/${title.ifBlank { areaId.toString() }}"
 
     private fun renderState() {
         if (needsLogin) return

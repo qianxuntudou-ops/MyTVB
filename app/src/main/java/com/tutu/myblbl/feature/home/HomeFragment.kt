@@ -20,6 +20,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
+import com.tutu.myblbl.core.ui.tab.disableAdjacentPagePrefetch
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.common.ext.getHomeDefaultStartPageIndex
 import com.tutu.myblbl.core.common.log.AppLog
@@ -60,7 +61,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         super.onViewCreated(view, savedInstanceState)
         adapter = HomeFragmentStateAdapter(childFragmentManager, viewLifecycleOwner.lifecycle)
         binding.viewPager.adapter = adapter
-        binding.viewPager.offscreenPageLimit = ViewPager2.OFFSCREEN_PAGE_LIMIT_DEFAULT
+        binding.viewPager.disableAdjacentPagePrefetch()
         tabMediator = TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.also { it.attach() }

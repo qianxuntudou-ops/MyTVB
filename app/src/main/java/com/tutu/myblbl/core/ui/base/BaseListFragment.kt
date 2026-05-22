@@ -50,6 +50,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     protected open val enableSwipeRefresh: Boolean = true
     protected open val enableLoadMoreFocusController: Boolean = false
     protected open val enableTvListFocusController: Boolean = false
+    protected open val initialViewHolderPrewarmCount: Int = 0
     private var pendingRecyclerIdleAction: (() -> Unit)? = null
     protected var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
     protected var tvFocusController: TvListFocusController? = null
@@ -82,6 +83,16 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         recyclerView?.setRecycledViewPool(sharedVideoPool)
         layoutManager = createLayoutManager()
         recyclerView?.layoutManager = layoutManager
+        val rvForPrewarm = recyclerView
+        val adapterForPrewarm = adapter
+        if (rvForPrewarm != null && adapterForPrewarm != null && initialViewHolderPrewarmCount > 0) {
+            RecyclerViewPoolPrewarmer.prewarm(
+                recyclerView = rvForPrewarm,
+                adapter = adapterForPrewarm,
+                count = initialViewHolderPrewarmCount,
+                source = "$className.initial"
+            )
+        }
         if (layoutManager is WrapContentGridLayoutManager) {
             val gridLM = layoutManager as WrapContentGridLayoutManager
             val adapterRef = adapter
@@ -100,7 +111,9 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         recyclerView?.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-                checkLoadMore()
+                if (dy > 0) {
+                    checkLoadMore()
+                }
                 if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) {
                     tvFocusController?.onUserTouchScroll()
                 }
@@ -194,6 +207,10 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         val lastVisiblePosition = lm.findLastVisibleItemPosition()
         if (lastVisiblePosition >= totalItemCount - loadMoreThreshold) {
             currentPage++
+            AppLog.i(
+                "PagePerf",
+                "${this::class.java.simpleName} load_more_trigger page=$currentPage last=$lastVisiblePosition total=$totalItemCount threshold=$loadMoreThreshold"
+            )
             loadData(currentPage)
         }
     }
@@ -327,6 +344,10 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                         return
                     }
                     currentPage++
+                    AppLog.i(
+                        "PagePerf",
+                        "${this@BaseListFragment::class.java.simpleName} focus_load_more_trigger page=$currentPage"
+                    )
                     loadData(currentPage)
                 }
             }
@@ -374,6 +395,10 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             loadMore = {
                 if (!isLoading && hasMore) {
                     currentPage++
+                    AppLog.i(
+                        "PagePerf",
+                        "${this::class.java.simpleName} tv_load_more_trigger page=$currentPage"
+                    )
                     loadData(currentPage)
                 }
             }

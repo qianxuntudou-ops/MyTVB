@@ -12,9 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.os.SystemClock
-import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.core.ui.image.ImageLoader
 
 class DynamicViewModel(
     private val userRepository: UserRepository
@@ -322,7 +320,6 @@ class DynamicViewModel(
                             currentAllDynamicOffset = response.data?.offset
                             currentPage = nextPage
                             _loadedPage.value = nextPage
-                            ImageLoader.prefetchVideoCovers(MyBLBLApplication.instance, items.take(6).map { it.effectiveCoverUrl })
                             _videos.value = items
                             _status.value = resolveStatus(currentUpId, currentVideoItems)
                             _screenState.value = ScreenState.Content
@@ -366,7 +363,6 @@ class DynamicViewModel(
                             _hasMoreVideos.value = response.data?.hasMore == true
                             currentPage = nextPage
                             _loadedPage.value = nextPage
-                            ImageLoader.prefetchVideoCovers(MyBLBLApplication.instance, items.take(6).map { it.effectiveCoverUrl })
                             _videos.value = items
                             _status.value = resolveStatus(currentUpId, currentVideoItems)
                             _screenState.value = ScreenState.Content

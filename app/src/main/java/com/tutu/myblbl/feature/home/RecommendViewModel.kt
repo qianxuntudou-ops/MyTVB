@@ -20,17 +20,17 @@ class RecommendViewModel(
 
     companion object {
         private const val TAG = "RecommendVM"
-        private const val FIRST_PAGE_SIZE = 12
+        private const val FIRST_PAGE_SIZE = 24
         private const val NEXT_PAGE_SIZE = 24
-        private const val FIRST_PAGE_PRELOAD_GRACE_MS = 180L
+        private const val FIRST_PAGE_PRELOAD_GRACE_MS = 450L
     }
 
     private val appContext = context.applicationContext
     private val _uiState = MutableStateFlow(FeedUiState<VideoModel>())
     override val uiState: StateFlow<FeedUiState<VideoModel>> = _uiState.asStateFlow()
 
-    private val freshIndexTracker = RecommendFreshIndexTracker()
     private var currentPage = 0
+    private var nextRecommendFetchRow = 1
     private var hasLoadedInitial = false
     private val seenBvids = mutableSetOf<String>()
 
@@ -86,8 +86,8 @@ class RecommendViewModel(
                 val filteredItems = preloaded.items.filterForInitialPreload()
                 AppLog.i(TAG, "STARTUP preload filterForInitial=${SystemClock.elapsedRealtime() - filterStart}ms")
                 filteredItems.mapNotNullTo(seenBvids) { it.bvid.takeIf(String::isNotBlank) }
-                freshIndexTracker.markFirstPageLoaded()
                 currentPage = 1
+                nextRecommendFetchRow = nextFetchRowAfter(preloaded)
                 _uiState.value = FeedUiState(
                     items = filteredItems,
                     source = FeedSource.NETWORK,
@@ -111,30 +111,34 @@ class RecommendViewModel(
             listChange = FeedListChange.NONE
         )
 
-        val freshIdx = freshIndexTracker.resolve(page)
+        val freshIdx = page.coerceAtLeast(1)
+        val fetchRow = if (page == 1 && replace) {
+            1
+        } else {
+            nextRecommendFetchRow.coerceAtLeast(1)
+        }
         val pageSize = if (page == 1) FIRST_PAGE_SIZE else NEXT_PAGE_SIZE
         repository.loadNetworkPage(
             page = page,
             pageSize = pageSize,
-            freshIdx = freshIdx
+            freshIdx = freshIdx,
+            fetchRow = fetchRow
         ).onSuccess { pageResult ->
             val filterStart = SystemClock.elapsedRealtime()
-            AppLog.i(TAG, "STARTUP T7 network page=$page ready items=${pageResult.items.size}")
+            AppLog.i(TAG, "STARTUP T7 network page=$page freshIdx=$freshIdx fetchRow=$fetchRow source=${pageResult.source} raw=${pageResult.rawCount} ready items=${pageResult.items.size}")
             val filteredItems = pageResult.items.filterForDisplay()
             if (replace) {
                 seenBvids.clear()
             }
             val dedupedItems = filteredItems.filter { it.bvid.isBlank() || it.bvid !in seenBvids }
             dedupedItems.mapNotNullTo(seenBvids) { it.bvid.takeIf(String::isNotBlank) }
-            if (page == 1) {
-                freshIndexTracker.markFirstPageLoaded()
-            }
             val mergedItems = if (replace) {
                 dedupedItems
             } else {
                 current.items + dedupedItems
             }
             currentPage = page
+            nextRecommendFetchRow = nextFetchRowAfter(pageResult)
             _uiState.value = FeedUiState(
                 items = mergedItems,
                 source = FeedSource.NETWORK,
@@ -154,6 +158,11 @@ class RecommendViewModel(
                 listChange = FeedListChange.NONE
             )
         }
+    }
+
+    private fun nextFetchRowAfter(page: RecommendFeedRepository.NetworkPage): Int {
+        val step = page.rawCount.coerceAtLeast(page.items.size).coerceAtLeast(1)
+        return page.requestFetchRow + step
     }
 
     private suspend fun List<VideoModel>.filterForDisplay(): List<VideoModel> {

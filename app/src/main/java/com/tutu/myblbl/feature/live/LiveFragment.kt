@@ -20,6 +20,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
+import com.tutu.myblbl.core.ui.tab.disableAdjacentPagePrefetch
 import com.tutu.myblbl.core.common.ext.toast
 import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.flow.collectLatest
@@ -57,7 +58,7 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
             lifecycle
         )
         viewPager.adapter = adapter
-        viewPager.offscreenPageLimit = 1
+        viewPager.disableAdjacentPagePrefetch()
 
         // 立即展示"推荐"tab，不等分区列表返回
         val recommendCategory = LiveAreaCategoryParent(id = 0, name = "推荐")

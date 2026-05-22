@@ -47,17 +47,24 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/imageCover"
+        <FrameLayout
+            android:id="@+id/cardCover"
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_marginTop="@dimen/px24"
-            android:scaleType="centerCrop"
             app:layout_constraintDimensionRatio="h,16:9"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:src="@mipmap/ic_launcher" />
+            app:layout_constraintTop_toTopOf="parent">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/imageCover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                tools:src="@mipmap/ic_launcher" />
+
+        </FrameLayout>
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/tvCount"
@@ -77,8 +84,8 @@
             android:paddingBottom="@dimen/px3"
             android:textColor="#FFFFFF"
             android:textSize="@dimen/px20"
-            app:layout_constraintBottom_toBottomOf="@+id/imageCover"
-            app:layout_constraintEnd_toEndOf="@+id/imageCover"
+            app:layout_constraintBottom_toBottomOf="@+id/cardCover"
+            app:layout_constraintEnd_toEndOf="@+id/cardCover"
             tools:text="2" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>

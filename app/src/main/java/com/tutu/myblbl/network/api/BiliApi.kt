@@ -5,11 +5,69 @@ import com.tutu.myblbl.model.live.LiveListWrapper
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.network.BiliClient
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.network.NetworkManager
+import com.tutu.myblbl.network.WbiGenerator
 import org.json.JSONObject
 
 object BiliApi {
 
     private const val TAG = "BiliApi"
+
+    data class RecommendPageResult(
+        val items: List<VideoModel>,
+        val rawCount: Int,
+        val source: String
+    )
+
+    suspend fun recommendV8(freshIdx: Int, ps: Int, fetchRow: Int): RecommendPageResult {
+        val t0 = SystemClock.elapsedRealtime()
+        if (NetworkManager.areWbiKeysStale()) {
+            val ensureStart = SystemClock.elapsedRealtime()
+            NetworkManager.ensureWbiKeys()
+            AppLog.i(TAG, "recommendV8 ensureWbiKeys elapsed=${SystemClock.elapsedRealtime() - ensureStart}ms")
+        }
+        val keys = NetworkManager.getWbiKeys()
+        val params = mapOf(
+            "ps" to ps.toString(),
+            "fresh_idx" to freshIdx.coerceAtLeast(1).toString(),
+            "fresh_idx_1h" to freshIdx.coerceAtLeast(1).toString(),
+            "fetch_row" to fetchRow.coerceAtLeast(1).toString(),
+            "feed_version" to "V8"
+        )
+        val signedParams = WbiGenerator.generateWbiParams(
+            params = params,
+            imgKey = keys.first,
+            subKey = keys.second,
+            includeDmParams = false
+        )
+        val url = BiliClient.buildUrl(
+            path = "x/web-interface/wbi/index/top/feed/rcmd",
+            params = signedParams
+        )
+        AppLog.i(
+            TAG,
+            "recommendV8 request freshIdx=${freshIdx.coerceAtLeast(1)} fetchRow=${fetchRow.coerceAtLeast(1)} ps=$ps keys=${keys.first.isNotBlank()}/${keys.second.isNotBlank()} url=$url"
+        )
+        val json = BiliClient.getJson(url)
+        val t1 = SystemClock.elapsedRealtime()
+        AppLog.i(TAG, "recommendV8 response code=${json.optInt("code", -1)} msg=${json.optString("message", "")} net=${t1 - t0}ms")
+        BiliClient.checkResponse(json, "recommendV8")
+        val data = json.optJSONObject("data")
+        if (data == null) {
+            AppLog.w(TAG, "recommendV8 data is null, raw=${json.toString().take(200)}")
+            return RecommendPageResult(emptyList(), rawCount = 0, source = "V8")
+        }
+        val items = data.optJSONArray("item") ?: data.optJSONArray("items")
+        if (items == null) {
+            AppLog.w(TAG, "recommendV8 item is null, data keys=${data.keys().asSequence().toList()}")
+            return RecommendPageResult(emptyList(), rawCount = 0, source = "V8")
+        }
+        AppLog.i(TAG, "recommendV8 items count=${items.length()}")
+        val result = parseRecommendItems(items.length()) { idx -> items.getJSONObject(idx) }
+        val t2 = SystemClock.elapsedRealtime()
+        AppLog.i(TAG, "recommendV8 total=${t2 - t0}ms parse=${t2 - t1}ms raw=${items.length()} result=${result.size}")
+        return RecommendPageResult(result, rawCount = items.length(), source = "V8")
+    }
 
     suspend fun recommend(freshIdx: Int, ps: Int): List<VideoModel> {
         val t0 = SystemClock.elapsedRealtime()
@@ -39,14 +97,21 @@ object BiliApi {
             return emptyList()
         }
         AppLog.i(TAG, "recommend items count=${items.length()}")
-        val result = (0 until items.length()).mapNotNull { idx ->
-            runCatching { VideoModel.fromJson(items.getJSONObject(idx)) }
-                .onFailure { AppLog.w(TAG, "recommend parse item failed: ${it.message}") }
-                .getOrNull()
-        }
+        val result = parseRecommendItems(items.length()) { idx -> items.getJSONObject(idx) }
         val t2 = SystemClock.elapsedRealtime()
         AppLog.i(TAG, "recommend total=${t2 - t0}ms parse=${t2 - t1}ms result=${result.size}")
         return result
+    }
+
+    private inline fun parseRecommendItems(
+        count: Int,
+        crossinline itemAt: (Int) -> JSONObject
+    ): List<VideoModel> {
+        return (0 until count).mapNotNull { idx ->
+            runCatching { VideoModel.fromJson(itemAt(idx)) }
+                .onFailure { AppLog.w(TAG, "recommend parse item failed: ${it.message}") }
+                .getOrNull()
+        }
     }
 
     suspend fun hotList(pn: Int, ps: Int): List<VideoModel> {

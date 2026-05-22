@@ -12,6 +12,7 @@ import android.view.ViewOutlineProvider
 import androidx.core.content.ContextCompat
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
+import com.tutu.myblbl.databinding.CellVideoLightBinding
 import com.tutu.myblbl.model.video.Dimension
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.core.ui.base.BaseVideoAdapter
@@ -22,6 +23,7 @@ import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.log.VideoCardPerfLogger
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.video.VideoCardViews
 import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 
 class VideoAdapter(
@@ -40,6 +42,8 @@ class VideoAdapter(
     var currentPlayingAid: Long = 0
 
     companion object {
+        private const val VIEW_TYPE_DEFAULT = 0x560100
+        private const val VIEW_TYPE_HISTORY = 0x560101
         private val portraitDetectedBvids = mutableSetOf<String>()
     }
 
@@ -95,29 +99,42 @@ class VideoAdapter(
 
     private var onItemClickListener: ((View, VideoModel) -> Unit)? = null
 
+    override fun getContentItemViewType(position: Int): Int {
+        return when (displayStyle) {
+            DisplayStyle.DEFAULT -> VIEW_TYPE_DEFAULT
+            DisplayStyle.HISTORY -> VIEW_TYPE_HISTORY
+        }
+    }
+
     fun setOnItemClickListener(listener: (View, VideoModel) -> Unit) {
         onItemClickListener = listener
     }
 
 
     override fun onCreateContentViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
-        val binding = VideoCardPerfLogger.measureInflate("VideoAdapter") {
-            CellVideoBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        val views = if (displayStyle == DisplayStyle.HISTORY) {
+            VideoCardPerfLogger.measureInflate("VideoAdapter.history") {
+                VideoCardViews.from(CellVideoBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            }
+        } else {
+            VideoCardPerfLogger.measureInflate("VideoAdapter.light") {
+                VideoCardViews.from(CellVideoLightBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            }
         }
         itemWidthPx?.let { width ->
-            val layoutParams = binding.root.layoutParams
+            val layoutParams = views.root.layoutParams
                 ?: androidx.recyclerview.widget.RecyclerView.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             layoutParams.width = width
-            binding.root.layoutParams = layoutParams
+            views.root.layoutParams = layoutParams
         }
         val clickLambda: (View, VideoModel) -> Unit = { v, item ->
             onItemClickListener?.invoke(v, item) ?: onItemClick(item)
         }
         return VideoViewHolder(
-            binding,
+            views,
             displayStyle,
             clickLambda,
             onTopEdgeUp,
@@ -145,7 +162,7 @@ class VideoAdapter(
     }
 
     class VideoViewHolder(
-        private val binding: CellVideoBinding,
+        private val views: VideoCardViews,
         private val displayStyle: DisplayStyle,
         private val onItemClick: (View, VideoModel) -> Unit,
         onTopEdgeUp: (() -> Boolean)?,
@@ -156,11 +173,11 @@ class VideoAdapter(
         private val onUpDisliked: ((String) -> Unit)? = null,
         private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
         private val detectPortraitFromCover: Boolean = true
-    ) : BaseVideoViewHolder(binding.root) {
+    ) : BaseVideoViewHolder(views.root) {
 
         private var currentVideo: VideoModel? = null
         private val defaultTextColor: Int by lazy {
-            val ta = binding.root.context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
+            val ta = views.root.context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
             val color = ta.getColor(0, 0)
             ta.recycle()
             color
@@ -228,11 +245,11 @@ class VideoAdapter(
         }
 
         init {
-            binding.imageView.clipToOutline = true
-            binding.imageView.outlineProvider = coverOutlineProviderFor(binding.imageView.resources)
-            binding.progressBar.clipToOutline = true
-            binding.progressBar.outlineProvider = PROGRESS_OUTLINE_PROVIDER
-            binding.root.setOnClickListener {
+            views.imageView.clipToOutline = true
+            views.imageView.outlineProvider = coverOutlineProviderFor(views.imageView.resources)
+            views.progressBar.clipToOutline = true
+            views.progressBar.outlineProvider = PROGRESS_OUTLINE_PROVIDER
+            views.root.setOnClickListener {
                 if (longPressTriggered) {
                     longPressTriggered = false
                     AppLog.w("VideoAdapter", "click blocked by longPressTriggered")
@@ -240,17 +257,17 @@ class VideoAdapter(
                 }
                 val position = bindingAdapterPosition
                 if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
-                    onItemInteracted?.invoke(binding.root, position)
+                    onItemInteracted?.invoke(views.root, position)
                 }
                 if (currentVideo == null) {
                     AppLog.e("VideoAdapter", "click but currentVideo is null, pos=$position")
                 } else {
                     AppLog.d("VideoAdapter", "click: pos=$position, bvid=${currentVideo?.bvid}, title=${currentVideo?.title}")
                 }
-                currentVideo?.let { onItemClick(binding.root, it) }
+                currentVideo?.let { onItemClick(views.root, it) }
             }
             @SuppressLint("ClickableViewAccessibility")
-            binding.root.setOnTouchListener { _, event ->
+            views.root.setOnTouchListener { _, event ->
                 when(event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelLongPress()
@@ -258,14 +275,14 @@ class VideoAdapter(
                 false
             }
             VideoCardFocusHelper.bindSidebarExit(
-                view = binding.root,
+                view = views.root,
                 onTopEdgeUp = onTopEdgeUp,
                 onBottomEdgeDown = onBottomEdgeDown,
                 handleListDpadDown = false,
                 chainedListener = keyListener
             )
             if (onFocusChange != null) {
-                binding.root.setOnFocusChangeListener { view, hasFocus ->
+                views.root.setOnFocusChangeListener { view, hasFocus ->
                     onFocusChange.invoke(view, bindingAdapterPosition, hasFocus)
                 }
             }
@@ -275,50 +292,50 @@ class VideoAdapter(
 
         fun bind(video: VideoModel, isCurrentlyPlaying: Boolean = false) {
             currentVideo = video
-            splitRunnable?.let { binding.textView.removeCallbacks(it) }
+            splitRunnable?.let { views.textView.removeCallbacks(it) }
             splitRunnable = null
 
             val title = resolveDisplayTitle(video)
             if (isCurrentlyPlaying) {
-                binding.iconPlaying.visibility = View.VISIBLE
-                val iconSize = binding.textView.textSize.toInt()
-                binding.iconPlaying.layoutParams = binding.iconPlaying.layoutParams.apply {
+                views.iconPlaying.visibility = View.VISIBLE
+                val iconSize = views.textView.textSize.toInt()
+                views.iconPlaying.layoutParams = views.iconPlaying.layoutParams.apply {
                     width = iconSize
                     height = iconSize
                 }
-                ImageLoader.loadDrawableRes(binding.iconPlaying, R.drawable.playing)
-                val accentColor = ContextCompat.getColor(binding.root.context, R.color.colorAccent)
-                binding.textView.setTextColor(accentColor)
-                binding.textOverflow.setTextColor(accentColor)
-                binding.textView.text = title
-                binding.textView.ellipsize = TextUtils.TruncateAt.END
-                binding.textView.minLines = 1
-                binding.textView.maxLines = 1
+                ImageLoader.loadDrawableRes(views.iconPlaying, R.drawable.playing)
+                val accentColor = ContextCompat.getColor(views.root.context, R.color.colorAccent)
+                views.textView.setTextColor(accentColor)
+                views.textOverflow.setTextColor(accentColor)
+                views.textView.text = title
+                views.textView.ellipsize = TextUtils.TruncateAt.END
+                views.textView.minLines = 1
+                views.textView.maxLines = 1
 
                 val split = Runnable {
-                    val layout = binding.textView.layout ?: return@Runnable
+                    val layout = views.textView.layout ?: return@Runnable
                     if (layout.lineCount > 0) {
                         val ellipsisCount = layout.getEllipsisCount(0)
                         if (ellipsisCount > 0) {
                             val visibleEnd = layout.getEllipsisStart(0)
-                            binding.textView.text = title.substring(0, visibleEnd)
-                            binding.textOverflow.text = title.substring(visibleEnd)
-                            binding.textOverflow.visibility = View.VISIBLE
+                            views.textView.text = title.substring(0, visibleEnd)
+                            views.textOverflow.text = title.substring(visibleEnd)
+                            views.textOverflow.visibility = View.VISIBLE
                         } else {
-                            binding.textOverflow.visibility = View.GONE
+                            views.textOverflow.visibility = View.GONE
                         }
                     }
                 }
                 splitRunnable = split
-                binding.textView.post(split)
+                views.textView.post(split)
             } else {
-                binding.iconPlaying.visibility = View.GONE
-                ImageLoader.clear(binding.iconPlaying)
-                binding.textView.setTextColor(defaultTextColor)
-                binding.textView.text = title
-                binding.textView.minLines = 2
-                binding.textView.maxLines = 2
-                binding.textOverflow.visibility = View.GONE
+                views.iconPlaying.visibility = View.GONE
+                ImageLoader.clear(views.iconPlaying)
+                views.textView.setTextColor(defaultTextColor)
+                views.textView.text = title
+                views.textView.minLines = 2
+                views.textView.maxLines = 2
+                views.textOverflow.visibility = View.GONE
             }
             when (displayStyle) {
                 DisplayStyle.DEFAULT -> bindDefault(video)
@@ -331,14 +348,14 @@ class VideoAdapter(
                 displayStyle == DisplayStyle.DEFAULT &&
                 !video.isPortrait && !cachedPortrait
             ImageLoader.loadVideoCover(
-                imageView = binding.imageView,
+                imageView = views.imageView,
                 url = coverUrl,
                 onPortraitDetected = if (needPortraitDetect) { isPortrait ->
                     if (bindingAdapterPosition != androidx.recyclerview.widget.RecyclerView.NO_POSITION
                         && currentVideo === video && isPortrait
                     ) {
                         if (video.bvid.isNotBlank()) portraitDetectedBvids.add(video.bvid)
-                        binding.imageAvatar.visibility = View.GONE
+                        views.imageAvatar.visibility = View.GONE
                         applyBadge(video.copy(dimension = Dimension(width = 1, height = 2)))
                     }
                 } else null
@@ -346,16 +363,16 @@ class VideoAdapter(
         }
 
         private fun bindDefault(video: VideoModel) {
-            binding.iconPlayCount.visibility = View.VISIBLE
-            binding.textPlayCount.visibility = View.VISIBLE
-            binding.iconDanmaku.visibility = View.VISIBLE
-            binding.textDanmakuCount.visibility = View.VISIBLE
-            binding.textHistoryViewTime.visibility = View.GONE
-            binding.iconHistoryDevice.visibility = View.GONE
+            views.iconPlayCount.visibility = View.VISIBLE
+            views.textPlayCount.visibility = View.VISIBLE
+            views.iconDanmaku.visibility = View.VISIBLE
+            views.textDanmakuCount.visibility = View.VISIBLE
+            views.textHistoryViewTime?.visibility = View.GONE
+            views.iconHistoryDevice?.visibility = View.GONE
 
             val ownerName = video.authorName
             val publishLabel = formatPublishTime(video)
-            binding.textViewOwner.text = buildString {
+            views.textViewOwner.text = buildString {
                 if (ownerName.isNotBlank()) {
                     append(ownerName)
                 }
@@ -367,56 +384,56 @@ class VideoAdapter(
                 }
             }
             if (video.isPortrait) {
-                binding.imageAvatar.visibility = View.GONE
+                views.imageAvatar.visibility = View.GONE
             } else {
-                binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
+                views.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
             }
             applyBadge(video)
 
             val duration = video.durationValue
             val progress = video.historyProgress.coerceAtLeast(0L)
             if (duration > 0 && progress > 0) {
-                binding.progressBar.visibility = View.VISIBLE
-                binding.progressBar.max = duration.toInt()
-                binding.progressBar.progress = progress.coerceAtMost(duration).toInt()
+                views.progressBar.visibility = View.VISIBLE
+                views.progressBar.max = duration.toInt()
+                views.progressBar.progress = progress.coerceAtMost(duration).toInt()
                 if (duration > 3 && progress >= duration - 3) {
-                    binding.textDuration.text = "已看完"
+                    views.textDuration.text = "已看完"
                 } else {
-                    binding.textDuration.text = binding.root.context.getString(
+                    views.textDuration.text = views.root.context.getString(
                         R.string.video_watch_progress_format,
                         NumberUtils.formatDuration(progress),
                         NumberUtils.formatDuration(duration)
                     )
                 }
             } else {
-                binding.progressBar.visibility = View.GONE
-                binding.textDuration.text = NumberUtils.formatDuration(duration.coerceAtLeast(0L))
+                views.progressBar.visibility = View.GONE
+                views.textDuration.text = NumberUtils.formatDuration(duration.coerceAtLeast(0L))
             }
 
-            binding.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
-            binding.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
-            binding.textDuration.visibility = if (binding.textDuration.text.isNullOrBlank()) View.GONE else View.VISIBLE
-            binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
-            binding.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
+            views.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
+            views.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
+            views.textDuration.visibility = if (views.textDuration.text.isNullOrBlank()) View.GONE else View.VISIBLE
+            views.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
+            views.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
         }
 
         private fun bindHistory(video: VideoModel) {
-            binding.iconPlayCount.visibility = View.GONE
-            binding.textPlayCount.visibility = View.GONE
-            binding.iconDanmaku.visibility = View.GONE
-            binding.textDanmakuCount.visibility = View.GONE
+            views.iconPlayCount.visibility = View.GONE
+            views.textPlayCount.visibility = View.GONE
+            views.iconDanmaku.visibility = View.GONE
+            views.textDanmakuCount.visibility = View.GONE
             val ownerName = video.authorName
-            binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
-            binding.textBadge.visibility = View.GONE
+            views.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
+            views.textBadge.visibility = View.GONE
 
             val duration = video.durationValue
             val progress = video.historyProgress.coerceAtLeast(0)
             if (duration > 0) {
-                binding.progressBar.visibility = View.VISIBLE
-                binding.progressBar.max = duration.toInt()
-                binding.progressBar.progress = progress.coerceAtMost(duration).toInt()
+                views.progressBar.visibility = View.VISIBLE
+                views.progressBar.max = duration.toInt()
+                views.progressBar.progress = progress.coerceAtMost(duration).toInt()
             } else {
-                binding.progressBar.visibility = View.GONE
+                views.progressBar.visibility = View.GONE
             }
 
             val durationText = if (video.historyBusiness == "live" && video.historyBadge.isNotBlank()) {
@@ -426,25 +443,26 @@ class VideoAdapter(
             } else {
                 video.historyBadge
             }
-            binding.textDuration.text = durationText
-            binding.textDuration.visibility = if (durationText.isNotBlank()) View.VISIBLE else View.GONE
-            binding.textViewOwner.text = ownerName
-            binding.textHistoryViewTime.text = formatHistoryTime(video.historyViewAt)
-            binding.textHistoryViewTime.visibility = View.VISIBLE
+            views.textDuration.text = durationText
+            views.textDuration.visibility = if (durationText.isNotBlank()) View.VISIBLE else View.GONE
+            views.textViewOwner.text = ownerName
+            views.textHistoryViewTime?.text = formatHistoryTime(video.historyViewAt)
+            views.textHistoryViewTime?.visibility = View.VISIBLE
             applyHistoryDeviceIcon(video.historyDevice)
-            binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
-            binding.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
+            views.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
+            views.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
         }
 
         private fun applyHistoryDeviceIcon(dt: Int) {
             val deviceIcon = HistoryDeviceIcon.resolve(dt)
+            val iconHistoryDevice = views.iconHistoryDevice ?: return
             if (deviceIcon == null) {
-                binding.iconHistoryDevice.visibility = View.GONE
-                binding.iconHistoryDevice.contentDescription = null
+                iconHistoryDevice.visibility = View.GONE
+                iconHistoryDevice.contentDescription = null
             } else {
-                binding.iconHistoryDevice.setImageResource(deviceIcon.drawableRes)
-                binding.iconHistoryDevice.contentDescription = deviceIcon.contentDescription
-                binding.iconHistoryDevice.visibility = View.VISIBLE
+                iconHistoryDevice.setImageResource(deviceIcon.drawableRes)
+                iconHistoryDevice.contentDescription = deviceIcon.contentDescription
+                iconHistoryDevice.visibility = View.VISIBLE
             }
         }
 
@@ -453,10 +471,10 @@ class VideoAdapter(
             if (video.isFollowed) parts.add("已关注")
             if (video.isPortrait) parts.add("竖屏")
             if (parts.isEmpty()) {
-                binding.textBadge.visibility = View.GONE
+                views.textBadge.visibility = View.GONE
             } else {
-                binding.textBadge.text = parts.joinToString("|")
-                binding.textBadge.visibility = View.VISIBLE
+                views.textBadge.text = parts.joinToString("|")
+                views.textBadge.visibility = View.VISIBLE
             }
         }
 

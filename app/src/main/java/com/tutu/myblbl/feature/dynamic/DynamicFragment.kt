@@ -20,8 +20,10 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.BaseListFragment
+import com.tutu.myblbl.core.ui.base.RecyclerViewPoolPrewarmer
 import android.os.SystemClock
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.log.PagePerfLogger
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.ui.activity.MainActivity
@@ -75,6 +77,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private var pendingVideoFocusRestoreOnResume = false
     private var preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
     private var videoFocusController: TvListFocusController? = null
+    private var currentOpenStartMs = 0L
+    private var latestVideoRequestStartMs = 0L
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -141,6 +145,12 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         binding.recyclerViewRight.adapter = videoAdapter
         binding.recyclerViewRight.itemAnimator = null
         binding.recyclerViewRight.setRecycledViewPool(BaseListFragment.sharedVideoPool)
+        RecyclerViewPoolPrewarmer.prewarm(
+            recyclerView = binding.recyclerViewRight,
+            adapter = videoAdapter,
+            count = 9,
+            source = "Dynamic.initial"
+        )
         binding.recyclerViewRight.setOnKeyListener { _, _, _ ->
             false
         }
@@ -189,6 +199,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     override fun initData() {
+        currentOpenStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow("Dynamic", "initData_start")
         AppLog.i(TAG, "DYN D0 initData start")
         loadData()
         latestScreenState = viewModel.screenState.value
@@ -217,6 +229,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     private fun loadData() {
+        latestVideoRequestStartMs = PagePerfLogger.now()
+        PagePerfLogger.markNow("Dynamic", "request_start", "upId=$currentUpId")
         pendingScrollToTop = true
         lastRefreshTime = System.currentTimeMillis()
         if (!sessionGateway.isLoggedIn()) {
@@ -231,6 +245,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     private fun refreshCurrentVideoList() {
+        currentOpenStartMs = PagePerfLogger.now()
+        latestVideoRequestStartMs = currentOpenStartMs
+        PagePerfLogger.markNow("Dynamic", "refresh_start", "upId=$currentUpId")
         pendingScrollToTop = true
         lastRefreshTime = System.currentTimeMillis()
         if (!sessionGateway.isLoggedIn()) {
@@ -270,20 +287,37 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.videos.collectLatest { rawVideos ->
+                    val page = viewModel.loadedPage.value
+                    if (rawVideos.isEmpty() && page == 0 && videoAdapter.itemCount == 0) {
+                        PagePerfLogger.markNow("Dynamic", "skip_empty_initial_videos")
+                        return@collectLatest
+                    }
                     val filterStartMs = SystemClock.elapsedRealtime()
                     val appContext = requireContext().applicationContext
                     val (videos, filterThread) = withContext(Dispatchers.Default) {
                         ContentFilter.filterVideos(appContext, rawVideos) to Thread.currentThread().name
                     }
                     AppLog.i(TAG, "DYN D6 filterVideos end elapsed=${SystemClock.elapsedRealtime() - filterStartMs}ms raw=${rawVideos.size} filtered=${videos.size} filterThread=$filterThread")
+                    PagePerfLogger.mark(
+                        "Dynamic",
+                        "filter_end",
+                        filterStartMs,
+                        "raw=${rawVideos.size} filtered=${videos.size} page=${viewModel.loadedPage.value}"
+                    )
 
-                    val page = viewModel.loadedPage.value
                     swipeRefreshLayout?.isRefreshing = false
+                    val applyStartMs = PagePerfLogger.now()
                     if (page <= 1 || videoAdapter.itemCount == 0) {
                         videoAdapter.setData(videos)
                     } else if (videos.isNotEmpty()) {
                         videoAdapter.addData(videos)
                     }
+                    PagePerfLogger.mark(
+                        "Dynamic",
+                        "adapter_apply",
+                        applyStartMs,
+                        "items=${videoAdapter.contentCount()} page=$page"
+                    )
 
                     videoFocusController?.onDataChanged(
                         if (page <= 1) TvDataChangeReason.REPLACE_PRESERVE_ANCHOR else TvDataChangeReason.APPEND
@@ -291,6 +325,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     if (videos.isNotEmpty()) {
                         showContent()
                         AppLog.i(TAG, "DYN D8 videos rendered count=${videos.size}")
+                        logDynamicFirstDraw(page, videoAdapter.contentCount())
                         if (pendingScrollToTop) {
                             pendingScrollToTop = false
                             scrollVideoListToTop()
@@ -345,12 +380,20 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabSelected ->
                             if (event.index == 2 && shouldRefresh()) {
+                                currentOpenStartMs = PagePerfLogger.now()
+                                PagePerfLogger.markNow("Dynamic", "tab_selected_refresh")
                                 currentUpId = 0L
                                 loadData()
+                            } else if (event.index == 2 && ::videoAdapter.isInitialized && videoAdapter.itemCount > 0) {
+                                currentOpenStartMs = PagePerfLogger.now()
+                                PagePerfLogger.markNow("Dynamic", "tab_selected_cached", "items=${videoAdapter.contentCount()}")
+                                logDynamicFirstDraw(viewModel.loadedPage.value, videoAdapter.contentCount())
                             }
 
                         is MainNavigationViewModel.Event.MainTabReselected ->
                             if (event.index == 2) {
+                                currentOpenStartMs = PagePerfLogger.now()
+                                PagePerfLogger.markNow("Dynamic", "tab_reselected")
                                 currentUpId = 0L
                                 loadData()
                             }
@@ -664,6 +707,27 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 }
             }
         )
+    }
+
+    private fun logDynamicFirstDraw(page: Int, itemCount: Int) {
+        val startMs = currentOpenStartMs.takeIf { it > 0L } ?: latestVideoRequestStartMs
+        if (startMs <= 0L || itemCount <= 0) return
+        PagePerfLogger.logRecyclerPreDraw(
+            recyclerView = binding.recyclerViewRight,
+            page = "Dynamic",
+            event = "first_cards_draw",
+            startMs = startMs,
+            itemCount = itemCount,
+            extra = "page=$page",
+            onLogged = {
+                if (page <= 1 && ::upAdapter.isInitialized) {
+                    upAdapter.setAvatarLoadsEnabled(true)
+                }
+            }
+        )
+        if (page <= 1) {
+            currentOpenStartMs = 0L
+        }
     }
 
     override fun onDestroyView() {
