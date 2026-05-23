@@ -554,6 +554,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         root.addView(actionContainer)
         dialog.setContentView(root)
         dialog.show()
+        dialog.window?.setLayout(
+            resources.getDimensionPixelSize(R.dimen.px800),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
     }
 
     private fun startDownloadApk(apkUrl: String) {
@@ -633,21 +637,30 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         dialog.setContentView(root)
         dialog.show()
+        dialog.window?.setLayout(
+            resources.getDimensionPixelSize(R.dimen.px800),
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
 
         downloadJob = updateScope.launch {
             try {
-                val apkFile = ApkUpdater.downloadApkToCache(requireContext(), apkUrl) { progress ->
-                    when (progress) {
-                        is ApkUpdater.Progress.Connecting -> {
-                            progressText.text = "连接中…"
-                            progressBar.isIndeterminate = true
+                val apkFile = withContext(Dispatchers.IO) {
+                    ApkUpdater.downloadApkToCache(requireContext(), apkUrl) { progress ->
+                        view?.post {
+                            if (!isAdded) return@post
+                            when (progress) {
+                                is ApkUpdater.Progress.Connecting -> {
+                                    progressText.text = "连接中…"
+                                    progressBar.isIndeterminate = true
+                                }
+                                is ApkUpdater.Progress.Downloading -> {
+                                    progressBar.isIndeterminate = false
+                                    progress.percent?.let { progressBar.progress = it }
+                                    progressText.text = progress.hint
+                                }
+                                is ApkUpdater.Progress.Done -> {}
+                            }
                         }
-                        is ApkUpdater.Progress.Downloading -> {
-                            progressBar.isIndeterminate = false
-                            progress.percent?.let { progressBar.progress = it }
-                            progressText.text = progress.hint
-                        }
-                        is ApkUpdater.Progress.Done -> {}
                     }
                 }
                 dialog.dismiss()
