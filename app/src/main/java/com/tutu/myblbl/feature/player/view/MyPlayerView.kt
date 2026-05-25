@@ -683,7 +683,8 @@ class MyPlayerView @JvmOverloads constructor(
         if (controller.isFullyVisible()) {
             if (shouldShowIndefinitely) {
                 controller.setShowTimeoutMs(0)
-            } else if (isForced) {
+            } else {
+                controller.setShowTimeoutMs(controllerShowTimeoutMs)
                 controller.resetHideCallbacks()
             }
             return
