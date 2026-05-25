@@ -220,6 +220,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
 
     override fun onResume() {
         super.onResume()
+        val restoringFromPlayer = pendingRestoreFocus
         if (pendingRestoreFocus) {
             restoreContentFocus()
         }
@@ -227,7 +228,9 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
             val isLoggedIn = viewModel.isLoggedIn()
             if (isLoggedIn && !lastKnownLoggedIn) {
                 lastKnownLoggedIn = isLoggedIn
-                refresh()
+                if (!restoringFromPlayer) {
+                    refresh()
+                }
             } else {
                 lastKnownLoggedIn = isLoggedIn
             }
@@ -667,6 +670,11 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
             AppLog.d("MeDebug", "[$type] onTabSelected: EARLY RETURN (isAdded/view/loading)")
             return
         }
+        if (pendingRestoreFocus && hasContentItems()) {
+            AppLog.d("MeDebug", "[$type] onTabSelected: restore pending, keep current anchor")
+            restoreContentFocus()
+            return
+        }
         val now = PagePerfLogger.now()
         val hasContent = hasContentItems()
         if (!hasContent && now - lastTabSelectedAtMs < 250L) {
@@ -796,7 +804,9 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                     restoreHistoryViewportAnchor()
                 }
             } else {
-                if (tvFocusController?.focusPrimary() != true) {
+                if (tvFocusController?.restoreCapturedAnchor() != true &&
+                    tvFocusController?.focusPrimary() != true
+                ) {
                     focusPrimaryContent()
                 }
             }
