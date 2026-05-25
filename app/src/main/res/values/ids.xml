@@ -8,6 +8,7 @@
     <item type="id" name="tag_image_loader_url" />
     <item type="id" name="tag_image_loader_attach_listener" />
     <item type="id" name="tag_image_loader_predraw_listener" />
+    <item type="id" name="tag_first_screen_render_token" />
     <item type="id" name="text_interaction_badge" />
     <item type="id" name="text_charge_badge" />
     <item type="id" name="text_overflow" />

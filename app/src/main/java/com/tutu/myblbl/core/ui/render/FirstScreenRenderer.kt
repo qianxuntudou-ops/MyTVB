@@ -29,6 +29,8 @@ object FirstScreenRenderer {
         onFirstFrame: (() -> Unit)? = null,
         onAppendRest: ((Int) -> Unit)? = null
     ) {
+        val renderToken = Any()
+        recyclerView.setTag(R.id.tag_first_screen_render_token, renderToken)
         if (items.isEmpty()) {
             setItems(emptyList()) {}
             return
@@ -76,6 +78,7 @@ object FirstScreenRenderer {
                             page = page,
                             allItems = items,
                             firstCount = firstBatch.size,
+                            renderToken = renderToken,
                             appendItems = appendItems,
                             onAppendRest = onAppendRest
                         )
@@ -130,12 +133,21 @@ object FirstScreenRenderer {
         page: String,
         allItems: List<T>,
         firstCount: Int,
+        renderToken: Any,
         appendItems: ((List<T>) -> Unit)?,
         onAppendRest: ((Int) -> Unit)?
     ) {
         val remaining = allItems.drop(firstCount)
         if (remaining.isEmpty()) return
         recyclerView.postDelayed({
+            if (recyclerView.getTag(R.id.tag_first_screen_render_token) !== renderToken) {
+                PagePerfLogger.markNow(
+                    page,
+                    "first_screen_append_skip_stale",
+                    "items=${allItems.size} appended=${remaining.size}"
+                )
+                return@postDelayed
+            }
             val appendStartMs = PagePerfLogger.now()
             appendItems?.invoke(remaining)
             PagePerfLogger.mark(
