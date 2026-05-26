@@ -212,8 +212,14 @@ class VideoPlayerViewModel(
         val seekPositionMs: Long,
         val playWhenReady: Boolean,
         val replaceInPlace: Boolean,
+        val continuationIntentId: String? = null,
         val startupTraceId: String = PlaybackStartupTrace.NO_TRACE,
         val startupTraceStartElapsedMs: Long = 0L
+    )
+
+    data class ContinuationSession(
+        val id: String,
+        val intent: ContinuationPlaybackIntent
     )
 
     data class ResumeProgressHint(
@@ -247,6 +253,7 @@ class VideoPlayerViewModel(
         val playWhenReady: Boolean,
         val resumeHintPositionMs: Long?,
         val replaceInPlace: Boolean,
+        val continuationIntentId: String?,
         val requestDurationMs: Long,
         val startupTraceId: String,
         val startupTraceStartElapsedMs: Long
@@ -563,6 +570,8 @@ class VideoPlayerViewModel(
     private var preloadedPlayback: PreloadedPlayback? = null
     private var preloadingIdentity: PlayRequestIdentity? = null
     private var preloadJob: Job? = null
+    private val continuationSessions = linkedMapOf<String, ContinuationPlaybackIntent>()
+    private var pendingContinuationIntentId: String? = null
     private var hasReachedFirstFrame: Boolean = false
     private var currentStartupTraceId: String = PlaybackStartupTrace.NO_TRACE
     private var currentStartupTraceStartElapsedMs: Long = 0L
@@ -862,7 +871,7 @@ class VideoPlayerViewModel(
         _videoSnapshot.value = null
         _error.value = null
         clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
-        loadPlayUrl(preferLastPlayTime = false)
+        loadPlayUrl(preferLastPlayTime = preferLastPlayTime)
     }
 
     fun playRelatedVideo(video: VideoModel, preferLastPlayTime: Boolean = true) {
@@ -1053,7 +1062,108 @@ class VideoPlayerViewModel(
         _error.value = message
     }
 
+    fun prepareContinuation(intent: ContinuationPlaybackIntent?): ContinuationSession? {
+        if (intent == null) {
+            clearPendingContinuation()
+            return null
+        }
+        val identity = intent.target.toPlayRequestIdentity() ?: run {
+            AppLog.w(TAG, "continuation_created_failed id=${intent.id} mode=${intent.mode} reason=invalid_identity")
+            return null
+        }
+        continuationSessions[intent.id] = intent
+        while (continuationSessions.size > 2) {
+            continuationSessions.remove(continuationSessions.keys.first())
+        }
+        AppLog.i(
+            TAG,
+            "continuation_created id=${intent.id} mode=${intent.mode} kind=${intent.kind} " +
+                "cid=${identity.cid} epId=${identity.epId ?: 0L} preferLastPlayTime=${intent.preferLastPlayTime}"
+        )
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "continuation_created",
+            message = "id=${intent.id} mode=${intent.mode} kind=${intent.kind} cid=${identity.cid} epId=${identity.epId ?: 0L}"
+        )
+        preloadPlayback(intent.target, continuationIntentId = intent.id)
+        return ContinuationSession(id = intent.id, intent = intent)
+    }
+
+    fun clearPendingContinuation() {
+        continuationSessions.clear()
+        pendingContinuationIntentId = null
+        clearPreloadedPlayback(cancelJob = true)
+        AppLog.i(TAG, "continuation_cleared")
+    }
+
+    fun playContinuation(sessionId: String) {
+        val intent = continuationSessions.remove(sessionId) ?: run {
+            AppLog.w(TAG, "continuation_play_missing id=$sessionId")
+            return
+        }
+        continuationSessions.clear()
+        val identity = intent.target.toPlayRequestIdentity() ?: run {
+            _error.value = "连播目标缺少视频标识"
+            AppLog.w(TAG, "continuation_play_failed id=$sessionId reason=invalid_identity")
+            return
+        }
+        pendingContinuationIntentId = intent.id
+        val hasReadyPreload = preloadedPlayback?.preparedPlayback?.identity == identity
+        val hasRunningPreload = preloadingIdentity == identity
+        AppLog.i(
+            TAG,
+            "continuation_play id=${intent.id} mode=${intent.mode} kind=${intent.kind} " +
+                "cid=${identity.cid} epId=${identity.epId ?: 0L} readyPreload=$hasReadyPreload runningPreload=$hasRunningPreload"
+        )
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "continuation_play",
+            message = "id=${intent.id} cid=${identity.cid} readyPreload=$hasReadyPreload runningPreload=$hasRunningPreload"
+        )
+        playContinuationIntent(intent, identity)
+    }
+
+    private fun playContinuationIntent(
+        intent: ContinuationPlaybackIntent,
+        identity: PlayRequestIdentity
+    ) {
+        // 优先按原分集下标播放；如果列表已刷新导致下标不可信，则退回到 intent 里的精确身份。
+        val episodeIndex = intent.episodeIndex
+        val episode = episodeIndex?.let { _episodes.value.orEmpty().getOrNull(it) }
+        if (episode != null && episode.matches(identity)) {
+            playEpisode(episodeIndex, preferLastPlayTime = intent.preferLastPlayTime)
+            return
+        }
+
+        reportPlaybackHeartbeat()
+        savePlayerSnapshot()
+        loadVideoInfo(
+            aid = identity.aid,
+            bvid = identity.bvid,
+            cid = identity.cid,
+            seasonId = intent.target.seasonId ?: 0L,
+            epId = identity.epId ?: 0L,
+            seekPositionMs = intent.startPositionMs,
+            preferLastPlayTime = intent.preferLastPlayTime
+        )
+    }
+
+    private fun PlayableEpisode.matches(identity: PlayRequestIdentity): Boolean {
+        if (cid != identity.cid) return false
+        val targetEpId = identity.epId
+        if (targetEpId != null && epId != targetEpId) return false
+        val targetBvid = identity.bvid
+        if (!targetBvid.isNullOrBlank() && bvid.isNotBlank() && bvid != targetBvid) return false
+        return true
+    }
+
     fun preloadPlayback(target: PlaybackPreloadTarget?) {
+        preloadPlayback(target, continuationIntentId = null)
+    }
+
+    private fun preloadPlayback(target: PlaybackPreloadTarget?, continuationIntentId: String?) {
         val identity = target?.toPlayRequestIdentity()
         val currentIdentity = currentPlayRequestIdentity()
 
@@ -1089,8 +1199,8 @@ class VideoPlayerViewModel(
         PlaybackStartupTrace.log(
             traceId = currentStartupTraceId,
             startElapsedMs = currentStartupTraceStartElapsedMs,
-            step = "playback_preload_started",
-            message = "source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L}"
+            step = "continuation_preload_started",
+            message = "id=${continuationIntentId.orEmpty()} source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L}"
         )
         preloadJob = viewModelScope.launch {
             val preparedPlayback = runCatching {
@@ -1100,6 +1210,7 @@ class VideoPlayerViewModel(
                     replaceInPlace = false,
                     playbackPositionMs = 0L,
                     playWhenReady = true,
+                    continuationIntentId = continuationIntentId,
                     suppressUiSignals = true
                 )
             }.getOrNull()
@@ -1122,8 +1233,8 @@ class VideoPlayerViewModel(
             PlaybackStartupTrace.log(
                 traceId = currentStartupTraceId,
                 startElapsedMs = currentStartupTraceStartElapsedMs,
-                step = "playback_preload_ready",
-                message = "source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L} " +
+                step = "continuation_preload_ready",
+                message = "id=${continuationIntentId.orEmpty()} source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L} " +
                     "quality=${preparedPlayback.selectionSnapshot.selectedQualityId} " +
                     "codec=${preparedPlayback.selectionSnapshot.selectedCodec} " +
                     "playWhenReady=${preparedPlayback.playWhenReady}"
@@ -1914,6 +2025,7 @@ class VideoPlayerViewModel(
         qualityCandidates: List<Int> = qualityPolicy.buildCandidates(
             requestedQualityId ?: selectedQualityId
         ),
+        continuationIntentId: String? = pendingContinuationIntentId,
         suppressUiSignals: Boolean = false
     ): PreparedPlayback? {
         val requestStartMs = System.currentTimeMillis()
@@ -2108,6 +2220,7 @@ class VideoPlayerViewModel(
                 playWhenReady = playWhenReady,
                 resumeHintPositionMs = resumeHintPositionMs,
                 replaceInPlace = replaceInPlace,
+                continuationIntentId = continuationIntentId,
                 requestDurationMs = System.currentTimeMillis() - requestStartMs,
                 startupTraceId = startupTraceId,
                 startupTraceStartElapsedMs = startupTraceStartElapsedMs
@@ -2144,9 +2257,13 @@ class VideoPlayerViewModel(
             seekPositionMs = preparedPlayback.seekToStart,
             playWhenReady = preparedPlayback.playWhenReady,
             replaceInPlace = preparedPlayback.replaceInPlace,
+            continuationIntentId = preparedPlayback.continuationIntentId,
             startupTraceId = preparedPlayback.startupTraceId,
             startupTraceStartElapsedMs = preparedPlayback.startupTraceStartElapsedMs
         )
+        if (pendingContinuationIntentId == preparedPlayback.continuationIntentId) {
+            pendingContinuationIntentId = null
+        }
         putCachedPlayback(
             bvid = preparedPlayback.identity.bvid,
             cid = preparedPlayback.identity.cid,
@@ -2159,6 +2276,7 @@ class VideoPlayerViewModel(
             startElapsedMs = preparedPlayback.startupTraceStartElapsedMs,
             step = "playback_request_emitted",
             message = "cid=${preparedPlayback.identity.cid} seek=${preparedPlayback.seekToStart} " +
+                "intentId=${preparedPlayback.continuationIntentId.orEmpty()} " +
                 "replace=${preparedPlayback.replaceInPlace} " +
                 "playWhenReady=${preparedPlayback.playWhenReady} " +
                 "quality=${preparedPlayback.selectionSnapshot.selectedQualityId} " +
@@ -2820,6 +2938,7 @@ class VideoPlayerViewModel(
             startElapsedMs = currentStartupTraceStartElapsedMs,
             step = "playback_preload_consumed",
             message = "cid=${identity.cid} epId=${identity.epId ?: 0L} source=${preloaded.source} " +
+                "intentId=${preloaded.preparedPlayback.continuationIntentId.orEmpty()} " +
                 "playWhenReady=$effectivePlayWhenReady " +
                 "quality=${preloaded.preparedPlayback.selectionSnapshot.selectedQualityId} " +
                 "codec=${preloaded.preparedPlayback.selectionSnapshot.selectedCodec}"
@@ -2854,6 +2973,9 @@ class VideoPlayerViewModel(
         cancelJob: Boolean
     ) {
         if (identity != null && preloadedPlayback?.preparedPlayback?.identity == identity) {
+            return
+        }
+        if (identity != null && preloadingIdentity == identity) {
             return
         }
         clearPreloadedPlayback(cancelJob = cancelJob)

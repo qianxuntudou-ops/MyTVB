@@ -13,19 +13,7 @@ import java.util.ArrayDeque
 class PlayerSessionCoordinator {
 
     sealed interface ContinuationPlan {
-        data class PlayNextEpisode(
-            val title: String,
-            val coverUrl: String,
-            val preloadTarget: PlaybackPreloadTarget?,
-            val perform: () -> Unit
-        ) : ContinuationPlan
-
-        data class PlayVideo(
-            val title: String,
-            val coverUrl: String,
-            val preloadTarget: PlaybackPreloadTarget?,
-            val perform: () -> Unit
-        ) : ContinuationPlan
+        data class PlayIntent(val intent: ContinuationPlaybackIntent) : ContinuationPlan
 
         object ExitPlayer : ContinuationPlan
 
@@ -108,9 +96,7 @@ class PlayerSessionCoordinator {
         afterPlayMode: AfterPlayMode,
         exitPlayerWhenPlaybackFinished: Boolean,
         hasNextEpisode: Boolean,
-        nextEpisode: VideoPlayerViewModel.PlayableEpisode?,
-        playNextEpisode: () -> Unit,
-        playVideo: (VideoModel) -> Unit
+        nextEpisode: VideoPlayerViewModel.PlayableEpisode?
     ): ContinuationPlan {
         fun finishPlan(): ContinuationPlan {
             return if (exitPlayerWhenPlaybackFinished) {
@@ -124,12 +110,17 @@ class PlayerSessionCoordinator {
             AfterPlayMode.NOTHING -> finishPlan()
             AfterPlayMode.RECOMMEND -> {
                 val related = nextRelatedVideo()
-                if (related != null) {
-                    ContinuationPlan.PlayVideo(
-                        title = related.title,
-                        coverUrl = related.coverUrl,
-                        preloadTarget = related.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
-                        perform = { playVideo(related) }
+                val target = related?.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN)
+                if (related != null && target != null) {
+                    ContinuationPlan.PlayIntent(
+                        ContinuationPlaybackIntent(
+                            mode = afterPlayMode,
+                            kind = ContinuationPlaybackIntent.Kind.RECOMMEND,
+                            title = related.title,
+                            coverUrl = related.coverUrl,
+                            target = target,
+                            video = related
+                        )
                     )
                 } else {
                     finishPlan()
@@ -138,12 +129,17 @@ class PlayerSessionCoordinator {
             AfterPlayMode.PLAY_QUEUE -> {
                 trimQueueAgainstCurrent(getCurrentVideo())
                 val queuedVideo = launchQueue.pollFirst()
-                if (queuedVideo != null) {
-                    ContinuationPlan.PlayVideo(
-                        title = queuedVideo.title,
-                        coverUrl = queuedVideo.coverUrl,
-                        preloadTarget = queuedVideo.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
-                        perform = { playVideo(queuedVideo) }
+                val target = queuedVideo?.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN)
+                if (queuedVideo != null && target != null) {
+                    ContinuationPlan.PlayIntent(
+                        ContinuationPlaybackIntent(
+                            mode = afterPlayMode,
+                            kind = ContinuationPlaybackIntent.Kind.PLAY_QUEUE,
+                            title = queuedVideo.title,
+                            coverUrl = queuedVideo.coverUrl,
+                            target = target,
+                            video = queuedVideo
+                        )
                     )
                 } else {
                     finishPlan()
@@ -152,17 +148,22 @@ class PlayerSessionCoordinator {
             AfterPlayMode.NEXT_EPISODE -> {
                 // 严格按“播放合集中的下一个”执行；没有下一集时不再兜底播队列或推荐。
                 if (hasNextEpisode && nextEpisode != null) {
-                    ContinuationPlan.PlayNextEpisode(
-                        title = nextEpisode.title,
-                        coverUrl = nextEpisode.cover,
-                        preloadTarget = PlaybackPreloadTarget(
-                            aid = nextEpisode.aid.takeIf { it > 0L },
-                            bvid = nextEpisode.bvid.takeIf { it.isNotBlank() },
-                            cid = nextEpisode.cid,
-                            epId = nextEpisode.epId.takeIf { it > 0L },
-                            source = PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN
-                        ),
-                        perform = playNextEpisode
+                    ContinuationPlan.PlayIntent(
+                        ContinuationPlaybackIntent(
+                            mode = afterPlayMode,
+                            kind = ContinuationPlaybackIntent.Kind.NEXT_EPISODE,
+                            title = nextEpisode.title,
+                            coverUrl = nextEpisode.cover,
+                            target = PlaybackPreloadTarget(
+                                aid = nextEpisode.aid.takeIf { it > 0L },
+                                bvid = nextEpisode.bvid.takeIf { it.isNotBlank() },
+                                cid = nextEpisode.cid,
+                                epId = nextEpisode.epId.takeIf { it > 0L },
+                                seasonId = nextEpisode.seasonId.takeIf { it > 0L },
+                                source = PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN
+                            ),
+                            episodeIndex = selectedEpisodeIndex + 1
+                        )
                     )
                 } else {
                     finishPlan()
@@ -294,6 +295,7 @@ class PlayerSessionCoordinator {
             bvid = targetBvid,
             cid = cid,
             epId = targetEpId,
+            seasonId = playbackSeasonId.takeIf { it > 0L },
             source = source
         )
     }

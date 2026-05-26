@@ -10,6 +10,7 @@ data class PlaybackPreloadTarget(
     val bvid: String? = null,
     val cid: Long,
     val epId: Long? = null,
+    val seasonId: Long? = null,
     val source: Source
 ) {
     enum class Source {

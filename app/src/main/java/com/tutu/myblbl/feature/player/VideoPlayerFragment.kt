@@ -446,7 +446,8 @@ class VideoPlayerFragment : Fragment() {
             textNext = textNext,
             countdownView = countdownView,
             canExecutePendingAction = { _binding != null && player?.playbackState == Player.STATE_ENDED },
-            onPendingActionCleared = { viewModel.preloadPlayback(null) }
+            onExecutePendingSession = { sessionId -> viewModel.playContinuation(sessionId) },
+            onPendingActionCleared = { viewModel.clearPendingContinuation() }
         )
         overlayUiController = VideoPlayerOverlayController(
             activity = requireActivity() as androidx.appcompat.app.AppCompatActivity,
@@ -1364,24 +1365,14 @@ class VideoPlayerFragment : Fragment() {
                 afterPlayMode = afterPlayMode,
                 exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
                 hasNextEpisode = hasNextEpisode,
-                nextEpisode = nextEpisode,
-                playNextEpisode = { viewModel.playNext(preferLastPlayTime = false) },
-                playVideo = {
-                    sessionCoordinator.updateCurrentVideo(it)
-                    viewModel.playRelatedVideo(it, preferLastPlayTime = false)
-                }
+                nextEpisode = nextEpisode
             )
         ) {
-            is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
-                AppLog.i(TAG, "autoplay plan=next_episode mode=$afterPlayMode cid=${plan.preloadTarget?.cid}")
-                viewModel.preloadPlayback(plan.preloadTarget)
-                autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
-            }
-
-            is PlayerSessionCoordinator.ContinuationPlan.PlayVideo -> {
-                AppLog.i(TAG, "autoplay plan=video mode=$afterPlayMode cid=${plan.preloadTarget?.cid}")
-                viewModel.preloadPlayback(plan.preloadTarget)
-                autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
+            is PlayerSessionCoordinator.ContinuationPlan.PlayIntent -> {
+                val intent = plan.intent
+                AppLog.i(TAG, "autoplay plan=${intent.kind} mode=$afterPlayMode cid=${intent.target.cid} id=${intent.id}")
+                val session = viewModel.prepareContinuation(intent) ?: return
+                autoPlayController.queueNextSession(intent.title, intent.coverUrl, session.id)
             }
 
             PlayerSessionCoordinator.ContinuationPlan.ExitPlayer -> {

@@ -22,6 +22,7 @@ class VideoPlayerAutoPlayController(
     private val textNext: TextView,
     private val countdownView: CountdownView,
     private val canExecutePendingAction: () -> Boolean,
+    private val onExecutePendingSession: (String) -> Unit,
     private val onPendingActionCleared: () -> Unit = {}
 ) {
 
@@ -35,20 +36,21 @@ class VideoPlayerAutoPlayController(
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private var pendingAutoPlayAction: (() -> Unit)? = null
+    // 倒计时控件只保存会话 id，不再持有会重新读取播放器状态的 lambda。
+    private var pendingSessionId: String? = null
 
     private val autoNextRunnable = Runnable {
         if (!canExecutePendingAction()) {
             return@Runnable
         }
-        val action = pendingAutoPlayAction ?: return@Runnable
+        val sessionId = pendingSessionId ?: return@Runnable
         hideNextPreview(clearPendingAction = false)
-        pendingAutoPlayAction = null
-        action.invoke()
+        pendingSessionId = null
+        onExecutePendingSession(sessionId)
     }
 
-    fun queueNextAction(title: String, coverUrl: String, action: () -> Unit, delayMs: Long = 5000L) {
-        pendingAutoPlayAction = action
+    fun queueNextSession(title: String, coverUrl: String, sessionId: String, delayMs: Long = 5000L) {
+        pendingSessionId = sessionId
         showNextPreview(title, coverUrl, delayMs)
         handler.removeCallbacks(autoNextRunnable)
         handler.postDelayed(autoNextRunnable, delayMs)
@@ -56,8 +58,8 @@ class VideoPlayerAutoPlayController(
 
     fun cancelPendingAction() {
         handler.removeCallbacks(autoNextRunnable)
-        val hadPendingAction = pendingAutoPlayAction != null
-        pendingAutoPlayAction = null
+        val hadPendingAction = pendingSessionId != null
+        pendingSessionId = null
         if (hadPendingAction) {
             onPendingActionCleared()
         }
@@ -84,8 +86,8 @@ class VideoPlayerAutoPlayController(
     private fun hideNextPreview(clearPendingAction: Boolean) {
         handler.removeCallbacks(autoNextRunnable)
         if (clearPendingAction) {
-            val hadPendingAction = pendingAutoPlayAction != null
-            pendingAutoPlayAction = null
+            val hadPendingAction = pendingSessionId != null
+            pendingSessionId = null
             if (hadPendingAction) {
                 onPendingActionCleared()
             }
