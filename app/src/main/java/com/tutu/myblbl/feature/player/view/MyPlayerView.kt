@@ -109,8 +109,11 @@ class MyPlayerView @JvmOverloads constructor(
     private var pendingTitle: String? = null
     private var pendingSubTitle: String? = null
     private var pendingLiveDuration: String? = null
+    private var pendingPlayerSettingChangeListener: OnPlayerSettingChange? = null
     private var pendingVideoSettingChangeListener: OnVideoSettingChangeListener? = null
     private var pendingRepeatMode: Int = Player.REPEAT_MODE_OFF
+    private var pendingAfterPlayMode: com.tutu.myblbl.feature.player.settings.AfterPlayMode =
+        com.tutu.myblbl.feature.player.settings.AfterPlayMode.RECOMMEND
     private var pendingSeekSeconds: Int? = null
     private var pendingTimeBarMinUpdateIntervalMs: Int = MyPlayerControlView.DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS
     private var pendingShowMultiWindowTimeBar: Boolean = false
@@ -499,6 +502,8 @@ class MyPlayerView @JvmOverloads constructor(
 
     private fun setupSettingView() {
         settingView = findViewById(R.id.setting_view)
+        settingView?.setOnPlayerSettingChange(pendingPlayerSettingChangeListener)
+        settingView?.setAfterPlayMode(pendingAfterPlayMode)
         settingView?.setOnVisibilityStateChangedListener { isShowing ->
             if (isShowing) {
                 controller?.removeHideCallbacks()
@@ -1373,6 +1378,7 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun setOnPlayerSettingChange(listener: OnPlayerSettingChange?) {
+        pendingPlayerSettingChangeListener = listener
         settingView?.setOnPlayerSettingChange(listener)
     }
 
@@ -1479,11 +1485,12 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun setAfterPlayMode(mode: com.tutu.myblbl.feature.player.settings.AfterPlayMode) {
+        pendingAfterPlayMode = mode
         settingView?.setAfterPlayMode(mode)
     }
 
     fun getAfterPlayMode(): com.tutu.myblbl.feature.player.settings.AfterPlayMode {
-        return settingView?.getAfterPlayMode() ?: com.tutu.myblbl.feature.player.settings.AfterPlayMode.NEXT_EPISODE
+        return settingView?.getAfterPlayMode() ?: pendingAfterPlayMode
     }
 
     fun showSubtitleSettingView() {

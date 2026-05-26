@@ -18,7 +18,7 @@ data class PlayerSettings(
     val defaultAudioQualityId: Int? = VideoQualityDefaults.DEFAULT_AUDIO_QUALITY_ID,
     val defaultPlaybackSpeed: Float = 1.0f,
     val defaultVideoCodec: VideoCodecEnum? = VideoCodecEnum.HEVC,
-    val afterPlayMode: AfterPlayMode = AfterPlayMode.NEXT_EPISODE,
+    val afterPlayMode: AfterPlayMode = AfterPlayMode.RECOMMEND,
     val exitPlayerWhenPlaybackFinished: Boolean = true,
     val showSubtitleByDefault: Boolean = false,
     val subtitleTextSizePx: Int = 45,
@@ -127,8 +127,8 @@ object PlayerSettingsStore {
                 "播推荐视频" -> AfterPlayMode.RECOMMEND
                 "播列表中的下一个" -> AfterPlayMode.PLAY_QUEUE
                 "播放合集中的下一个" -> AfterPlayMode.NEXT_EPISODE
-                null, "" -> AfterPlayMode.NEXT_EPISODE
-                else -> AfterPlayMode.NEXT_EPISODE
+                null, "" -> AfterPlayMode.RECOMMEND
+                else -> AfterPlayMode.RECOMMEND
             },
             exitPlayerWhenPlaybackFinished = parseToggle(
                 readSetting(KEY_PLAY_FINISH_EXIT_PLAYER),
@@ -188,6 +188,21 @@ object PlayerSettingsStore {
         cachedSettings = settings
         lastSettingsSnapshot = snapshot
         return settings
+    }
+
+    fun saveAfterPlayMode(mode: AfterPlayMode) {
+        appSettings.putStringAsync(KEY_AFTER_PLAY, mode.toSettingValue())
+        cachedSettings = cachedSettings?.copy(afterPlayMode = mode)
+        lastSettingsSnapshot = null
+    }
+
+    private fun AfterPlayMode.toSettingValue(): String {
+        return when (this) {
+            AfterPlayMode.NOTHING -> "什么都不做"
+            AfterPlayMode.RECOMMEND -> "播推荐视频"
+            AfterPlayMode.PLAY_QUEUE -> "播列表中的下一个"
+            AfterPlayMode.NEXT_EPISODE -> "播放合集中的下一个"
+        }
     }
 
     private fun parseVideoQualityId(value: String?): Int? {

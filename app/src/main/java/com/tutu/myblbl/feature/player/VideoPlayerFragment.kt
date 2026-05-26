@@ -50,6 +50,7 @@ import com.tutu.myblbl.core.lifecycle.AppBackgroundMonitor
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.feature.player.settings.PlayerSettings
 import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
+import com.tutu.myblbl.feature.player.settings.AfterPlayMode
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.system.ViewUtils
@@ -616,6 +617,12 @@ class VideoPlayerFragment : Fragment() {
 
             override fun onScreenMirrorChange(enabled: Boolean) {
                 playerView.setMirrorEnabled(enabled)
+            }
+
+            override fun onAfterPlayModeChange(mode: AfterPlayMode) {
+                playerSettings = playerSettings.copy(afterPlayMode = mode)
+                playerView.setAfterPlayMode(mode)
+                PlayerSettingsStore.saveAfterPlayMode(mode)
             }
         })
         playerView.setOnVideoSettingChangeListener(object : OnVideoSettingChangeListener {
@@ -1349,12 +1356,15 @@ class VideoPlayerFragment : Fragment() {
     }
 
     private fun handlePlaybackEnded() {
+        val afterPlayMode = playerSettings.afterPlayMode
+        val hasNextEpisode = viewModel.hasNextEpisode()
+        val nextEpisode = viewModel.getNextEpisode()
         when (
             val plan = sessionCoordinator.buildContinuationPlan(
-                afterPlayMode = playerView.getAfterPlayMode(),
+                afterPlayMode = afterPlayMode,
                 exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
-                hasNextEpisode = viewModel.hasNextEpisode(),
-                nextEpisode = viewModel.getNextEpisode(),
+                hasNextEpisode = hasNextEpisode,
+                nextEpisode = nextEpisode,
                 playNextEpisode = { viewModel.playNext() },
                 playVideo = {
                     sessionCoordinator.updateCurrentVideo(it)
@@ -1363,20 +1373,24 @@ class VideoPlayerFragment : Fragment() {
             )
         ) {
             is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
+                AppLog.i(TAG, "autoplay plan=next_episode mode=$afterPlayMode cid=${plan.preloadTarget?.cid}")
                 viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
 
             is PlayerSessionCoordinator.ContinuationPlan.PlayVideo -> {
+                AppLog.i(TAG, "autoplay plan=video mode=$afterPlayMode cid=${plan.preloadTarget?.cid}")
                 viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
 
             PlayerSessionCoordinator.ContinuationPlan.ExitPlayer -> {
+                AppLog.i(TAG, "autoplay plan=exit mode=$afterPlayMode hasNext=$hasNextEpisode nextCid=${nextEpisode?.cid}")
                 exitPlayerHost()
             }
 
             PlayerSessionCoordinator.ContinuationPlan.ShowController -> {
+                AppLog.i(TAG, "autoplay plan=show_controller mode=$afterPlayMode hasNext=$hasNextEpisode nextCid=${nextEpisode?.cid}")
                 playerView.showController()
             }
         }
