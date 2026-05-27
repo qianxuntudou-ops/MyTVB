@@ -34,6 +34,8 @@ object VideoLightCardFactory {
             id = R.id.click_view
             isClickable = true
             isFocusable = true
+            defaultFocusHighlightEnabled = false
+            setBackgroundResource(R.drawable.cell_background)
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -756,8 +758,6 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
     lateinit var progressBar: View
     lateinit var coverMetaOverlay: View
     lateinit var textLayer: View
-    private val statePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val backgroundRect = RectF()
 
     private var coverLeft = 0
     private var coverTop = 0
@@ -767,10 +767,6 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
     private var titleRowHeight = 0
     private var lastContentWidth = -1
     private var lastDesiredHeight = -1
-
-    init {
-        setWillNotDraw(false)
-    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val startNs = SystemClock.elapsedRealtimeNanos()
@@ -816,30 +812,6 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
 
         textLayer.layout(coverLeft, titleTop, coverRight, titleTop + textLayer.measuredHeight)
         VideoCardPerfLogger.recordPhase(perfSource, "layout", SystemClock.elapsedRealtimeNanos() - startNs)
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val color = when {
-            isPressed -> metrics.pressedBackgroundColor
-            isFocused || hasFocus() -> metrics.focusedBackgroundColor
-            isSelected -> metrics.selectedBackgroundColor
-            else -> Color.TRANSPARENT
-        }
-        if (color == Color.TRANSPARENT) return
-        statePaint.color = color
-        backgroundRect.set(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawRoundRect(
-            backgroundRect,
-            metrics.cardRadius.toFloat(),
-            metrics.cardRadius.toFloat(),
-            statePaint
-        )
-    }
-
-    override fun drawableStateChanged() {
-        super.drawableStateChanged()
-        invalidate()
     }
 
     private fun canReuseMeasuredChildren(widthSize: Int, contentWidth: Int): Boolean {
@@ -914,9 +886,6 @@ private class LightCardMetrics private constructor(context: Context) {
     val ownerTextSize = dimenF(context, R.dimen.px22)
     val metaTextSize = dimenF(context, R.dimen.px22)
     val badgeTextSize = dimenF(context, R.dimen.px20)
-    val pressedBackgroundColor = themeColor(context, androidx.appcompat.R.attr.colorPrimary, Color.TRANSPARENT)
-    val focusedBackgroundColor = themeColor(context, androidx.appcompat.R.attr.colorControlHighlight, Color.TRANSPARENT)
-    val selectedBackgroundColor = themeColor(context, R.attr.fourthBackgroundColor, Color.TRANSPARENT)
 
     private fun dimen(context: Context, resId: Int): Int = context.resources.getDimensionPixelSize(resId)
 
@@ -928,17 +897,6 @@ private class LightCardMetrics private constructor(context: Context) {
             value.toFloat(),
             context.resources.displayMetrics
         ).toInt()
-
-    private fun themeColor(context: Context, attr: Int, fallback: Int): Int {
-        val value = TypedValue()
-        if (!context.theme.resolveAttribute(attr, value, true)) {
-            return fallback
-        }
-        if (value.resourceId != 0) {
-            return ContextCompat.getColor(context, value.resourceId)
-        }
-        return value.data
-    }
 
     companion object {
         private val cache = java.util.WeakHashMap<android.content.res.Resources, LightCardMetrics>()
