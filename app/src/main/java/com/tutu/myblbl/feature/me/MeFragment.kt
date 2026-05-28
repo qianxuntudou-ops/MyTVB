@@ -84,7 +84,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                notifyCurrentTab { it.onTabReselected() }
+                // Tab按钮再次点击，不触发刷新，避免抢走焦点
             }
         }.also { tabLayout.addOnTabSelectedListener(it) }
 

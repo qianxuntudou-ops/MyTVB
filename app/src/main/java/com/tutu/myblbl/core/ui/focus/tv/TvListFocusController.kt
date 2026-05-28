@@ -255,7 +255,7 @@ class TvListFocusController(
         for (i in 0 until recyclerView.childCount) {
             val child = recyclerView.getChildAt(i)
             val pos = recyclerView.getChildAdapterPosition(child)
-            if (pos != targetPosition) {
+            if (pos != RecyclerView.NO_POSITION && pos != targetPosition) {
                 child.isFocusable = false
             }
         }

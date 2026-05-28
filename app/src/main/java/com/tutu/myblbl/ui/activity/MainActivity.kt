@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
+import androidx.recyclerview.widget.RecyclerView
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.activity.OnBackPressedCallback
@@ -369,7 +370,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     override fun onTabReselected(index: Int) {
-        postTabClickEvent(index)
+        // 侧边栏按钮再次点击，不触发刷新，避免抢走焦点
     }
 
     override fun onTabNavigateRight(index: Int): Boolean {
@@ -876,9 +877,21 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
         if (event?.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-            mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MenuPressed)
+            val focused = currentFocus
+            if (focused != null && isInsideRecyclerView(focused)) {
+                mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MenuPressed)
+            }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    private fun isInsideRecyclerView(view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current is RecyclerView) return true
+            current = current.parent as? View
+        }
+        return false
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

@@ -81,13 +81,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
             }
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                val elapsed = System.currentTimeMillis() - lastTabSelectedTime
-                if (tab.position == lastTabSelectedPosition && elapsed < 300) {
-                    return
-                }
-                lastTabSelectedPosition = tab.position
-                lastTabSelectedTime = System.currentTimeMillis()
-                postTopTabEvent(tab.position)
+                // Tab按钮再次点击，不触发刷新，避免抢走焦点
             }
         }.also { binding.tabLayout.addOnTabSelectedListener(it) }
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {

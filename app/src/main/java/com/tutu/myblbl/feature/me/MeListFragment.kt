@@ -4,6 +4,7 @@ package com.tutu.myblbl.feature.me
 
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.ViewTreeObserver
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -75,6 +76,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     private var pendingHistoryReturnRestore = false
     private var pendingHistoryScrollToTop = false
     private var pendingLaterScrollToTop = false
+    private var focusToFirstAfterScrollToTop = false
     private var lastKnownLoggedIn = false
     private var tvFocusController: TvListFocusController? = null
     private var currentOpenStartMs = 0L
@@ -513,9 +515,22 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                 if (pendingLaterScrollToTop && filtered.isNotEmpty()) {
                     AppLog.d("MeDebug", "[later] SCROLLING TO TOP")
                     pendingLaterScrollToTop = false
+                    val shouldFocusFirst = focusToFirstAfterScrollToTop
+                    focusToFirstAfterScrollToTop = false
                     scrollListToTop(immediate = true)
-                    binding.recyclerView.post {
-                        scrollListToTop(immediate = true)
+                    if (shouldFocusFirst) {
+                        val rv = binding.recyclerView
+                        rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                if (isAdded && view != null) {
+                                    tvFocusController?.requestRefreshFocus(0)
+                                }
+                                return true
+                            }
+                        })
+                    } else {
+                        binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
                     }
                 } else {
                     AppLog.d("MeDebug", "[later] NOT scrolling to top: pendingLaterScroll=$pendingLaterScrollToTop, filteredEmpty=${filtered.isEmpty()}")
@@ -565,9 +580,22 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
             TYPE_LATER -> {
                 if (pendingLaterScrollToTop) {
                     pendingLaterScrollToTop = false
+                    val shouldFocusFirst = focusToFirstAfterScrollToTop
+                    focusToFirstAfterScrollToTop = false
                     scrollListToTop(immediate = true)
-                    binding.recyclerView.post {
-                        scrollListToTop(immediate = true)
+                    if (shouldFocusFirst) {
+                        val rv = binding.recyclerView
+                        rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                            override fun onPreDraw(): Boolean {
+                                rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                if (isAdded && view != null) {
+                                    tvFocusController?.requestRefreshFocus(0)
+                                }
+                                return true
+                            }
+                        })
+                    } else {
+                        binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
                     }
                 }
             }
@@ -664,6 +692,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         pendingHistoryReturnRestore = false
         pendingHistoryScrollToTop = type == TYPE_HISTORY
         pendingLaterScrollToTop = type == TYPE_LATER
+        focusToFirstAfterScrollToTop = true
         tvFocusController?.clearAnchorForUserRefresh()
         pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
         pendingHistoryAnchorOffset = 0
@@ -708,6 +737,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                 pendingHistoryScrollToTop = type == TYPE_HISTORY
                 pendingLaterScrollToTop = type == TYPE_LATER
                 tvFocusController?.clearAnchorForUserRefresh()
+                binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 AppLog.d("MeDebug", "[$type] onTabSelected: network_only loadData, pendingLaterScroll=$pendingLaterScrollToTop, pendingHistoryScroll=$pendingHistoryScrollToTop")
                 currentPage = 1
                 loadData()
@@ -899,11 +929,23 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
         pendingHistoryAnchorOffset = 0
         binding.recyclerView.stopScroll()
-        binding.recyclerView.clearFocus()
         historyAdapter?.clearFocusMemory()
+        val shouldFocusFirst = focusToFirstAfterScrollToTop
+        focusToFirstAfterScrollToTop = false
         scrollListToTop(immediate = true)
-        binding.recyclerView.post {
-            scrollListToTop(immediate = true)
+        if (shouldFocusFirst) {
+            val rv = binding.recyclerView
+            rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    rv.viewTreeObserver.removeOnPreDrawListener(this)
+                    if (isAdded && view != null) {
+                        tvFocusController?.requestRefreshFocus(0)
+                    }
+                    return true
+                }
+            })
+        } else {
+            binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }
     }
 
