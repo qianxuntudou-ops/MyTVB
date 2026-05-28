@@ -55,7 +55,6 @@ class VideoPlayerOverlayController(
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.EPISODE_BUTTON)
         keepControllerVisibleForOverlay()
         uiCoordinator.transition(UiEvent.PanelOpened(PanelType.EPISODE))
-        playerProvider()?.pause()
 
         val dialog = AppCompatDialog(activity, R.style.DialogTheme)
         dialog.setContentView(R.layout.dialog_choose_episode)
