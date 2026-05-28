@@ -74,6 +74,7 @@ class SearchNewFragment :
     private var isResultPanelVisible = false
     private var pendingResultFocus = false
     private var pendingOpenKeyword: String? = null
+    private var lastAppliedCategories: List<SearchCategoryItem>? = null
     private var searchOpenStartMs = 0L
     private var searchResultStartMs = 0L
     private val pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
@@ -393,6 +394,7 @@ class SearchNewFragment :
         }
 
         currentKeyword = normalized
+        lastAppliedCategories = null
         searchResultStartMs = PagePerfLogger.now()
         PagePerfLogger.markNow("Search", "perform_search", "keywordLen=${normalized.length}")
         pendingHistoryKeyword = null
@@ -581,6 +583,35 @@ class SearchNewFragment :
         syncCenterColumn()
     }
 
+    override fun onPause() {
+        if (isResultPanelVisible) {
+            resultPagerAdapter?.captureFocusAnchors()
+        }
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isResultPanelVisible) {
+            binding.root.post {
+                if (!isAdded || view == null) return@post
+                val focused = binding.root.findFocus()
+                if (focused == null || !isDescendantOf(focused, binding.viewSearchResult)) {
+                    resultPagerAdapter?.restoreFocusAnchors()
+                }
+            }
+        }
+    }
+
+    private fun isDescendantOf(view: View, ancestor: View): Boolean {
+        var current = view.parent
+        while (current is View) {
+            if (current === ancestor) return true
+            current = current.parent
+        }
+        return false
+    }
+
     override fun onDestroyView() {
         focusCoordinator.unregister(view)
         tabMediator?.detach()
@@ -597,6 +628,10 @@ class SearchNewFragment :
         if (currentKeyword.isBlank() && resultPagerAdapter == null) {
             return
         }
+        if (categories == lastAppliedCategories && resultPagerAdapter != null) {
+            return
+        }
+        lastAppliedCategories = categories
         val adapter = ensureSearchResultSetup()
         val pageStates = viewModel.searchPageStates.value
         val initialItems = pageStates.mapValues { (_, state) -> state.items }

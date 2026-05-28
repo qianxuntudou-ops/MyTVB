@@ -140,6 +140,17 @@ class SearchResultPagerAdapter(
         return holders[type]?.focusPrimaryContent(anchorView) == true
     }
 
+    fun captureFocusAnchors() {
+        holders.values.forEach { it.captureFocusAnchor() }
+    }
+
+    fun restoreFocusAnchors() {
+        val restored = holders.values.any { it.restoreFocusAnchor() }
+        if (!restored) {
+            holders.values.forEach { it.focusPrimaryContent() }
+        }
+    }
+
     inner class ViewHolder(
         private val binding: PageSearchResultBinding
     ) : RecyclerView.ViewHolder(binding.root) {
@@ -246,6 +257,14 @@ class SearchResultPagerAdapter(
             } else {
                 applyUiState()
             }
+        }
+
+        fun captureFocusAnchor() {
+            tvFocusController?.captureCurrentAnchor()
+        }
+
+        fun restoreFocusAnchor(): Boolean {
+            return tvFocusController?.restoreCapturedAnchor() == true
         }
 
         fun release() {

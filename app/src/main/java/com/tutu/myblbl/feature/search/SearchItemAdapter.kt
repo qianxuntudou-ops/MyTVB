@@ -51,6 +51,16 @@ class SearchItemAdapter(
     private val viewTypeBase = nextViewTypeBase.getAndAdd(VIEW_TYPE_STRIDE)
 
     fun setItems(list: List<SearchItemModel>) {
+        if (items.size == list.size) {
+            var identical = true
+            for (i in items.indices) {
+                if (searchItemKey(items[i]) != searchItemKey(list[i])) {
+                    identical = false
+                    break
+                }
+            }
+            if (identical) return
+        }
         if (items.isEmpty() && list.isNotEmpty()) {
             items.addAll(list)
             notifyItemRangeInserted(0, list.size)
