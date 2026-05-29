@@ -398,6 +398,7 @@ class MyPlayerView @JvmOverloads constructor(
         val settingStartMs = SystemClock.elapsedRealtime()
         setupSettingView()
         AppLog.i("PlayerViewPerf", "setupSettingView elapsed=${SystemClock.elapsedRealtime() - settingStartMs}ms")
+        restoreOverlayZOrder()
         isClickable = true
         isFocusable = true
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
@@ -460,6 +461,7 @@ class MyPlayerView @JvmOverloads constructor(
             newController.setProgressOnlyUiEnabled(!persistentBottomProgressEnabled)
             newController.addVisibilityListener(controllerComponentListener)
             applyPendingControllerState(newController)
+            restoreOverlayZOrder()
         }
 
         controllerShowTimeoutMs = if (controller != null) {
@@ -579,6 +581,7 @@ class MyPlayerView @JvmOverloads constructor(
         overlay.setPersistentBottomProgressEnabled(persistentBottomProgressEnabled)
         pendingSeekSeconds?.let { overlay.seekSeconds = it }
         overlay.setSeekPreviewSnapshot(pendingSeekPreviewSnapshot)
+        restoreOverlayZOrder()
         overlay.setCallback(object : SeekOverlayView.Callback {
             override fun onAnimationStart(displayMode: SeekOverlayView.DisplayMode) = Unit
 
@@ -1545,76 +1548,78 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun setMirrorEnabled(enabled: Boolean) {
-        player ?: return
-        val frame = contentFrame ?: return
+        val currentPlayer = player ?: return
+        settingView?.setScreenMirrorEnabled(enabled)
+        if (enabled) {
+            dmMaskController.setEnabled(false)
+        }
 
         val currentSurface = videoSurfaceView
 
-        // 已经是 TextureView，只需切换 scaleX，不重建 View。
-        //
-        // ⚠️ 必须显式 setLayerType(LAYER_TYPE_HARDWARE) 锁住硬件层。
-        // 原因：TextureView 在 scaleX != 1f 时 view 系统会自动套一个临时
-        // hardware layer，切回 scaleX = 1f 又会销毁它。Adreno 驱动在这种反复
-        // 创建/销毁 RenderTarget 时会触发 EGL_BAD_MATCH（eglSurfaceAttrib 1338），
-        // OpenGLRenderer 反复重建上下文 → 主线程 jank 100ms+。
-        // 一直保持 LAYER_TYPE_HARDWARE 后 scaleX 切换只是 GPU matrix 改动，无重建。
         if (currentSurface is TextureView) {
-            if (currentSurface.layerType != LAYER_TYPE_HARDWARE) {
-                currentSurface.setLayerType(LAYER_TYPE_HARDWARE, null)
-            }
             currentSurface.scaleX = if (enabled) -1f else 1f
+            AppLog.i(
+                "PlayerViewMirror",
+                "mirror=$enabled surface=TextureView scaleX=${currentSurface.scaleX}"
+            )
+            restoreOverlayZOrder()
             return
         }
 
-        // 关闭镜像且当前是 SurfaceView，无需操作
-        if (!enabled) return
+        if (!enabled || currentSurface !is SurfaceView) {
+            currentSurface?.scaleX = 1f
+            restoreOverlayZOrder()
+            return
+        }
 
-        // 首次开启镜像：从 SurfaceView 切换到 TextureView。
-        //
-        // ⚠️ 切换顺序非常敏感，错了会触发 EGL_BAD_MATCH，UI 卡死 1-2 秒（用户看到
-        // 「弹幕全部消失」实为 Choreographer 跳 100+ 帧，弹幕滚动暂停）。
-        //
-        // 错误做法（之前的实现）：
-        //   addView(textureView) → textureView.post {
-        //       clearVideoSurfaceView(old);            // 1. 旧 surface 已 detach
-        //       setVideoTextureView(textureView)       // 2. 但新 SurfaceTexture 还没创建
-        //   }
-        //   textureView.post 只保证 layout 完成，SurfaceTexture 是 GPU 线程异步创建的，
-        //   post 时往往还没就绪。期间 video codec 没有可写 target → EGL_BAD_MATCH，
-        //   OpenGLRenderer 反复重建上下文 → 主线程 Choreographer skip 60-120 帧。
-        //
-        // 正确做法：addView 后通过 SurfaceTextureListener.onSurfaceTextureAvailable
-        // 等到 GPU 线程确认 SurfaceTexture 真正可用，再把 player 切到新 surface。
-        // 旧 SurfaceView 的 detach 由 setVideoTextureView 内部自动处理，无需手动 clear。
-        val surfaceView = currentSurface as SurfaceView
-
-        val layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        val textureView = TextureView(context)
-        textureView.layoutParams = layoutParams
-        textureView.isOpaque = true
-        // 预先锁住硬件层，避免后续每次 scaleX 切换时 view 系统反复创建/销毁 hardware
-        // layer，导致 Adreno 驱动报 EGL_BAD_MATCH（详见上方注释）。
-        textureView.setLayerType(LAYER_TYPE_HARDWARE, null)
-
+        val frame = contentFrame ?: return
+        val textureView = TextureView(context).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            isOpaque = true
+            scaleX = -1f
+        }
         textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(s: SurfaceTexture, w: Int, h: Int) {
-                // 摘掉 listener：player.setVideoTextureView 内部会重设自己的 listener，
-                // 这里先清空避免被重入回调。
+            override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
                 textureView.surfaceTextureListener = null
                 videoSurfaceView = textureView
                 textureView.scaleX = -1f
-                player?.setVideoTextureView(textureView)
-                frame.removeView(surfaceView)
+                currentPlayer.setVideoTextureView(textureView)
+                textureView.post {
+                    if (currentSurface.parent === frame && videoSurfaceView === textureView) {
+                        frame.removeView(currentSurface)
+                    }
+                    restoreOverlayZOrder()
+                }
+                AppLog.i("PlayerViewMirror", "mirror=true surface=TextureView created")
             }
 
-            override fun onSurfaceTextureSizeChanged(s: SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
 
-            override fun onSurfaceTextureDestroyed(s: SurfaceTexture): Boolean = true
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean = true
 
-            override fun onSurfaceTextureUpdated(s: SurfaceTexture) {}
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
         }
 
         frame.addView(textureView, 0)
+        restoreOverlayZOrder()
+    }
+
+    private fun restoreOverlayZOrder() {
+        val controllerLayer: View? = controller ?: findViewById<View>(R.id.exo_controller_placeholder)
+        dmkMaskHost?.bringToFront()
+        findViewById<View>(R.id.interaction_view)?.bringToFront()
+        pauseIndicatorView?.bringToFront()
+        controllerLayer?.bringToFront()
+        seekOverlayView?.bringToFront()
+        settingView?.bringToFront()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            dmkMaskHost?.translationZ = 1f
+            findViewById<View>(R.id.interaction_view)?.translationZ = 2f
+            pauseIndicatorView?.translationZ = 3f
+            controllerLayer?.translationZ = 4f
+            seekOverlayView?.translationZ = 5f
+            settingView?.translationZ = 6f
+        }
     }
 
     fun showHideMirrorButton(show: Boolean) {

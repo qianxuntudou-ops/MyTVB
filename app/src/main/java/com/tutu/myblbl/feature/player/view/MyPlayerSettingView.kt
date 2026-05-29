@@ -399,6 +399,16 @@ class MyPlayerSettingView @JvmOverloads constructor(
     fun getDmMergeDuplicate(): Boolean = panelState.dmMergeDuplicate
     fun getDmSmartShield(): Boolean = panelState.dmSmartShield
 
+    fun setScreenMirrorEnabled(enabled: Boolean) {
+        updateState { state ->
+            state.copy(
+                screenMirrorEnabled = enabled,
+                dmSmartShield = if (enabled) false else state.dmSmartShield
+            )
+        }
+        refreshCurrentMenuInPlace()
+    }
+
     fun setOnPlayerSettingChange(listener: OnPlayerSettingChange?) {
         onPlayerSettingChange = listener
     }
@@ -443,7 +453,10 @@ class MyPlayerSettingView @JvmOverloads constructor(
             ITEM_DM_SETTING -> showDmSettingMenu()
             ITEM_SCREEN_MIRROR -> {
                 val newValue = !panelState.screenMirrorEnabled
-                updateState { it.copy(screenMirrorEnabled = newValue) }
+                updateState { it.copy(screenMirrorEnabled = newValue, dmSmartShield = if (newValue) false else it.dmSmartShield) }
+                if (newValue) {
+                    onPlayerSettingInnerChange?.onDmSmartShield(false)
+                }
                 onPlayerSettingChange?.onScreenMirrorChange(newValue)
                 val label = if (newValue) context.getString(R.string.on) else context.getString(R.string.off)
                 Toast.makeText(context, "${context.getString(R.string.screen_mirror)}：$label", Toast.LENGTH_SHORT).show()
@@ -566,7 +579,8 @@ class MyPlayerSettingView @JvmOverloads constructor(
             }
 
             ITEM_DM_SMART_SHIELD -> {
-                updateState { it.copy(dmSmartShield = itemId == 0) }
+                val newValue = itemId == 0 && !panelState.screenMirrorEnabled
+                updateState { it.copy(dmSmartShield = newValue) }
                 onPlayerSettingInnerChange?.onDmSmartShield(panelState.dmSmartShield)
             }
         }
@@ -602,7 +616,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 title = context.getString(R.string.dm_merge_duplicate)
             }
             ITEM_DM_SMART_SHIELD -> {
-                newValue = !panelState.dmSmartShield
+                newValue = !panelState.dmSmartShield && !panelState.screenMirrorEnabled
                 updateState { it.copy(dmSmartShield = newValue) }
                 onPlayerSettingInnerChange?.onDmSmartShield(newValue)
                 title = context.getString(R.string.dm_smart_shield)
