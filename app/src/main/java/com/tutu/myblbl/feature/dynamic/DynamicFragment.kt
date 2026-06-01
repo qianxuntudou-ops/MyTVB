@@ -185,6 +185,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         lastFocusedVideoPosition = 0
         pendingScrollToTop = true
         preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
+        if (wasSelected) {
+            swipeRefreshLayout?.isRefreshing = true
+            lastRefreshTime = System.currentTimeMillis()
+        }
         viewModel.selectUp(currentUpId.toString(), pageSize, forceRefresh = wasSelected)
     }
 
