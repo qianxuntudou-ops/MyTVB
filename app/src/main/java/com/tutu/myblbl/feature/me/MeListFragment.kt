@@ -522,15 +522,18 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                     scrollListToTop(immediate = true)
                     if (shouldFocusFirst) {
                         val rv = binding.recyclerView
-                        rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                            override fun onPreDraw(): Boolean {
-                                rv.viewTreeObserver.removeOnPreDrawListener(this)
-                                if (isAdded && view != null) {
-                                    tvFocusController?.requestRefreshFocus(0)
+                        val focused = activity?.currentFocus
+                        if (focused != null && rv.findContainingItemView(focused) != null) {
+                            rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                                override fun onPreDraw(): Boolean {
+                                    rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                    if (isAdded && view != null) {
+                                        tvFocusController?.requestRefreshFocus(0)
+                                    }
+                                    return true
                                 }
-                                return true
-                            }
-                        })
+                            })
+                        }
                     } else {
                         binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
                     }
@@ -587,15 +590,18 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                     scrollListToTop(immediate = true)
                     if (shouldFocusFirst) {
                         val rv = binding.recyclerView
-                        rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                            override fun onPreDraw(): Boolean {
-                                rv.viewTreeObserver.removeOnPreDrawListener(this)
-                                if (isAdded && view != null) {
-                                    tvFocusController?.requestRefreshFocus(0)
+                        val focused = activity?.currentFocus
+                        if (focused != null && rv.findContainingItemView(focused) != null) {
+                            rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                                override fun onPreDraw(): Boolean {
+                                    rv.viewTreeObserver.removeOnPreDrawListener(this)
+                                    if (isAdded && view != null) {
+                                        tvFocusController?.requestRefreshFocus(0)
+                                    }
+                                    return true
                                 }
-                                return true
-                            }
-                        })
+                            })
+                        }
                     } else {
                         binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
                     }
@@ -696,6 +702,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         pendingLaterScrollToTop = type == TYPE_LATER
         focusToFirstAfterScrollToTop = true
         tvFocusController?.clearAnchorForUserRefresh()
+        swipeRefreshLayout?.isRefreshing = true
         pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
         pendingHistoryAnchorOffset = 0
         if (type == TYPE_HISTORY) {
@@ -937,15 +944,18 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         scrollListToTop(immediate = true)
         if (shouldFocusFirst) {
             val rv = binding.recyclerView
-            rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-                override fun onPreDraw(): Boolean {
-                    rv.viewTreeObserver.removeOnPreDrawListener(this)
-                    if (isAdded && view != null) {
-                        tvFocusController?.requestRefreshFocus(0)
+            val focused = activity?.currentFocus
+            if (focused != null && rv.findContainingItemView(focused) != null) {
+                rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        rv.viewTreeObserver.removeOnPreDrawListener(this)
+                        if (isAdded && view != null) {
+                            tvFocusController?.requestRefreshFocus(0)
+                        }
+                        return true
                     }
-                    return true
-                }
-            })
+                })
+            }
         } else {
             binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
         }

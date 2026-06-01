@@ -325,7 +325,8 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
                 if (wasPendingScrollToTop && !isPendingReturnRestore()) {
                     scrollToTop()
                     val rv = recyclerView
-                    if (rv != null) {
+                    val focused = activity?.currentFocus
+                    if (rv != null && focused != null && rv.findContainingItemView(focused) != null) {
                         rv.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                             override fun onPreDraw(): Boolean {
                                 rv.viewTreeObserver.removeOnPreDrawListener(this)

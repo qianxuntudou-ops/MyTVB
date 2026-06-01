@@ -24,7 +24,8 @@ fun TabLayout.enableTouchNavigation(
     smoothScrollOnSelection: Boolean = true,
     onNavigateDown: (() -> Boolean)? = null,
     onNavigateLeft: (() -> Boolean)? = null,
-    onNavigateRight: (() -> Boolean)? = null
+    onNavigateRight: (() -> Boolean)? = null,
+    onTabReselected: ((index: Int) -> Unit)? = null
 ) {
     viewPager.isUserInputEnabled = true
     post {
@@ -44,7 +45,7 @@ fun TabLayout.enableTouchNavigation(
                                         smoothScroll = smoothScrollOnSelection
                                     )
                                 } else {
-                                    getTabAt(index)?.select()
+                                    onTabReselected?.invoke(index)
                                 }
                                 keepSelectedTabFocused(tabStrip, index, viewPager)
                                 true
@@ -86,7 +87,7 @@ fun TabLayout.enableTouchNavigation(
                         smoothScroll = smoothScrollOnSelection
                     )
                 } else {
-                    getTabAt(index)?.select()
+                    onTabReselected?.invoke(index)
                 }
                 keepSelectedTabFocused(tabStrip, index, viewPager)
             }

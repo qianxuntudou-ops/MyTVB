@@ -59,7 +59,10 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            onNavigateDown = ::focusCurrentPagePrimaryContent
+            onNavigateDown = ::focusCurrentPagePrimaryContent,
+            onTabReselected = {
+                adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
+            }
         )
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) = Unit
@@ -67,7 +70,6 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
             }
         }.also { tabLayout.addOnTabSelectedListener(it) }
 

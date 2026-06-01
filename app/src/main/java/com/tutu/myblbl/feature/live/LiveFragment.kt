@@ -73,7 +73,10 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            onNavigateDown = ::focusCurrentPagePrimaryContent
+            onNavigateDown = ::focusCurrentPagePrimaryContent,
+            onTabReselected = {
+                adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
+            }
         )
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) = Unit
@@ -81,7 +84,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                // Tab按钮再次点击，不触发刷新，避免抢走焦点
             }
         }.also { tabLayout.addOnTabSelectedListener(it) }
     }
@@ -118,7 +120,10 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
                         adapter.setCategories(categories)
                         tabLayout.enableTouchNavigation(
                             viewPager = viewPager,
-                            onNavigateDown = ::focusCurrentPagePrimaryContent
+                            onNavigateDown = ::focusCurrentPagePrimaryContent,
+                            onTabReselected = {
+                                adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
+                            }
                         )
                         viewPager.currentItem = previousItem.coerceIn(0, categories.lastIndex)
                     }

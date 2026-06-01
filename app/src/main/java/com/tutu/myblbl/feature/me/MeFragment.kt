@@ -76,7 +76,12 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            onNavigateDown = ::focusCurrentPagePrimaryContent
+            onNavigateDown = ::focusCurrentPagePrimaryContent,
+            onTabReselected = {
+                if (viewModel.isLoggedIn.value) {
+                    getCurrentTabPage()?.refresh()
+                }
+            }
         )
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) = Unit
@@ -84,7 +89,6 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                // Tab按钮再次点击，不触发刷新，避免抢走焦点
             }
         }.also { tabLayout.addOnTabSelectedListener(it) }
 

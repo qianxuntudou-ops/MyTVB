@@ -68,7 +68,10 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         binding.tabLayout.enableTouchNavigation(
             viewPager = binding.viewPager,
             onNavigateDown = ::focusCurrentPagePrimaryContent,
-            onNavigateLeft = ::focusLeftFunctionArea
+            onNavigateLeft = ::focusLeftFunctionArea,
+            onTabReselected = { index ->
+                (adapter.getCurrentFragment(index) as? HomeTabPage)?.refresh()
+            }
         )
 
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {
@@ -81,7 +84,6 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
             }
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                // Tab按钮再次点击，不触发刷新，避免抢走焦点
             }
         }.also { binding.tabLayout.addOnTabSelectedListener(it) }
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {

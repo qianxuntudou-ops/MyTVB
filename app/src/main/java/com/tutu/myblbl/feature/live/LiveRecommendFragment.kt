@@ -181,6 +181,7 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
         currentOpenStartMs = PagePerfLogger.now()
         PagePerfLogger.markNow("LiveRecommend", "refresh_start", "hasContent=${adapter.itemCount > 0}")
         capturedRoomId = null
+        swipeRefreshLayout?.isRefreshing = true
         viewModel.loadData(forceRefresh = true)
     }
 

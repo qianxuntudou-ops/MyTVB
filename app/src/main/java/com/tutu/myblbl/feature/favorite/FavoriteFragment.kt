@@ -185,7 +185,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             return
         }
 
-        binding.progressBar.visibility = View.VISIBLE
+        binding.progressBar.visibility = if (adapter.itemCount > 0) View.GONE else View.VISIBLE
         isLoadingFolders = true
 
         folderLoadJob = viewLifecycleOwner.lifecycleScope.launch {
@@ -320,6 +320,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     }
 
     override fun refresh() {
+        swipeRefreshLayout?.isRefreshing = true
         loadFavoriteFolders()
     }
 
