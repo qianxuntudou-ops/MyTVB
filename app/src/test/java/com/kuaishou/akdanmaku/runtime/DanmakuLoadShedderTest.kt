@@ -1,6 +1,7 @@
 package com.kuaishou.akdanmaku.runtime
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class DanmakuLoadShedderTest {
@@ -32,5 +33,10 @@ class DanmakuLoadShedderTest {
   fun nextLevel_recoversOneStepWhenPressureDrops() {
     assertEquals(2, DanmakuLoadShedder.nextLevel(3, layoutCostMs = 1L, rejectedCount = 0, unmeasuredCount = 0))
     assertEquals(0, DanmakuLoadShedder.nextLevel(0, layoutCostMs = 1L, rejectedCount = 0, unmeasuredCount = 0))
+  }
+
+  @Test
+  fun shouldSkipItem_keepsOrdinaryDanmakuUnderPressure() {
+    assertFalse(DanmakuLoadShedder.shouldSkipItem(DanmakuLoadShedder.MAX_LEVEL))
   }
 }

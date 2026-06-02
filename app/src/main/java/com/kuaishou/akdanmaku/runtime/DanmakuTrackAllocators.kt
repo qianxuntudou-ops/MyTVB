@@ -10,7 +10,6 @@ import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItem
 import com.kuaishou.akdanmaku.data.DanmakuItem.Companion.ROLLING_START_TIME_UNSET
 import com.kuaishou.akdanmaku.ext.isTimeout
-import kotlin.math.abs
 
 /**
  * 滚动弹幕轨道分配器。
@@ -20,7 +19,7 @@ import kotlin.math.abs
  */
 internal class RollingTrackAllocator {
   private val rows = ArrayList<Row>(32)
-  private val itemToRow = HashMap<Long, Row>(256)
+  private val placements = HashMap<Long, RollingPlacement>(256)
   private var maxBottom = 0
 
   fun updateExisting(
@@ -31,8 +30,8 @@ internal class RollingTrackAllocator {
     config: DanmakuConfig
   ): Boolean {
     if (!refreshMaxBottom(height, config)) return false
-    val row = itemToRow[item.data.danmakuId] ?: return false
-    updatePosition(item, row, nowMs, width, config)
+    val placement = placements[item.data.danmakuId] ?: return false
+    placement.updatePosition(item, nowMs, width, config.rollingDurationMs, config.layoutGeneration)
     return true
   }
 
@@ -45,18 +44,33 @@ internal class RollingTrackAllocator {
     config: DanmakuConfig
   ): Boolean {
     refreshMaxBottom(height, config)
-    val drawState = item.drawState
-    val row = itemToRow[item.data.danmakuId] ?: run {
-      val newRow = findOrCreateRow(item, nowMs, width, margin, config) ?: return false
-      itemToRow[item.data.danmakuId] = newRow
+    val placement = placements[item.data.danmakuId] ?: run {
+      val rollingDurationMs = config.rollingDurationMs
+      val newRow = findOrCreateRow(
+        item = item,
+        nowMs = nowMs,
+        width = width,
+        margin = margin,
+        rollingDurationMs = rollingDurationMs,
+        allowOverlap = config.allowOverlap,
+        overlapFraction = config.overlapFraction
+      ) ?: return false
       if (item.rollingStartTimeMs == ROLLING_START_TIME_UNSET) {
         item.rollingStartTimeMs = nowMs.coerceAtLeast(item.timePosition)
       }
-      newRow.add(item)
-      newRow
+      val newPlacement = RollingPlacement(
+        item = item,
+        row = newRow,
+        topFloat = newRow.top.toFloat(),
+        startTimeMs = item.rollingStartTimeMs,
+        width = item.drawState.width
+      )
+      placements[item.data.danmakuId] = newPlacement
+      newRow.add(newPlacement)
+      newPlacement
     }
 
-    updatePosition(item, row, nowMs, width, config)
+    placement.updatePosition(item, nowMs, width, config.rollingDurationMs, config.layoutGeneration)
     return true
   }
 
@@ -64,40 +78,19 @@ internal class RollingTrackAllocator {
     val nextMaxBottom = (height * config.screenPart).toInt()
     if (maxBottom == nextMaxBottom) return true
     maxBottom = nextMaxBottom
-    if (rows.isEmpty() && itemToRow.isEmpty()) return true
+    if (rows.isEmpty() && placements.isEmpty()) return true
     clear()
     return false
   }
 
-  private fun updatePosition(
-    item: DanmakuItem,
-    row: Row,
-    nowMs: Long,
-    width: Int,
-    config: DanmakuConfig
-  ) {
-    val drawState = item.drawState
-    val startTime = RollingDanmakuTiming.resolvedStartTime(item.rollingStartTimeMs, item.timePosition)
-    drawState.positionX = RollingDanmakuTiming.positionX(
-      screenWidth = width,
-      itemWidth = drawState.width,
-      nowMs = nowMs,
-      startTimeMs = startTime,
-      durationMs = config.rollingDurationMs
-    )
-    drawState.positionY = row.top.toFloat()
-    drawState.visibility = true
-    drawState.layoutGeneration = config.layoutGeneration
-  }
-
   fun remove(item: DanmakuItem) {
-    val row = itemToRow.remove(item.data.danmakuId) ?: return
-    row.remove(item)
+    val placement = placements.remove(item.data.danmakuId) ?: return
+    placement.row.remove(placement)
   }
 
   fun clear() {
     rows.clear()
-    itemToRow.clear()
+    placements.clear()
   }
 
   private fun findOrCreateRow(
@@ -105,15 +98,26 @@ internal class RollingTrackAllocator {
     nowMs: Long,
     width: Int,
     margin: Int,
-    config: DanmakuConfig
+    rollingDurationMs: Long,
+    allowOverlap: Boolean,
+    overlapFraction: Float
   ): Row? {
     val itemHeight = item.drawState.height.toInt().coerceAtLeast(1)
+    val nextStartTime = item.predictedRollingStartTime(nowMs)
+    val nextWidth = item.drawState.width
     for (row in rows) {
-      row.dropExpired(nowMs, config.rollingDurationMs)
+      row.dropExpiredOnce(nowMs, rollingDurationMs)
       if (itemHeight > row.height) continue
       val tail = row.tail
-      if (config.allowOverlap || tail == null ||
-        !willRollingCollision(tail, item, width, nowMs, config.rollingDurationMs, config.overlapFraction)) {
+      if (allowOverlap || tail == null ||
+        !tail.willCollideWith(
+          nextStartTime = nextStartTime,
+          nextWidth = nextWidth,
+          screenWidth = width,
+          nowMs = nowMs,
+          durationMs = rollingDurationMs,
+          overlapFraction = overlapFraction
+        )) {
         return row
       }
     }
@@ -124,85 +128,147 @@ internal class RollingTrackAllocator {
   }
 
   private class Row(val top: Int, val height: Int) {
-    private val items = ArrayDeque<DanmakuItem>()
+    private var head: RollingPlacement? = null
+    var tail: RollingPlacement? = null
+      private set
+    private var lastCleanupNowMs = Long.MIN_VALUE
     val bottom: Int
       get() = top + height
-    val tail: DanmakuItem?
-      get() = items.lastOrNull()
 
-    fun add(item: DanmakuItem) {
-      items.addLast(item)
+    fun add(placement: RollingPlacement) {
+      val previousTail = tail
+      placement.previous = previousTail
+      placement.next = null
+      placement.linked = true
+      if (previousTail == null) {
+        head = placement
+      } else {
+        previousTail.next = placement
+      }
+      tail = placement
     }
 
-    fun remove(item: DanmakuItem) {
-      items.remove(item)
+    fun remove(placement: RollingPlacement) {
+      if (!placement.linked) return
+      val previous = placement.previous
+      val next = placement.next
+      if (previous == null) {
+        head = next
+      } else {
+        previous.next = next
+      }
+      if (next == null) {
+        tail = previous
+      } else {
+        next.previous = previous
+      }
+      placement.previous = null
+      placement.next = null
+      placement.linked = false
     }
 
-    fun dropExpired(nowMs: Long, durationMs: Long) {
-      while (items.firstOrNull()?.isRollingTimeout(nowMs, durationMs) == true) {
-        items.removeFirst()
+    fun dropExpiredOnce(nowMs: Long, durationMs: Long) {
+      if (lastCleanupNowMs == nowMs) return
+      lastCleanupNowMs = nowMs
+      var currentHead = head
+      while (currentHead != null && currentHead.isTimeout(nowMs, durationMs)) {
+        remove(currentHead)
+        currentHead = head
       }
     }
   }
 
-  private fun willRollingCollision(
-    previous: DanmakuItem,
-    next: DanmakuItem,
+  private class RollingPlacement(
+    val item: DanmakuItem,
+    val row: Row,
+    private val topFloat: Float,
+    val startTimeMs: Long,
+    val width: Float
+  ) {
+    var previous: RollingPlacement? = null
+    var next: RollingPlacement? = null
+    var linked: Boolean = false
+
+    fun updatePosition(
+      item: DanmakuItem,
+      nowMs: Long,
+      screenWidth: Int,
+      durationMs: Long,
+      layoutGeneration: Int
+    ) {
+      val drawState = item.drawState
+      drawState.positionX = screenWidth - (nowMs - startTimeMs).toFloat() / durationMs * (screenWidth + drawState.width)
+      drawState.positionY = topFloat
+      drawState.visibility = true
+      drawState.layoutGeneration = layoutGeneration
+    }
+
+    fun isTimeout(nowMs: Long, durationMs: Long, startTimeMs: Long = this.startTimeMs): Boolean =
+      !item.isHolding && RollingDanmakuTiming.isTimeout(nowMs, startTimeMs, durationMs)
+
+    fun willCollideWith(
+      nextStartTime: Long,
+      nextWidth: Float,
+      screenWidth: Int,
+      nowMs: Long,
+      durationMs: Long,
+      overlapFraction: Float
+    ): Boolean {
+      if (isTimeout(nowMs, durationMs)) return false
+      val dt = nextStartTime - startTimeMs
+      if (dt <= 0) return true
+      if (dt >= durationMs || RollingDanmakuTiming.isTimeout(nowMs, nextStartTime, durationMs)) return false
+      return RollingCollision.willCollide(
+        previousStartTime = startTimeMs,
+        previousWidth = width,
+        nextStartTime = nextStartTime,
+        nextWidth = nextWidth,
+        screenWidth = screenWidth,
+        nowMs = nowMs,
+        durationMs = durationMs,
+        overlapFraction = overlapFraction
+      )
+    }
+  }
+
+}
+
+internal object RollingCollision {
+  fun willCollide(
+    previousStartTime: Long,
+    previousWidth: Float,
+    nextStartTime: Long,
+    nextWidth: Float,
     screenWidth: Int,
     nowMs: Long,
     durationMs: Long,
     overlapFraction: Float
   ): Boolean {
-    val previousStartTime = previous.rollingStartTimeForLayout()
-    val nextStartTime = next.predictedRollingStartTime(nowMs)
-    if (previous.isRollingTimeout(nowMs, durationMs, previousStartTime)) return false
-    val dt = nextStartTime - previousStartTime
-    if (dt <= 0) return true
-    if (abs(dt) >= durationMs || next.isRollingTimeout(nowMs, durationMs, nextStartTime)) return false
-    return checkCollisionAt(previous, next, screenWidth, nowMs, durationMs, overlapFraction, previousStartTime, nextStartTime) ||
-      checkCollisionAt(previous, next, screenWidth, nowMs + durationMs, durationMs, overlapFraction, previousStartTime, nextStartTime)
-  }
-
-  private fun checkCollisionAt(
-    previous: DanmakuItem,
-    next: DanmakuItem,
-    screenWidth: Int,
-    atMs: Long,
-    durationMs: Long,
-    overlapFraction: Float,
-    previousStartTime: Long,
-    nextStartTime: Long
-  ): Boolean {
-    val previousWidth = previous.drawState.width
-    val nextWidth = next.drawState.width
     val tolerance = minOf(previousWidth, nextWidth) * overlapFraction
-    val previousDt = atMs - previousStartTime
-    val nextDt = atMs - nextStartTime
-    val previousRight = screenWidth - (screenWidth + previousWidth) * (previousDt.toFloat() / durationMs) + previousWidth
-    val nextLeft = screenWidth - (screenWidth + nextWidth) * (nextDt.toFloat() / durationMs)
-    return nextLeft < previousRight - tolerance
+    val screen = screenWidth.toFloat()
+    val duration = durationMs.toFloat()
+    val previousDistance = screen + previousWidth
+    val nextDistance = screen + nextWidth
+    val previousRightNow = screen -
+      previousDistance * ((nowMs - previousStartTime).toFloat() / duration) +
+      previousWidth
+    val nextLeftNow = screen - nextDistance * ((nowMs - nextStartTime).toFloat() / duration)
+    if (nextLeftNow < previousRightNow - tolerance) return true
+    val previousRightEnd = previousRightNow - previousDistance
+    val nextLeftEnd = nextLeftNow - nextDistance
+    return nextLeftEnd < previousRightEnd - tolerance
   }
-
 }
 
 private fun DanmakuItem.predictedRollingStartTime(nowMs: Long): Long =
   RollingDanmakuTiming.predictedStartTime(rollingStartTimeMs, nowMs, timePosition)
-
-private fun DanmakuItem.rollingStartTimeForLayout(): Long =
-  RollingDanmakuTiming.resolvedStartTime(rollingStartTimeMs, timePosition)
-
-private fun DanmakuItem.isRollingTimeout(nowMs: Long, durationMs: Long): Boolean =
-  isRollingTimeout(nowMs, durationMs, rollingStartTimeForLayout())
-
-private fun DanmakuItem.isRollingTimeout(nowMs: Long, durationMs: Long, startTimeMs: Long): Boolean =
-  RollingDanmakuTiming.isTimeout(nowMs, startTimeMs, durationMs)
 
 /**
  * 顶部/底部固定弹幕轨道。固定弹幕同轨只需等待上一条超时，不做滚动碰撞。
  */
 internal class FixedTrackAllocator(private val fromBottom: Boolean) {
   private val rows = ArrayList<Row>(16)
-  private val itemToRow = HashMap<Long, Row>(64)
+  private val placements = HashMap<Long, FixedPlacement>(64)
   private var lastMaxBottom = 0
 
   fun updateExisting(
@@ -212,8 +278,8 @@ internal class FixedTrackAllocator(private val fromBottom: Boolean) {
     config: DanmakuConfig
   ): Boolean {
     if (!refreshMaxBottom(height, config)) return false
-    val row = itemToRow[item.data.danmakuId] ?: return false
-    updatePosition(item, row, width, config)
+    val placement = placements[item.data.danmakuId] ?: return false
+    updatePosition(item, placement.top, width, config)
     return true
   }
 
@@ -227,13 +293,19 @@ internal class FixedTrackAllocator(private val fromBottom: Boolean) {
   ): Boolean {
     val maxBottom = (height * config.screenPart).toInt()
     refreshMaxBottom(height, config)
-    val row = itemToRow[item.data.danmakuId] ?: run {
+    val placement = placements[item.data.danmakuId] ?: run {
       val newRow = findOrCreateRow(item, nowMs, margin, config, maxBottom) ?: return false
-      itemToRow[item.data.danmakuId] = newRow
-      newRow.item = item
-      newRow
+      val newPlacement = FixedPlacement(
+        item = item,
+        row = newRow,
+        top = newRow.top,
+        expireTimeMs = item.timePosition + config.durationMs
+      )
+      placements[item.data.danmakuId] = newPlacement
+      newRow.placement = newPlacement
+      newPlacement
     }
-    updatePosition(item, row, width, config)
+    updatePosition(item, placement.top, width, config)
     return true
   }
 
@@ -241,34 +313,34 @@ internal class FixedTrackAllocator(private val fromBottom: Boolean) {
     val maxBottom = (height * config.screenPart).toInt()
     if (lastMaxBottom == maxBottom) return true
     lastMaxBottom = maxBottom
-    if (rows.isEmpty() && itemToRow.isEmpty()) return true
+    if (rows.isEmpty() && placements.isEmpty()) return true
     clear()
     return false
   }
 
   private fun updatePosition(
     item: DanmakuItem,
-    row: Row,
+    rowTop: Int,
     width: Int,
     config: DanmakuConfig
   ) {
     val drawState = item.drawState
     drawState.positionX = ((width - drawState.width) * 0.5f).coerceAtLeast(0f)
-    drawState.positionY = row.top.toFloat()
+    drawState.positionY = rowTop.toFloat()
     drawState.visibility = true
     drawState.layoutGeneration = config.layoutGeneration
   }
 
   fun remove(item: DanmakuItem) {
-    val row = itemToRow.remove(item.data.danmakuId) ?: return
-    if (row.item == item) {
-      row.item = null
+    val placement = placements.remove(item.data.danmakuId) ?: return
+    if (placement.row.placement == placement) {
+      placement.row.placement = null
     }
   }
 
   fun clear() {
     rows.clear()
-    itemToRow.clear()
+    placements.clear()
   }
 
   private fun findOrCreateRow(
@@ -280,7 +352,7 @@ internal class FixedTrackAllocator(private val fromBottom: Boolean) {
   ): Row? {
     val itemHeight = item.drawState.height.toInt().coerceAtLeast(1)
     for (row in rows) {
-      val current = row.item
+      val current = row.placement
       if (current == null || current.isTimeout(nowMs)) {
         if (itemHeight <= row.height) return row
       }
@@ -297,8 +369,18 @@ internal class FixedTrackAllocator(private val fromBottom: Boolean) {
   }
 
   private class Row(val top: Int, val height: Int) {
-    var item: DanmakuItem? = null
+    var placement: FixedPlacement? = null
     val bottom: Int
       get() = top + height
+  }
+
+  private class FixedPlacement(
+    val item: DanmakuItem,
+    val row: Row,
+    val top: Int,
+    val expireTimeMs: Long
+  ) {
+    fun isTimeout(nowMs: Long): Boolean =
+      !item.isHolding && (item.isTimeout(nowMs) || nowMs > expireTimeMs)
   }
 }

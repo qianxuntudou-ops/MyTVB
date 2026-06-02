@@ -77,13 +77,4 @@ object VideoCardPerfLogger {
             )
         }
     }
-
-    private fun AtomicLong.updateMax(value: Long) {
-        while (true) {
-            val current = get()
-            if (value <= current || compareAndSet(current, value)) {
-                return
-            }
-        }
-    }
 }

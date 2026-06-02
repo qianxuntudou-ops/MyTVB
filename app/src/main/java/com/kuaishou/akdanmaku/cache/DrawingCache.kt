@@ -29,6 +29,7 @@ import android.os.Build
 import com.kuaishou.akdanmaku.ext.AkLog as Log
 import com.kuaishou.akdanmaku.engine.DanmakuEngine
 import com.kuaishou.akdanmaku.ext.EMPTY_BITMAP
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 绘制缓存
@@ -38,8 +39,9 @@ import com.kuaishou.akdanmaku.ext.EMPTY_BITMAP
  */
 class DrawingCache {
   private val holder = DrawingCacheHolder()
+  @Volatile
   private var pendingRecycle = false
-  private var refCount: Int = 0
+  private val refCount = AtomicInteger(0)
   internal var cacheManager: CacheManager? = null
 
   var size = 0
@@ -84,27 +86,24 @@ class DrawingCache {
     holder.takeIf { it.bitmap != EMPTY_BITMAP && !it.bitmap.isRecycled }
 
   fun destroy() {
-    synchronized(this) {
-      if (refCount <= 0) {
-        recycle()
-      } else {
-        pendingRecycle = true
-      }
+    if (refCount.get() <= 0) {
+      recycle()
+      return
+    }
+    pendingRecycle = true
+    if (refCount.get() <= 0) {
+      cacheManager?.releaseCache(this)
     }
   }
 
   fun increaseReference() {
-    synchronized(this) {
-      refCount++
-    }
+    refCount.incrementAndGet()
   }
 
   fun decreaseReference() {
-    synchronized(this) {
-      refCount--
-      if (refCount <= 0 && pendingRecycle) {
-        cacheManager?.releaseCache(this)
-      }
+    val count = refCount.decrementAndGet()
+    if (count == 0 && pendingRecycle) {
+      cacheManager?.releaseCache(this)
     }
   }
 
@@ -117,7 +116,7 @@ class DrawingCache {
           Throwable()
         )
       }
-      if (refCount > 0) return
+      if (refCount.get() > 0) return
       pendingRecycle = false
       holder.recycle()
       size = 0

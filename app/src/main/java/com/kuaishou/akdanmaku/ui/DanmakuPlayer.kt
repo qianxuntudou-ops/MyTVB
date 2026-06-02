@@ -73,6 +73,8 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
     private const val RELEASE_LATCH_TIMEOUT_MS = 220L
     private const val MAX_PRIME_MEASURE_ON_UPDATE = 160
     private const val MAX_PRIME_MEASURE_ON_APPEND = 12
+    private const val DRAW_WAIT_SKIP_LOG_THRESHOLD = 4
+    private const val DRAW_WAIT_SKIP_LOG_INTERVAL_MS = 1000L
     const val MIN_DANMAKU_DURATION: Long = 4000
     const val MAX_DANMAKU_DURATION_HIGH_DENSITY: Long = 9000
     /**
@@ -100,6 +102,8 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
   private var currentDisplayerHeight = 0
   private var currentDisplayerSizeFactor = 1f
   private var config: DanmakuConfig? = null
+  private var skippedDrawWaitFrames = 0
+  private var lastDrawWaitSkipLogAtMs = 0L
 
   private val drawSemaphore = Semaphore(0)
 
@@ -147,17 +151,20 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
     } else {
       // Prepare next frameCallback.
       postFrameCallback()
-      // update entities before system update
-      engine.preAct()
-      // Wait for acquiring a permit.
-      val waitStartedAtMs = SystemClock.elapsedRealtime()
-      drawSemaphore.acquire()
-      waitDrawMs = SystemClock.elapsedRealtime() - waitStartedAtMs
+      if (!drawSemaphore.tryAcquire()) {
+        skippedDrawWaitFrames++
+        danmakuView?.postInvalidateOnAnimation()
+        logDrawWaitSkipIfNeeded(frameStartedAtMs)
+        return
+      }
+      skippedDrawWaitFrames = 0
     }
     if (!started) {
       return
     }
     startTrace("updateFrame")
+    // update entities before system update
+    engine.preAct()
     // Do work in actionThread.
     val actStartedAtMs = SystemClock.elapsedRealtime()
     engine.act()
@@ -202,6 +209,16 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
     if (drawSemaphore.availablePermits() == 0) {
       drawSemaphore.release()
     }
+  }
+
+  private fun logDrawWaitSkipIfNeeded(nowMs: Long) {
+    if (skippedDrawWaitFrames < DRAW_WAIT_SKIP_LOG_THRESHOLD) return
+    if (nowMs - lastDrawWaitSkipLogAtMs < DRAW_WAIT_SKIP_LOG_INTERVAL_MS) return
+    lastDrawWaitSkipLogAtMs = nowMs
+    AppLog.w(
+      "PlaybackPerf",
+      "danmaku_action skip_wait_draw frames=$skippedDrawWaitFrames"
+    )
   }
 
   /**

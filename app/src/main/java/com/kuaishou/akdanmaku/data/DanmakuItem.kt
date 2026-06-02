@@ -57,6 +57,8 @@ open class DanmakuItem(var data: DanmakuItemData, player: DanmakuPlayer? = null)
   internal var rollingStartTimeMs = ROLLING_START_TIME_UNSET
   internal var filterGeneration = -1
   internal var filteredInGeneration = false
+  internal var pendingMeasureGeneration = -1
+  internal var pendingCacheGeneration = -1
 
 
   val rect: RectF
@@ -88,6 +90,8 @@ open class DanmakuItem(var data: DanmakuItemData, player: DanmakuPlayer? = null)
     rollingStartTimeMs = ROLLING_START_TIME_UNSET
     filterGeneration = -1
     filteredInGeneration = false
+    pendingMeasureGeneration = -1
+    pendingCacheGeneration = -1
   }
 
   override fun compareTo(other: DanmakuItem): Int {
@@ -102,6 +106,7 @@ open class DanmakuItem(var data: DanmakuItemData, player: DanmakuPlayer? = null)
 
   fun cacheRecycle() {
     drawState.recycle()
+    pendingCacheGeneration = -1
     if (state > ItemState.Measured) {
       state = ItemState.Measured
     }

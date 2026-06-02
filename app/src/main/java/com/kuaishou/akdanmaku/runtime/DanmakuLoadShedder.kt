@@ -1,7 +1,5 @@
 package com.kuaishou.akdanmaku.runtime
 
-import com.kuaishou.akdanmaku.data.DanmakuItem
-
 internal object DanmakuLoadShedder {
   fun enqueueBudget(level: Int): Int {
     return when (level.coerceIn(0, MAX_LEVEL)) {
@@ -23,11 +21,10 @@ internal object DanmakuLoadShedder {
     }
   }
 
-  fun shouldSkipItem(item: DanmakuItem, level: Int): Boolean {
-    if (level <= 0 || item.data.isImportant || item.data.rank > 0 || item.isHolding) {
-      return false
-    }
-    return true
+  fun shouldSkipItem(level: Int): Boolean {
+    if (level <= 0) return false
+    // 负载保护只缩小每帧入队预算，不再永久丢弃普通弹幕；否则一次短抖动会让后续窗口明显缺弹幕。
+    return false
   }
 
   const val MAX_LEVEL = 3

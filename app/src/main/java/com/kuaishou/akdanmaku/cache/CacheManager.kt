@@ -39,6 +39,7 @@ import com.kuaishou.akdanmaku.render.DanmakuRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuDisplayer
 import com.kuaishou.akdanmaku.utils.Size
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 缓存管理器，用于完成后台缓存绘制与管理缓存相关对象
@@ -58,7 +59,7 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
   private val cacheHandler by lazy { CacheHandler(cacheThread.looper) }
   private var cancelFlag = false
 
-  private val measureSizeCache = Collections.synchronizedMap(mutableMapOf<Long, Size>())
+  private val measureSizeCache = ConcurrentHashMap<Long, Size>()
   private val pendingMeasureKeys = Collections.synchronizedSet(mutableSetOf<Long>())
   private val pendingBuildKeys = Collections.synchronizedSet(mutableSetOf<Long>())
   private var sharedCacheGeneration = -1
@@ -84,39 +85,34 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
   fun requestBuildCache(
     item: DanmakuItem,
     displayer: DanmakuDisplayer,
-    config: DanmakuConfig
+    config: DanmakuConfig,
+    priority: Int = CACHE_PRIORITY_VISIBLE
   ) {
     val key = requestKey(item.data.danmakuId, config.cacheGeneration)
     if (!pendingBuildKeys.add(key)) return
-    cacheHandler.obtainMessage(
-      WORKER_MSG_BUILD_CACHE,
-      CacheInfo(item, displayer, config, key)
-    ).sendToTarget()
+    cacheHandler.enqueue(PendingCacheTask.build(CacheInfo(item, displayer, config, key), priority))
   }
 
   fun requestMeasure(
     item: DanmakuItem,
     displayer: DanmakuDisplayer,
-    config: DanmakuConfig
+    config: DanmakuConfig,
+    priority: Int = CACHE_PRIORITY_VISIBLE
   ) {
     val key = requestKey(item.data.danmakuId, config.measureGeneration)
     if (!pendingMeasureKeys.add(key)) return
-    cacheHandler.obtainMessage(
-      WORKER_MSG_BUILD_MEASURE,
-      CacheInfo(item, displayer, config, key)
-    ).sendToTarget()
+    cacheHandler.enqueue(PendingCacheTask.measure(CacheInfo(item, displayer, config, key), priority))
   }
 
   /**
    * 发送一个 build 结束的请求，放置在当前若干 build_cache 消息后，当此批次缓存完成后会发送一个回调消息
    */
   fun requestBuildSign() {
-    cacheHandler.removeMessages(WORKER_MSG_RENDER_SIGN)
-    cacheHandler.sendEmptyMessage(WORKER_MSG_RENDER_SIGN)
+    cacheHandler.requestBuildSign()
   }
 
   fun cancelAllRequests() {
-    cacheHandler.removeCallbacksAndMessages(null)
+    cacheHandler.cancelQueuedRequests()
     pendingMeasureKeys.clear()
     pendingBuildKeys.clear()
     cancelFlag = true
@@ -137,13 +133,28 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
     cacheHandler.obtainMessage(WORKER_MSG_RELEASE_ITEM, cache).sendToTarget()
   }
 
+  fun releaseReferences(caches: List<DrawingCache>, delayMs: Long = CACHE_REFERENCE_RELEASE_DELAY_MS) {
+    if (caches.isEmpty()) return
+    val snapshot = ArrayList<DrawingCache>(caches.size)
+    for (cache in caches) {
+      if (cache != DrawingCache.EMPTY_DRAWING_CACHE) {
+        snapshot.add(cache)
+      }
+    }
+    if (snapshot.isEmpty()) return
+    val message = cacheHandler.obtainMessage(WORKER_MSG_RELEASE_REFERENCES, CacheReferenceRelease(snapshot))
+    if (delayMs > 0L) {
+      cacheHandler.sendMessageDelayed(message, delayMs)
+    } else {
+      message.sendToTarget()
+    }
+  }
+
   fun clearMeasureCache() {
     cacheHandler.obtainMessage(WORKER_MSG_CLEAR_CACHE).sendToTarget()
   }
 
-  fun getDanmakuSize(danmaku: DanmakuItemData): Size? = synchronized(measureSizeCache) {
-    measureSizeCache[danmaku.danmakuId]
-  }
+  fun getDanmakuSize(danmaku: DanmakuItemData): Size? = measureSizeCache[danmaku.danmakuId]
 
   fun release() {
     if (available) {
@@ -161,137 +172,80 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
     val item: DanmakuItem,
     val displayer: DanmakuDisplayer,
     val config: DanmakuConfig,
-    val requestKey: Long
+    val requestKey: Long,
+    val measureGeneration: Int = config.measureGeneration,
+    val cacheGeneration: Int = config.cacheGeneration
   )
 
+  private class CacheTask(
+    val what: Int,
+    val info: CacheInfo,
+    val priority: Int,
+    val sequence: Long
+  )
+
+  private data class PendingCacheTask(
+    val what: Int,
+    val info: CacheInfo,
+    val priority: Int
+  ) {
+    companion object {
+      fun measure(info: CacheInfo, priority: Int): PendingCacheTask =
+        PendingCacheTask(WORKER_MSG_BUILD_MEASURE, info, priority.coerceIn(0, CACHE_PRIORITY_BACKGROUND))
+
+      fun build(info: CacheInfo, priority: Int): PendingCacheTask =
+        PendingCacheTask(WORKER_MSG_BUILD_CACHE, info, priority.coerceIn(0, CACHE_PRIORITY_BACKGROUND))
+    }
+  }
+
+  private class CacheReferenceRelease(val caches: ArrayList<DrawingCache>)
+
   private inner class CacheHandler(looper: Looper) : Handler(looper) {
+    private val pendingTasks = PriorityQueue<CacheTask> { left, right ->
+      if (left.priority != right.priority) {
+        left.priority.compareTo(right.priority)
+      } else {
+        left.sequence.compareTo(right.sequence)
+      }
+    }
+    private var sequence = 0L
+    private var dispatching = false
+    private var renderSignPending = false
+
+    fun enqueue(task: PendingCacheTask) {
+      val message = obtainMessage(WORKER_MSG_QUEUE_TASK, task)
+      message.sendToTarget()
+    }
+
+    fun requestBuildSign() {
+      removeMessages(WORKER_MSG_RENDER_SIGN)
+      sendEmptyMessage(WORKER_MSG_RENDER_SIGN)
+    }
+
+    fun cancelQueuedRequests() {
+      cancelWorkMessages()
+      pendingTasks.clear()
+      dispatching = false
+      renderSignPending = false
+    }
+
     override fun handleMessage(msg: Message) {
       when (msg.what) {
-        WORKER_MSG_BUILD_MEASURE -> {
-          val info = msg.obj as? CacheInfo ?: return
-          val config = info.config
-          val item = info.item
-          if (cancelFlag) {
-            Log.d(DanmakuEngine.TAG, "[CacheManager] cancel cache.")
-            cancelFlag = false
-            pendingMeasureKeys.remove(info.requestKey)
-            return
-          }
-
-          try {
-            startTrace("CacheManager_checkMeasure")
-            val drawState = item.drawState
-            // check measure
-            if (!drawState.isMeasured(config.measureGeneration)) {
-              try {
-                val size = renderer.measure(item, info.displayer, config)
-                drawState.width = size.width.toFloat()
-                drawState.height = size.height.toFloat()
-                drawState.measureGeneration = config.measureGeneration
-                synchronized(measureSizeCache) {
-                  measureSizeCache[item.data.danmakuId] = size
-                }
-                item.state = ItemState.Measured
-              } catch (e: Exception) {
-                Log.e(DanmakuEngine.TAG, "CacheManager.measure failed", e)
-                item.state = ItemState.Error
-              }
-            }
-            endTrace()
-          } finally {
-            pendingMeasureKeys.remove(info.requestKey)
-          }
-        }
-        WORKER_MSG_BUILD_CACHE -> {
-          val info = msg.obj as? CacheInfo ?: return
-
-          try {
-            startTrace("CacheManager_buildCache")
-            val config = info.config
-            val item = info.item
-            val drawState = item.drawState
-            if (sharedCacheGeneration != config.cacheGeneration) {
-              clearSharedDrawingCaches()
-              sharedCacheGeneration = config.cacheGeneration
-            }
-            val sharedKey = sharedCacheKey(item, info.displayer, config)
-            val sharedCache = sharedKey?.let { key ->
-              sharedDrawingCaches[key]?.takeIf { cache ->
-                cache.get() != null && isCacheSizeJustified(cache, drawState)
-              } ?: run {
-                removeSharedDrawingCache(key)
-                null
-              }
-            }
-            if (sharedCache != null) {
-              replaceItemDrawingCache(drawState, sharedCache)
-              item.state = ItemState.Rendered
-              item.drawState.cacheGeneration = config.cacheGeneration
-              endTrace()
-              return
-            }
-
-            startTrace("CacheManager_checkCache")
-            // check drawingCache
-            if (drawState.drawingCache.get() == null ||
-              drawState.drawingCache == DrawingCache.EMPTY_DRAWING_CACHE ||
-              isSizeJustified(drawState)
-            ) {
-              if (drawState.drawingCache != DrawingCache.EMPTY_DRAWING_CACHE && drawState.drawingCache.get() != null) {
-                drawState.drawingCache.decreaseReference()
-              }
-              drawState.drawingCache =
-                cachePool.acquire(drawState.width.toInt(), drawState.height.toInt())
-                  ?: DrawingCache().build(
-                    drawState.width.toInt(),
-                    drawState.height.toInt(),
-                    info.displayer.densityDpi,
-                    checkSize = true
-                  )
-              drawState.drawingCache.erase()
-              drawState.drawingCache.increaseReference()
-              drawState.drawingCache.cacheManager = this@CacheManager
-            }
-            endTrace()
-
-            startTrace("CacheManager_drawCache")
-            val holder = drawState.drawingCache.get()
-            if (holder == null) {
-              cachePool.release(drawState.drawingCache)
-              drawState.drawingCache = DrawingCache.EMPTY_DRAWING_CACHE
-              item.state = ItemState.Error
-              return
-            }
-            // draw cache
-            synchronized(drawState) {
-              try {
-                renderer.draw(item, holder.canvas, info.displayer, config)
-                item.state = ItemState.Rendered
-                item.drawState.cacheGeneration = config.cacheGeneration
-                if (sharedKey != null) {
-                  putSharedDrawingCache(sharedKey, drawState.drawingCache)
-                }
-              } catch (e: Exception) {
-                Log.e(DanmakuEngine.TAG, "CacheManager.draw failed", e)
-                item.state = ItemState.Error
-              }
-            }
-            endTrace()
-//          callbackHandler.obtainMessage(MSG_CACHE_BUILT, info.item).sendToTarget()
-            endTrace()
-          } finally {
-            pendingBuildKeys.remove(info.requestKey)
-          }
-        }
+        WORKER_MSG_QUEUE_TASK -> enqueueInternal(msg.obj as? PendingCacheTask ?: return)
+        WORKER_MSG_DRAIN_QUEUE -> drainOne()
         WORKER_MSG_SEEK -> {
-          removeCallbacksAndMessages(null)
+          cancelWorkMessages()
+          pendingTasks.clear()
+          dispatching = false
+          renderSignPending = false
         }
         WORKER_MSG_CLEAR_CACHE -> {
-          synchronized(measureSizeCache) {
-            measureSizeCache.clear()
-          }
+          measureSizeCache.clear()
           pendingMeasureKeys.clear()
           pendingBuildKeys.clear()
+          pendingTasks.clear()
+          dispatching = false
+          renderSignPending = false
           clearSharedDrawingCaches()
         }
         WORKER_MSG_DESTROY -> {
@@ -300,17 +254,237 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
         WORKER_MSG_RELEASE_ITEM -> {
           (msg.obj as? DrawingCache)?.let { if (!cachePool.release(it)) it.destroy() }
         }
+        WORKER_MSG_RELEASE_REFERENCES -> {
+          (msg.obj as? CacheReferenceRelease)?.let(::releaseReferences)
+        }
         WORKER_MSG_WARM_UP -> {
           // no-op，只用于触发 cacheHandler/cacheThread 初始化。
         }
         WORKER_MSG_RENDER_SIGN -> {
-          callbackHandler.sendEmptyMessage(MSG_CACHE_RENDER)
+          if (pendingTasks.isNotEmpty() || dispatching) {
+            renderSignPending = true
+          } else {
+            callbackHandler.sendEmptyMessage(MSG_CACHE_RENDER)
+          }
         }
         WORKER_MSG_RELEASE -> {
+          pendingTasks.clear()
+          dispatching = false
+          renderSignPending = false
           cachePool.clear()
           isReleased = true
           cacheThread.quitSafely()
         }
+      }
+    }
+
+    private fun cancelWorkMessages() {
+      removeMessages(WORKER_MSG_QUEUE_TASK)
+      removeMessages(WORKER_MSG_DRAIN_QUEUE)
+      removeMessages(WORKER_MSG_RENDER_SIGN)
+    }
+
+    private fun enqueueInternal(task: PendingCacheTask) {
+      if (!isTaskCurrent(task)) {
+        clearPendingKey(task)
+        return
+      }
+      pendingTasks.add(CacheTask(task.what, task.info, task.priority, sequence++))
+      if (!dispatching) {
+        dispatching = true
+        sendEmptyMessage(WORKER_MSG_DRAIN_QUEUE)
+      }
+    }
+
+    private fun drainOne() {
+      if (cancelFlag) {
+        Log.d(DanmakuEngine.TAG, "[CacheManager] cancel cache.")
+        cancelFlag = false
+        pendingMeasureKeys.clear()
+        pendingBuildKeys.clear()
+        pendingTasks.clear()
+        dispatching = false
+        renderSignPending = false
+        return
+      }
+      while (true) {
+        val task = pendingTasks.poll() ?: run {
+          dispatching = false
+          dispatchPendingRenderSign()
+          return
+        }
+        if (!isTaskCurrent(task)) {
+          clearPendingKey(task)
+          continue
+        }
+        when (task.what) {
+          WORKER_MSG_BUILD_MEASURE -> handleMeasure(task.info)
+          WORKER_MSG_BUILD_CACHE -> handleBuildCache(task.info)
+        }
+        if (pendingTasks.isNotEmpty()) {
+          sendEmptyMessage(WORKER_MSG_DRAIN_QUEUE)
+        } else {
+          dispatching = false
+          dispatchPendingRenderSign()
+        }
+        return
+      }
+    }
+
+    private fun dispatchPendingRenderSign() {
+      if (!renderSignPending) return
+      renderSignPending = false
+      callbackHandler.sendEmptyMessage(MSG_CACHE_RENDER)
+    }
+
+    private fun releaseReferences(release: CacheReferenceRelease) {
+      for (cache in release.caches) {
+        cache.decreaseReference()
+      }
+    }
+
+    private fun handleMeasure(info: CacheInfo) {
+      val config = info.config
+      val item = info.item
+
+      try {
+        startTrace("CacheManager_checkMeasure")
+        val drawState = item.drawState
+        if (!drawState.isMeasured(info.measureGeneration)) {
+          try {
+            val size = renderer.measure(item, info.displayer, config)
+            drawState.width = size.width.toFloat()
+            drawState.height = size.height.toFloat()
+            drawState.measureGeneration = info.measureGeneration
+            measureSizeCache[item.data.danmakuId] = size
+            item.state = ItemState.Measured
+            item.pendingMeasureGeneration = -1
+          } catch (e: Exception) {
+            Log.e(DanmakuEngine.TAG, "CacheManager.measure failed", e)
+            item.state = ItemState.Error
+            item.pendingMeasureGeneration = -1
+          }
+        }
+        endTrace()
+      } finally {
+        pendingMeasureKeys.remove(info.requestKey)
+      }
+    }
+
+    private fun handleBuildCache(info: CacheInfo) {
+      try {
+        startTrace("CacheManager_buildCache")
+        val config = info.config
+        val item = info.item
+        val drawState = item.drawState
+        if (!drawState.isMeasured(info.measureGeneration)) {
+          item.state = ItemState.Uninitialized
+          item.pendingCacheGeneration = -1
+          return
+        }
+        if (sharedCacheGeneration != info.cacheGeneration) {
+          clearSharedDrawingCaches()
+          sharedCacheGeneration = info.cacheGeneration
+        }
+        val sharedKey = sharedCacheKey(item, info.displayer, config)
+        val sharedCache = sharedKey?.let { key ->
+          sharedDrawingCaches[key]?.takeIf { cache ->
+            cache.get() != null && isCacheSizeJustified(cache, drawState)
+          } ?: run {
+            removeSharedDrawingCache(key)
+            null
+          }
+        }
+        if (sharedCache != null) {
+          replaceItemDrawingCache(drawState, sharedCache)
+          item.state = ItemState.Rendered
+          item.drawState.cacheGeneration = info.cacheGeneration
+          item.pendingCacheGeneration = -1
+          endTrace()
+          return
+        }
+
+        startTrace("CacheManager_checkCache")
+        if (drawState.drawingCache.get() == null ||
+          drawState.drawingCache == DrawingCache.EMPTY_DRAWING_CACHE ||
+          isSizeJustified(drawState)
+        ) {
+          if (drawState.drawingCache != DrawingCache.EMPTY_DRAWING_CACHE && drawState.drawingCache.get() != null) {
+            drawState.drawingCache.decreaseReference()
+          }
+          drawState.drawingCache =
+            cachePool.acquire(drawState.width.toInt(), drawState.height.toInt())
+              ?: DrawingCache().build(
+                drawState.width.toInt(),
+                drawState.height.toInt(),
+                info.displayer.densityDpi,
+                checkSize = true
+              )
+          drawState.drawingCache.erase()
+          drawState.drawingCache.increaseReference()
+          drawState.drawingCache.cacheManager = this@CacheManager
+        }
+        endTrace()
+
+        startTrace("CacheManager_drawCache")
+        val holder = drawState.drawingCache.get()
+        if (holder == null) {
+          cachePool.release(drawState.drawingCache)
+          drawState.drawingCache = DrawingCache.EMPTY_DRAWING_CACHE
+          item.state = ItemState.Error
+          item.pendingCacheGeneration = -1
+          return
+        }
+        synchronized(drawState) {
+          try {
+            renderer.draw(item, holder.canvas, info.displayer, config)
+            item.state = ItemState.Rendered
+            item.drawState.cacheGeneration = info.cacheGeneration
+            item.pendingCacheGeneration = -1
+            if (sharedKey != null) {
+              putSharedDrawingCache(sharedKey, drawState.drawingCache)
+            }
+          } catch (e: Exception) {
+            Log.e(DanmakuEngine.TAG, "CacheManager.draw failed", e)
+            item.state = ItemState.Error
+            item.pendingCacheGeneration = -1
+          }
+        }
+        endTrace()
+//          callbackHandler.obtainMessage(MSG_CACHE_BUILT, info.item).sendToTarget()
+        endTrace()
+      } finally {
+        pendingBuildKeys.remove(info.requestKey)
+      }
+    }
+
+    private fun isTaskCurrent(task: CacheTask): Boolean =
+      isTaskCurrent(PendingCacheTask(task.what, task.info, task.priority))
+
+    private fun isTaskCurrent(task: PendingCacheTask): Boolean {
+      val info = task.info
+      val item = info.item
+      return when (task.what) {
+        WORKER_MSG_BUILD_MEASURE ->
+          item.state == ItemState.Measuring &&
+            item.pendingMeasureGeneration == info.measureGeneration &&
+            !item.drawState.isMeasured(info.measureGeneration)
+        WORKER_MSG_BUILD_CACHE ->
+          item.state >= ItemState.Rendering &&
+            item.pendingCacheGeneration == info.cacheGeneration &&
+            item.drawState.isMeasured(info.measureGeneration) &&
+            item.drawState.cacheGeneration != info.cacheGeneration
+        else -> true
+      }
+    }
+
+    private fun clearPendingKey(task: CacheTask) =
+      clearPendingKey(PendingCacheTask(task.what, task.info, task.priority))
+
+    private fun clearPendingKey(task: PendingCacheTask) {
+      when (task.what) {
+        WORKER_MSG_BUILD_MEASURE -> pendingMeasureKeys.remove(task.info.requestKey)
+        WORKER_MSG_BUILD_CACHE -> pendingBuildKeys.remove(task.info.requestKey)
       }
     }
 
@@ -404,6 +578,9 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
     private const val WORKER_MSG_DESTROY = 4
     private const val WORKER_MSG_RELEASE_ITEM = 5
     private const val WORKER_MSG_WARM_UP = 6
+    private const val WORKER_MSG_QUEUE_TASK = 7
+    private const val WORKER_MSG_DRAIN_QUEUE = 8
+    private const val WORKER_MSG_RELEASE_REFERENCES = 9
 
     const val MSG_CACHE_RENDER = -1
     const val MSG_CACHE_MEASURED = 0
@@ -411,6 +588,9 @@ class CacheManager(private val callbackHandler: Handler, private val renderer: D
     const val MSG_CACHE_FAILED = 2
 
     private const val MAX_SHARED_DRAWING_CACHE = 384
+    private const val CACHE_REFERENCE_RELEASE_DELAY_MS = 48L
+    private const val CACHE_PRIORITY_VISIBLE = 0
+    private const val CACHE_PRIORITY_BACKGROUND = 2
     private const val FNV_OFFSET = -3750763034362895579L
     private const val FNV_PRIME = 1099511628211L
   }
