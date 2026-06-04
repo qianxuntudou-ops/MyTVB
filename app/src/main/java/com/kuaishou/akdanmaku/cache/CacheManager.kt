@@ -91,7 +91,10 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
   ) {
     if (isReleased) return
     val key = requestKey(item.data.danmakuId, config.cacheGeneration)
-    if (!pendingBuildKeys.add(key)) return
+    if (!pendingBuildKeys.add(key)) {
+      cacheHandler.boostBuild(key, priority)
+      return
+    }
     cacheHandler.enqueue(PendingCacheTask.build(CacheInfo(item, displayer, config, key), priority))
   }
 
@@ -220,6 +223,11 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
     var nextIndex: Int = 0
   )
 
+  private class CacheBoost(
+    val requestKey: Long,
+    val priority: Int
+  )
+
   private inner class CacheHandler(looper: Looper) : Handler(looper) {
     private val pendingTasks = PriorityQueue<CacheTask> { left, right ->
       if (left.priority != right.priority) {
@@ -234,6 +242,11 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
 
     fun enqueue(task: PendingCacheTask) {
       val message = obtainMessage(WORKER_MSG_QUEUE_TASK, task)
+      message.sendToTarget()
+    }
+
+    fun boostBuild(requestKey: Long, priority: Int) {
+      val message = obtainMessage(WORKER_MSG_BOOST_BUILD, CacheBoost(requestKey, priority))
       message.sendToTarget()
     }
 
@@ -252,6 +265,7 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
     override fun handleMessage(msg: Message) {
       when (msg.what) {
         WORKER_MSG_QUEUE_TASK -> enqueueInternal(msg.obj as? PendingCacheTask ?: return)
+        WORKER_MSG_BOOST_BUILD -> boostBuildInternal(msg.obj as? CacheBoost ?: return)
         WORKER_MSG_DRAIN_QUEUE -> drainOne()
         WORKER_MSG_SEEK -> {
           cancelWorkMessages()
@@ -314,6 +328,27 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
       if (!dispatching) {
         dispatching = true
         sendEmptyMessage(WORKER_MSG_DRAIN_QUEUE)
+      }
+    }
+
+    private fun boostBuildInternal(boost: CacheBoost) {
+      var boostedTask: CacheTask? = null
+      val retainedTasks = ArrayList<CacheTask>(pendingTasks.size)
+      while (true) {
+        val task = pendingTasks.poll() ?: break
+        if (task.what == WORKER_MSG_BUILD_CACHE && task.info.requestKey == boost.requestKey) {
+          boostedTask = task
+          break
+        }
+        retainedTasks.add(task)
+      }
+      pendingTasks.addAll(retainedTasks)
+      val task = boostedTask ?: return
+      val boostedPriority = boost.priority.coerceIn(0, CACHE_PRIORITY_BACKGROUND)
+      if (boostedPriority >= task.priority) {
+        pendingTasks.add(task)
+      } else {
+        pendingTasks.add(CacheTask(task.what, task.info, boostedPriority, task.sequence))
       }
     }
 
@@ -634,6 +669,7 @@ internal class CacheManager(private val callbackHandler: Handler, private val co
     private const val WORKER_MSG_QUEUE_TASK = 7
     private const val WORKER_MSG_DRAIN_QUEUE = 8
     private const val WORKER_MSG_RELEASE_REFERENCES = 9
+    private const val WORKER_MSG_BOOST_BUILD = 10
 
     const val MSG_CACHE_RENDER = -1
     const val MSG_CACHE_MEASURED = 0

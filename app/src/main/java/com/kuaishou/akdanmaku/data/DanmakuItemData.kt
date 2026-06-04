@@ -27,7 +27,7 @@ package com.kuaishou.akdanmaku.data
  *
  * 单个弹幕数据结构
  */
-class DanmakuItemData(
+data class DanmakuItemData(
 
   /**
    * 单个弹幕的唯一 Id

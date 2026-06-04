@@ -40,7 +40,7 @@ class MyPlayerDanmakuController(
 
     companion object {
         private const val TAG = "DanmakuCtrl"
-        private const val MERGE_DUPLICATE_WINDOW_MS = 15_000
+        private const val MERGE_DUPLICATE_WINDOW_MS = 2_000
         private const val MERGE_DUPLICATE_MIN_COUNT = 2
         private const val MAX_SYNC_DRIFT_MS = 1200L
         private const val DRIFT_SYNC_INTERVAL_NORMAL_MS = 3200L
@@ -352,7 +352,7 @@ class MyPlayerDanmakuController(
         val now = SystemClock.uptimeMillis()
         pruneLiveSentTimestamps(now)
 
-        val effectiveThreshold = max(3, (baseThreshold() * screenPart).toInt())
+        val effectiveThreshold = estimateLiveMergeCapacity()
         val bufferTotal = liveMergeBuffer.values.sumOf { it.count }
 
         val expiredKeys = mutableListOf<MergeDuplicateKey>()
@@ -371,7 +371,7 @@ class MyPlayerDanmakuController(
         val now = SystemClock.uptimeMillis()
         pruneLiveSentTimestamps(now)
 
-        val effectiveThreshold = max(3, (baseThreshold() * screenPart).toInt())
+        val effectiveThreshold = estimateLiveMergeCapacity()
         val bufferTotal = liveMergeBuffer.values.sumOf { it.count }
 
         for ((_, entry) in liveMergeBuffer) {
@@ -414,6 +414,14 @@ class MyPlayerDanmakuController(
                 liveSentTimestamps.add(now)
             }
         }
+    }
+
+    private fun estimateLiveMergeCapacity(): Int {
+        val metrics = context.resources.displayMetrics
+        val visibleHeight = metrics.heightPixels * screenPart
+        val trackHeight = 36f * danmakuConfig.textSizeScale
+        val tracks = (visibleHeight / trackHeight.coerceAtLeast(36f)).toInt().coerceAtLeast(3)
+        return (tracks * 2).coerceIn(6, 160)
     }
 
     private fun doSendLiveDanmaku(dm: DmModel, player: DanmakuPlayer) {
@@ -886,10 +894,9 @@ class MyPlayerDanmakuController(
         startIndex: Long
     ): List<DanmakuItemData> {
         return applySmartFilter(level = smartFilterLevel, stage = stage)
-            .mergeDuplicateDanmaku(mergeDuplicate, screenPart)
             .mapIndexedNotNull { index, item ->
-                item.toDanmakuItemData(startIndex + index, allowVipColorful)
-            }
+            item.toDanmakuItemData(startIndex + index, allowVipColorful)
+        }
     }
 
     private fun replacePlayerWindowData(
@@ -1373,91 +1380,8 @@ class MyPlayerDanmakuController(
         return isVipColorfulDanmakuSettingAllowed()
     }
 
-    private fun baseThreshold(): Int {
-        val screenWidth = context.resources.displayMetrics.widthPixels
-        return (screenWidth / 1080f * 120).toInt().coerceAtMost(250)
-    }
-
     private fun hasPreparedData(): Boolean {
         return danmakuTimeline.data.isNotEmpty() || rawDanmakuData.isNotEmpty() || danmakuData.isNotEmpty()
-    }
-
-    private fun List<DmModel>.mergeDuplicateDanmaku(enabled: Boolean, part: Float): List<DmModel> {
-        if (!enabled || isEmpty()) return this
-
-        val effectiveThreshold = max(3, (baseThreshold() * part).toInt())
-
-        // First pass: identify merge groups
-        val firstIndexByKey = HashMap<MergeDuplicateKey, Int>()
-        val groupIdOf = IntArray(size) { -1 }
-        val groups = mutableListOf<MergeGroup>()
-
-        for (i in indices) {
-            val item = this[i]
-            val key = MergeDuplicateKey(
-                content = item.content.trim().lowercase(),
-                mode = item.mode,
-                color = item.color,
-                colorful = item.colorful,
-                colorfulSrc = item.colorfulSrc.trim()
-            )
-            val firstIdx = firstIndexByKey[key]
-            if (firstIdx != null &&
-                item.progress - this[firstIdx].progress <= MERGE_DUPLICATE_WINDOW_MS
-            ) {
-                groupIdOf[i] = groupIdOf[firstIdx]
-                groups[groupIdOf[i]].count++
-            } else {
-                firstIndexByKey[key] = i
-                val gid = groups.size
-                groupIdOf[i] = gid
-                groups.add(MergeGroup(firstIndex = i, count = 1))
-            }
-        }
-
-        // Second pass: compute density and decide merge strategy per group
-        for (group in groups) {
-            if (group.count < 2) continue
-            val windowStart = this[group.firstIndex].progress.toLong()
-            val windowEnd = windowStart + MERGE_DUPLICATE_WINDOW_MS
-            val total = countInRange(windowStart, windowEnd)
-            val other = total - group.count
-            val budget = effectiveThreshold - other
-            when {
-                group.count <= budget -> {
-                    group.standaloneCount = group.count
-                    group.mergedCount = 0
-                }
-                budget >= 1 -> {
-                    group.standaloneCount = budget - 1
-                    group.mergedCount = group.count - budget + 1
-                }
-                else -> {
-                    group.standaloneCount = 0
-                    group.mergedCount = group.count
-                }
-            }
-        }
-
-        // Third pass: generate output
-        val emitted = IntArray(groups.size)
-        return mapIndexedNotNull { index, item ->
-            val gid = groupIdOf[index]
-            val group = groups[gid]
-            if (group.count < 2 || group.mergedCount == 0) return@mapIndexedNotNull item
-            val e = emitted[gid]++
-            when {
-                e < group.standaloneCount -> item
-                e == group.standaloneCount -> {
-                    val src = this[group.firstIndex]
-                    item.copy(
-                        content = "${src.content} ×${group.mergedCount}",
-                        fontSize = max(item.fontSize, 12) + 2
-                    )
-                }
-                else -> null
-            }
-        }
     }
 
     private fun List<DmModel>.applySmartFilter(level: Int, stage: String): List<DmModel> {
@@ -1501,13 +1425,6 @@ class MyPlayerDanmakuController(
         val color: Int,
         val colorful: Int,
         val colorfulSrc: String
-    )
-
-    private data class MergeGroup(
-        val firstIndex: Int,
-        var count: Int,
-        var standaloneCount: Int = 0,
-        var mergedCount: Int = 0
     )
 
     private data class LiveMergeEntry(

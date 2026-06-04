@@ -55,6 +55,7 @@ open class DanmakuItem(var data: DanmakuItemData, player: DanmakuPlayer? = null)
   internal val drawState = DrawState()
   internal var shownGeneration = -1
   internal var rollingStartTimeMs = ROLLING_START_TIME_UNSET
+  internal var rollingMotionWidth = 0f
   internal var filterGeneration = -1
   internal var filteredInGeneration = false
   internal var pendingMeasureGeneration = -1
@@ -88,6 +89,7 @@ open class DanmakuItem(var data: DanmakuItemData, player: DanmakuPlayer? = null)
     holdState.reset()
     drawState.reset()
     rollingStartTimeMs = ROLLING_START_TIME_UNSET
+    rollingMotionWidth = 0f
     filterGeneration = -1
     filteredInGeneration = false
     pendingMeasureGeneration = -1

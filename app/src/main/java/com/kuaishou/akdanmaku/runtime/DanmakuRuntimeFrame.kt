@@ -88,6 +88,23 @@ internal class RuntimeFrame {
     commands.addAll(newCommands)
   }
 
+  fun pruneRuntimeOutsideCommands(nowMs: Long, isRuntimeOutside: (DanmakuItem, Long) -> Boolean): Int {
+    val oldFixedCommandStart = fixedCommandStartIndex
+    var keptRolling = 0
+    var dropped = 0
+    commands.retainIndexed { index, item ->
+      val keep = !isRuntimeOutside(item, nowMs)
+      if (keep && index < oldFixedCommandStart) {
+        keptRolling++
+      } else if (!keep) {
+        dropped++
+      }
+      keep
+    }
+    fixedCommandStartIndex = keptRolling.coerceIn(0, commands.size)
+    return dropped
+  }
+
   fun markTransition(nowMs: Long) {
     transitionStartedAtMs = nowMs
   }
@@ -222,6 +239,30 @@ internal class CommandBuffer(initialCapacity: Int) {
     size = 0
   }
 
+  fun retainIndexed(shouldKeep: (Int, DanmakuItem) -> Boolean) {
+    var writeIndex = 0
+    for (readIndex in 0 until size) {
+      val item = items[readIndex]
+      if (item != null && shouldKeep(readIndex, item)) {
+        if (writeIndex != readIndex) {
+          items[writeIndex] = item
+          caches[writeIndex] = caches[readIndex]
+          cacheGenerations[writeIndex] = cacheGenerations[readIndex]
+          lefts[writeIndex] = lefts[readIndex]
+          tops[writeIndex] = tops[readIndex]
+          rights[writeIndex] = rights[readIndex]
+          bottoms[writeIndex] = bottoms[readIndex]
+        }
+        writeIndex++
+      }
+    }
+    for (index in writeIndex until size) {
+      items[index] = null
+      caches[index] = null
+    }
+    size = writeIndex
+  }
+
   private fun ensureCapacity(required: Int) {
     if (required <= items.size) return
     var nextCapacity = items.size * 2
@@ -238,11 +279,31 @@ internal class CommandBuffer(initialCapacity: Int) {
 
 internal class DrawCommandResult(
   val cacheHit: Boolean,
-  val fallbackDrawn: Boolean
+  val fallbackDrawn: Boolean,
+  val skipReason: Int = SKIP_NONE
 ) {
   companion object {
+    const val SKIP_NONE = 0
+    const val SKIP_CACHE_MISS = 1
+    const val SKIP_UNMEASURED = 2
+    const val SKIP_RENDERER_FAILED = 3
+
     val CACHE_HIT = DrawCommandResult(cacheHit = true, fallbackDrawn = false)
     val FALLBACK_DRAWN = DrawCommandResult(cacheHit = false, fallbackDrawn = true)
-    val SKIPPED = DrawCommandResult(cacheHit = false, fallbackDrawn = false)
+    val CACHE_MISS_SKIPPED = DrawCommandResult(
+      cacheHit = false,
+      fallbackDrawn = false,
+      skipReason = SKIP_CACHE_MISS
+    )
+    val UNMEASURED_SKIPPED = DrawCommandResult(
+      cacheHit = false,
+      fallbackDrawn = false,
+      skipReason = SKIP_UNMEASURED
+    )
+    val RENDERER_FAILED_SKIPPED = DrawCommandResult(
+      cacheHit = false,
+      fallbackDrawn = false,
+      skipReason = SKIP_RENDERER_FAILED
+    )
   }
 }
