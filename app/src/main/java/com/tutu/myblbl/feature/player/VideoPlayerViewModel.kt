@@ -3474,11 +3474,6 @@ class VideoPlayerViewModel(
             danmakuLoadedSegments.clear()
             danmakuLoadingSegments.clear()
             danmakuTotalSegments = segmentCount
-            AppLog.i(TAG, "danmaku segment config: cid=$cid durationMs=$durationMs " +
-                "serverTotalSegments=${danmakuView?.totalSegments} " +
-                "serverSegmentDurationMs=${danmakuView?.segmentDurationMs} " +
-                "fallbackSegmentCount=$fallbackSegmentCount " +
-                "resolvedSegmentCount=$segmentCount")
 
             // 2. 计算初始段（根据 seekPosition，使用协程启动前的快照）
             val initialSegment = resolveDanmakuSegmentIndex(seekPositionMs)
@@ -3831,13 +3826,10 @@ class VideoPlayerViewModel(
         } else {
             _danmaku.value.orEmpty() + items
         }
-        val emitted = _danmakuUpdates.tryEmit(DanmakuUpdate(
+        _danmakuUpdates.tryEmit(DanmakuUpdate(
             items = items,
             replace = replace
         ))
-        AppLog.i(TAG, "publishDanmaku: replace=$replace count=${items.size} " +
-            "emitted=$emitted firstProgress=${items.firstOrNull()?.progress} " +
-            "lastProgress=${items.lastOrNull()?.progress}")
     }
 
     private fun scheduleDmMaskReadyCallback(dmMask: DmMaskInfo) {
@@ -4007,8 +3999,6 @@ class VideoPlayerViewModel(
         if (newIndex == currentDanmakuSegmentIndex) {
             // 重试当前段：如果之前的加载失败或返回了空数据，定期重试
             if (!danmakuLoadedSegments.contains(newIndex) && !danmakuLoadingSegments.contains(newIndex)) {
-                AppLog.w(TAG, "danmaku segment retry: segment=$newIndex positionMs=$positionMs " +
-                    "loaded=${danmakuLoadedSegments} loading=${danmakuLoadingSegments}")
                 loadDanmakuSegmentIfNeeded(newIndex)
             }
             // 邻近预加载：距离下个 segment 边界不足 2 分钟时提前加载
@@ -4032,9 +4022,6 @@ class VideoPlayerViewModel(
         }
         val previousIndex = currentDanmakuSegmentIndex
         currentDanmakuSegmentIndex = newIndex
-        AppLog.i(TAG, "danmaku segment changed: positionMs=$positionMs from=$previousIndex " +
-            "to=$newIndex total=$danmakuTotalSegments loaded=${danmakuLoadedSegments} " +
-            "loading=${danmakuLoadingSegments}")
         PlaybackStartupTrace.log(
             traceId = currentStartupTraceId,
             startElapsedMs = currentStartupTraceStartElapsedMs,
@@ -4071,8 +4058,6 @@ class VideoPlayerViewModel(
                 step = "danmaku_segment_cache_hit",
                 message = "cid=$cid segment=$segmentIndex regular=${cachedPayload.regularItems.size} special=${cachedPayload.specialItems.size}"
             )
-            AppLog.i(TAG, "danmaku segment cache hit: segment=$segmentIndex " +
-                "regular=${cachedPayload.regularItems.size} special=${cachedPayload.specialItems.size}")
             publishDanmakuSegmentPayload(cachedPayload)
             return
         }
@@ -4084,8 +4069,6 @@ class VideoPlayerViewModel(
             step = "danmaku_segment_load_started",
             message = "cid=$cid segment=$segmentIndex"
         )
-        AppLog.i(TAG, "danmaku segment load start: segment=$segmentIndex cid=$cid " +
-            "totalSegments=$danmakuTotalSegments")
         viewModelScope.launch(Dispatchers.IO) {
             val expectedSegmentCount = resolveExpectedDanmakuSegmentCount(
                 totalCount = danmakuViewCache[cid]?.first?.totalCount ?: 0L,
@@ -4100,7 +4083,6 @@ class VideoPlayerViewModel(
                 )
             }.getOrNull()
             if (payload == null) {
-                AppLog.w(TAG, "danmaku segment load failed (attempt 1): segment=$segmentIndex cid=$cid")
                 delay(2000L)
                 payload = runCatching {
                     loadDanmakuSegmentPayload(
@@ -4114,25 +4096,32 @@ class VideoPlayerViewModel(
             withContext(Dispatchers.Main) {
                 danmakuLoadingSegments.remove(segmentIndex)
                 if (!isActiveDanmakuRequest(loadGeneration) || currentCid != cid) {
-                    AppLog.w(TAG, "danmaku segment load discarded: segment=$segmentIndex " +
-                        "cid=$cid currentCid=$currentCid " +
-                        "active=${isActiveDanmakuRequest(loadGeneration)}")
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_discarded",
+                        message = "cid=$cid segment=$segmentIndex currentCid=$currentCid active=${isActiveDanmakuRequest(loadGeneration)}"
+                    )
                     return@withContext
                 }
                 if (payload == null) {
-                    AppLog.e(TAG, "danmaku segment load FAILED after 2 attempts: " +
-                        "segment=$segmentIndex cid=$cid totalSegments=$danmakuTotalSegments")
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_failed",
+                        message = "cid=$cid segment=$segmentIndex attempts=2"
+                    )
                     return@withContext
                 }
                 if (payload.regularItems.isEmpty() && payload.specialItems.isEmpty()) {
-                    AppLog.w(TAG, "danmaku segment load EMPTY: segment=$segmentIndex cid=$cid " +
-                        "totalSegments=$danmakuTotalSegments")
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_empty",
+                        message = "cid=$cid segment=$segmentIndex"
+                    )
                     return@withContext
                 }
-                AppLog.i(TAG, "danmaku segment load success: segment=$segmentIndex " +
-                    "regular=${payload.regularItems.size} special=${payload.specialItems.size} " +
-                    "firstProgress=${payload.regularItems.firstOrNull()?.progress} " +
-                    "lastProgress=${payload.regularItems.lastOrNull()?.progress}")
                 danmakuSegmentPayloads[segmentIndex] = payload
                 danmakuLoadedSegments.add(segmentIndex)
                 PlaybackStartupTrace.log(

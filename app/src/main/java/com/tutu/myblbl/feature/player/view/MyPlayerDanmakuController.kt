@@ -245,8 +245,6 @@ class MyPlayerDanmakuController(
         if (data.isEmpty()) {
             return
         }
-        AppLog.i(TAG, "appendData: incoming=${data.size} firstProgress=${data.firstOrNull()?.progress} " +
-            "lastProgress=${data.lastOrNull()?.progress} existingTimeline=${danmakuTimeline.count}")
         val previousJob = prepareJob
         val generation = ++prepareGeneration
         prepareJob = controllerScope.launch {
@@ -269,28 +267,21 @@ class MyPlayerDanmakuController(
                 allowVipColorful = allowVipColorful,
                 stage = "append_window"
             )
-            AppLog.i(TAG, "appendData window: position=$positionSnapshotMs " +
-                "window=[${preparedWindow.range.windowStartMs},${preparedWindow.range.windowEndMs}] " +
-                "rawCount=${preparedWindow.rawCount} preparedCount=${preparedWindow.data.size} " +
-                "capped=${preparedWindow.range.isCapped} " +
-                "totalTimeline=${timeline.count}")
             val signature = preparedWindow.data.fastPreparedSignature()
             withContext(Dispatchers.Main.immediate) {
                 if (prepareGeneration != generation) {
-                    AppLog.w(TAG, "appendData discarded: generation mismatch " +
-                        "current=$prepareGeneration expected=$generation")
                     return@withContext
                 }
                 danmakuTimeline = timeline
                 rawDanmakuData = timeline.data
                 rawDanmakuSignature = rawSignature
                 rawDanmakuCount = timeline.count
+                applyPreparedWindowState(preparedWindow, signature)
                 val player = danmakuPlayer
-                if (player != null && preparedWindow.data.isNotEmpty()) {
-                    appendPlayerWindowData(
+                if (player != null) {
+                    replacePlayerWindowData(
                         player = player,
-                        window = preparedWindow,
-                        signature = signature,
+                        data = preparedWindow.data,
                         reason = "append",
                         generation = generation
                     )
