@@ -16,10 +16,11 @@ import java.util.zip.GZIPInputStream
  * 按 Bilibili 参考链路重构：
  *  - 文件结构：MASK 魔数 + 段索引表 + gzip 段数据（SVG path）
  *  - SVG path 坐标使用标准 SVG 坐标系（Y 轴向下），与 Android 屏幕坐标一致
- *  - path 代表"背景区"，人物区域是 EVEN_ODD 的洞
+ *  - 解析后的 path 代表弹幕可显示区，DanmakuMaskHostLayout 用 clipPath 保留该区域
  *
  * 关键修正：
- *  - 去掉 Y 轴翻转（之前 viewHeight - value*0.1 导致遮罩垂直镜像）
+ *  - 正确应用 SVG <g transform="translate(0,H) scale(0.1,-0.1)">
+ *  - 使用 SVG 默认 nonzero/WINDING fill rule
  *  - SVG 文本 BOM 头剥离
  *  - 0 byte body 显式当失败
  */
@@ -465,13 +466,14 @@ object WebmaskParser {
      * 坐标系：webmask SVG 使用标准 SVG 坐标系（Y 轴向下），与 Android 屏幕坐标一致。
      * 坐标值 × 0.1 转为 SVG 像素（webmask 用 10× 精度编码，如 3200 = 320px）。
      *
-     * EVEN_ODD fill rule：外圈是背景区，内圈（人物轮廓）是洞。
+     * SVG 默认 fill rule 是 nonzero，对应 Android Path.FillType.WINDING。
+     * 当前解析后的 webmask path 表示弹幕可显示区，由 HostLayout 用 clipPath 保留。
      *
      * 椭圆弧（A/a）命令：完整参数化弧线实现，将 SVG arc 端点参数转为 Android arcTo 格式。
      */
     private fun svgPathToAndroidPath(d: String, viewWidth: Float, viewHeight: Float): Path? {
         try {
-            val path = Path().apply { fillType = Path.FillType.EVEN_ODD }
+            val path = Path().apply { fillType = Path.FillType.WINDING }
             val tokens = tokenizeSvgPath(d.trim())
             var i = 0
             var currentCommand = 'M'

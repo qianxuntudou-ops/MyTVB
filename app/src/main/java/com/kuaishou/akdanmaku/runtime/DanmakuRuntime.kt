@@ -77,6 +77,7 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
   private var filterResultCacheable = false
   private var fallbackLimitLogTick = 0
   private var lastFrameStallLogAtMs = 0L
+  private var lastDrawStallLogAtMs = 0L
   private var lastUpdateTimeMs = DanmakuTimelineJumpPolicy.TIME_UNSET
   private var frameReuseGeneration = 0
   private val frameReuseInvalidationCounts = IntArray(REUSE_INVALIDATE_REASON_COUNT)
@@ -374,16 +375,26 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
   fun draw(canvas: Canvas, onRenderReady: () -> Unit) {
     try {
       val liveFrame = frame
-      val fallbackTransitionFrame = transitionFrame?.takeIf { it.isTransitionAlive() }
+      val fallbackTransitionFrame = transitionFrame
       val currentFrame = liveFrame ?: fallbackTransitionFrame
-      val transitionElapsedMs = if (liveFrame == null && currentFrame === fallbackTransitionFrame) {
-        currentFrame?.transitionElapsedMs() ?: 0L
-      } else {
-        0L
-      }
+      val drawingTransitionFrame = liveFrame == null && currentFrame === fallbackTransitionFrame
+      val transitionElapsedMs = 0L
       val config = context.config
       if (!config.visibility || currentFrame == null ||
         currentFrame.visibilityGeneration != config.visibilityGeneration) {
+        logDrawStallIfNeeded(
+          reason = when {
+            !config.visibility -> "hidden"
+            currentFrame == null -> "noFrame"
+            else -> "visibility:${currentFrame.visibilityGeneration}->${config.visibilityGeneration}"
+          },
+          liveFrame = liveFrame,
+          transitionFrame = fallbackTransitionFrame,
+          currentFrame = currentFrame,
+          drawn = 0,
+          skippedOutside = 0,
+          commandCount = currentFrame?.commands?.size ?: 0
+        )
         return
       }
 
@@ -397,11 +408,15 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
       var fallbackRendererFailed = 0
       var fallbackCacheBoosts = 0
       var visibleCommandCount = 0
+      var skippedOutside = 0
       val now = context.timer.currentTimeMs
       val commandCount = currentFrame.commands.size
       for (index in 0 until commandCount) {
         val item = currentFrame.commands.itemAt(index)
-        if (item.isRuntimeOutside(now)) continue
+        if (!drawingTransitionFrame && item.isRuntimeOutside(now)) {
+          skippedOutside++
+          continue
+        }
         val fixedCommand = index >= currentFrame.fixedCommandStartIndex
         visibleCommandCount++
         val drawResult = drawCommand(
@@ -442,6 +457,17 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
         }
         dispatchShown(item, config)
       }
+      if (visibleCommandCount == 0 || fallbackDraws + hit == 0) {
+        logDrawStallIfNeeded(
+          reason = if (visibleCommandCount == 0) "noVisibleCommand" else "noDrawnCommand",
+          liveFrame = liveFrame,
+          transitionFrame = fallbackTransitionFrame,
+          currentFrame = currentFrame,
+          drawn = fallbackDraws + hit,
+          skippedOutside = skippedOutside,
+          commandCount = commandCount
+        )
+      }
       if (fallbackSkipped > 0 && shouldLogFallbackLimit()) {
         Log.w(
           DanmakuEngine.TAG,
@@ -456,6 +482,30 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
     } finally {
       onRenderReady()
     }
+  }
+
+  private fun logDrawStallIfNeeded(
+    reason: String,
+    liveFrame: RuntimeFrame?,
+    transitionFrame: RuntimeFrame?,
+    currentFrame: RuntimeFrame?,
+    drawn: Int,
+    skippedOutside: Int,
+    commandCount: Int
+  ) {
+    val elapsed = SystemClock.elapsedRealtime()
+    if (elapsed - lastDrawStallLogAtMs < DRAW_STALL_LOG_INTERVAL_MS) return
+    lastDrawStallLogAtMs = elapsed
+    Log.w(
+      DanmakuEngine.TAG,
+      "[Runtime] draw stall reason=$reason now=${context.timer.currentTimeMs}ms " +
+        "live=${liveFrame?.commands?.size ?: -1} transition=${transitionFrame?.commands?.size ?: -1} " +
+        "current=${currentFrame?.commands?.size ?: -1} commands=$commandCount drawn=$drawn " +
+        "outside=$skippedOutside active=${activeStates.size} waiting=${waitingStates.size} " +
+        "pending=${pendingAddItems.size} sorted=${sortedItems.size} scan=${timelineWindow.scanIndex} " +
+        "measureQueue=${measureQueue.size} visible=${context.config.visibility} " +
+        "size=${context.displayer.width}x${context.displayer.height}"
+    )
   }
 
   private fun shouldLogFallbackLimit(): Boolean {
@@ -1810,6 +1860,7 @@ internal class DanmakuRuntime(private val context: DanmakuContext) {
     private const val MERGE_CANVAS_PADDING = 6f
     private const val FRAME_CACHE_RELEASE_DELAY_MS = 48L
     private const val FRAME_STALL_LOG_INTERVAL_MS = 1_000L
+    private const val DRAW_STALL_LOG_INTERVAL_MS = 1_000L
     private const val MIN_ENQUEUE_PER_FRAME = 4
     private const val ENQUEUE_BUDGET_MS = 2L
     private const val CACHE_PRIORITY_VISIBLE = 0

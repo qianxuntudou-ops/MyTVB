@@ -2,12 +2,8 @@ package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Matrix
-import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.os.SystemClock
 import android.util.AttributeSet
@@ -20,13 +16,13 @@ import com.tutu.myblbl.model.dm.MaskFrame
  * 弹幕防挡蒙版宿主容器。
  *
  * 按 Bilibili 参考链路重构。参考 Chronos shader 是
- * `CRONDefaultShading() * mask_sample`：先完成弹幕绘制，再乘当前 mask alpha。
+ * `CRONDefaultShading() * mask_sample`：只让弹幕显示在当前 mask 覆盖区。
  *
  * MyBLBL 用 Android 2D 的等价近似：
  *  - 只负责渲染裁剪，不做业务逻辑
  *  - 多个 Path UNION 合并为单个 mergedPath
- *  - saveLayer 先绘制弹幕子 View，再用 DST_IN 乘当前 mask alpha
- *  - EVEN_ODD fill rule：人物区域是 path 的"洞"，DST_IN 后该区域 alpha 为 0
+ *  - clipPath 到当前 mask path 覆盖区，再绘制弹幕子 View
+ *  - SVG 默认 nonzero/WINDING fill rule；解析后的 webmask path 是弹幕可显示区
  *  - 防闪烁：queryAt 返回 null 时，回退到上一个有效 mergedPath
  *  - 空 paths 是明确的"无遮挡帧"，不能复用旧遮罩
  *  - 明确的缓存清除入口 `clearCachedMask()`，由 DmMaskController 在 seek/release 时调用
@@ -60,12 +56,7 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
 
     private val transformMatrix = Matrix()
     private val transformPath = Path()
-    private val mergedPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
-    private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-    }
+    private val mergedPath = Path().apply { fillType = Path.FillType.WINDING }
 
     /** 同帧去重 + 防闪烁缓存：记录上一个有效帧及其 bounds。 */
     private var cachedFrame: MaskFrame? = null
@@ -83,7 +74,7 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
     fun clearCachedMask() {
         cachedFrame = null
         mergedPath.reset()
-        mergedPath.fillType = Path.FillType.EVEN_ODD
+        mergedPath.fillType = Path.FillType.WINDING
         postInvalidateOnAnimation()
     }
 
@@ -140,7 +131,7 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
         if (frame != null && frame.paths.isEmpty()) {
             cachedFrame = null
             mergedPath.reset()
-            mergedPath.fillType = Path.FillType.EVEN_ODD
+            mergedPath.fillType = Path.FillType.WINDING
             maybeLogMaskState("empty_paths", pts, frame, bounds, false)
             super.dispatchDraw(canvas)
             return
@@ -175,7 +166,7 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
             buildMergedPath(effectiveFrame, bounds)
         }
 
-        // 9. 参考 shader 近似：弹幕先绘制到 layer，再用当前 mask alpha 合成。
+        // 9. 参考 shader 近似：直接把弹幕裁到 webmask 可显示区。
         maybeLogMaskState("masked", pts, effectiveFrame, bounds, true)
         drawDanmakuWithMask(canvas)
     }
@@ -185,9 +176,9 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
             super.dispatchDraw(canvas)
             return
         }
-        val saveCount = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        val saveCount = canvas.save()
+        canvas.clipPath(mergedPath)
         super.dispatchDraw(canvas)
-        canvas.drawPath(mergedPath, maskPaint)
         canvas.restoreToCount(saveCount)
     }
 
@@ -219,7 +210,7 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
         transformMatrix.postTranslate(dx, dy)
 
         mergedPath.reset()
-        mergedPath.fillType = Path.FillType.EVEN_ODD
+        mergedPath.fillType = Path.FillType.WINDING
         for (path in frame.paths) {
             transformPath.set(path)
             transformPath.transform(transformMatrix)
