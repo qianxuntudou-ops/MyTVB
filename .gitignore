@@ -39,6 +39,12 @@ captures/
 *~
 /temp/*
 
+# ========== Graphify 本地缓存 ==========
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+
 # ========== 密钥 & 签名 ==========
 *.jks
 *.keystore
