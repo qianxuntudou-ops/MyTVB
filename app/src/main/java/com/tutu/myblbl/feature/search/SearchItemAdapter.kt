@@ -50,22 +50,23 @@ class SearchItemAdapter(
     private val items = mutableListOf<SearchItemModel>()
     private val viewTypeBase = nextViewTypeBase.getAndAdd(VIEW_TYPE_STRIDE)
 
-    fun setItems(list: List<SearchItemModel>) {
+    fun setItems(list: List<SearchItemModel>): Boolean {
         val plan = SearchItemUpdatePlanner.plan(
             oldKeys = items.map(::searchItemKey),
             newKeys = list.map(::searchItemKey)
         )
-        when (plan) {
-            SearchItemUpdatePlan.NoChange -> return
+        return when (plan) {
+            SearchItemUpdatePlan.NoChange -> false
             is SearchItemUpdatePlan.Append -> {
                 items.addAll(list.subList(plan.positionStart, plan.positionStart + plan.itemCount))
                 notifyItemRangeInserted(plan.positionStart, plan.itemCount)
-                return
+                true
             }
             SearchItemUpdatePlan.Replace -> {
                 items.clear()
                 items.addAll(list)
                 notifyDataSetChanged()
+                true
             }
         }
     }

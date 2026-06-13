@@ -59,7 +59,7 @@ class RecyclerViewFocusOperator(
             }
         }
 
-        scheduleAttachRetry(position, offsetTop, token, retryLeft = 2, onFocused = onFocused)
+        scheduleAttachRetry(position, offsetTop, token, retryLeft = 5, onFocused = onFocused)
         return true
     }
 
@@ -75,35 +75,39 @@ class RecyclerViewFocusOperator(
         retryLeft: Int,
         onFocused: ((Int) -> Unit)?
     ) {
-        recyclerView.post {
+        recyclerView.postDelayed({
             if (token != focusToken) {
                 AppLog.w(TAG, "focusPosition post: STALE token=$token current=$focusToken, pos=$position")
-                return@post
+                return@postDelayed
             }
             if (!recyclerView.isAttachedToWindow) {
                 AppLog.w(TAG, "focusPosition post: RV detached, pos=$position")
-                return@post
+                return@postDelayed
             }
             if (requestAttachedPositionFocus(position, onFocused)) {
                 pendingFocusPosition = RecyclerView.NO_POSITION
-                return@post
+                return@postDelayed
             }
-            // 条目对 LayoutManager 可见但 View 还未 attach——再等一帧
             val stillVisible = isPositionVisible(position)
+            val rvShown = recyclerView.isShown
             if (stillVisible && retryLeft > 0) {
-                AppLog.d(TAG, "focusPosition post: visible but not attached yet, retry=$retryLeft pos=$position")
+                if (!rvShown) {
+                    AppLog.d(TAG, "focusPosition post: RV not shown yet (transition?), retry=$retryLeft pos=$position")
+                } else {
+                    AppLog.d(TAG, "focusPosition post: visible but requestFocus failed, retry=$retryLeft pos=$position")
+                }
                 scheduleAttachRetry(position, offsetTop, token, retryLeft - 1, onFocused)
-                return@post
+                return@postDelayed
             }
-            AppLog.w(TAG, "focusPosition post: retries exhausted (visible=$stillVisible) for pos=$position, trying fallback")
+            AppLog.w(TAG, "focusPosition post: retries exhausted (visible=$stillVisible shown=$rvShown) for pos=$position, trying fallback")
             val spanCount = (recyclerView.layoutManager as? GridLayoutManager)?.spanCount ?: 0
             if (spanCount > 0 && focusSameColumnVisible(position, spanCount, onFocused)) {
                 pendingFocusPosition = RecyclerView.NO_POSITION
-                return@post
+                return@postDelayed
             }
             focusNearestVisible(position, onFocused, maxCandidates = 3)
             pendingFocusPosition = RecyclerView.NO_POSITION
-        }
+        }, 50)
     }
 
     private fun isPositionVisible(position: Int): Boolean {

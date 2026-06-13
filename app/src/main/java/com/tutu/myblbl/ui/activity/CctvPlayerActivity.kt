@@ -57,6 +57,7 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     private var recoveryInProgress = false
     private var scriptRecoverySession = -1
     private var playbackTimeoutSession = -1
+    private var probeExtends = 0
     private var playbackStartMs = 0L
     private var preferredQuality = CctvQuality.P1080
     private var selectedQuality = CctvQuality.P1080
@@ -86,6 +87,14 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         binding.buttonQuality.setOnClickListener {
             showQualityDialog()
         }
+        // 焦点进入按钮行后取消自动隐藏，避免操作中途控制栏消失
+        val cancelAutoHide = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                handler.removeCallbacks(hideControllerRunnable)
+            }
+        }
+        binding.buttonQuality.onFocusChangeListener = cancelAutoHide
+        binding.buttonRefresh.onFocusChangeListener = cancelAutoHide
         updateQualityButton()
         scheduleControllerHide()
     }
@@ -291,20 +300,6 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         playCurrentChannel(showHint = true)
     }
 
-    private fun switchQuality(delta: Int) {
-        if (delta == 0) return
-        val qualities = CctvQuality.values()
-        val currentQualityIndex = qualities.indexOf(selectedQuality).coerceAtLeast(0)
-        val nextQualityIndex = (currentQualityIndex + delta + qualities.size) % qualities.size
-        val nextQuality = qualities[nextQualityIndex]
-        if (nextQuality == selectedQuality) return
-        preferredQuality = nextQuality
-        selectedQuality = nextQuality
-        updateQualityButton()
-        showChannelHint("画质：${nextQuality.label}")
-        playCurrentChannel(showHint = false)
-    }
-
     private fun showController() {
         binding.controller.visibility = View.VISIBLE
         binding.textClock.visibility = View.VISIBLE
@@ -323,6 +318,10 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         handler.removeCallbacks(hideControllerRunnable)
         binding.controller.visibility = View.GONE
         binding.textClock.visibility = View.GONE
+        // 收起后焦点回到播放区，避免落在已隐藏的按钮上
+        if (!binding.playerRoot.isFocused) {
+            binding.playerRoot.requestFocus()
+        }
     }
 
     private fun scheduleControllerHide() {
@@ -354,20 +353,58 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     }
 
     private val playbackTimeoutRunnable = Runnable {
-        if (
-            playbackTimeoutSession == playbackSession &&
-            !isFinishing &&
-            !isDestroyed &&
-            binding.progressBar.visibility == View.VISIBLE
-        ) {
-            recoverPlayback(playbackTimeoutSession, "播放器加载超时", allowQualityFallback = true)
+        if (playbackTimeoutSession != playbackSession || isFinishing || isDestroyed) {
+            return@Runnable
         }
+        // 已成功起播（progressBar 隐藏）则不再探测
+        if (binding.progressBar.visibility != View.VISIBLE) {
+            return@Runnable
+        }
+        // 超时先探测缓冲状态，区分「正在缓冲」与「真失败」，避免误降级
+        probePlaybackBuffer(playbackTimeoutSession)
     }
 
     private fun schedulePlaybackTimeout(session: Int) {
         playbackTimeoutSession = session
+        probeExtends = 0
         handler.removeCallbacks(playbackTimeoutRunnable)
-        handler.postDelayed(playbackTimeoutRunnable, PLAYBACK_TIMEOUT_MS)
+        // 1080P 码率高、起播慢，给更宽的初始窗口；低档维持原阈值
+        handler.postDelayed(playbackTimeoutRunnable, initialPlaybackTimeoutMs())
+    }
+
+    private fun initialPlaybackTimeoutMs(): Long =
+        if (selectedQuality == CctvQuality.P1080) PLAYBACK_TIMEOUT_1080_MS else PLAYBACK_TIMEOUT_MS
+
+    private fun probePlaybackBuffer(session: Int) {
+        binding.webPlayer.evaluateJavascript(BUFFER_PROBE_SCRIPT) { result ->
+            if (session != playbackSession || isFinishing || isDestroyed) {
+                return@evaluateJavascript
+            }
+            val verdict = result?.trim()?.trim('"') ?: "novideo"
+            val canExtend = probeExtends < PLAYBACK_PROBE_MAX_EXTENDS
+            logPlaybackStage(
+                session,
+                "buffer_probe",
+                "verdict=$verdict extends=$probeExtends/$PLAYBACK_PROBE_MAX_EXTENDS canExtend=$canExtend"
+            )
+            when (verdict) {
+                "failed" -> recoverPlayback(session, "播放器加载超时", allowQualityFallback = true)
+                else -> if (canExtend) {
+                    schedulePlaybackExtension(session, verdict)
+                } else {
+                    val reason = if (verdict == "streaming") "播放器缓冲超时" else "播放器加载超时"
+                    recoverPlayback(session, reason, allowQualityFallback = true)
+                }
+            }
+        }
+    }
+
+    private fun schedulePlaybackExtension(session: Int, reason: String) {
+        probeExtends++
+        playbackTimeoutSession = session
+        handler.removeCallbacks(playbackTimeoutRunnable)
+        handler.postDelayed(playbackTimeoutRunnable, PLAYBACK_PROBE_EXTEND_MS)
+        logPlaybackStage(session, "buffer_probe_extend", "reason=$reason extends=$probeExtends")
     }
 
     private fun recoverPlayback(session: Int, reason: String, allowQualityFallback: Boolean) {
@@ -539,34 +576,73 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    switchChannel(-1)
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    switchChannel(1)
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_CENTER,
-                KeyEvent.KEYCODE_ENTER -> {
-                    toggleController()
-                    return true
-                }
-                KeyEvent.KEYCODE_DPAD_LEFT,
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    if (binding.controller.visibility == View.VISIBLE) {
-                        switchQuality(if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) 1 else -1)
-                    } else {
-                        showController()
+        if (event.action != KeyEvent.ACTION_DOWN) {
+            return super.dispatchKeyEvent(event)
+        }
+        val controllerVisible = binding.controller.visibility == View.VISIBLE
+        return when (event.keyCode) {
+            // 上下：控制栏隐藏时切台；呼出后用于离开/进入按钮行（不再切台）
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                if (!controllerVisible) {
+                    switchChannel(if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
+                    true
+                } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                    // 离开按钮行，收起控制栏回到切台模式
+                    hideController()
+                    true
+                } else {
+                    // 下：进入按钮行（已在内则不重复聚焦）
+                    if (!isControllerButtonFocused()) {
+                        binding.buttonQuality.requestFocus()
                     }
-                    return true
+                    true
                 }
             }
+            // 左右：隐藏时呼出控制栏；呼出后在 画质↔刷新 间移动焦点
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (!controllerVisible) {
+                    showController()
+                    true
+                } else if (!isControllerButtonFocused()) {
+                    binding.buttonQuality.requestFocus()
+                    true
+                } else {
+                    val target =
+                        if (binding.buttonQuality.isFocused) binding.buttonRefresh else binding.buttonQuality
+                    target.requestFocus()
+                    true
+                }
+            }
+            // OK：隐藏时呼出控制栏；呼出后激活当前按钮
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                if (!controllerVisible) {
+                    showController()
+                    true
+                } else if (!isControllerButtonFocused()) {
+                    binding.buttonQuality.requestFocus()
+                    true
+                } else if (event.repeatCount == 0) {
+                    when {
+                        binding.buttonQuality.isFocused -> {
+                            binding.buttonQuality.performClick()
+                            true
+                        }
+                        binding.buttonRefresh.isFocused -> {
+                            binding.buttonRefresh.performClick()
+                            true
+                        }
+                        else -> super.dispatchKeyEvent(event)
+                    }
+                } else {
+                    true // 长按重复不重复触发
+                }
+            }
+            else -> super.dispatchKeyEvent(event)
         }
-        return super.dispatchKeyEvent(event)
     }
+
+    private fun isControllerButtonFocused(): Boolean =
+        binding.buttonQuality.isFocused || binding.buttonRefresh.isFocused
 
     override fun onBackPressed() {
         if (binding.controller.visibility == View.VISIBLE || binding.textError.visibility == View.VISIBLE) {
@@ -789,6 +865,9 @@ $scriptTags
         private const val CONTROLLER_HIDE_DELAY_MS = 5_000L
         private const val CHANNEL_HINT_DELAY_MS = 1_500L
         private const val PLAYBACK_TIMEOUT_MS = 6_000L
+        private const val PLAYBACK_TIMEOUT_1080_MS = 8_000L
+        private const val PLAYBACK_PROBE_EXTEND_MS = 4_000L
+        private const val PLAYBACK_PROBE_MAX_EXTENDS = 2
         private const val EXIT_INTERVAL_MS = 2_000L
         private const val SWIPE_DISTANCE = 90
         private const val USER_AGENT =
@@ -889,6 +968,22 @@ $scriptTags
                 console.log('mybili cctv inject error ' + error);
                 return 'error ' + error;
               }
+            })();
+        """.trimIndent()
+
+        private val BUFFER_PROBE_SCRIPT = """
+            (function() {
+                try {
+                    var v = document.getElementsByTagName('video')[0];
+                    if (!v) return 'novideo';
+                    var ns = v.networkState, rs = v.readyState, vw = v.videoWidth || 0;
+                    // ns=3 NO_SOURCE 视为真失败；vw>0 / readyState>=1 / 正在加载(ns=2) 视为缓冲中
+                    if (ns === 3) return 'failed';
+                    if (vw > 0 || rs >= 1 || ns === 2) return 'streaming';
+                    return 'idle';
+                } catch (e) {
+                    return 'error';
+                }
             })();
         """.trimIndent()
     }

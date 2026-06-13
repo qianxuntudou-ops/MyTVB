@@ -39,6 +39,7 @@ import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.system.ViewUtils
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.log.PagePerfLogger
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
@@ -85,6 +86,7 @@ class SearchNewFragment :
     }
 
     companion object {
+        private const val TAG = "SearchFocus"
         private const val ARG_KEYWORD = "keyword"
         private const val SEARCH_PANEL_FOCUS_DELAY_MS = 48L
 
@@ -581,7 +583,11 @@ class SearchNewFragment :
 
     override fun onPause() {
         if (isResultPanelVisible) {
+            val focused = binding.root.findFocus()
+            AppLog.d(TAG, "onPause: isResultPanelVisible=true focused=${focused?.javaClass?.simpleName} focusedId=${focused?.id}")
             resultPagerAdapter?.captureFocusAnchors()
+        } else {
+            AppLog.d(TAG, "onPause: isResultPanelVisible=false, skip capture")
         }
         super.onPause()
     }
@@ -589,13 +595,28 @@ class SearchNewFragment :
     override fun onResume() {
         super.onResume()
         if (isResultPanelVisible) {
-            binding.root.post {
-                if (!isAdded || view == null) return@post
-                val focused = binding.root.findFocus()
-                if (focused == null || !isDescendantOf(focused, binding.viewSearchResult)) {
-                    resultPagerAdapter?.restoreFocusAnchors()
+            AppLog.d(TAG, "onResume: isResultPanelVisible=true, posting restore")
+            binding.root.postDelayed({
+                if (!isAdded || view == null) {
+                    AppLog.d(TAG, "onResume.post: fragment not added, skip")
+                    return@postDelayed
                 }
-            }
+                if (!binding.viewSearchResult.isShown) {
+                    AppLog.d(TAG, "onResume.post: viewSearchResult not shown yet, retry")
+                    binding.root.postDelayed({
+                        if (!isAdded || view == null) return@postDelayed
+                        val focused = binding.root.findFocus()
+                        AppLog.d(TAG, "onResume.retry: focused=${focused?.javaClass?.simpleName} shown=${binding.viewSearchResult.isShown}")
+                        resultPagerAdapter?.restoreFocusAnchors()
+                    }, 120)
+                    return@postDelayed
+                }
+                val focused = binding.root.findFocus()
+                AppLog.d(TAG, "onResume.post: focused=${focused?.javaClass?.simpleName}, calling restoreFocusAnchors")
+                resultPagerAdapter?.restoreFocusAnchors()
+            }, 80)
+        } else {
+            AppLog.d(TAG, "onResume: isResultPanelVisible=false, skip restore")
         }
     }
 

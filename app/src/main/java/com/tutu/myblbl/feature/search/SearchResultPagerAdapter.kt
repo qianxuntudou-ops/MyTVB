@@ -16,6 +16,7 @@ import com.tutu.myblbl.core.ui.base.BaseListFragment
 import com.tutu.myblbl.core.ui.base.VideoRecyclerViewTuning
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
@@ -28,9 +29,14 @@ class SearchResultPagerAdapter(
     private val onTopEdgeUp: ((View) -> Boolean)? = null
 ) : RecyclerView.Adapter<SearchResultPagerAdapter.ViewHolder>() {
 
+    private companion object {
+        const val TAG = "SearchFocus"
+    }
+
     private val holders = mutableMapOf<SearchType, ViewHolder>()
     private val pendingStates = mutableMapOf<SearchType, PendingState>()
     private val pages = mutableListOf<SearchResultPage>()
+    private var focusedPageType: SearchType? = null
 
     private data class PendingState(
         val items: List<SearchItemModel>,
@@ -142,12 +148,35 @@ class SearchResultPagerAdapter(
     }
 
     fun captureFocusAnchors() {
-        holders.values.forEach { it.captureFocusAnchor() }
+        focusedPageType = null
+        holders.forEach { (type, holder) ->
+            if (holder.captureFocusAnchor()) {
+                focusedPageType = type
+                AppLog.d(TAG, "captureFocusAnchors: focusedPage=$type")
+            }
+        }
+        AppLog.d(TAG, "captureFocusAnchors: done, focusedPageType=$focusedPageType holders=${holders.keys}")
     }
 
     fun restoreFocusAnchors() {
-        val restored = holders.values.any { it.restoreFocusAnchor() }
+        AppLog.d(TAG, "restoreFocusAnchors: focusedPageType=$focusedPageType holders=${holders.keys}")
+        val focusedType = focusedPageType
+        val focusedHolder = focusedType?.let { holders[it] }
+        if (focusedHolder != null) {
+            AppLog.d(TAG, "restoreFocusAnchors: trying focused page=$focusedType")
+            if (focusedHolder.restoreFocusAnchor()) {
+                AppLog.d(TAG, "restoreFocusAnchors: SUCCESS on focused page=$focusedType")
+                return
+            }
+            AppLog.d(TAG, "restoreFocusAnchors: FAILED on focused page=$focusedType, trying others")
+        }
+        val restored = holders.entries.any { (type, holder) ->
+            val ok = holder.restoreFocusAnchor()
+            AppLog.d(TAG, "restoreFocusAnchors: fallback page=$type result=$ok")
+            ok
+        }
         if (!restored) {
+            AppLog.d(TAG, "restoreFocusAnchors: all FAILED, falling back to focusPrimaryContent")
             holders.values.forEach { it.focusPrimaryContent() }
         }
     }
@@ -236,11 +265,14 @@ class SearchResultPagerAdapter(
         fun submit(page: SearchResultPage) {
             val filteredItems = ContentFilter.filterSearchItems(binding.root.context, page.items)
             val applyUiState = {
-                currentAdapter?.setItems(filteredItems)
+                val changed = currentAdapter?.setItems(filteredItems) ?: false
+                AppLog.d(TAG, "submit: type=$currentType itemCount=${filteredItems.size} changed=$changed")
                 binding.recyclerViewResult.isVisible = filteredItems.isNotEmpty()
                 binding.textEmpty.isVisible = !page.loading && filteredItems.isEmpty()
                 binding.textEmpty.setText(R.string.search_empty)
-                tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
+                if (changed) {
+                    tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
+                }
                 Unit
             }
             if (binding.recyclerViewResult.isComputingLayout) {
@@ -263,8 +295,8 @@ class SearchResultPagerAdapter(
             }
         }
 
-        fun captureFocusAnchor() {
-            tvFocusController?.captureCurrentAnchor()
+        fun captureFocusAnchor(): Boolean {
+            return tvFocusController?.captureCurrentAnchor() ?: false
         }
 
         fun restoreFocusAnchor(): Boolean {

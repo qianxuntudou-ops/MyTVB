@@ -332,7 +332,7 @@ class TvListFocusController(
         return focusPosition(position, 0, "refresh", allowOutsideFocus = true)
     }
 
-    fun requestFocusPosition(position: Int): Boolean {
+    fun requestFocusPosition(position: Int, allowOutsideFocus: Boolean = false): Boolean {
         if (!adapter.isFocusablePosition(position)) {
             return false
         }
@@ -342,28 +342,40 @@ class TvListFocusController(
             offsetTop = 0
         )
         currentAnchor = anchor
-        return focusPosition(position, anchor.offsetTop, "request")
+        return focusPosition(position, anchor.offsetTop, "request", allowOutsideFocus = allowOutsideFocus)
     }
 
-    fun captureCurrentAnchor() {
+    fun captureCurrentAnchor(): Boolean {
         val focused = recyclerView.rootView?.findFocus()
         val position = focused?.let(::resolveAdapterPosition) ?: RecyclerView.NO_POSITION
-        capturedAnchor = if (focused != null && position != RecyclerView.NO_POSITION && adapter.isFocusablePosition(position)) {
-            createAnchor(focused, position, TvFocusAnchor.Source.RETURN_RESTORE)
+        val hasRealFocus = focused != null &&
+            position != RecyclerView.NO_POSITION &&
+            adapter.isFocusablePosition(position)
+        capturedAnchor = if (hasRealFocus) {
+            createAnchor(focused!!, position, TvFocusAnchor.Source.RETURN_RESTORE)
         } else if (currentAnchor != null && resolveAnchorPosition(currentAnchor!!) != RecyclerView.NO_POSITION) {
             currentAnchor
         } else {
             anchorFromVisibleOrCurrent()
         }
+        logD("captureCurrentAnchor: hasRealFocus=$hasRealFocus pos=$position focused=${describeView(focused)} capturedPos=${capturedAnchor?.adapterPosition} capturedKey=${capturedAnchor?.stableKey}")
+        return hasRealFocus
     }
 
     fun restoreCapturedAnchor(): Boolean {
-        val anchor = capturedAnchor ?: currentAnchor ?: return false
-        val position = resolveAnchorPosition(anchor)
-        if (position == RecyclerView.NO_POSITION) {
+        val anchor = capturedAnchor ?: currentAnchor ?: run {
+            logD("restoreCapturedAnchor: no anchor, return false")
             return false
         }
-        return focusPosition(position, anchor.offsetTop, "returnRestore")
+        val position = resolveAnchorPosition(anchor)
+        logD("restoreCapturedAnchor: anchorKey=${anchor.stableKey} anchorPos=${anchor.adapterPosition} resolvedPos=$position")
+        if (position == RecyclerView.NO_POSITION) {
+            logD("restoreCapturedAnchor: resolvedPos=NO_POSITION, return false")
+            return false
+        }
+        val result = focusPosition(position, anchor.offsetTop, "returnRestore", allowOutsideFocus = true)
+        logD("restoreCapturedAnchor: focusPosition result=$result")
+        return result
     }
 
     fun clearAnchorForUserRefresh() {
