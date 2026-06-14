@@ -8,8 +8,6 @@
 
 # ========== 编译输出 ==========
 build/
-app/build/
-*/build/
 app/release/
 *.apk
 *.aab
@@ -24,7 +22,6 @@ app/release/
 # ========== Gradle 相关 ==========
 .gradle/
 .kotlin/
-.gradle-app.setting
 gradle-app.setting
 local.properties
 
@@ -52,8 +49,9 @@ key.properties
 google-services.json
 
 # ========== 文档 ==========
+# docs/ 下只纳入 HTML 报告（团队共享/存档），其余（md、临时文件、superpowers/ 等）忽略
 /docs/*
-!docs/dm-mask-reference-analysis.html
+!docs/*.html
 
 # ========== 调试文件 ==========
 debug.txt
@@ -108,10 +106,6 @@ app/src/main/res/values-watch/styles.xml
 .claude/
 *.pid
 *.seed
-API_MODERNIZATION_TODO.md
-PLAN_DATASTORE_MIGRATION.md
-PLAN_LISTADAPTER_MIGRATION.md
-PLAN_WITHCONTEXT_CLEANUP.md
 CLAUDE.md
 AGENTS.md
 app/debug/output-metadata.json
