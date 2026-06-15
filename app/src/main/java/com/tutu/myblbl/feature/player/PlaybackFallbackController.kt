@@ -67,7 +67,6 @@ internal class PlaybackFallbackController(
         val activePlaybackIntentId: String
         val startupTraceId: String
         val startupTraceStartElapsedMs: Long
-        val preferSoftwareDecoderSafePlayback: Boolean
 
         // ===== 共享状态读（实时读 VM 字段，不缓存） =====
         val dashSession: VideoPlaybackSession?
@@ -85,8 +84,6 @@ internal class PlaybackFallbackController(
 
         // ===== VM 私有方法转发 =====
         fun currentPlayRequestIdentity(): VmPlayRequestIdentity?
-        fun readSoftwareDecoderSafeQualityId(): Int
-        fun rememberSoftwareDecoderSafeQuality(qualityId: Int)
         fun emitRiskControlTryLookBypass()
 
         // ===== UI/派发写 =====
@@ -129,7 +126,6 @@ internal class PlaybackFallbackController(
     private var playInfoRefreshRetryCount: Int = 0
     private var fallbackAttemptCount: Int = 0
     private val attemptedFallbackSignatures = linkedSetOf<String>()
-    private var softwareDecoderDowngradeAttemptedCid: Long = 0L
     private var lastPlaybackPositionMs: Long = 0L
 
     // ===== 公开 API（供 ViewModel 调用） =====
@@ -182,14 +178,6 @@ internal class PlaybackFallbackController(
     /** 卡顿回调入口，返回是否已派发新 fallback。 */
     fun handlePlaybackStall(positionMs: Long, stalledMs: Long): Boolean {
         lastPlaybackPositionMs = positionMs.coerceAtLeast(0L)
-        if (shouldKeepCurrentSourceOnPlaybackStall()) {
-            AppLog.w(
-                TAG,
-                "playback stall keep current source: position=$lastPlaybackPositionMs stalledMs=$stalledMs " +
-                    "quality=${context.selectedQualityId} codec=${context.selectedCodec} safeQuality=${context.readSoftwareDecoderSafeQualityId()}"
-            )
-            return false
-        }
         val handled =
             trySwitchToCodec(VideoCodecEnum.AVC, lastPlaybackPositionMs, reason = "stall_${stalledMs}ms_prefer_avc") ||
                 tryNextCdnInCurrentCodec(lastPlaybackPositionMs, reason = "stall_${stalledMs}ms") ||
@@ -200,13 +188,12 @@ internal class PlaybackFallbackController(
         return handled
     }
 
-    /** 切集/重置入口：清空所有 fallback 状态，含 softwareDecoderDowngradeAttemptedCid。 */
+    /** 切集/重置入口：清空所有 fallback 状态。 */
     fun reset() {
         context.onStreamFallbackPlanUpdated(plan = null, routeIndex = 0, cdnIndex = 0)
         playInfoRefreshRetryCount = 0
         fallbackAttemptCount = 0
         attemptedFallbackSignatures.clear()
-        softwareDecoderDowngradeAttemptedCid = 0L
     }
 
     /**
@@ -357,34 +344,6 @@ internal class PlaybackFallbackController(
         return fallbackQualityId
     }
 
-    /** 软解安全画质候选构造：纯软解或开启 prefer safe 时按安全档封顶。 */
-    fun buildSoftwareDecoderSafeQualityCandidates(
-        qualityCandidates: List<Int>,
-        hardwareCodecs: Set<VideoCodecEnum>
-    ): List<Int> {
-        if (hardwareCodecs.isNotEmpty() && !context.preferSoftwareDecoderSafePlayback) {
-            return qualityCandidates
-        }
-        val requestedQualityId = qualityCandidates.firstOrNull()
-            ?: context.requestedQualityId
-            ?: context.selectedQualityId
-            ?: return qualityCandidates
-        val safeQualityId = context.readSoftwareDecoderSafeQualityId()
-        context.rememberSoftwareDecoderSafeQuality(safeQualityId)
-        if (requestedQualityId <= safeQualityId) {
-            return qualityCandidates
-        }
-        val cappedCandidates = qualityPolicy.buildCandidates(safeQualityId)
-        AppLog.w(
-            TAG,
-            "software-only decoder quality cap: requested=$requestedQualityId " +
-                "cap=$safeQualityId " +
-                "preferSoftwareSafe=${context.preferSoftwareDecoderSafePlayback} " +
-                "hardwareCodecs=$hardwareCodecs candidates=$cappedCandidates"
-        )
-        return cappedCandidates
-    }
-
     /**
      * 使用当前请求上下文重新加载播放 URL（经 [scope] 异步）。
      * 供 onGaiaVgateResult / tryRefreshPlayInfo 等回环路径调用。
@@ -422,28 +381,7 @@ internal class PlaybackFallbackController(
         loadPlayUrlWithCurrentContext(reason = "gaia_vgate_verified")
     }
 
-    /** 当前 cid 是否已经触发过软解安全档降级（供 VM 软解检测幂等）。 */
-    fun hasSoftwareDecoderDowngradeBeenAttempted(cid: Long): Boolean =
-        softwareDecoderDowngradeAttemptedCid == cid
-
-    /** 标记当前 cid 已触发过软解安全档降级。 */
-    fun markSoftwareDecoderDowngradeAttempted(cid: Long) {
-        softwareDecoderDowngradeAttemptedCid = cid
-    }
-
     // ===== 内部 fallback 链 =====
-
-    private fun shouldKeepCurrentSourceOnPlaybackStall(): Boolean {
-        val safeQualityId = context.readSoftwareDecoderSafeQualityId()
-        val currentQualityId = context.selectedQualityId
-            ?: context.requestedQualityId
-            ?: context.currentPlayInfo?.quality
-        val currentCodec = context.selectedCodec ?: context.requestedCodec
-        return context.preferSoftwareDecoderSafePlayback &&
-            currentQualityId != null &&
-            currentQualityId <= safeQualityId &&
-            currentCodec == VideoCodecEnum.AVC
-    }
 
     private fun classifyPlaybackError(error: PlaybackException): PlaybackErrorType {
         val code = error.errorCode
