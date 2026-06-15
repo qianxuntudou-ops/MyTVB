@@ -1442,38 +1442,22 @@ class MyPlayerDanmakuController(
     }
 
     private fun List<DmModel>.applySmartFilter(level: Int, stage: String): List<DmModel> {
-        val startedAt = SystemClock.elapsedRealtime()
         val normalizedLevel = level.normalizeSmartFilterLevel()
         if (normalizedLevel == SMART_FILTER_LEVEL_OFF || isEmpty()) {
             return this
         }
-        var maxPositiveScore = 0
-        for (item in this) {
-            if (item.aiFlagScore > maxPositiveScore) {
-                maxPositiveScore = item.aiFlagScore
-            }
-        }
-        if (maxPositiveScore == 0) return this
-        val threshold = resolveSmartFilterThreshold(normalizedLevel, maxPositiveScore)
+        // Smart filter uses Bilibili danmaku weight (DanmakuElem field 9, AI-derived).
+        // Aligned with BiliDanmakuFilterPolicy.shouldDropByAi: drop when weight>0 and weight<level;
+        // weight==0 means un-evaluated, keep it.
         val filtered = filter { item ->
-            val score = item.aiFlagScore
-            score <= 0 || score < threshold
+            val score = item.weight
+            score <= 0 || score >= normalizedLevel
         }
-        val costMs = SystemClock.elapsedRealtime() - startedAt
         val dropped = size - filtered.size
-        if (costMs >= SMART_FILTER_PROFILE_LOG_MS || dropped > 0) {
-            AppLog.i(
-                TAG,
-                "smart filter stage=$stage level=$normalizedLevel raw=${size} kept=${filtered.size} " +
-                    "dropped=$dropped threshold=$threshold maxScore=$maxPositiveScore cost=${costMs}ms"
-            )
+        if (dropped > 0) {
+            AppLog.i(TAG, "smart filter stage=$stage level=$normalizedLevel raw=${size} kept=${filtered.size} dropped=$dropped")
         }
         return filtered
-    }
-
-    private fun resolveSmartFilterThreshold(level: Int, maxPositiveScore: Int): Int {
-        val ratio = (SMART_FILTER_LEVEL_MAX - level).toFloat() / SMART_FILTER_LEVEL_MAX
-        return max(1, (maxPositiveScore * ratio).toInt())
     }
 
     private data class MergeDuplicateKey(
