@@ -65,6 +65,22 @@ internal fun shouldApplyBlblCacheResult(
 internal fun cacheReadyStartTime(motionStarted: Boolean, currentStartTimeMs: Int, nowMs: Int): Int =
     if (motionStarted) currentStartTimeMs else nowMs
 
+/**
+ * 引擎单调时钟的钳制判定：
+ * - 前进：跟随；
+ * - 小幅回退（≤ [backReleaseThresholdMs]）：吸收为"冻结等 raw 追上"（防漂移回跳）；
+ * - 大幅回退（> 阈值）：视为合法回退（seek 回看/换视频起播），直接放行。
+ *   换视频时序竞态（notifySeek 放行高水位后，播放器 BUFFERING 期间仍上报旧视频
+ *   位置把高水位重新抬回去）下，新视频位置若被钳在旧高水位，引擎时钟会冻结直到
+ *   播放追上——表现为"进入播放没弹幕 + 在场弹幕卡住不动"。
+ */
+internal fun resolveMonotonicClockMs(pos: Long, floor: Long, backReleaseThresholdMs: Long): Long =
+    when {
+        pos >= floor -> pos
+        floor - pos > backReleaseThresholdMs -> pos
+        else -> floor
+    }
+
 internal fun isCacheWaitExpired(motionStarted: Boolean, admittedAtMs: Int, nowMs: Int, timeoutMs: Int): Boolean =
     !motionStarted && nowMs - admittedAtMs >= timeoutMs
 
@@ -370,10 +386,15 @@ internal class DanmakuEngine(
 
     override fun stepTime(positionMs: Long, uiFrameId: Int) {
         val pos = positionMs.coerceAtLeast(0L)
-        val floor = monotonicClockMs
-        // 单调钳制：只允许前进。回退（漂移硬校准等）被吸收为"冻结等 raw 追上"，
-        // 而不是位置倒跳。合法回退（用户 seek 回看）走 allowClockBackwardTo 放行。
-        val effective = if (pos >= floor) pos else floor
+        // 单调钳制：小幅回退（漂移硬校准等）被吸收为"冻结等 raw 追上"，防止位置倒跳；
+        // 大幅回退（seek 回看/换视频起播）直接放行（见 resolveMonotonicClockMs 注释）。
+        val effective = resolveMonotonicClockMs(pos, monotonicClockMs, REPLAY_BACK_THRESHOLD_MS.toLong())
+        if (effective < monotonicClockMs && AppLog.isEnabled) {
+            AppLog.w(
+                TAG,
+                "clock BACKWARD-RELEASE pos=${pos}ms floor=${monotonicClockMs}ms back=${monotonicClockMs - pos}ms"
+            )
+        }
         monotonicClockMs = effective
         currentPositionMs = effective
         currentUiFrameId = uiFrameId

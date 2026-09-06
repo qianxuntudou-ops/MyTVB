@@ -35,6 +35,7 @@ import android.view.animation.OvershootInterpolator
 import androidx.annotation.OptIn
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -240,6 +241,16 @@ class MyPlayerView @JvmOverloads constructor(
 
     private var uiFrameMonitorStarted = false
     private var lastUiFrameTimeNs = 0L
+
+    /**
+     * 弹幕位置供数闸门：媒体源切换（onMediaItemTransition）到新源首帧渲染
+     * （onRenderedFirstFrame）之间为 false——player 实例跨视频复用，此窗口内
+     * player.currentPosition 仍是旧视频位置，直接供数会污染弹幕引擎时钟
+     * （init 锚定到旧位置 + 单调高水位被抬回 + timer 前向硬锚吞掉脏值），
+     * 表现为换视频后弹幕长时间不出现或卡住。冻结期间供 0（新视频起播位置）。
+     */
+    @Volatile
+    private var danmakuPositionArmed = false
     private val uiFrameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNs: Long) {
             val lastFrameTimeNs = lastUiFrameTimeNs
@@ -443,9 +454,17 @@ class MyPlayerView @JvmOverloads constructor(
             updateAspectRatio()
         }
 
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // 媒体源切换：player.currentPosition 在新源首帧前仍可能返回旧视频位置
+            // （player 实例跨视频复用），期间弹幕位置供数冻结为 0，见 danmakuPositionArmed。
+            danmakuPositionArmed = false
+        }
+
         override fun onRenderedFirstFrame() {
             onSeekDiagFirstFrame()
             dmMaskController.onPositionChanged()
+            // 新源首帧已渲染，currentPosition 必然属于当前媒体，弹幕位置供数解冻。
+            danmakuPositionArmed = true
             hasRenderedFirstFrame = true
             suppressControllerShowUntilFirstFrame = false
             activeDanmakuController()?.notifyPlaybackFirstFrame()
@@ -2739,7 +2758,9 @@ class MyPlayerView @JvmOverloads constructor(
         dmkMaskHost?.addView(view) ?: addView(view)
         liteDanmakuView = view
         liteDanmakuController = BlblDanmakuController(context) { liteDanmakuView }.also {
-            it.playerPositionProvider = { player?.currentPosition ?: 0L }
+            it.playerPositionProvider = {
+                if (danmakuPositionArmed) player?.currentPosition ?: 0L else 0L
+            }
         }
         restoreOverlayZOrder()
     }
