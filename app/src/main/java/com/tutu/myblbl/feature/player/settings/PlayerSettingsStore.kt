@@ -34,7 +34,9 @@ data class PlayerSettings(
     val sponsorBlockAutoSkip: Boolean = true,
     // 音量均衡：挂载 DynamicsProcessing 限制器 + LoudnessEnhancer。默认关闭——
     // 这些系统音效在大量电视盒子上驱动实现有 bug，会引入失真（电音）。
-    val audioNormalize: Boolean = false
+    val audioNormalize: Boolean = false,
+    // 无缝切清晰度：满足条件时用多清晰度 DASH MPD 源替代单档源，切档不重建播放器。默认关闭。
+    val seamlessQualitySwitch: Boolean = false
 )
 
 private object VideoQualityDefaults {
@@ -69,6 +71,7 @@ object PlayerSettingsStore {
     private const val KEY_SPONSOR_BLOCK_ENABLED = "sponsor_block_enabled"
     private const val KEY_SPONSOR_BLOCK_AUTO_SKIP = "sponsor_block_auto_skip"
     private const val KEY_AUDIO_NORMALIZE = "audio_normalize"
+    private const val KEY_SEAMLESS_QUALITY_SWITCH = "seamless_quality_switch"
 
     fun load(context: Context): PlayerSettings {
         fun readSetting(key: String): String? = appSettings.getCachedString(key)
@@ -110,6 +113,8 @@ object PlayerSettingsStore {
             append(readSetting(KEY_SPONSOR_BLOCK_AUTO_SKIP).orEmpty())
             append("|")
             append(readSetting(KEY_AUDIO_NORMALIZE).orEmpty())
+            append("|")
+            append(readSetting(KEY_SEAMLESS_QUALITY_SWITCH).orEmpty())
         }
         if (snapshot == lastSettingsSnapshot) {
             return cachedSettings!!
@@ -192,6 +197,10 @@ object PlayerSettingsStore {
             ),
             audioNormalize = parseToggle(
                 readSetting(KEY_AUDIO_NORMALIZE),
+                defaultValue = false
+            ),
+            seamlessQualitySwitch = parseToggle(
+                readSetting(KEY_SEAMLESS_QUALITY_SWITCH),
                 defaultValue = false
             )
         )

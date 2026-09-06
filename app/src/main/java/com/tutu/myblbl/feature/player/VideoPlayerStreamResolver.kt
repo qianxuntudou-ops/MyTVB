@@ -171,6 +171,87 @@ internal class VideoPlayerStreamResolver(
 
     fun buildFnval(@Suppress("UNUSED_PARAMETER") qualityId: Int): Int = 4048
 
+    /**
+     * 从 playInfo 的 dash 响应收集全部可无缝切换的档位，构建多清晰度目录。
+     * 返回 null 表示不满足无缝条件（可用档位不足两档 / 初始档缺失 / 音轨缺 SegmentBase），
+     * 调用方回退现有 Progressive+Merging 链路。
+     */
+    fun buildSeamlessCatalog(
+        playInfo: PlayInfoModel,
+        initialQualityId: Int,
+        selectedAudioId: Int?,
+        initialCodec: VideoCodecEnum?
+    ): SeamlessQualityCatalog? {
+        val dash = playInfo.dash ?: return null
+        // 同一 (qn, codec) 可能有多条流（不同带宽），取最高带宽；SegmentBase 缺失的流进不了静态 MPD。
+        val options = dash.video.orEmpty()
+            .filter { it.realSegmentBase != null && it.realBaseUrl.isNotBlank() }
+            .groupBy { it.id to it.codecId }
+            .mapNotNull { (_, streams) ->
+                val video = streams.maxByOrNull { it.bandwidth } ?: return@mapNotNull null
+                val urls = CdnLatencyProfile.sortUrlsByLatency(
+                    buildDistinctUrls(video.realBaseUrl, video.realBackupUrl)
+                )
+                if (urls.isEmpty()) return@mapNotNull null
+                SeamlessVideoOption(
+                    qn = video.id,
+                    codec = VideoCodecEnum.fromId(video.codecId),
+                    representation = DashRepresentation(
+                        id = video.id,
+                        mimeType = video.realMimeType.ifBlank { "video/mp4" },
+                        codecs = video.codecs,
+                        bandwidth = video.bandwidth,
+                        width = video.width,
+                        height = video.height,
+                        frameRate = video.realFrameRate,
+                        baseUrl = urls.first(),
+                        backupUrls = urls.drop(1),
+                        segmentBase = video.realSegmentBase?.let { sb ->
+                            DashSegmentBase(
+                                initialization = sb.initialization.ifBlank { sb.range },
+                                indexRange = sb.realIndexRange
+                            )
+                        }
+                    )
+                )
+            }
+        if (options.map { it.qn }.distinct().size < 2) return null
+        val resolvedInitialCodec = initialCodec ?: options.first().codec
+        if (options.none { it.qn == initialQualityId && it.codec == resolvedInitialCodec }) return null
+
+        // 音轨选择与 resolveDashRoutePlan 保持一致：请求 id 优先，缺省取最高带宽。
+        val selectedAudio = buildAudioTracks(playInfo)
+            .firstOrNull { it.id == selectedAudioId }
+            ?: buildAudioTracks(playInfo).maxByOrNull { it.bandwidth }
+            ?: return null
+        val audioUrls = CdnLatencyProfile.sortUrlsByLatency(
+            buildDistinctUrls(selectedAudio.realBaseUrl, selectedAudio.realBackupUrl)
+        )
+        if (audioUrls.isEmpty()) return null
+        val audioRepresentation = DashRepresentation(
+            id = selectedAudio.id,
+            mimeType = selectedAudio.realMimeType.ifBlank { "audio/mp4" },
+            codecs = selectedAudio.codecs,
+            bandwidth = selectedAudio.bandwidth,
+            baseUrl = audioUrls.first(),
+            backupUrls = audioUrls.drop(1),
+            segmentBase = selectedAudio.realSegmentBase?.let { sb ->
+                DashSegmentBase(
+                    initialization = sb.initialization.ifBlank { sb.range },
+                    indexRange = sb.realIndexRange
+                )
+            }
+        )
+        return SeamlessQualityCatalog(
+            options = options,
+            audioRepresentation = audioRepresentation,
+            durationMs = resolveDurationMs(playInfo),
+            minBufferTimeMs = resolveMinBufferTimeMs(playInfo),
+            initialQualityId = initialQualityId,
+            initialCodec = resolvedInitialCodec
+        )
+    }
+
     fun buildFourk(qualityId: Int): Int {
         return if (qualityId >= 120) 1 else 0
     }

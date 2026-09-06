@@ -283,6 +283,11 @@ class VideoPlayerFragment : Fragment() {
             if (!hasFps) {
                 AppLog.w("PlaybackPerf", "video stream has NO frame rate metadata, Surface.setFrameRate skipped by Media3")
             }
+            // 无缝清晰度切换：从多清晰度 MPD 的 Representation id 解析出真实生效的 (qn, codec)，
+            // 回读给 VM 纠正 UI 选择态与心跳上报档位；非无缝源 id 解析为 null，无副作用。
+            parseVideoRepresentationId(format.id)?.let { (qn, codecid) ->
+                viewModel.onSeamlessVideoTrackChanged(qn, codecid)
+            }
         }
 
         override fun onDroppedVideoFrames(

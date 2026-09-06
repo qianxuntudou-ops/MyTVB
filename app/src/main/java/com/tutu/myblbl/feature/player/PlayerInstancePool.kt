@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.media.VideoCodecSupport
 import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
@@ -219,6 +220,9 @@ object PlayerInstancePool {
         return ExoPlayer.Builder(context)
             .setRenderersFactory(createRenderersFactory(context))
             .setLoadControl(loadControl)
+            // 无缝清晰度切换：多清晰度 DASH MPD 源的视频轨选择交给 SeamlessQualitySelector
+            // 控制；非无缝源（format.id 解析不出 qn/codec）自动退回默认自适应逻辑，行为不变。
+            .setTrackSelector(DefaultTrackSelector(context, SeamlessQualityTrackSelectionFactory()))
             .build()
             .also(PlayerPlaybackPolicy::apply)
             .also {

@@ -123,6 +123,7 @@ class VideoPlayerViewModel(
             val mediaSource: MediaSource,
             val playInfo: PlayInfoModel,
             val selectionSnapshot: VideoPlayerStreamResolver.SelectionSnapshot,
+            val seamlessCatalog: SeamlessQualityCatalog? = null,
             val expiresAtMs: Long
         )
         private val cachedPlaybacks = LinkedHashMap<String, CachedPlayback>(2, 0.75f, true)
@@ -148,7 +149,8 @@ class VideoPlayerViewModel(
             cid: Long,
             mediaSource: MediaSource,
             playInfo: PlayInfoModel,
-            selectionSnapshot: VideoPlayerStreamResolver.SelectionSnapshot
+            selectionSnapshot: VideoPlayerStreamResolver.SelectionSnapshot,
+            seamlessCatalog: SeamlessQualityCatalog? = null
         ) {
             trimExpiredCachedPlaybacks()
             // 诊断：写入缓存时记录 uri，定位是否"写入即串台"（原因B）
@@ -166,6 +168,7 @@ class VideoPlayerViewModel(
                 mediaSource = mediaSource,
                 playInfo = playInfo,
                 selectionSnapshot = selectionSnapshot,
+                seamlessCatalog = seamlessCatalog,
                 expiresAtMs = System.currentTimeMillis() + LAST_PLAYBACK_TTL_MS
             )
             while (cachedPlaybacks.size > MAX_CACHED_PLAYBACKS) {
@@ -276,7 +279,8 @@ class VideoPlayerViewModel(
         val requestDurationMs: Long,
         val startupTraceId: String,
         val startupTraceStartElapsedMs: Long,
-        val cdnStates: List<VideoPlayerCdnFailoverState> = emptyList()
+        val cdnStates: List<VideoPlayerCdnFailoverState> = emptyList(),
+        val seamlessCatalog: SeamlessQualityCatalog? = null
     )
 
     private data class PreloadedPlayback(
@@ -359,6 +363,17 @@ class VideoPlayerViewModel(
         dataSourceFactory = cacheDataSourceFactory,
         urlNormalizer = VideoPlayerUrlUtils::normalizeUrl
     )
+    private val seamlessDashMediaSourceFactory = SeamlessDashMediaSourceFactory(
+        baseDataSourceFactory = cacheDataSourceFactory,
+        urlNormalizer = VideoPlayerUrlUtils::normalizeUrl
+    )
+    // 当前会话若挂的是多清晰度 DASH MPD 源则非空，selectVideoQuality 据此走无缝切换。
+    private var currentSeamlessCatalog: SeamlessQualityCatalog? = null
+    // 无缝会话当前生效的编码（初始=目录初始值；渲染器回读真实值后更新，见 onSeamlessVideoTrackChanged）。
+    private var currentSeamlessCodec: VideoCodecEnum? = null
+    private val seamlessQualitySwitchEnabled: Boolean
+        get() = com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
+            .load(appContext).seamlessQualitySwitch
     private val douyinWarmupManager = DouyinPlaybackWarmupManager(
         dataSourceFactory = cacheDataSourceFactory,
         urlNormalizer = VideoPlayerUrlUtils::normalizeUrl
@@ -1079,8 +1094,45 @@ class VideoPlayerViewModel(
         requestedQualityId = quality.id
         _selectedQuality.value = quality
         savePlayerSnapshot()
+        // 无缝切换：当前挂的是多清晰度 DASH MPD 且目标档在同编码下可用时，
+        // 只改 TrackSelection 目标并丢弃旧档缓冲，不重建 MediaSource、不黑屏不重seek。
+        val catalog = currentSeamlessCatalog
+        val codec = currentSeamlessCodec
+        if (catalog != null && codec != null && catalog.hasTrack(quality.id, codec)) {
+            capturePlaybackSnapshot(currentPositionMs, playWhenReady)
+            SeamlessQualitySelector.setTarget(quality.id, codec.id)
+            currentDashSession = currentDashSession?.copy(actualQualityId = quality.id)
+            AppLog.i(
+                TAG,
+                "seamless quality switch qn=${quality.id} codec=${codec.id} " +
+                    "pos=${currentPositionMs}ms available=${catalog.qualityIds}"
+            )
+            return
+        }
         capturePlaybackSnapshot(currentPositionMs, playWhenReady)
         loadPlayUrl(preferLastPlayTime = false, replaceInPlace = true)
+    }
+
+    /**
+     * 渲染器层真实生效的视频轨回读（来自 onVideoInputFormatChanged 解析 Representation id）。
+     * 初始挂载或目标档不可用时实际档可能与期望不一致，以实际为准纠正 UI 选择态与心跳档位。
+     */
+    fun onSeamlessVideoTrackChanged(qn: Int, codecid: Int) {
+        if (currentSeamlessCatalog == null) return
+        val codec = VideoCodecEnum.fromId(codecid)
+        currentSeamlessCodec = codec
+        if (qn > 0) {
+            currentDashSession = currentDashSession?.copy(actualQualityId = qn, actualCodec = codec)
+            val selected = _selectedQuality.value
+            if (selected?.id != qn) {
+                val actual = VideoQuality.fromId(qn)
+                if (actual.id == qn) {
+                    _selectedQuality.value = actual
+                    requestedQualityId = qn
+                    AppLog.i(TAG, "seamless actual track qn=$qn codec=$codec corrected from=${selected?.id}")
+                }
+            }
+        }
     }
 
     fun selectAudioQuality(
@@ -1409,6 +1461,7 @@ class VideoPlayerViewModel(
         }
 
         var dashMediaSource: MediaSource? = null
+        var rebuiltSeamlessCatalog: SeamlessQualityCatalog? = null
         if (useDashPlayback) {
             val dashRoutePlan = streamResolver.resolveDashRoutePlan(
                 playInfo = playInfo,
@@ -1424,6 +1477,26 @@ class VideoPlayerViewModel(
                     val sourceWithState = dashMediaSourceFactory.createMediaSourceWithCdnState(route)
                     dashMediaSource = sourceWithState.mediaSource
                     currentCdnStates = sourceWithState.cdnFailoverStates
+                    if (seamlessQualitySwitchEnabled) {
+                        val seamlessCatalog = streamResolver.buildSeamlessCatalog(
+                            playInfo = playInfo,
+                            initialQualityId = selectionSnapshot.selectedQualityId ?: return,
+                            selectedAudioId = selectionSnapshot.selectedAudioId,
+                            initialCodec = route.codec
+                        )
+                        val seamlessSource = seamlessCatalog?.let { catalog ->
+                            runCatching { seamlessDashMediaSourceFactory.createMediaSource(catalog) }
+                                .onFailure { e ->
+                                    AppLog.w(TAG, "seamless rebuild failed, fallback progressive: ${e.message}", e)
+                                }
+                                .getOrNull()
+                        }
+                        if (seamlessSource != null) {
+                            dashMediaSource = seamlessSource.mediaSource
+                            currentCdnStates = seamlessSource.cdnFailoverStates
+                            rebuiltSeamlessCatalog = seamlessSource.catalog
+                        }
+                    }
                     currentDashSession = VideoPlaybackSession(
                         identity = currentDashSession?.identity ?: SessionIdentity(
                             aid = currentAid,
@@ -1465,6 +1538,18 @@ class VideoPlayerViewModel(
             currentCdnStates = progressiveSelection.cdnFailoverStates
         }
         applySelectionSnapshot(selectionSnapshot)
+        // 与 applyPreparedPlayback 同步维护无缝会话状态（切换编码/音轨重建后保持无缝能力）。
+        currentSeamlessCatalog = rebuiltSeamlessCatalog
+        if (rebuiltSeamlessCatalog != null) {
+            currentSeamlessCodec = rebuiltSeamlessCatalog.initialCodec
+            SeamlessQualitySelector.setTarget(
+                rebuiltSeamlessCatalog.initialQualityId,
+                rebuiltSeamlessCatalog.initialCodec.id
+            )
+        } else {
+            currentSeamlessCodec = null
+            SeamlessQualitySelector.clearTarget()
+        }
         _playbackRequest.value = PlaybackRequest(
             mediaSource = mediaSource,
             aid = currentAid,
@@ -1706,6 +1791,10 @@ class VideoPlayerViewModel(
                 )
                 applySelectionSnapshot(cachedPlayback.selectionSnapshot)
                 currentPlayInfo = cachedPlayback.playInfo
+                // zero-overhead 复用：player 上仍挂着同一 MediaSource（可能是多清晰度 MPD），
+                // TrackSelection target 无人改动、保持用户上次选择的档位即可，这里只恢复 VM 侧目录状态。
+                currentSeamlessCatalog = cachedPlayback.seamlessCatalog
+                currentSeamlessCodec = cachedPlayback.seamlessCatalog?.initialCodec
                 val playInfo = cachedPlayback.playInfo
                 val resumePositionMs = if (preferLastPlayTime && !isSteinsGateVideo && currentGraphVersion <= 0L) {
                     val cachedResume = VideoPlayerPlayInfoCache.get(
@@ -2288,6 +2377,7 @@ class VideoPlayerViewModel(
             var dashMediaSource: MediaSource? = null
             var preparedDashSession: VideoPlaybackSession? = null
             var preparedCdnStates: List<VideoPlayerCdnFailoverState> = emptyList()
+            var preparedSeamlessCatalog: SeamlessQualityCatalog? = null
             if (dashPlaybackEnabled) {
                 val dashRoutePlan = streamResolver.resolveDashRoutePlan(
                     playInfo = initialPlayInfo,
@@ -2308,6 +2398,33 @@ class VideoPlayerViewModel(
                         val sourceWithState = dashMediaSourceFactory.createMediaSourceWithCdnState(firstRoute)
                         dashMediaSource = sourceWithState.mediaSource
                         preparedCdnStates = sourceWithState.cdnFailoverStates
+                        // 无缝优先：满足条件时把单档 Progressive+Merging 源替换为多清晰度 DASH MPD 源，
+                        // 后续切档只改 track selection 不重建；构建失败静默回退旧链路。
+                        if (seamlessQualitySwitchEnabled) {
+                            val seamlessCatalog = streamResolver.buildSeamlessCatalog(
+                                playInfo = initialPlayInfo,
+                                initialQualityId = resolvedQualityId,
+                                selectedAudioId = selectionSnapshot.selectedAudioId,
+                                initialCodec = firstRoute.codec
+                            )
+                            if (seamlessCatalog != null) {
+                                val seamlessSource = runCatching {
+                                    seamlessDashMediaSourceFactory.createMediaSource(seamlessCatalog)
+                                }.onFailure { e ->
+                                    AppLog.w(TAG, "seamless source build failed, fallback progressive: ${e.message}", e)
+                                }.getOrNull()
+                                if (seamlessSource != null) {
+                                    dashMediaSource = seamlessSource.mediaSource
+                                    preparedCdnStates = seamlessSource.cdnFailoverStates
+                                    preparedSeamlessCatalog = seamlessSource.catalog
+                                }
+                            } else {
+                                AppLog.i(
+                                    TAG,
+                                    "seamless catalog unavailable cid=${identity.cid} quality=$resolvedQualityId, use progressive merge"
+                                )
+                            }
+                        }
                         preparedDashSession = VideoPlaybackSession(
                             identity = SessionIdentity(
                                 aid = identity.aid,
@@ -2385,7 +2502,8 @@ class VideoPlayerViewModel(
                 requestDurationMs = System.currentTimeMillis() - requestStartMs,
                 startupTraceId = startupTraceId,
                 startupTraceStartElapsedMs = startupTraceStartElapsedMs,
-                cdnStates = preparedCdnStatesFinal
+                cdnStates = preparedCdnStatesFinal,
+                seamlessCatalog = preparedSeamlessCatalog
             )
         }
     }
@@ -2400,6 +2518,16 @@ class VideoPlayerViewModel(
         currentDashSession = preparedPlayback.dashSession
         currentCdnStates = preparedPlayback.cdnStates
         applySelectionSnapshot(preparedPlayback.selectionSnapshot)
+        // 无缝会话状态：挂新源前重置 TrackSelection 目标，避免上一个视频的档位串到新视频。
+        val seamlessCatalog = preparedPlayback.seamlessCatalog
+        currentSeamlessCatalog = seamlessCatalog
+        if (seamlessCatalog != null) {
+            currentSeamlessCodec = seamlessCatalog.initialCodec
+            SeamlessQualitySelector.setTarget(seamlessCatalog.initialQualityId, seamlessCatalog.initialCodec.id)
+        } else {
+            currentSeamlessCodec = null
+            SeamlessQualitySelector.clearTarget()
+        }
         if (preparedPlayback.resumeHintPositionMs != null) {
             didApplyLastPlayPosition = true
         }
@@ -2435,7 +2563,8 @@ class VideoPlayerViewModel(
             cid = preparedPlayback.identity.cid,
             mediaSource = preparedPlayback.mediaSource,
             playInfo = preparedPlayback.playInfo,
-            selectionSnapshot = preparedPlayback.selectionSnapshot
+            selectionSnapshot = preparedPlayback.selectionSnapshot,
+            seamlessCatalog = preparedPlayback.seamlessCatalog
         )
         PlaybackStartupTrace.log(
             traceId = preparedPlayback.startupTraceId,
