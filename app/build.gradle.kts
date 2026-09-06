@@ -54,8 +54,8 @@ android {
         applicationId = (project.findProperty("applicationId") as? String) ?: "com.tutu.myblbl"
         minSdk = 23
         targetSdk = 35
-        versionCode = 78
-        versionName = "1.6.18"
+        versionCode = 79
+        versionName = "1.6.19"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
