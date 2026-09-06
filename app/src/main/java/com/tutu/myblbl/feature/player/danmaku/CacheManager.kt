@@ -64,6 +64,7 @@ internal class CacheManager(
         private const val MSG_CLEAR = 2002
         private const val MSG_RELEASE = 2099
         private const val MSG_FLUSH_RELEASED = 2003
+        private const val MSG_RECYCLE_ZERO = 2004
 
         private const val CACHE_POOL_MAX_COUNT: Int = 72
 
@@ -239,6 +240,25 @@ internal class CacheManager(
     }
 
     /**
+     * 快照租约直达释放（action 线程调用，publishSnapshot 时归还可写缓冲的租约）：
+     * 只递减引用计数，不投递帧号延迟队列。归零时该 entry 必然不在 latest 快照的租约
+     * 持有中（latest 的租约会维持计数 >0），主线程只读 latest，不存在"画到已回收
+     * bitmap"的窗口；此时计数已归零，不能走 processReleasedEntry（会二次递减），
+     * 由 [MSG_RECYCLE_ZERO] 在 cache 线程直接入池/回收。
+     *
+     * 此前快照租约也走 enqueueRelease 环形队列：洪峰时快照每帧重建，每次全部同屏
+     * 条目 入队→主线程 drain（每条一次 synchronized）→cache 线程 flush，三线程
+     * 每秒数千次接力空转（计数归零前的 release 无回收副作用），是与 blbl 流畅度
+     * 差距的主要每帧成本之一。
+     */
+    fun releaseSnapshotLease(entry: SharedCacheEntry?) {
+        if (entry == null || entry.isRecycled) return
+        if (entry.release()) {
+            runCatching { handler.obtainMessage(MSG_RECYCLE_ZERO, entry).sendToTarget() }
+        }
+    }
+
+    /**
      * 延迟回收队列：主线程（drainReleasedBitmaps）只做出队并转投本队列，
      * 真正的 pool 归还/bitmap.recycle()（触发 NativeAllocationRegistry 与驱动侧纹理释放，
      * 突发时可达每帧 24 条）由 cache 线程在 MSG_FLUSH_RELEASED 中执行，避免顶到 vsync。
@@ -289,6 +309,12 @@ internal class CacheManager(
         if (entry.isRecycled) return
         // release() 归零说明没有其他持有者（item 已退场 + 共享表已淘汰），可安全回收。
         if (!entry.release()) return
+        recycleEntryBitmap(entry)
+    }
+
+    /** 已归零条目的实际回收（入池或 recycle）；isRecycled 防重入。 */
+    private fun recycleEntryBitmap(entry: SharedCacheEntry) {
+        if (entry.isRecycled) return
         val bmp = entry.bitmap
         if (bmp.isRecycled) return
         val pooled = pool.tryPut(bmp)
@@ -325,6 +351,12 @@ internal class CacheManager(
                     if (synchronized(recycleLock) { recycleQueue.isNotEmpty() }) {
                         flushRecycleQueueAsync()
                     }
+                }
+
+                MSG_RECYCLE_ZERO -> {
+                    // releaseSnapshotLease 归零直达：计数已归零，只入池/回收，不再递减。
+                    val entry = msg.obj as? SharedCacheEntry ?: return
+                    recycleEntryBitmap(entry)
                 }
                 MSG_CLEAR -> {
                     recycleFlushPosted.set(false)

@@ -73,8 +73,8 @@ internal fun adjustedTimelineIndexAfterPrefixTrim(index: Int, droppedCount: Int)
 
 /** Whether the player needs vsync animation now, or can sleep until a timeline event. */
 internal data class DanmakuFrameSchedule(
-    val animate: Boolean,
-    val nextWakeAtMs: Int?,
+    var animate: Boolean,
+    var nextWakeAtMs: Int?,
 )
 
 internal fun writeDanmakuRenderOrder(
@@ -249,6 +249,8 @@ internal class DanmakuEngine(
 
     // ---- Render snapshot (double buffer) ----
     private val snapshots = Array(3) { RenderSnapshot() }
+    /** frameSchedule 复用输出实例（action 线程独占写读）。 */
+    private val frameScheduleOut = DanmakuFrameSchedule(animate = true, nextWakeAtMs = null)
     @Volatile private var latestSnapshot: RenderSnapshot = snapshots[0]
     private var snapshotDirty: Boolean = true
     private var rebuildRequested: Boolean = true
@@ -897,13 +899,15 @@ internal class DanmakuEngine(
 
     override fun frameSchedule(): DanmakuFrameSchedule {
         // This method is called only from the action thread, immediately after act().
+        // 复用输出实例（action 线程单线程写读，Player 同线程消费），避免每帧分配。
         if (active.isNotEmpty() || pending.isNotEmpty()) {
-            return DanmakuFrameSchedule(animate = true, nextWakeAtMs = null)
+            frameScheduleOut.animate = true
+            frameScheduleOut.nextWakeAtMs = null
+            return frameScheduleOut
         }
-        return DanmakuFrameSchedule(
-            animate = false,
-            nextWakeAtMs = items.getOrNull(index)?.timeMs(),
-        )
+        frameScheduleOut.animate = false
+        frameScheduleOut.nextWakeAtMs = items.getOrNull(index)?.timeMs()
+        return frameScheduleOut
     }
 
     override fun replaceDanmakusFrom(minTimeMs: Long, list: List<Danmaku>) {
@@ -1131,10 +1135,9 @@ internal class DanmakuEngine(
 
     /** The writable snapshot has no UI reader, so its old cache leases may now be returned. */
     private fun releaseSnapshotCacheLeases(snapshot: RenderSnapshot) {
-        val releaseAt = currentUiFrameId + 1
         for (i in 0 until snapshot.count) {
             val entry = snapshot.cacheEntries[i] ?: continue
-            cacheManager.enqueueRelease(entry, releaseAtFrameId = releaseAt)
+            cacheManager.releaseSnapshotLease(entry)
         }
     }
 
@@ -1778,8 +1781,10 @@ internal class DanmakuEngine(
 
         // ---- 1) 在场未缓存条目（最老等待者优先）----
         // scanBudget 限定单帧扫描圈数：退避未到期的条目放回队尾，避免空转循环。
+        // 上限独立于队列长度：表情位图未就绪的条目会持续回队（每帧重查就绪状态），
+        // 若扫描预算 = 队列长度，这类条目会占满整帧预算，饿死排在后面的普通条目。
         val nowMsForRetry = currentPositionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        var scanBudget = uncachedActive.size
+        var scanBudget = minOf(uncachedActive.size, MAX_UNCACHED_SCAN_PER_FRAME)
         while (uncachedActive.isNotEmpty() && requested < MAX_CACHE_REQUESTS_PER_FRAME && scanBudget-- > 0) {
             if (cacheManager.queueDepth() >= MAX_CACHE_QUEUE_DEPTH) return
             val item = uncachedActive.removeFirst()
@@ -2229,6 +2234,7 @@ internal class DanmakuEngine(
         private const val MAX_CACHE_REQUESTS_PER_FRAME = 8
         private const val MAX_PREFETCH_REQUESTS_PER_FRAME = 8
         private const val MAX_CACHE_QUEUE_DEPTH = 48
+        private const val MAX_UNCACHED_SCAN_PER_FRAME = 32
         private const val MAX_CACHE_WAIT_MS = 1_600
 
         /** 建图失败（预算耗尽）后的重试退避：给释放路径时间回填位图池。 */
