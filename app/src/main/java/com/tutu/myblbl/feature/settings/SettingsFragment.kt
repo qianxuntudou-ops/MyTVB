@@ -1807,6 +1807,34 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 extraLayoutSpace[0] = extraLayoutSpacePx
                 extraLayoutSpace[1] = extraLayoutSpacePx
             }
+
+            // 列表首尾按上/下键时焦点留在原地，不回退到全局搜索甩到列表外
+            override fun onInterceptFocusSearch(focused: View, direction: Int): View? {
+                val position = itemLayoutPosition(focused)
+                if (position != RecyclerView.NO_POSITION) {
+                    if (direction == View.FOCUS_UP && position == 0) {
+                        return focused
+                    }
+                    if (direction == View.FOCUS_DOWN && position == itemCount - 1) {
+                        return focused
+                    }
+                }
+                return super.onInterceptFocusSearch(focused, direction)
+            }
+
+            /** 焦点可能在 item 内部的 click_view 上，向上找到 RecyclerView 的直接 child 再取位置。 */
+            private fun itemLayoutPosition(focused: View): Int {
+                var target: View = focused
+                var parent = target.parent
+                while (parent is ViewGroup && parent !is RecyclerView) {
+                    target = parent
+                    parent = target.parent
+                }
+                if (parent !is RecyclerView) {
+                    return RecyclerView.NO_POSITION
+                }
+                return getPosition(target)
+            }
         }
     }
 

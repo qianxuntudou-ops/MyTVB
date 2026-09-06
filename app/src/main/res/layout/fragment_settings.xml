@@ -169,6 +169,7 @@
             android:paddingTop="@dimen/px20"
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px20"
+            android:nextFocusDown="@id/button_setting_device"
             app:layout_constraintEnd_toEndOf="@+id/button_setting_tv"
             app:layout_constraintStart_toStartOf="@+id/button_setting_tv"
             app:layout_constraintTop_toBottomOf="@+id/button_setting_tv">
