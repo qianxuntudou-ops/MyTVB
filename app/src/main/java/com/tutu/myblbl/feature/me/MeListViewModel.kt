@@ -15,7 +15,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MeListViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val feedPrewarmer: com.tutu.myblbl.repository.PersonalFeedPrewarmer
 ) : ViewModel() {
     private var lastLoadedAt = 0L
 
@@ -90,7 +91,12 @@ class MeListViewModel(
             AppLog.d("MePerf", "loadHistory: 开始请求, page=$page, viewAt=$historyCursorViewAt")
 
             try {
-                userRepository.getHistory(historyCursorViewAt, pageSize)
+                // 预取命中时直接用内存结果；注意先求值成完整的 Result 再链 onSuccess，
+                // 否则 ?: 的优先级会让命中分支跳过整个成功处理链。
+                val response = (if (page == 1) feedPrewarmer.takeHistory() else null)
+                    ?.let { Result.success(it) }
+                    ?: userRepository.getHistory(historyCursorViewAt, pageSize)
+                response
                     .onSuccess { response ->
                     if (!isActiveRequest(requestId)) {
                         AppLog.d("MePerf", "loadHistory: drop stale result, request=$requestId page=$page")
@@ -159,7 +165,10 @@ class MeListViewModel(
             }
 
             try {
-                userRepository.getLaterWatch()
+                val response = feedPrewarmer.takeLaterWatch()
+                    ?.let { Result.success(it) }
+                    ?: userRepository.getLaterWatch()
+                response
                     .onSuccess { response ->
                     if (!isActiveRequest(requestId)) {
                         AppLog.d("MePerf", "loadLaterWatch: drop stale result, request=$requestId")

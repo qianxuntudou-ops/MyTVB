@@ -102,6 +102,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     private val mainNavigationViewModel: MainNavigationViewModel by viewModels()
     private val sessionGateway: NetworkSessionGateway by inject()
     private val userRepository: UserRepository by inject()
+    private val personalFeedPrewarmer: com.tutu.myblbl.repository.PersonalFeedPrewarmer by inject()
     private var currentFragmentIndex = -1
     private var exitTime: Long = 0
     private val exitInterval = 2000L
@@ -246,6 +247,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 )
                 revealStartupShell("first_pre_draw")
                 scheduleFastStartupAvatarRefresh()
+                // 壳首帧已提交，立刻在 IO 线程预热网络并发出推荐首页请求。
+                // 首页 Fragment 要再过两帧才会 loadInitial，loadSharedFirstPage 会直接
+                // await 这条 in-flight 请求，500ms 级的网络 RTT 与 Fragment 创建并行。
+                // （133b814a 壳层先行重构时误删了此调用，导致首屏请求完全串行在 UI 后面。）
+                (application as? MyBLBLApplication)?.scheduleStartupFirstPagePreload(delayMillis = 0L)
                 Choreographer.getInstance().postFrameCallback {
                     binding.root.post {
                         attachInitialContentAfterShellDraw()
@@ -609,6 +615,18 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             }
             .addTask("imageCdnPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 2500L) {
                 ImageLoader.prewarmCdn()
+            }
+            // 个人数据预取：历史/稍后观看/收藏夹列表都是点进 tab 才发请求，真机 RTT 下
+            // 用户要干等整个网络往返。首屏稳定后（1.8s）后台预取第一页，进"我的"直接渲染。
+            .addTask("personalFeedPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 1800L) {
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        (application as? MyBLBLApplication)?.ensureDataRuntimeReady("personalFeedPrewarm")
+                    }
+                    if (sessionGateway.isLoggedIn()) {
+                        personalFeedPrewarmer.prewarm()
+                    }
+                }
             }
             // player 与 security 预热放 IDLE 阶段：首页 firstPreDraw 后的空闲间隙立即触发，
             // 远早于 DELAYED 3-3.5s。实测用户常在启动后 3s 左右点视频，DELAYED 3s/3.5s 会

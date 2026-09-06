@@ -544,6 +544,27 @@ object ContentFilter {
 
     private val CONTEXTUAL_RISK_KEYWORDS_LOWER = normalizeKeywords(CONTEXTUAL_RISK_KEYWORDS)
 
+    // 关键词匹配走 Aho-Corasick 自动机：数百个词对每条标题/简介逐个 contains
+    // 实测 22 条视频 50~60ms（每次刷新/翻页都付），自动机一遍扫描 <1ms。
+    // 词表为编译期常量，首次使用时构建一次（by lazy），语义与逐词 contains 等价。
+    private val TITLE_AUTOMATON by lazy { AhoCorasick(TITLE_BLOCKED_KEYWORDS_LOWER) }
+    private val DESC_AUTOMATON by lazy { AhoCorasick(DESC_BLOCKED_KEYWORDS_LOWER) }
+    private val TAG_AUTOMATON by lazy { AhoCorasick(TAG_BLOCKED_KEYWORDS_LOWER) }
+    private val CONTEXTUAL_SUBJECT_AUTOMATON by lazy { AhoCorasick(CONTEXTUAL_SUBJECT_KEYWORDS_LOWER) }
+    private val CONTEXTUAL_RISK_AUTOMATON by lazy { AhoCorasick(CONTEXTUAL_RISK_KEYWORDS_LOWER) }
+
+    /**
+     * 提前构建关键词自动机（首启一次性 ~20ms）。启动预加载协程在等首屏接口
+     * 响应的空闲期调用，避免首次 filterVideos 在数据返回后的关键路径上付这笔构建成本。
+     */
+    fun prewarm() {
+        TITLE_AUTOMATON
+        DESC_AUTOMATON
+        TAG_AUTOMATON
+        CONTEXTUAL_SUBJECT_AUTOMATON
+        CONTEXTUAL_RISK_AUTOMATON
+    }
+
     private val BLOCKED_TYPE_NAMES_LOWER = VIDEO_BLOCKED_TYPE_NAMES
         .map { it.trim().lowercase() }
         .filter { it.isNotEmpty() }
@@ -737,7 +758,12 @@ object ContentFilter {
         val blockedVideoKeys = getBlockedVideoKeys(context)
         val blockedUpNames = getBlockedUpNames(context)
         val minorProtectionEnabled = isMinorProtectionEnabled(context)
+        val t1 = SystemClock.elapsedRealtime()
+        var titleChars = 0
+        var descChars = 0
         val result = videos.filter { video ->
+            titleChars += video.title?.length ?: 0
+            descChars += video.desc?.length ?: 0
             !isVideoBlockedFast(
                 blockedVideoKeys = blockedVideoKeys,
                 blockedUpNames = blockedUpNames,
@@ -755,7 +781,13 @@ object ContentFilter {
         }
         val elapsed = SystemClock.elapsedRealtime() - t0
         if (elapsed > 5) {
-            AppLog.i("ContentFilter", "filterVideos ${videos.size}→${result.size} elapsed=${elapsed}ms")
+            AppLog.i(
+                "ContentFilter",
+                "filterVideos ${videos.size}→${result.size} elapsed=${elapsed}ms " +
+                    "prepare=${t1 - t0}ms scan=${SystemClock.elapsedRealtime() - t1}ms " +
+                    "minor=$minorProtectionEnabled keys=${blockedVideoKeys.size} ups=${blockedUpNames.size} " +
+                    "titleChars=$titleChars descChars=$descChars"
+            )
         }
         return result
     }
@@ -788,7 +820,7 @@ object ContentFilter {
         if (!isMinorProtectionEnabled(context)) return false
         val keywordLower = keyword.trim().lowercase()
         if (keywordLower.isEmpty()) return false
-        return containsAny(keywordLower, TITLE_BLOCKED_KEYWORDS_LOWER)
+        return TITLE_AUTOMATON.containsAny(keywordLower)
     }
 
     fun isSearchItemBlocked(context: Context, item: SearchItemModel): Boolean {
@@ -816,7 +848,7 @@ object ContentFilter {
         if (tags.isNullOrEmpty()) return false
         return tags.any { tag ->
             val tagName = tag.tagName.trim().lowercase()
-            tagName.isNotEmpty() && containsAny(tagName, TAG_BLOCKED_KEYWORDS_LOWER)
+            tagName.isNotEmpty() && TAG_AUTOMATON.containsAny(tagName)
         }
     }
 
@@ -825,20 +857,20 @@ object ContentFilter {
         // 归一化后再匹配：让"丝 袜""ｓｅｘｙ""胆小 勿入"等变体失效。
         // 仅做安全的字符变换（去空白/全角转半角/小写），不做拼音谐音模糊匹配，避免误伤。
         val normalized = normalizeForMatch(titleLower)
-        if (containsAny(normalized, TITLE_BLOCKED_KEYWORDS_LOWER)) return true
+        if (TITLE_AUTOMATON.containsAny(normalized)) return true
         return containsContextualRiskFast(normalized)
     }
 
     private fun shouldBlockDesc(descLower: String): Boolean {
         if (descLower.isEmpty()) return false
         val normalized = normalizeForMatch(descLower)
-        if (containsAny(normalized, DESC_BLOCKED_KEYWORDS_LOWER)) return true
+        if (DESC_AUTOMATON.containsAny(normalized)) return true
         return containsContextualRiskFast(normalized)
     }
 
     private fun containsContextualRiskFast(valueLower: String): Boolean {
-        return containsAny(valueLower, CONTEXTUAL_SUBJECT_KEYWORDS_LOWER) &&
-            containsAny(valueLower, CONTEXTUAL_RISK_KEYWORDS_LOWER)
+        return CONTEXTUAL_SUBJECT_AUTOMATON.containsAny(valueLower) &&
+            CONTEXTUAL_RISK_AUTOMATON.containsAny(valueLower)
     }
 
     /**
@@ -857,10 +889,6 @@ object ContentFilter {
             }
         }
         return sb.toString()
-    }
-
-    private fun containsAny(valueLower: String, keywordsLower: Collection<String>): Boolean {
-        return keywordsLower.any { valueLower.contains(it) }
     }
 
     private fun normalizeKeywords(keywords: Collection<String>): List<String> {

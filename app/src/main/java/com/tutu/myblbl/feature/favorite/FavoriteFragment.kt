@@ -56,6 +56,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     private val sessionGateway: SessionStateRepository by inject()
     private val favoriteRepository: FavoriteRepository by inject()
     private val userRepository: UserRepository by inject()
+    private val feedPrewarmer: com.tutu.myblbl.repository.PersonalFeedPrewarmer by inject()
     private lateinit var adapter: FavoriteFolderAdapter
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
     private var embedded = false
@@ -214,7 +215,9 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             }
 
             val result = try {
-                favoriteRepository.getFavoriteFolders(mid)
+                feedPrewarmer.takeFolders()
+                    ?.let { Result.success(it) }
+                    ?: favoriteRepository.getFavoriteFolders(mid)
             } catch (e: CancellationException) {
                 throw e
             }
