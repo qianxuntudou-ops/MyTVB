@@ -10,6 +10,7 @@ import android.view.animation.AnimationUtils
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
@@ -162,17 +163,24 @@ class VideoPlayerOverlayController(
         keepControllerVisibleForOverlay()
         uiCoordinator.transition(UiEvent.PanelOpened(PanelType.EPISODE))
 
-        // Dialog 层兜底：焦点在视频列表内时按返回不关弹窗，改回分组 tab。
-        // 列表引用与回 tab 动作在下方初始化后才有值，先以可空引用承接。
+        // BACK 拦截：AppCompat 的 OnBackPressedDispatcher 会在窗口层截走 BACK、
+        // 不经过 view 树与 onKeyDown，必须用 callback 注册才能拦截。
+        // 焦点在视频列表内 → 回分组 tab 不关弹窗；否则走默认关闭。
         var seasonDialogRef: SeasonEpisodeDialog? = null
         var recyclerViewRef: RecyclerView? = null
         var backToTabAction: (() -> Unit)? = null
+        fun isFocusInsideSeasonList(): Boolean =
+            isFocusInsideRecyclerView(seasonDialogRef?.window?.currentFocus, recyclerViewRef)
         val dialog = SeasonEpisodeDialog(
             activity,
-            isFocusInsideList = {
-                isFocusInsideRecyclerView(seasonDialogRef?.window?.currentFocus, recyclerViewRef)
-            },
-            onBackInsideList = { backToTabAction?.invoke() }
+            backPressedHandler = {
+                if (isFocusInsideSeasonList()) {
+                    backToTabAction?.invoke()
+                    false
+                } else {
+                    true
+                }
+            }
         ).also { seasonDialogRef = it }
         dialog.setCanceledOnTouchOutside(true)
         // 贴屏幕右侧、垂直居中；宽高由布局根节点固定（px600×px935），
@@ -293,7 +301,6 @@ class VideoPlayerOverlayController(
         )
 
         dialog.setOnDismissListener {
-            com.tutu.myblbl.core.common.log.AppLog.d("SeasonPanel", "dialog dismissed (用户按返回关闭)")
             uiCoordinator.transition(UiEvent.PanelClosed)
             if (isViewActive()) {
                 restoreControllerAfterOverlay()
@@ -306,10 +313,6 @@ class VideoPlayerOverlayController(
                 requestInitialSeasonFocus()
             }
         }
-        com.tutu.myblbl.core.common.log.AppLog.d(
-            "SeasonPanel",
-            "dialog shown groups=${groups.size} activeGroup=$activeGroup tabs=${tabViews.size}"
-        )
     }
 
     private fun buildSeasonTab(label: String): AppCompatTextView {
@@ -662,39 +665,28 @@ class VideoPlayerOverlayController(
 }
 
 /**
- * 合集选集弹窗。焦点落在视频列表内时拦截返回键：回调 [onBackInsideList]
- * 把焦点送回分组 tab，而不是关闭弹窗；焦点在 tab 或其它位置时正常关闭。
+ * 合集选集弹窗。BACK 键由 AppCompat 的 OnBackPressedDispatcher 在窗口层
+ * 直接消费（不经过 view 树与 onKeyDown），所以通过 [backPressedHandler]
+ * 注册 callback 拦截：返回 false 表示已处理（回 tab 不关弹窗），
+ * 返回 true 走默认关闭流程。
  */
 private class SeasonEpisodeDialog(
     context: AppCompatActivity,
-    private val isFocusInsideList: () -> Boolean,
-    private val onBackInsideList: () -> Unit
+    backPressedHandler: () -> Boolean
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        val inside = isFocusInsideList()
-        com.tutu.myblbl.core.common.log.AppLog.d(
-            "SeasonPanel",
-            "dialog onKeyDown keyCode=$keyCode action=${event.action} insideList=$inside focus=${window?.currentFocus?.let { it::class.java.simpleName } ?: "null"}"
+    init {
+        onBackPressedDispatcher.addCallback(
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (backPressedHandler()) {
+                        // 默认行为：关闭弹窗（等价 onBackPressed → cancel）
+                        this@SeasonEpisodeDialog.cancel()
+                    }
+                    // 否则已由 handler 处理（焦点回 tab），弹窗保持打开
+                }
+            }
         )
-        if (keyCode == KeyEvent.KEYCODE_BACK && inside) {
-            // 消费 DOWN，避免系统进入返回键 tracking 流程
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        val inside = isFocusInsideList()
-        com.tutu.myblbl.core.common.log.AppLog.d(
-            "SeasonPanel",
-            "dialog onKeyUp keyCode=$keyCode action=${event.action} insideList=$inside"
-        )
-        if (keyCode == KeyEvent.KEYCODE_BACK && inside) {
-            onBackInsideList()
-            return true
-        }
-        return super.onKeyUp(keyCode, event)
     }
 }
 

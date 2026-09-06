@@ -96,11 +96,7 @@ class PlayerSeasonEpisodePanelAdapter(
             // 列表内按返回键回到分组 tab（不关闭弹窗）；DOWN/UP 都消费，
             // 防止 DOWN 穿透后 Dialog 层开始 tracking、UP 时关闭弹窗。
             // 第一项按“上”同理回 tab。
-            binding.clickView.setOnKeyListener { v, keyCode, event ->
-                com.tutu.myblbl.core.common.log.AppLog.d(
-                    "SeasonPanel",
-                    "item onKey v=${v::class.java.simpleName} keyCode=$keyCode action=${event.action} pos=$bindingAdapterPosition repeat=${event.repeatCount}"
-                )
+            binding.clickView.setOnKeyListener { _, keyCode, event ->
                 when (keyCode) {
                     KeyEvent.KEYCODE_BACK -> {
                         if (event.action == KeyEvent.ACTION_DOWN ||
