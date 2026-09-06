@@ -367,6 +367,15 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         super.onHiddenChanged(hidden)
         if (!hidden) {
             val controller = tvFocusController ?: return
+            // tab 切换 show 回来时，焦点往往已有效落在侧边栏按钮等列表外部 view 上
+            // （用户刚点过 tab 按钮），此时不应把焦点抢回列表；仅当焦点为空或无效
+            // （如 overlay 关闭后焦点丢失）时才走强制恢复。
+            val focused = view?.rootView?.findFocus()
+            if (focused != null && focused.isShown && focused.isFocusable &&
+                !controller.hasFocusInList()
+            ) {
+                return
+            }
             controller.restoreFocusAfterReturn(
                 onRestored = {},
                 onFailed = { tvFocusController?.ensureValidFocus("shown") }

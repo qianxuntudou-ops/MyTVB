@@ -3,6 +3,12 @@ package com.tutu.myblbl.core.ui.focus
 import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AbsListView
+import android.widget.HorizontalScrollView
+import android.widget.ScrollView
+import androidx.core.widget.NestedScrollView
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 
 object SpatialFocusNavigator {
 
@@ -82,7 +88,7 @@ object SpatialFocusNavigator {
         when (view) {
             null -> return
             is ViewGroup -> {
-                if (isEligibleCandidate(view)) {
+                if (isEligibleCandidate(view) && !isScrollContainer(view)) {
                     out += view
                 }
                 for (index in 0 until view.childCount) {
@@ -95,6 +101,20 @@ object SpatialFocusNavigator {
                 }
             }
         }
+    }
+
+    /**
+     * 滚动容器的 focusable 是框架默认值，不代表它是合法的焦点目标：
+     * 焦点若落在容器自身上没有任何视觉反馈（表现为焦点"消失"），
+     * 因此空间搜索只收集其子项，跳过容器本身。
+     */
+    private fun isScrollContainer(view: View): Boolean {
+        return view is RecyclerView ||
+            view is ViewPager2 ||
+            view is AbsListView ||
+            view is ScrollView ||
+            view is HorizontalScrollView ||
+            view is NestedScrollView
     }
 
     private fun View.visibleRectOnScreen(): Rect? {
