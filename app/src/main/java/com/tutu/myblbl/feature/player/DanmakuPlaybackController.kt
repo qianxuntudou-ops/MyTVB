@@ -1230,11 +1230,23 @@ internal class DanmakuPlaybackController(
                     return@withContext
                 }
                 if (payload.regularItems.isEmpty()) {
+                    // 真空段（该 6 分钟确实无弹幕）与风控空段在此不可区分，但必须按
+                    // "已加载"落账终止重试：否则 onDanmakuSegmentChanged 每次位置回调都会
+                    // 重拉同一空段，而网关把 1..64 字节空段判为可疑后每次都 forceUaRefresh
+                    // 刷 UA——高频 UA 抖动本身会触发 B 站风控升级，把"局部真空段"放大成
+                    // "全会话弹幕断供"（长视频播着播着全没弹幕的根因之一）。
+                    // 空段无数据可发布；也不能走 replace 发布路径（会把已发布快照清空）。
+                    danmakuSegmentPayloads[segmentIndex] = payload
+                    danmakuLoadedSegments.add(segmentIndex)
+                    danmakuSegmentCoveredUntilMs[segmentIndex] = segmentIndex.toLong() * DANMAKU_SEGMENT_DURATION_MS
+                    if (shouldPublish) {
+                        danmakuPublishedSegments.add(segmentIndex)
+                    }
                     PlaybackStartupTrace.log(
                         traceId = context.startupTraceId,
                         startElapsedMs = context.startupTraceStartElapsedMs,
-                        step = "danmaku_segment_load_empty",
-                        message = "cid=$cid segment=$segmentIndex"
+                        step = "danmaku_segment_empty_finalized",
+                        message = "cid=$cid segment=$segmentIndex publish=$shouldPublish"
                     )
                     return@withContext
                 }

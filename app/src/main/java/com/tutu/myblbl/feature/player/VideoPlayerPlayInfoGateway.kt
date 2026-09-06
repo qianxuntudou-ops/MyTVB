@@ -27,6 +27,9 @@ import android.os.SystemClock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
+/** 可疑段预热的 UA 强制刷新最小间隔。 */
+private const val SUSPICIOUS_UA_REFRESH_MIN_INTERVAL_MS = 60_000L
+
 class VideoPlayerPlayInfoGateway(
     private val apiService: ApiService,
     private val noCookieApiService: ApiService,
@@ -47,6 +50,14 @@ class VideoPlayerPlayInfoGateway(
         val expectedCount: Int,
         val minimumUsefulCount: Int
     )
+
+    /**
+     * 可疑段触发的 forceUaRefresh 预热节流时间点。真空段（该 6 分钟本来就没弹幕，
+     * 1..64 字节）会被误判可疑，若上层持续重试同一空段，这里会以调用频率高频刷新 UA——
+     * 高频 UA 抖动正是 B 站风控的触发特征，会把局部空段放大成全会话弹幕断供。
+     * 任何路径的可疑预热，UA 强制刷新至少间隔 [SUSPICIOUS_UA_REFRESH_MIN_INTERVAL_MS]。
+     */
+    private var lastSuspiciousUaRefreshAtMs: Long = 0L
 
     data class PlayInfoResult(
         val code: Int,
@@ -591,7 +602,13 @@ class VideoPlayerPlayInfoGateway(
             )
         }
 
-        securityGateway.prewarmWebSession(forceUaRefresh = normalProbe != null)
+        // 可疑预热：UA 强制刷新按最小间隔节流（prewarm 本身仍执行，只是不重复换 UA）。
+        val forceUaRefresh = normalProbe != null &&
+            SystemClock.elapsedRealtime() - lastSuspiciousUaRefreshAtMs >= SUSPICIOUS_UA_REFRESH_MIN_INTERVAL_MS
+        if (forceUaRefresh) {
+            lastSuspiciousUaRefreshAtMs = SystemClock.elapsedRealtime()
+        }
+        securityGateway.prewarmWebSession(forceUaRefresh = forceUaRefresh)
         ensureWbiKeys()
 
         if (!hasWbiKeys()) {
