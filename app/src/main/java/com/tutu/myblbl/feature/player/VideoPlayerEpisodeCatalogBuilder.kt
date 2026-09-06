@@ -192,6 +192,19 @@ class VideoPlayerEpisodeCatalogBuilder(
         val archiveBvid = firstOrNull { it.displayBvid.isNotBlank() }?.displayBvid.orEmpty()
         val archiveCover = firstOrNull { it.displayCover.isNotBlank() }?.displayCover.orEmpty()
         val archiveCid = firstOrNull { it.displayCid > 0L }?.displayCid ?: representative.displayCid
+        val archivePubDate = asSequence()
+            .mapNotNull { it.arc?.pubDate?.takeIf { date -> date > 0L } }
+            .firstOrNull()
+            ?: 0L
+        val archivePlayCount = asSequence()
+            .mapNotNull { it.arc?.viewCount?.takeIf { count -> count > 0L } }
+            .firstOrNull()
+            ?: 0L
+        val archiveDanmakuCount = asSequence()
+            .mapNotNull { it.arc?.danmakuCount?.takeIf { count -> count > 0L } }
+            .firstOrNull()
+            ?: 0L
+        val archiveDuration = firstOrNull { it.displayDuration > 0L }?.displayDuration ?: 0L
 
         // 单P（或拿不到分P信息）：维持"一个稿件一项"的形态，标题用稿件名。
         if (candidatePages.size <= 1) {
@@ -207,6 +220,10 @@ class VideoPlayerEpisodeCatalogBuilder(
                     cover = archiveCover,
                     aid = archiveAid,
                     bvid = archiveBvid,
+                    pubDate = archivePubDate,
+                    playCount = archivePlayCount,
+                    danmakuCount = archiveDanmakuCount,
+                    duration = archiveDuration,
                     source = VideoPlayerViewModel.EpisodeCatalogSource.UGC_SEASON
                 )
             )
@@ -230,6 +247,10 @@ class VideoPlayerEpisodeCatalogBuilder(
                 cover = archiveCover,
                 aid = archiveAid,
                 bvid = archiveBvid,
+                pubDate = archivePubDate,
+                playCount = archivePlayCount,
+                danmakuCount = archiveDanmakuCount,
+                duration = archiveDuration,
                 source = VideoPlayerViewModel.EpisodeCatalogSource.UGC_SEASON
             )
         }

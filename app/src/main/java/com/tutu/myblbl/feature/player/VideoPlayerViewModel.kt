@@ -206,6 +206,10 @@ class VideoPlayerViewModel(
         val bvid: String = "",
         val epId: Long = 0L,
         val seasonId: Long = 0L,
+        val pubDate: Long = 0L,
+        val playCount: Long = 0L,
+        val danmakuCount: Long = 0L,
+        val duration: Long = 0L,
         val source: EpisodeCatalogSource = EpisodeCatalogSource.PAGES
     )
 

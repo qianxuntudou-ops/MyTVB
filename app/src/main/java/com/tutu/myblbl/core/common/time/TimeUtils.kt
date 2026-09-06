@@ -49,6 +49,14 @@ object TimeUtils {
         }
     }
 
+    fun formatPubDate(timestamp: Long): String {
+        return if (timestamp > 0) {
+            publishYearFormat.format(Date(timestamp * 1000))
+        } else {
+            ""
+        }
+    }
+
     fun formatHistoryViewTime(timestamp: Long): String {
         if (timestamp <= 0L) {
             return ""
