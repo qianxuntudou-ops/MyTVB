@@ -386,6 +386,13 @@ internal class DanmakuPlayer(
             when (msg.what) {
                 MSG_FRAME_UPDATE -> {
                     if (released || !started) return
+                    // 先注册下一帧 vsync 回调再执行 act（对齐 blbl.cat3399 的注册顺序）：
+                    // act 偶发超过一个 vsync 周期（TV 小核、洪峰测量/轨道分配）时，
+                    // 下一帧仍准时回调；此前 act 完成后才注册，act 慢一拍就错过下一个
+                    // vsync → 实际帧率减半。慢速弹幕（速度档1，12s 滚一屏）被人眼平滑
+                    // 跟踪，帧率不足直接表现为"一顿一顿"。doFrame 内 remove+send 保证
+                    // MSG 不重入；进入空闲时在 runFrameUpdate 里注销回调。
+                    postFrameCallback()
                     runFrameUpdate()
                 }
 
@@ -421,7 +428,10 @@ internal class DanmakuPlayer(
                         )
                     }
                     frameLoopIdle = false
-                    runFrameUpdate()
+                    // 统一走标准帧入口（MSG_FRAME_UPDATE 开头会注册下一帧 vsync 回调）；
+                    // 此前直接 runFrameUpdate，animate=true 分支注册回调的逻辑已上移，
+                    // 不经标准入口会导致帧循环只跑一帧就停。
+                    sendEmptyMessage(MSG_FRAME_UPDATE)
                 }
 
                 MSG_OP_SET -> {
@@ -567,10 +577,12 @@ internal class DanmakuPlayer(
                 val schedule = engineAction.frameSchedule()
                 if (schedule.animate) {
                     frameLoopIdle = false
-                    postFrameCallback()
+                    // 下一帧 vsync 回调已在 MSG_FRAME_UPDATE 开头注册，无需重复。
                 } else {
                     frameLoopIdle = true
                     idleCycleCount.incrementAndGet()
+                    // 进入空闲：注销 vsync 回调（省电），改用 Handler 定时唤醒。
+                    Choreographer.getInstance().removeFrameCallback(frameCallback)
                     schedule.nextWakeAtMs?.let { nextWakeAtMs ->
                         val delayMs = resolveDanmakuIdleWakeDelayMs(
                             nextWakeAtMs = nextWakeAtMs,

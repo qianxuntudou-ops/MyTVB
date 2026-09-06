@@ -638,9 +638,19 @@ internal class DanmakuEngine(
     }
 
     override fun acquireRenderSnapshot(): RenderSnapshot {
+        var spins = 0
         while (true) {
             val candidate = latestSnapshot
-            if (!candidate.tryAcquireRead()) continue
+            if (!candidate.tryAcquireRead()) {
+                // 撞上 action 线程的写窗口：让出 CPU 再试，避免主线程纯忙等。
+                // 写线程被调度延迟（TV 小核繁忙）时，无让步自旋会把等待放大成
+                // 主线程整帧卡顿（掉帧/"一顿一顿"的来源之一）。
+                if (++spins >= 32) {
+                    spins = 0
+                    Thread.yield()
+                }
+                continue
+            }
             if (candidate === latestSnapshot) return candidate
             candidate.releaseRead()
         }
