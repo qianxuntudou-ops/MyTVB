@@ -21,3 +21,7 @@ data class Danmaku(
     val vipGradient: Boolean = false,
     val vipGradientStyle: DanmakuVipGradientStyle = DanmakuVipGradientStyle.NONE,
 )
+
+/** 高赞弹幕（attr bit2）：官方客户端在弹幕头部显示点赞图标。 */
+val Danmaku.isHighLiked: Boolean
+    get() = (attr and (1 shl 2)) != 0

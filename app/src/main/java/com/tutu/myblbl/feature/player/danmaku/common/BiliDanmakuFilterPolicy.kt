@@ -16,7 +16,8 @@ internal object BiliDanmakuFilterPolicy {
         items: List<DmModel>,
         context: DanmakuFilterContext,
         settings: DanmakuSettingsSnapshot?,
-        stage: String
+        stage: String,
+        userFilter: DanmakuUserFilter = DanmakuUserFilter.EMPTY,
     ): List<DmModel> {
         if (items.isEmpty()) return items
         val startedAtNs = System.nanoTime()
@@ -43,7 +44,8 @@ internal object BiliDanmakuFilterPolicy {
             restrictPeriods.isEmpty() &&
             !aiEnabled &&
             playerConfig == DanmuWebPlayerConfigProto() &&
-            settings == null) {
+            settings == null &&
+            userFilter.isEmpty()) {
             return items
         }
 
@@ -52,6 +54,10 @@ internal object BiliDanmakuFilterPolicy {
         var restrictedDropped = 0
         var aiDropped = 0
         var typeDropped = 0
+        var userDropped = 0
+        val userKeywords = userFilter.keywords
+        val userRegexes = userFilter.regexes
+        val blockedMidHashes = userFilter.blockedUserMidHashes
         val filtered = ArrayList<DmModel>(items.size)
         for (item in items) {
             val content = item.content.trim()
@@ -65,6 +71,21 @@ internal object BiliDanmakuFilterPolicy {
             }
             if (reportMatchers.any { it.matches(content) }) {
                 reportDropped++
+                continue
+            }
+            // 云端用户屏蔽：拉黑用户（midHash）/ 屏蔽词 / 正则（B 站账号同步规则）。
+            if (blockedMidHashes.isNotEmpty() && item.midHash.isNotBlank() &&
+                blockedMidHashes.contains(item.midHash.trim().lowercase())
+            ) {
+                userDropped++
+                continue
+            }
+            if (userKeywords.isNotEmpty() && userKeywords.any { content.contains(it) }) {
+                userDropped++
+                continue
+            }
+            if (userRegexes.isNotEmpty() && userRegexes.any { it.containsMatchIn(content) }) {
+                userDropped++
                 continue
             }
             if ((aiEnabled && aiLevel > 0 && shouldDropByAi(item, aiLevel)) ||
@@ -86,7 +107,8 @@ internal object BiliDanmakuFilterPolicy {
                 TAG,
                 "stage=$stage raw=${items.size} kept=${filtered.size} dropped=$dropped " +
                     "blank=$blankOrUnsupported report=$reportDropped restrict=$restrictedDropped " +
-                    "ai=$aiDropped type=$typeDropped serviceAiLevel=$aiLevel localAiLevel=$localAiLevel cost=${costMs}ms"
+                    "ai=$aiDropped type=$typeDropped user=$userDropped " +
+                    "serviceAiLevel=$aiLevel localAiLevel=$localAiLevel cost=${costMs}ms"
             )
         }
         return filtered

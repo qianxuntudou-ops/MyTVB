@@ -8,7 +8,11 @@ import android.util.TypedValue
 import android.content.Context
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.feature.player.danmaku.common.BiliDanmakuStyle
+import com.tutu.myblbl.feature.player.danmaku.common.DanmakuInlineParser
+import com.tutu.myblbl.feature.player.danmaku.emote.DanmakuEmoteRepository
+import com.tutu.myblbl.feature.player.danmaku.emote.EmoteBitmapLoader
 import com.tutu.myblbl.feature.player.danmaku.model.DanmakuCacheState
+import com.tutu.myblbl.feature.player.danmaku.model.DanmakuInlineSegment
 import com.tutu.myblbl.feature.player.danmaku.model.DanmakuItem
 import com.tutu.myblbl.feature.player.danmaku.model.DanmakuKind
 import com.tutu.myblbl.feature.player.danmaku.model.RenderSnapshot
@@ -219,6 +223,8 @@ internal class DanmakuEngine(
 
     @Volatile private var cacheStyleGeneration: Int = 0
     @Volatile private var measureGeneration: Int = 0
+    /** 表情词典版本快照：词典加载/刷新后递增 measureGeneration 使宽度缓存全部失效。 */
+    @Volatile private var engineEmoteVersion: Int = 0
     @Volatile private var debugPendingCount: Int = 0
     @Volatile private var debugNextAtMs: Int? = null
 
@@ -312,6 +318,7 @@ internal class DanmakuEngine(
             val oldTs = textSizePx
             val oldStrokeWidthPx = strokeWidthPx
             val oldTypeface = actionPaint.typeface
+            val oldShowHighLikeIcon = config.showHighLikeIcon
 
             textSizePx = tsPx
             strokeWidthPx = newStrokeWidthPx
@@ -320,7 +327,8 @@ internal class DanmakuEngine(
             actionPaint.textSize = tsPx
             if (actionPaint.typeface != newTypeface) actionPaint.typeface = newTypeface
 
-            val styleChanged = oldTs != tsPx || oldStrokeWidthPx != newStrokeWidthPx || oldTypeface != newTypeface
+            val styleChanged = oldTs != tsPx || oldStrokeWidthPx != newStrokeWidthPx ||
+                oldTypeface != newTypeface || oldShowHighLikeIcon != newConfig.showHighLikeIcon
             if (styleChanged) {
                 cacheStyleGeneration++
                 measureGeneration++
@@ -498,6 +506,14 @@ internal class DanmakuEngine(
                 debugNextAtMs = null
                 publishEmptySnapshot()
                 return
+            }
+
+            // 表情词典版本变化（首载/24h 刷新）：表情 token 命中状态改变 → 宽度与
+            // 内联段解析结果全部失效重算（分段解析结果本身还带 item 级版本对比双保险）。
+            val emoteVersion = DanmakuEmoteRepository.version()
+            if (emoteVersion != engineEmoteVersion) {
+                engineEmoteVersion = emoteVersion
+                measureGeneration++
             }
 
             val outlinePad = outlinePadPx
@@ -1764,6 +1780,11 @@ internal class DanmakuEngine(
             }
             if (hasValidCache(item, style.generation)) continue // 预取已送达
             if (item.cacheState == DanmakuCacheState.Rendering) continue // 已在途
+            if (!inlineImagesReadyOrPrefetch(item)) {
+                // 表情未就绪：放回队尾下轮重查（prefetch 已在检查中触发）。
+                uncachedActive.addLast(item)
+                continue
+            }
             enqueueCacheRequest(item, style)
             requested++
         }
@@ -1784,6 +1805,7 @@ internal class DanmakuEngine(
             if (item.consumed) continue // 替换标记的条目不会再入场（回看会重建游标）
             if (hasValidCache(item, style.generation)) continue
             if (item.cacheState == DanmakuCacheState.Rendering) continue // 已在途
+            if (!inlineImagesReadyOrPrefetch(item)) continue // 表情未就绪：prefetch 已触发，入场后 FIFO 兜底建图
             enqueueCacheRequest(item, style)
             prefetchRequested++
         }
@@ -1798,7 +1820,8 @@ internal class DanmakuEngine(
             cachedStyleOutlinePadPx == outlinePad &&
             cached.textSizePx == textSizePx &&
             cached.strokeWidthPx == strokeWidthPx &&
-            cached.fontWeight == cfg.fontWeight
+            cached.fontWeight == cfg.fontWeight &&
+            cached.showHighLikeIcon == cfg.showHighLikeIcon
         ) {
             return cached
         }
@@ -1809,6 +1832,7 @@ internal class DanmakuEngine(
                 strokeWidthPx = strokeWidthPx,
                 outlinePadPx = outlinePad,
                 generation = gen,
+                showHighLikeIcon = cfg.showHighLikeIcon,
             )
         cachedStyle = style
         cachedStyleGeneration = gen
@@ -2043,14 +2067,96 @@ internal class DanmakuEngine(
             return item.measuredWidthPx
         }
         val text = item.data.text
-        val width = if (text.isBlank()) {
-            outlinePad * 2f
-        } else {
-            actionPaint.measureText(text) + outlinePad * 2f
+        val width = when {
+            text.isBlank() -> outlinePad * 2f
+            !needsInlineSegments(item) -> actionPaint.measureText(text) + outlinePad * 2f
+            else -> measureTextWidthWithInlineSegments(item, outlinePad)
         }
         item.measuredWidthPx = width
         item.measureGeneration = measureGeneration
         return width
+    }
+
+    /** 是否需要分段解析：高赞图标（开关开 + attr 命中）或文本可能含表情 token；VIP 渐变走整行贴图渲染。 */
+    private fun needsInlineSegments(item: DanmakuItem): Boolean {
+        val data = item.data
+        if (data.vipGradient) return false
+        return (config.showHighLikeIcon && data.isHighLiked) || data.text.indexOf('[') >= 0
+    }
+
+    /**
+     * 分段测量：Text 段用 paint.measureText(start,end)，表情/高赞图标按行高方块计。
+     * 行高口径（descent-ascent+leading）与 act() 的 textBoxHeight 及 CacheManager 烘焙一致，
+     * 保证测量宽度 ≥ 烘焙内容宽度，位图不裁字。
+     */
+    private fun measureTextWidthWithInlineSegments(item: DanmakuItem, outlinePad: Float): Float {
+        actionPaint.getFontMetrics(actionFontMetrics)
+        val emoteSizePx = (actionFontMetrics.descent - actionFontMetrics.ascent + actionFontMetrics.leading)
+            .coerceAtLeast(1f)
+        val text = item.data.text
+        val segments = parseInlineSegmentsFor(item)
+        var w = 0f
+        if (segments == null) {
+            w = actionPaint.measureText(text)
+        } else {
+            for (seg in segments) {
+                when (seg) {
+                    is DanmakuInlineSegment.Text ->
+                        if (seg.end > seg.start) w += actionPaint.measureText(text, seg.start, seg.end)
+                    is DanmakuInlineSegment.Emote -> w += emoteSizePx
+                    is DanmakuInlineSegment.HighLikeIcon -> w += emoteSizePx + inlineIconGapPx(emoteSizePx)
+                }
+            }
+        }
+        return w + outlinePad * 2f
+    }
+
+    /**
+     * 取/解析内联段。缓存命中要求 item 记录的词典版本与当前一致（词典刷新后表情
+     * 命中状态可能变化）；未就绪词典（version=0）下解析出的"仅高赞图标"结果不缓存。
+     */
+    private fun parseInlineSegmentsFor(item: DanmakuItem): List<DanmakuInlineSegment>? {
+        val emoteVersion = DanmakuEmoteRepository.version()
+        val showIcon = config.showHighLikeIcon
+        val cached = item.inlineSegments
+        if (cached != null && item.inlineSegmentsEmoteVersion == emoteVersion &&
+            item.inlineSegmentsShowIcon == showIcon
+        ) return cached
+        val parsed = DanmakuInlineParser.parse(
+            text = item.data.text,
+            isHighLiked = item.data.isHighLiked,
+            showHighLikeIcon = showIcon,
+            canParseEmote = emoteVersion > 0,
+            urlForToken = DanmakuEmoteRepository::urlForToken,
+        )
+        if (parsed != null && DanmakuInlineParser.shouldCacheParsedSegments(item.data.text, emoteVersion > 0)) {
+            item.inlineSegments = parsed
+            item.inlineSegmentsEmoteVersion = emoteVersion
+            item.inlineSegmentsShowIcon = showIcon
+        }
+        return parsed
+    }
+
+    /** 表情/图标与相邻内容的间隙。 */
+    private fun inlineIconGapPx(iconSizePx: Float): Float = (iconSizePx * 0.14f).coerceAtLeast(density * 2f)
+
+    /**
+     * 建图前置检查：所有表情段位图已就绪才允许烘焙（保证烘焙产物完整、可直接入共享表）；
+     * 未就绪则触发 prefetch 返回 false，调用方下轮重查（加载完成无需回调通知——
+     * requestCacheBuilds 每帧轮询 getCached 自然发现就绪）。
+     */
+    private fun inlineImagesReadyOrPrefetch(item: DanmakuItem): Boolean {
+        if (!needsInlineSegments(item)) return true
+        val segments = parseInlineSegmentsFor(item) ?: return true
+        var ready = true
+        for (seg in segments) {
+            if (seg !is DanmakuInlineSegment.Emote) continue
+            val bmp = EmoteBitmapLoader.getCached(seg.url)
+            if (bmp != null && !bmp.isRecycled) continue
+            ready = false
+            EmoteBitmapLoader.prefetch(seg.url)
+        }
+        return ready
     }
 
     private fun lowerBound(pos: Int): Int {

@@ -358,6 +358,16 @@ object NetworkManager {
 
     fun getOkHttpClient(): OkHttpClient = internalOkHttpClient
 
+    /** 当前登录用户 mid（cookie DedeUserID）；未登录返回 null。 */
+    fun currentMid(): Long? =
+        internalCookieManager.getCookieValue("DedeUserID")
+            ?.trim()
+            ?.toLongOrNull()
+            ?.takeIf { it > 0L }
+
+    /** 是否持有有效登录会话（SESSDATA）。 */
+    fun hasLoginSession(): Boolean = internalCookieManager.hasSessionCookie()
+
     fun getCurrentUserAgent(): String = currentUserAgentValue
 
     fun getAcceptLanguage(): String {

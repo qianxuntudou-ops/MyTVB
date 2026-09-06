@@ -1,7 +1,6 @@
 package com.tutu.myblbl.feature.player.danmaku.model
 
 import com.tutu.myblbl.feature.player.danmaku.Danmaku
-
 internal enum class DanmakuKind {
     SCROLL,
     TOP,
@@ -25,6 +24,15 @@ internal class DanmakuItem(
     @Volatile var cacheGeneration: Int = -1
     @Volatile var pendingCacheGeneration: Int = -1
     @Volatile var cacheState: DanmakuCacheState = DanmakuCacheState.Init
+
+    /**
+     * 内联段（表情/高赞图标）解析结果缓存。emoteVersion 记录解析时的词典版本，
+     * 词典加载/刷新后按版本对比失效重解析（含表情命中状态变化）；
+     * showIcon 记录解析时的高赞图标开关，开关切换后同样失效。
+     */
+    @Volatile var inlineSegments: List<DanmakuInlineSegment>? = null
+    @Volatile var inlineSegmentsEmoteVersion: Int = -1
+    @Volatile var inlineSegmentsShowIcon: Boolean = true
 
     // ---- Active state (action thread only) ----
     var kind: DanmakuKind = DanmakuKind.SCROLL

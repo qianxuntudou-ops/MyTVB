@@ -4,6 +4,7 @@ import android.os.SystemClock
 import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -84,6 +85,16 @@ object BiliClient {
         val keys = NetworkManager.getWbiKeys()
         val signed = WbiGenerator.generateWbiParams(params, keys.first, keys.second)
         return buildUrl(path, signed)
+    }
+
+    /** 拉取原始字节（表情图等静态资源）。非 2xx 抛 IOException。 */
+    suspend fun getBytes(url: String): ByteArray {
+        return withContext(Dispatchers.IO) {
+            okHttpClient().newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for $url")
+                resp.body?.bytes() ?: ByteArray(0)
+            }
+        }
     }
 
     fun requireCsrf(): String {

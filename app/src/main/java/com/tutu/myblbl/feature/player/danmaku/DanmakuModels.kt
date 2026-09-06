@@ -107,6 +107,8 @@ data class DanmakuConfig(
     val trackSpacing: DanmakuTrackSpacing = DanmakuTrackSpacing.DEFAULT,
     /** 同屏弹幕数上限（并发渲染性能约束；满员即弃、不排队）。0 = 自适应：下限 100、按渲染帧率自动增减（初始 TV 100 / 其他 160）。 */
     val maxOnScreen: Int = 0,
+    /** 高赞弹幕头部显示点赞图标（attr bit2）。 */
+    val showHighLikeIcon: Boolean = true,
 )
 
 data class DanmakuSessionSettings(

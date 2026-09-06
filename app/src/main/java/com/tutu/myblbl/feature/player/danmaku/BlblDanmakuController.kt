@@ -11,6 +11,8 @@ import com.tutu.myblbl.feature.player.danmaku.common.BiliDanmakuStyle
 import com.tutu.myblbl.feature.player.danmaku.common.DanmakuDuplicateMergePolicy
 import com.tutu.myblbl.feature.player.danmaku.common.DanmakuController
 import com.tutu.myblbl.feature.player.danmaku.common.DanmakuSettingsSnapshot
+import com.tutu.myblbl.feature.player.danmaku.common.DanmakuUserFilter
+import com.tutu.myblbl.feature.player.danmaku.common.DanmakuUserFilterRepository
 import com.tutu.myblbl.feature.player.danmaku.common.LiveDanmakuBatcher
 import com.tutu.myblbl.feature.player.danmaku.common.LiveDanmakuController
 import com.tutu.myblbl.feature.player.danmaku.common.VipDanmakuTextureCache
@@ -689,17 +691,22 @@ class BlblDanmakuController(
     /**
      * 数据预处理：过滤 + 合并重复。纯 CPU 计算，无 View/主线程依赖，可安全在后台线程执行。
      */
-    private fun preprocess(
+    private suspend fun preprocess(
         items: List<DmModel>,
         append: Boolean,
         filterContext: DanmakuFilterContext
     ): List<Danmaku> {
+        // 0. 云端用户屏蔽（登录态，B 站账号同步的屏蔽词/正则/拉黑用户）。
+        //    非阻塞读取：命中 10min 缓存零开销；未命中返回 EMPTY 并后台刷新（不卡弹幕首帧）。
+        val userFilter = runCatching { DanmakuUserFilterRepository.get() }
+            .getOrDefault(DanmakuUserFilter.EMPTY)
         // 1. 过滤（复用现有策略，engine 无关）
         val filtered = BiliDanmakuFilterPolicy.apply(
             items = items,
             context = filterContext,
             settings = lastSnapshot,
-            stage = if (append) "blbl_append" else "blbl"
+            stage = if (append) "blbl_append" else "blbl",
+            userFilter = userFilter,
         )
         // 2. 合并重复（复用现有策略）
         val mergeDuplicate = lastSnapshot?.mergeDuplicate ?: true
