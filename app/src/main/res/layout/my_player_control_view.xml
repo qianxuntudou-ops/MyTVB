@@ -215,7 +215,7 @@
                 <com.mytvb.feature.player.view.PlayerControlButton
                     android:id="@+id/button_play_speed"
                     android:background="@drawable/cell_background"
-                    android:padding="@dimen/px18"
+                    android:padding="@dimen/px30"
                     android:focusable="true"
                     android:visibility="gone"
                     android:clickable="true"
