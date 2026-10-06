@@ -1,5 +1,6 @@
 package com.mytvb.feature.player.danmaku
 
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.HandlerThread
@@ -133,7 +134,10 @@ internal class DanmakuPlayer(
         val engine =
             DanmakuEngine(
                 appContext = view.context.applicationContext,
-                displayMetrics = view.resources.displayMetrics,
+                // 与 BlblDanmakuController.density 同源：sp() 换算必须用系统原生 metrics，
+                // 否则 controller 按 density 反推 textSizeSp、engine 按 UiScale 钉死值正推，
+                // 两侧不同源导致字号塌缩。
+                displayMetrics = Resources.getSystem().displayMetrics,
                 cacheManager = cacheManager,
             )
         engineMain = engine

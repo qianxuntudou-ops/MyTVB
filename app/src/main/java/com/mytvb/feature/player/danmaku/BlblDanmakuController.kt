@@ -1,6 +1,7 @@
 package com.mytvb.feature.player.danmaku
 
 import android.content.Context
+import android.content.res.Resources
 import android.os.SystemClock
 import com.mytvb.core.common.ext.isVipColorfulDanmakuAllowed
 import com.mytvb.core.common.log.AppLog
@@ -76,8 +77,17 @@ class BlblDanmakuController(
         private const val DRIFT_HARD_SYNC_DEBOUNCE = 3
     }
 
-    /** 屏幕密度，用于对齐 AkDanmaku 字号公式。 */
-    private val density: Float = context.resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
+    /**
+     * 屏幕密度，用于对齐 AkDanmaku 字号公式。必须取系统原生 density
+     * （[Resources.getSystem] 不经 UiScale 覆写）：UiScale 已把 Activity/Application
+     * resources 的 density 钉死为设计倍率（1080p 档为 1.0），若读覆写值，
+     * 25×(density−0.6) 公式会把 1080p 电视弹幕字号塌缩到原生的约 1/3。
+     * 弹幕有自己的字号设置档，不随「界面缩放」走。
+     */
+    private val density: Float =
+        Resources.getSystem().displayMetrics.density.takeIf { it > 0f }
+            ?: context.resources.displayMetrics.density.takeIf { it > 0f }
+            ?: 1f
 
     var playerPositionProvider: (() -> Long)? = null
 
