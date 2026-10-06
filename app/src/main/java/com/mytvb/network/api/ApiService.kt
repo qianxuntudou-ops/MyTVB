@@ -230,6 +230,12 @@ interface ApiService {
         @FieldMap params: Map<String, String>
     ): BaseResponse<String>
 
+    @POST("x/v2/history/report")
+    @FormUrlEncoded
+    suspend fun reportHistoryProgress(
+        @FieldMap params: Map<String, String>
+    ): BaseResponse<String>
+
     @POST("x/click-interface/click/web/h5")
     @FormUrlEncoded
     suspend fun reportVideoClickH5(

@@ -1017,7 +1017,7 @@ class VideoPlayerViewModel(
 
     fun playEpisode(index: Int, preferLastPlayTime: Boolean = true) {
         val episode = _episodes.value.getOrNull(index) ?: return
-        reportPlaybackHeartbeat()
+        reportPlaybackHeartbeat(force = true)
         savePlayerSnapshot()
         val targetBvid = episode.bvid.takeIf { it.isNotBlank() }
         val targetSeasonId = episode.seasonId.takeIf { it > 0L }
@@ -1096,7 +1096,7 @@ class VideoPlayerViewModel(
             _error.value = appContext.getString(R.string.player_error_related_missing_id)
             return
         }
-        reportPlaybackHeartbeat()
+        reportPlaybackHeartbeat(force = true)
         val targetIdentity = PlayRequestIdentity(
             aid = targetAid,
             bvid = targetBvid?.takeIf { it.isNotBlank() },
@@ -1118,7 +1118,7 @@ class VideoPlayerViewModel(
     fun playInteractionChoice(cid: Long, edgeId: Long) {
         if (cid <= 0L) return
         AppLog.d(TAG, "playInteractionChoice: cid=$cid, edgeId=$edgeId")
-        reportPlaybackHeartbeat()
+        reportPlaybackHeartbeat(force = true)
         currentCid = cid
         pendingSeekPositionMs = 0L
         pendingPlayWhenReady = true
@@ -1376,7 +1376,7 @@ class VideoPlayerViewModel(
             return
         }
 
-        reportPlaybackHeartbeat()
+        reportPlaybackHeartbeat(force = true)
         savePlayerSnapshot()
         loadVideoInfo(
             aid = identity.aid,
@@ -1534,7 +1534,7 @@ class VideoPlayerViewModel(
         }
     }
 
-    fun reportPlaybackHeartbeat(playType: Int = 0) {
+    fun reportPlaybackHeartbeat(playType: Int = 0, force: Boolean = false) {
         // 进度归属校验：VM 会话身份与 player 实际挂载源不一致（复用实例换源窗口、
         // 切集瞬间）时，position 属于别的视频，上报会把假进度写进服务端观看历史，
         // 之后这个视频在任何端都会带着错误进度续播。
@@ -1545,7 +1545,7 @@ class VideoPlayerViewModel(
             )
             return
         }
-        heartbeatReporter.reportPlaybackHeartbeat(playType)
+        heartbeatReporter.reportPlaybackHeartbeat(playType, force)
     }
 
     private fun rebuildPlayback() {
