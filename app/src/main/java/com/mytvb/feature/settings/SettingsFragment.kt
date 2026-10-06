@@ -284,9 +284,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         playerGroups = listOf(
             SettingGroup(R.string.setting_group_play_defaults, listOf(
                 stored(KEY_DEFAULT_VIDEO_QUALITY, R.string.default_video_quality, "1080P"),
-                stored(KEY_SEAMLESS_QUALITY_SWITCH, R.string.seamless_quality_switch, "关"),
+                stored(KEY_SEAMLESS_QUALITY_SWITCH, R.string.seamless_quality_switch, "开"),
                 stored(KEY_DEFAULT_AUDIO_TRACK, R.string.default_audio_track, "192kbps"),
-                stored(KEY_AUDIO_BALANCE, R.string.audio_balance, "关"),
+                stored(KEY_AUDIO_BALANCE, R.string.audio_balance, "中"),
                 stored(KEY_DEFAULT_PLAY_SPEED, R.string.default_play_speed, "1.0"),
                 stored(KEY_MUSIC_ZONE_NORMAL_SPEED, R.string.music_zone_normal_speed, "关"),
                 stored(KEY_VIDEO_CODEC, R.string.video_codec, "HEVC")

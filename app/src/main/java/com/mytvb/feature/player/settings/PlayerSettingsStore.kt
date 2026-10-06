@@ -47,10 +47,10 @@ data class PlayerSettings(
     val sponsorBlockEnabled: Boolean = false,
     val sponsorBlockAutoSkip: Boolean = true,
     // 音量均衡：PCM 级自适应响度归一（VolumeBalanceAudioProcessor），关/低/中/高四档。
-    // 取代旧的系统音效方案（DynamicsProcessing/LoudnessEnhancer——部分 TV 设备驱动有 bug 会失真）。
-    val audioBalance: AudioBalanceLevel = AudioBalanceLevel.OFF,
-    // 无缝切清晰度：满足条件时用多清晰度 DASH MPD 源替代单档源，切档不重建播放器。默认关闭。
-    val seamlessQualitySwitch: Boolean = false
+    // 取代旧的系统音效方案（DynamicsProcessing/LoudnessEnhancer——部分 TV 设备驱动有 bug 会失真）。默认中档。
+    val audioBalance: AudioBalanceLevel = AudioBalanceLevel.MEDIUM,
+    // 无缝切清晰度：满足条件时用多清晰度 DASH MPD 源替代单档源，切档不重建播放器。默认开启。
+    val seamlessQualitySwitch: Boolean = true
 )
 
 private object VideoQualityDefaults {
@@ -238,7 +238,7 @@ object PlayerSettingsStore {
             ),
             seamlessQualitySwitch = parseToggle(
                 readSetting(KEY_SEAMLESS_QUALITY_SWITCH),
-                defaultValue = false
+                defaultValue = true
             )
         )
         cachedSettings = settings
@@ -325,13 +325,13 @@ object PlayerSettingsStore {
 
     /**
      * 音量均衡档位解析：新 key（关/低/中/高）优先；未设置过时回退旧布尔开关，
-     * 旧"开"映射到中档，其余（含从未设置）为关。
+     * 旧"关"尊重用户选择仍为关，其余（含从未设置）落到默认中档。
      */
     private fun parseAudioBalance(value: String?, legacyValue: String?): AudioBalanceLevel {
         if (!value.isNullOrBlank()) {
             return AudioBalanceLevel.fromSettingValue(value)
         }
-        return if (legacyValue?.trim() == "开") AudioBalanceLevel.MEDIUM else AudioBalanceLevel.OFF
+        return if (legacyValue?.trim() == "关") AudioBalanceLevel.OFF else AudioBalanceLevel.MEDIUM
     }
 
     // 换用新 key（subtitle_default_mode）后旧值（show_subtitle_default 的 关/开/自动）不再读取：
