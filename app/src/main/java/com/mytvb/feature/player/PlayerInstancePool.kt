@@ -259,6 +259,10 @@ object PlayerInstancePool {
             )
             .setTargetBufferBytes(TARGET_BUFFER_BYTES)
             .setPrioritizeTimeOverSizeThresholds(true)
+            // blbl 同款：保留约一个前向缓冲窗的回看数据（从关键帧起），
+            // 单击后退/来回扫这类"落在已播区间内"的 seek 直接命中内存缓冲，
+            // 不再丢弃数据重新走网络
+            .setBackBuffer(DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, true)
             .build()
         return ExoPlayer.Builder(context)
             .setRenderersFactory(createRenderersFactory(context))
