@@ -150,7 +150,7 @@
     <string name="cctv_quality">Quality</string>
     <string name="minor_protection">Teen protection</string>
     <string name="teen_mode">Teen mode</string>
-    <string name="watch_time_limit">Time limit per session</string>
+    <string name="watch_time_limit">Watch time limit</string>
     <string name="rest_time_limit">Rest duration</string>
     <string name="psas_enabled">Enable PSA</string>
     <string name="psas_interval">PSA interval</string>
@@ -255,9 +255,9 @@
     <string name="show_video_detail_page">Open video detail page</string>
     <string name="show_bottom_progress_bar">Show persistent bottom progress bar</string>
     <string name="show_dm_switch">Show danmaku toggle button</string>
-    <string name="show_next_previous">Show next/previous episode buttons</string>
+    <string name="show_next_previous">Show next/previous video buttons</string>
     <string name="show_play_speed_button">Show playback speed button</string>
-    <string name="show_playback_rate">Always show playback speed</string>
+    <string name="show_playback_rate">Always show current speed</string>
     <string name="music_zone_normal_speed">Music videos at 1x by default</string>
     <string name="show_subtitle_default">Default subtitles</string>
     <string name="sign_out">Sign out</string>

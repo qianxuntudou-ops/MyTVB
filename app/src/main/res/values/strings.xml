@@ -86,7 +86,7 @@
     <string name="device_info">设备信息</string>
     <string name="dm_allow_bottom">显示底部弹幕</string>
     <string name="dm_allow_top">显示顶部弹幕</string>
-    <string name="dm_alpha">弹幕透明度</string>
+    <string name="dm_alpha">弹幕不透明度</string>
     <string name="dm_filter_weight">弹幕智能屏蔽等级</string>
     <string name="dm_merge_duplicate">重复弹幕合并</string>
     <string name="dm_smart_shield">智能防挡（低性能设备不建议开启）</string>
@@ -212,7 +212,7 @@
     <string name="cctv_quality">画质</string>
     <string name="minor_protection">青少年保护</string>
     <string name="teen_mode">青少年模式</string>
-    <string name="watch_time_limit">单次观看时长</string>
+    <string name="watch_time_limit">观看时长上限</string>
     <string name="rest_time_limit">休息时长</string>
     <string name="psas_enabled">开启公益广告</string>
     <string name="psas_interval">公益广告间隔</string>
@@ -388,9 +388,9 @@
     <string name="show_video_detail_page">进入视频详情页</string>
     <string name="show_bottom_progress_bar">显示底部常驻进度条</string>
     <string name="show_dm_switch">显示弹幕开关按钮</string>
-    <string name="show_next_previous">显示上下集切换按钮</string>
-    <string name="show_play_speed_button">显示播放速度设置按键</string>
-    <string name="show_playback_rate">常驻显示播放倍率</string>
+    <string name="show_next_previous">显示上一个/下一个视频按钮</string>
+    <string name="show_play_speed_button">显示倍速调节按键</string>
+    <string name="show_playback_rate">常驻显示当前倍速</string>
     <string name="music_zone_normal_speed">音乐区视频默认1倍速</string>
     <string name="show_subtitle_default">默认字幕</string>
     <string name="side_sheet_accessibility_pane_title">Side Sheet</string>
@@ -468,7 +468,7 @@
 
     <!-- ===== 多语言：设置页标题 ===== -->
     <string name="x5_core_replace">X5内核替换</string>
-    <string name="sponsor_block">空降助手</string>
+    <string name="sponsor_block">跳过赞助片段（空降助手）</string>
     <string name="audio_balance">音量均衡</string>
     <string name="seamless_quality_switch">无缝切换清晰度</string>
     <string name="app_version">应用版本</string>
