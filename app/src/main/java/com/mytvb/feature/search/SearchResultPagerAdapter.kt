@@ -170,8 +170,22 @@ class SearchResultPagerAdapter(
             AppLog.d(TAG, "restoreFocusAnchors: focus already inside a page list, skip")
             return
         }
+        // 离开时焦点就不在搜索结果页（focusedPageType=null，如焦点在底层 tab 页列表上
+        // 直接进播放）：焦点恢复职责不归搜索页，继续走 fallback 会把底层页面已恢复好
+        // 的焦点抢到结果页。
+        if (focusedPageType == null) {
+            AppLog.d(TAG, "restoreFocusAnchors: focusedPageType=null, skip")
+            return
+        }
+        // 结果面板整体不可见（搜索浮层未随本页显示）：对不可见面板恢复焦点等于把
+        // 焦点藏进看不见的列表，表现为返回后焦点消失、按 BACK 才重新出现。
+        if (holders.values.none { it.isPageVisible() }) {
+            AppLog.d(TAG, "restoreFocusAnchors: result panel not shown, skip")
+            return
+        }
         val focusedType = focusedPageType
-        val focusedHolder = focusedType?.let { holders[it] }
+        // 离屏的 focused 页同样不可见，不直接恢复，交给下方可见页 fallback。
+        val focusedHolder = focusedType?.let { holders[it] }?.takeIf { it.isPageVisible() }
         if (focusedHolder != null) {
             AppLog.d(TAG, "restoreFocusAnchors: trying focused page=$focusedType")
             if (focusedHolder.restoreFocusAnchor()) {
@@ -191,7 +205,9 @@ class SearchResultPagerAdapter(
             }
         if (!restored) {
             AppLog.d(TAG, "restoreFocusAnchors: all FAILED, falling back to focusPrimaryContent")
-            holders.values.forEach { it.focusPrimaryContent() }
+            // 兜底与上方 fallback 同一可见性约束：不可见页的 focusPrimaryContent 一样
+            // 能聚焦成功，会让焦点落在看不见的列表上。
+            holders.values.filter { it.isPageVisible() }.forEach { it.focusPrimaryContent() }
         }
     }
 
