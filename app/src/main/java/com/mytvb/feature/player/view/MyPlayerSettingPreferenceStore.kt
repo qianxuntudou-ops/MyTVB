@@ -25,13 +25,15 @@ internal class MyPlayerSettingPreferenceStore(
         return state.copy(
             dmEnabled = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_ENABLE)?.let { it == "开" } ?: true,
             dmAlpha = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_ALPHA)?.toFloatOrNull() ?: 1.0f,
-            dmTextSize = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_TEXT_SIZE)?.let {
-                when (it) {
-                    "小号" -> 35
-                    "大号" -> 45
-                    else -> it.toIntOrNull() ?: 40
-                }
-            } ?: 40,
+            dmTextSize = MyPlayerSettingView.coerceDmTextSize(
+                appSettings.getCachedString(MyPlayerSettingView.KEY_DM_TEXT_SIZE)?.let {
+                    when (it) {
+                        "小号" -> 35
+                        "大号" -> 45
+                        else -> it.toIntOrNull() ?: 40
+                    }
+                } ?: 40
+            ),
             dmSpeed = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_SPEED)?.toIntOrNull() ?: 4,
             dmArea = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_AREA)?.let {
                 when (it) {

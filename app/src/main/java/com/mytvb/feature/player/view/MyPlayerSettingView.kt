@@ -36,7 +36,12 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal val PLAYBACK_SPEEDS = floatArrayOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f)
         internal val DM_ALPHA_VALUES = floatArrayOf(0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f)
         // 30-55 为历史档位；56-100 供超宽/低密度屏（如 5120×1600）放大使用
-        internal val DM_TEXT_SIZE_VALUES = IntArray(71) { 30 + it }
+        /** 弹幕字号档位：30~60 步进 2（16 档，视觉放大由引擎 toBlblTextScale 档位系数承担）。 */
+        internal val DM_TEXT_SIZE_VALUES = IntArray(16) { 30 + it * 2 }
+
+        /** 字号存储值归一到最近档位（兼容旧版 30~100 逐档存储值，如 39/55/100）。 */
+        internal fun coerceDmTextSize(value: Int): Int =
+            DM_TEXT_SIZE_VALUES.minBy { kotlin.math.abs(it - value) }
         internal val DM_AREA_VALUES = arrayOf(
             DmScreenArea.OneEighth,
             DmScreenArea.OneSixth,
@@ -87,6 +92,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val ITEM_DM_ALLOW_BOTTOM = 107
         internal const val ITEM_DM_MERGE_DUPLICATE = 108
         internal const val ITEM_DM_SMART_SHIELD = 109
+
+        /** 列表首个可聚焦项的 adapter 位置（position 0 是 Header 标题，不可聚焦）。 */
+        private const val FIRST_FOCUSABLE_ITEM_POSITION = 1
     }
 
     private val panelWidthPx by lazy { resources.getDimensionPixelSize(R.dimen.px650) }
@@ -215,21 +223,31 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 KeyEvent.KEYCODE_BACK -> return onBack()
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     val focused = findFocus() ?: return super.dispatchKeyEvent(event)
-                    if (focused.parent === recyclerView) {
-                        val lastChild = recyclerView.getChildAt(recyclerView.childCount - 1)
-                        if (focused === lastChild) return true
-                    }
+                    if (focused.parent === recyclerView && isLastAdapterItem(focused)) return true
                 }
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     val focused = findFocus() ?: return super.dispatchKeyEvent(event)
-                    if (focused.parent === recyclerView) {
-                        val firstChild = recyclerView.getChildAt(0)
-                        if (focused === firstChild) return true
+                    if (focused.parent === recyclerView && isFirstFocusableAdapterItem(focused)) {
+                        return true
                     }
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * 列表边界吞方向键的判定必须用 adapter 位置，不能用 getChildAt(0)/getChildAt(N-1)：
+     * 那是 attach 缓存的首尾项，滚动中途会指向列表中间——长列表（如弹幕字号 30-100）
+     * 滚到底再回头向上时，焦点走到 attach 顶就被误吞 UP 键，表现为"只能回滚一屏、
+     * 必须退出重进才能继续选更小字号"。
+     */
+    private fun isFirstFocusableAdapterItem(view: View): Boolean =
+        recyclerView.getChildAdapterPosition(view) <= FIRST_FOCUSABLE_ITEM_POSITION
+
+    private fun isLastAdapterItem(view: View): Boolean {
+        val itemCount = recyclerView.adapter?.itemCount ?: 0
+        return itemCount > 0 && recyclerView.getChildAdapterPosition(view) >= itemCount - 1
     }
 
     @SuppressLint("ClickableViewAccessibility")

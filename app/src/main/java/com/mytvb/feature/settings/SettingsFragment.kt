@@ -50,6 +50,7 @@ import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
 import com.mytvb.feature.player.settings.AudioBalanceSettings
 import com.mytvb.feature.player.sponsor.SponsorBlockRepository
+import com.mytvb.feature.player.view.MyPlayerSettingView
 import com.mytvb.core.common.ext.normalizeDanmakuSmartFilterValue
 import com.mytvb.core.common.ext.localizedSettingLabel
 import com.mytvb.network.cookie.CookieManager
@@ -452,7 +453,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     }
 
     private fun applyStored(key: String) {
-        appSettings.getCachedString(key)?.let { setStored(key, it) }
+        appSettings.getCachedString(key)?.let {
+            // 字号存储值可能是旧版 30~100 逐档值，归一到当前 30~60 步进 2 档位再显示
+            val normalized = if (key == KEY_DM_TEXT_SIZE) {
+                MyPlayerSettingView.coerceDmTextSize(it.toIntOrNull() ?: 40).toString()
+            } else {
+                it
+            }
+            setStored(key, normalized)
+        }
     }
 
     private fun toggle(
@@ -600,7 +609,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             KEY_DM_SWITCH -> toggle(key)
             KEY_SHOW_DM_SWITCH -> toggle(key)
             // —— 弹幕·样式 ——
-            KEY_DM_TEXT_SIZE -> showDmChoiceDialog(key, Array(71) { (30 + it).toString() })
+            KEY_DM_TEXT_SIZE -> showDmChoiceDialog(
+                key,
+                MyPlayerSettingView.DM_TEXT_SIZE_VALUES.map(Int::toString).toTypedArray()
+            )
             KEY_DM_ALPHA -> showDmChoiceDialog(key, arrayOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"))
             KEY_DM_TRACK_SPACING -> showDmChoiceDialog(key, arrayOf("紧凑", "标准", "宽松", "特宽"))
             KEY_DM_SPEED -> showDmChoiceDialog(key, arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9"))
