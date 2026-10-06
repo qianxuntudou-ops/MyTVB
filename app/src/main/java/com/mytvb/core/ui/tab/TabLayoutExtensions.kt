@@ -7,7 +7,6 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
@@ -16,11 +15,10 @@ import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayout
 import com.mytvb.R
 
-private const val TAB_SWITCH_BASE_DURATION_MS = 60
-private const val TAB_SWITCH_STEP_DURATION_MS = 20
-private const val TAB_SWITCH_MAX_DURATION_MS = 60
 private const val TAB_DIRECT_SWITCH_OUT_DURATION_MS = 120L
 private const val TAB_DIRECT_SWITCH_IN_DURATION_MS = 150L
+private const val TAB_DIRECT_SWITCH_TOTAL_DURATION_MS =
+    TAB_DIRECT_SWITCH_OUT_DURATION_MS + TAB_DIRECT_SWITCH_IN_DURATION_MS
 
 fun TabLayout.enableTouchNavigation(
     viewPager: ViewPager2,
@@ -325,7 +323,7 @@ private fun TabLayout.keepSelectedTabFocused(
     }
     postDelayed({
         requestSelectedTabFocusIfNeeded(tabStrip, index, viewPager)
-    }, TAB_SWITCH_MAX_DURATION_MS + 32L)
+    }, TAB_DIRECT_SWITCH_TOTAL_DURATION_MS + 32L)
 }
 
 private fun TabLayout.requestSelectedTabFocusIfNeeded(
@@ -411,13 +409,9 @@ private fun ViewPager2.setCurrentItemFromTab(
     item: Int,
     smoothScroll: Boolean
 ) {
-    val recyclerView = getChildAt(0) as? RecyclerView
     val adapter = adapter
-    if (!smoothScroll || recyclerView == null || adapter == null) {
+    if (adapter == null || adapter.itemCount <= 0) {
         setCurrentItem(item, smoothScroll)
-        return
-    }
-    if (adapter.itemCount <= 0) {
         return
     }
 
@@ -426,41 +420,13 @@ private fun ViewPager2.setCurrentItemFromTab(
     if (pageDelta == 0) {
         return
     }
-    if (kotlin.math.abs(pageDelta) > 1) {
-        animateDirectTabSwitch(targetItem, pageDelta)
-        return
-    }
 
-    val pageSize = when (orientation) {
-        ViewPager2.ORIENTATION_VERTICAL -> height - paddingTop - paddingBottom
-        else -> width - paddingLeft - paddingRight
-    }
-    if (pageSize <= 0 || scrollState != ViewPager2.SCROLL_STATE_IDLE) {
-        setCurrentItem(targetItem, true)
-        return
-    }
-
-    val distance = pageSize * pageDelta * horizontalDirectionMultiplier()
-    recyclerView.stopScroll()
-    recyclerView.smoothScrollBy(
-        if (orientation == ViewPager2.ORIENTATION_HORIZONTAL) distance else 0,
-        if (orientation == ViewPager2.ORIENTATION_VERTICAL) distance else 0,
-        DecelerateInterpolator(1.8f),
-        calculateTabSwitchDuration(kotlin.math.abs(pageDelta))
-    )
-}
-
-private fun ViewPager2.horizontalDirectionMultiplier(): Int {
-    if (orientation != ViewPager2.ORIENTATION_HORIZONTAL) {
-        return 1
-    }
-    return if (layoutDirection == View.LAYOUT_DIRECTION_RTL) -1 else 1
-}
-
-private fun calculateTabSwitchDuration(pageDistance: Int): Int {
-    val duration = TAB_SWITCH_BASE_DURATION_MS +
-        (pageDistance - 1).coerceAtLeast(0) * TAB_SWITCH_STEP_DURATION_MS
-    return duration.coerceAtMost(TAB_SWITCH_MAX_DURATION_MS)
+    // 一律瞬切 + 平移滑入，不走 setCurrentItem(item, true)：
+    // 其内部 LinearSmoothScroller 时长不可控（实测一页 ~800ms），且滚动启动瞬间
+    // ScrollEventAdapter 会提前 dispatch onPageSelected → TabLayoutMediator 回写
+    // setCurrentItem(true)，把任何自定义 recyclerView.smoothScrollBy(duration) 覆盖掉
+    // （实测 60/240ms 自定义时长均在启动 7ms 后被替换成 ~810ms 默认慢滚动）。
+    animateDirectTabSwitch(targetItem, pageDelta)
 }
 
 private fun ViewPager2.animateDirectTabSwitch(targetItem: Int, pageDelta: Int) {
@@ -485,7 +451,7 @@ private fun ViewPager2.animateDirectTabSwitch(targetItem: Int, pageDelta: Int) {
     translationY = startTranslationY
 
     animate()
-        .setDuration(TAB_DIRECT_SWITCH_OUT_DURATION_MS + TAB_DIRECT_SWITCH_IN_DURATION_MS)
+        .setDuration(TAB_DIRECT_SWITCH_TOTAL_DURATION_MS)
         .translationX(0f)
         .translationY(0f)
         .start()
