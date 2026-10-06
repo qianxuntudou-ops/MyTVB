@@ -15,10 +15,9 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
         <ImageView
-            android:layout_gravity="center|top"
+            android:layout_gravity="center"
             android:id="@+id/exo_buffering"
             android:contentDescription="@string/loading"
-            android:layout_marginTop="@dimen/px394"
             android:visibility="gone"
             android:layout_width="@dimen/px113"
             android:layout_height="@dimen/px113"/>
