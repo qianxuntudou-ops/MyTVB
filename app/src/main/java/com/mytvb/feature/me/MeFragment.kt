@@ -23,13 +23,15 @@ import com.mytvb.feature.settings.SignInFragment
 import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusNearestTabTo
+import com.mytvb.core.ui.tab.focusSelectedTab
+import com.mytvb.core.ui.base.OnBackPressedHandler
 import com.mytvb.core.ui.tab.disableAdjacentPagePrefetch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
+class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBackPressedHandler {
     companion object {
         private const val USER_INFO_CACHE_TTL_MS = 10 * 60 * 1000L
 
@@ -78,10 +80,14 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            onNavigateDown = ::focusCurrentPagePrimaryContent,
+            onNavigateDown = ::focusCurrentPageNearestContent,
+            onNavigateLeft = ::focusLeftFunctionArea,
             onTabReselected = {
-                if (viewModel.isLoggedIn.value) {
-                    getCurrentTabPage()?.refresh()
+                // 重选当前 tab = 回顶聚焦第一卡（与首页一致）；刷新只留 MENU 键。
+                // 未登录时 tab 栏不可见不会触发，无需登录判断。
+                val page = getCurrentTabPage()
+                if (page != null && !page.scrollToTopAndFocus()) {
+                    page.scrollToTop()
                 }
             }
         )
@@ -219,6 +225,63 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
 
     fun focusCurrentTab(anchorView: View? = view?.findFocus() ?: activity?.currentFocus): Boolean {
         return binding.tabLayout.focusNearestTabTo(anchorView)
+    }
+
+    /**
+     * BACK 三层分发（与 HomeFragment 一致）：
+     * 内容区 → 当前选中的二级 tab；tab 栏 → 主边栏当前主 tab 按钮；
+     * 未登录时 tab/viewPager 均 GONE（hasFocus 恒 false），自然放行给退出流程。
+     */
+    override fun onBackPressed(): Boolean {
+        if (tabLayout.hasFocus()) {
+            return (activity as? com.mytvb.ui.activity.MainActivity)?.focusSidebarCurrentTab() == true
+        }
+        if (viewPager.hasFocus()) {
+            return tabLayout.focusSelectedTab()
+        }
+        return false
+    }
+
+    /** 首个二级 tab 上按 LEFT：聚焦左侧主边栏（与首页一致）。 */
+    private fun focusLeftFunctionArea(): Boolean {
+        return (activity as? com.mytvb.ui.activity.MainActivity)?.focusLeftFunctionArea() == true
+    }
+
+    /** 列表顶行 UP 的落点：聚焦当前选中的二级 tab（不切页）。 */
+    fun focusSelectedTabFromContent(): Boolean {
+        return tabLayout.focusSelectedTab()
+    }
+
+    /** 内容网格左右边缘切二级 tab（与 HomeFragment 一致）；首/末 tab 越界方向保持原有行为。 */
+    fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
+        val target = viewPager.currentItem + delta
+        if (target < 0) {
+            return (activity as? com.mytvb.ui.activity.MainActivity)?.focusLeftFunctionArea() == true
+        }
+        if (target >= adapter.itemCount) {
+            return true
+        }
+        viewPager.setCurrentItem(target, true)
+        // 切页后旧页焦点随页面滑出，需把焦点交接到新页；布局未稳时补一次延迟重试
+        viewPager.post {
+            if (isAdded && !focusCurrentPageNearestContent()) {
+                viewPager.postDelayed({
+                    if (isAdded) {
+                        focusCurrentPageNearestContent()
+                    }
+                }, 120L)
+            }
+        }
+        return true
+    }
+
+    /** 顶部 tab 栏按 DOWN：就近聚焦可见第一项（列表位置不动，半截轻滚补齐）；回顶只由重选 tab 承担。 */
+    private fun focusCurrentPageNearestContent(): Boolean {
+        val page = getCurrentTabPage() ?: return false
+        if (page.focusNearestVisibleContent()) {
+            return true
+        }
+        return focusCurrentPagePrimaryContent()
     }
 
     override fun focusEntryFromMainTab(): Boolean {

@@ -67,14 +67,18 @@ fun TabLayout.enableTouchNavigation(
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 if (index == 0) {
-                                    consumeEdgeNavigation { onNavigateLeft?.invoke() }
+                                    val r = onNavigateLeft?.invoke() ?: false
+                                    AppLog.d("TabNav", "DPAD_LEFT tab[0] edge->leftArea=$r hasCb=${onNavigateLeft != null}")
+                                    true
                                 } else {
                                     false
                                 }
                             }
                             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                 if (index == tabStrip.childCount - 1) {
-                                    consumeEdgeNavigation { onNavigateRight?.invoke() }
+                                    val r = onNavigateRight?.invoke() ?: false
+                                    AppLog.d("TabNav", "DPAD_RIGHT tab[last] edge->right=$r hasCb=${onNavigateRight != null}")
+                                    true
                                 } else {
                                     false
                                 }

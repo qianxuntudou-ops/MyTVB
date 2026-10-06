@@ -369,6 +369,20 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         }
     }
 
+    override fun focusNearestVisibleContent(): Boolean {
+        return focusNearestVisibleListItem()
+    }
+
+    override fun scrollToTopAndFocus(): Boolean {
+        scrollToTop()
+        recyclerView?.post {
+            if (isAdded && view != null) {
+                focusPrimaryContent()
+            }
+        }
+        return true
+    }
+
     override fun focusPrimaryContent(): Boolean {
         if (!isAdded || view == null) {
             return false
@@ -441,7 +455,8 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
     }
 
     private fun focusTopTab(): Boolean {
-        return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
+        // UP 顶行落"当前选中的二级 tab"（不切页），与 VideoFeedFragment 一致
+        return (parentFragment as? HomeFragment)?.focusSelectedTabFromContent() == true
     }
 
     private fun pageTag(): String = "HomeLane/$type"

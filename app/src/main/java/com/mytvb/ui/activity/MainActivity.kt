@@ -660,6 +660,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         return binding.myTabView.focusNearestButtonTo(sourceView)
     }
 
+    /** BACK 从二级 tab 栏回退的落点：主边栏当前选中的主 tab 按钮（对齐 blbl requestFocusSidebarSelectedNav）。 */
+    fun focusSidebarCurrentTab(): Boolean {
+        if (binding.myTabView.visibility != View.VISIBLE) {
+            return false
+        }
+        return binding.myTabView.focusCurrentTab()
+    }
+
     fun showTabBar(show: Boolean) {
         binding.myTabView.visibility = if (show) View.VISIBLE else View.GONE
         binding.divide.visibility = if (show) View.VISIBLE else View.GONE

@@ -53,6 +53,8 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
         return VideoAdapter(
             onItemClick = ::onVideoClick,
             onTopEdgeUp = ::focusTopTab,
+            onLeftEdge = ::switchToPrevCategoryTab,
+            onRightEdge = ::switchToNextCategoryTab,
             onBottomEdgeDown = ::keepCurrentFocus,
             onItemFocusedWithView = { view, position ->
                 tvFocusController?.onItemFocused(view, position)
@@ -220,8 +222,35 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
     }
 
     private fun focusTopTab(): Boolean {
-        val handled = (parentFragment as? CategoryFragment)?.focusCurrentTab() == true
-        return handled
+        // UP 顶行落"当前选中的分区 tab"（不切页），与首页一致
+        return (parentFragment as? CategoryFragment)?.focusSelectedTabFromContent() == true
+    }
+
+    /** tab 栏 DOWN 的落点：就近聚焦可见第一项，位置保持不动，半截轻滚补齐。 */
+    fun focusNearestVisibleContent(): Boolean {
+        return focusNearestVisibleListItem()
+    }
+
+    /** 重选 tab 的回顶：滚动到顶并聚焦第一项。 */
+    fun scrollToTopAndFocus(): Boolean {
+        if (!isAdded || view == null) return false
+        scrollToTop()
+        val rv = recyclerView ?: return false
+        val controller = tvFocusController ?: return false
+        rv.post {
+            if (isAdded && view != null) {
+                controller.requestRefreshFocus(0)
+            }
+        }
+        return true
+    }
+
+    private fun switchToPrevCategoryTab(): Boolean {
+        return (parentFragment as? CategoryFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+    }
+
+    private fun switchToNextCategoryTab(): Boolean {
+        return (parentFragment as? CategoryFragment)?.switchAdjacentTabFromContentEdge(1) == true
     }
 
     private fun keepCurrentFocus(): Boolean {

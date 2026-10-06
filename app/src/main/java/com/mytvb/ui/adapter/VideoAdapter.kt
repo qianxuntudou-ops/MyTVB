@@ -30,6 +30,8 @@ class VideoAdapter(
     private val onItemClick: (VideoModel) -> Unit = {},
     onTopEdgeUp: (() -> Boolean)? = null,
     onBottomEdgeDown: (() -> Boolean)? = null,
+    onLeftEdge: (() -> Boolean)? = null,
+    onRightEdge: (() -> Boolean)? = null,
     onItemFocused: ((Int) -> Unit)? = null,
     onItemFocusedWithView: ((View, Int) -> Unit)? = null,
     onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
@@ -57,6 +59,8 @@ class VideoAdapter(
     init {
         this.onTopEdgeUp = onTopEdgeUp
         this.onBottomEdgeDown = onBottomEdgeDown
+        this.onLeftEdge = onLeftEdge
+        this.onRightEdge = onRightEdge
         this.onItemFocused = onItemFocused
         this.onItemFocusedWithView = onItemFocusedWithView
         this.onItemDpad = onItemDpad
@@ -143,6 +147,8 @@ class VideoAdapter(
             clickLambda,
             onTopEdgeUp,
             onBottomEdgeDown,
+            onLeftEdge,
+            onRightEdge,
             { view, position, hasFocus ->
                 if (hasFocus) {
                     onItemFocused?.invoke(position)
@@ -180,6 +186,8 @@ class VideoAdapter(
         private val onItemClick: (View, VideoModel) -> Unit,
         onTopEdgeUp: (() -> Boolean)?,
         onBottomEdgeDown: (() -> Boolean)?,
+        onLeftEdge: (() -> Boolean)? = null,
+        onRightEdge: (() -> Boolean)? = null,
         onFocusChange: ((View, Int, Boolean) -> Unit)? = null,
         private val onItemInteracted: ((View, Int) -> Unit)? = null,
         private val onItemDisliked: ((VideoModel) -> Unit)? = null,
@@ -280,6 +288,8 @@ class VideoAdapter(
                 view = views.root,
                 onTopEdgeUp = onTopEdgeUp,
                 onBottomEdgeDown = onBottomEdgeDown,
+                onLeftEdge = onLeftEdge,
+                onRightEdge = onRightEdge,
                 handleListDpadDown = false,
                 chainedListener = keyListener
             )

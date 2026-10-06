@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class HistoryVideoAdapter(
     private val onItemClick: (HistoryVideoModel) -> Unit,
     onTopEdgeUp: (() -> Boolean)? = null,
+    onLeftEdge: (() -> Boolean)? = null,
+    onRightEdge: (() -> Boolean)? = null,
     onItemFocused: ((Int) -> Unit)? = null,
     onItemFocusedWithView: ((View, Int) -> Unit)? = null,
     onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
@@ -38,6 +40,8 @@ class HistoryVideoAdapter(
         setHasStableIds(true)
         setShowLoadMore(false)
         this.onTopEdgeUp = onTopEdgeUp
+        this.onLeftEdge = onLeftEdge
+        this.onRightEdge = onRightEdge
         this.onItemFocused = onItemFocused
         this.onItemFocusedWithView = onItemFocusedWithView
         this.onItemDpad = onItemDpad
@@ -195,6 +199,8 @@ class HistoryVideoAdapter(
             VideoCardFocusHelper.bindSidebarExit(
                 view = views.root,
                 onTopEdgeUp = onTopEdgeUp,
+                onLeftEdge = onLeftEdge,
+                onRightEdge = onRightEdge,
                 handleListDpadDown = false,
                 chainedListener = keyListener
             )

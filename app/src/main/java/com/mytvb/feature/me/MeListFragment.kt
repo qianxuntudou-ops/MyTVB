@@ -122,6 +122,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                 onTopEdgeUp = {
                     focusTopTab()
                 },
+                onLeftEdge = ::switchToPrevMeTab,
+                onRightEdge = ::switchToNextMeTab,
                 onItemFocused = { position -> lastFocusedHistoryPosition = position },
                 onItemFocusedWithView = { view, position ->
                     tvFocusController?.onItemFocused(view, position)
@@ -148,6 +150,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                 onTopEdgeUp = {
                     focusTopTab()
                 },
+                onLeftEdge = ::switchToPrevMeTab,
+                onRightEdge = ::switchToNextMeTab,
                 onItemFocusedWithView = { view, position ->
                     tvFocusController?.onItemFocused(view, position)
                 },
@@ -588,7 +592,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
         if (videos.isEmpty()) return "empty"
         val first = videos.first()
         val last = videos.last()
-        return "${videos.size}:${first.bvid}:${first.title.hashCode()}:${last.bvid}:${last.title.hashCode()}:${last.viewAt}"
+        return "${videos.size}:${first.bvid}:${first.title.hashCode()}:${first.progress}:${first.viewAt}:" +
+            "${last.bvid}:${last.title.hashCode()}:${last.viewAt}"
     }
 
     private fun videoListSignature(videos: List<VideoModel>): String {
@@ -854,7 +859,67 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private fun focusTopTab(): Boolean {
-        return (parentFragment as? MeFragment)?.focusCurrentTab() == true
+        // UP 顶行落"当前选中的二级 tab"（不切页），与首页一致
+        return (parentFragment as? MeFragment)?.focusSelectedTabFromContent() == true
+    }
+
+    /** tab 栏 DOWN 的落点：就近聚焦（锚点优先），位置保持不动，半截轻滚补齐。 */
+    override fun focusNearestVisibleContent(): Boolean {
+        if (!isAdded || view == null) return false
+        val rv = binding.recyclerView
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return false
+        val handled = focusPrimaryContent()
+        com.mytvb.core.common.log.AppLog.d("DownFocus", "[me] focusPrimary=$handled")
+        // 锚点恢复的滚动是 pending（会覆盖任何提前的补滚），必须布局完成后校验最终焦点卡：
+        // 顶部被裁 → 列表下移补全；底部被裁 → 列表上移补全。scrollBy 同步滚动，
+        // 不会被后续布局/恢复链覆盖。
+        rv.post {
+            if (!isAdded || view == null) return@post
+            val focused = rv.findFocus()
+            if (focused == null) return@post
+            val itemView = rv.findContainingItemView(focused) ?: return@post
+            val padTop = rv.paddingTop
+            val visibleBottom = rv.height - rv.paddingBottom
+            val delta = when {
+                itemView.top < padTop -> itemView.top - padTop
+                itemView.bottom > visibleBottom -> itemView.bottom - visibleBottom
+                else -> 0
+            }
+            com.mytvb.core.common.log.AppLog.d(
+                "DownFocus",
+                "[me] post focusedItem top=${itemView.top} bottom=${itemView.bottom} padTop=$padTop visibleBottom=$visibleBottom delta=$delta"
+            )
+            if (delta != 0) {
+                rv.scrollBy(0, delta)
+                rv.post {
+                    val c2 = rv.findContainingItemView(rv.findFocus() ?: return@post)
+                    com.mytvb.core.common.log.AppLog.d("DownFocus", "[me] verify top=${c2?.top} bottom=${c2?.bottom}")
+                }
+            }
+        }
+        return handled
+    }
+
+    /** 重选 tab 的回顶：滚动到顶并聚焦第一项。 */
+    override fun scrollToTopAndFocus(): Boolean {
+        if (!isAdded || view == null) return false
+        scrollListToTop(immediate = true)
+        val rv = binding.recyclerView
+        val controller = tvFocusController ?: return false
+        rv.post {
+            if (isAdded && view != null) {
+                controller.requestRefreshFocus(0)
+            }
+        }
+        return true
+    }
+
+    private fun switchToPrevMeTab(): Boolean {
+        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+    }
+
+    private fun switchToNextMeTab(): Boolean {
+        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(1) == true
     }
 
     private fun restoreContentFocus() {

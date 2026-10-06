@@ -282,6 +282,48 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         recyclerView?.scrollToPosition(0)
     }
 
+    /**
+     * 就近聚焦当前可见内容（tab 栏 DOWN 的落点）：
+     * 列表保持现有滚动位置不动；聚焦优先走焦点锚点（恢复离开时的卡片），否则可见第一项。
+     * 锚点恢复自带按离开时偏移的滚动，可能把目标卡复现成半截——因此在布局完成后
+     * 校验最终聚焦卡片，顶缘仍被裁时轻滚补齐到完整可见。
+     */
+    protected fun focusNearestVisibleListItem(): Boolean {
+        if (!isAdded || view == null) return false
+        val rv = recyclerView ?: return false
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return false
+        val handled = focusPrimaryContent()
+        com.mytvb.core.common.log.AppLog.d("DownFocus", "[base] focusPrimary=$handled")
+        // 锚点恢复的滚动是 pending（会覆盖任何提前的补滚），必须布局完成后校验最终焦点卡：
+        // 顶部被裁 → 列表下移补全；底部被裁 → 列表上移补全。scrollBy 同步滚动，
+        // 不会被后续布局/恢复链覆盖。
+        rv.post {
+            if (!isAdded || view == null) return@post
+            val focused = rv.findFocus()
+            if (focused == null) return@post
+            val itemView = rv.findContainingItemView(focused) ?: return@post
+            val padTop = rv.paddingTop
+            val visibleBottom = rv.height - rv.paddingBottom
+            val delta = when {
+                itemView.top < padTop -> itemView.top - padTop
+                itemView.bottom > visibleBottom -> itemView.bottom - visibleBottom
+                else -> 0
+            }
+            com.mytvb.core.common.log.AppLog.d(
+                "DownFocus",
+                "[base] post focusedItem top=${itemView.top} bottom=${itemView.bottom} padTop=$padTop visibleBottom=$visibleBottom delta=$delta"
+            )
+            if (delta != 0) {
+                rv.scrollBy(0, delta)
+                rv.post {
+                    val c2 = rv.findContainingItemView(rv.findFocus() ?: return@post)
+                    com.mytvb.core.common.log.AppLog.d("DownFocus", "[base] verify top=${c2?.top} bottom=${c2?.bottom}")
+                }
+            }
+        }
+        return handled
+    }
+
     protected fun isRecyclerIdle(): Boolean {
         val rv = recyclerView ?: return true
         return rv.scrollState == RecyclerView.SCROLL_STATE_IDLE && !rv.isComputingLayout

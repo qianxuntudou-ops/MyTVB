@@ -58,6 +58,8 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         return VideoAdapter(
             onItemClick = ::onVideoClick,
             onTopEdgeUp = ::focusTopTab,
+            onLeftEdge = ::switchToPrevHomeTab,
+            onRightEdge = ::switchToNextHomeTab,
             onItemFocusedWithView = { view, position ->
                 tvFocusController?.onItemFocused(view, position)
                 scheduleFocusWarmup()
@@ -481,7 +483,36 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
     }
 
     private fun focusTopTab(): Boolean {
-        return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
+        // UP 顶行落"当前选中的二级 tab"（不切页，对齐 blbl focusSelectedTabIfAvailable）：
+        // 落几何最近的 tab 会让随后的 OK 误切到隔壁页。
+        return (parentFragment as? HomeFragment)?.focusSelectedTabFromContent() == true
+    }
+
+    /** 行首左边缘：切上一个二级 tab；已是首个 tab 时由宿主回退到主边栏（保持原行为）。 */
+    private fun switchToPrevHomeTab(): Boolean {
+        return (parentFragment as? HomeFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+    }
+
+    /** 行尾右边缘：切下一个二级 tab；已是末个 tab 时吞键（保持原行为）。 */
+    private fun switchToNextHomeTab(): Boolean {
+        return (parentFragment as? HomeFragment)?.switchAdjacentTabFromContentEdge(1) == true
+    }
+
+    override fun focusNearestVisibleContent(): Boolean {
+        return focusNearestVisibleListItem()
+    }
+
+    override fun scrollToTopAndFocus(): Boolean {
+        scrollToTop()
+        val rv = recyclerView ?: return false
+        val controller = tvFocusController ?: return false
+        // scrollToPosition(0) 后目标 holder 需等一帧布局，post 后再请求聚焦第一项
+        rv.post {
+            if (isAdded && view != null) {
+                controller.requestRefreshFocus(0)
+            }
+        }
+        return true
     }
 
     protected fun isCurrentHomePage(): Boolean {

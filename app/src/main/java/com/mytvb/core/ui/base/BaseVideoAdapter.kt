@@ -13,6 +13,7 @@ abstract class BaseVideoAdapter<T : Any, VH : RecyclerView.ViewHolder> : BaseAda
     protected var onTopEdgeUp: (() -> Boolean)? = null
     protected var onBottomEdgeDown: (() -> Boolean)? = null
     protected var onLeftEdge: (() -> Boolean)? = null
+    protected var onRightEdge: (() -> Boolean)? = null
     protected var onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null
     protected var onItemsChanged: (() -> Unit)? = null
 
