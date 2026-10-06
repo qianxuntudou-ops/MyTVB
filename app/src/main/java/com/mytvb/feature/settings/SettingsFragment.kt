@@ -56,6 +56,7 @@ import com.mytvb.core.common.ext.localizedSettingLabel
 import com.mytvb.network.cookie.CookieManager
 import com.mytvb.ui.activity.MainActivity
 import com.mytvb.ui.activity.GaiaVgateActivity
+import com.mytvb.ui.widget.NonFocusableScrollView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -961,9 +962,22 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             layoutParams = lp
         })
 
-        root.addView(ScaledTextView(requireContext()).apply {
+        // 更新日志可能很长：正文钳到 55% 屏高转为滚动，避免整个弹窗高度超屏把按钮顶出屏幕
+        val notesScroll = NonFocusableScrollView(requireContext()).apply {
+            maxHeight = (resources.displayMetrics.heightPixels * 0.55f).toInt()
+            // 滚动条常驻且加粗（内容不满 maxHeight 时系统不绘制，不会误显示），
+            // 上下渐隐边缘提示还有未滚到的内容
+            setScrollbarFadingEnabled(false)
+            setScrollBarSize(resources.getDimensionPixelSize(R.dimen.px8))
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(resources.getDimensionPixelSize(R.dimen.px30))
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px40, px20, px40, 0)
+            layoutParams = lp
+        }
+        notesScroll.addView(ScaledTextView(requireContext()).apply {
             val notes = if (releaseInfo.releaseNotes.isNotBlank()) {
-                getString(R.string.update_release_notes_format, releaseInfo.releaseNotes.take(300))
+                getString(R.string.update_release_notes_format, releaseInfo.releaseNotes)
             } else ""
             text = getString(
                 R.string.update_confirm_message_format,
@@ -974,10 +988,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             setTextColor(textColor)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.px30))
             setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
-            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(px40, px20, px40, 0)
-            layoutParams = lp
         })
+        root.addView(notesScroll)
 
         val actionContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1008,6 +1020,23 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         root.addView(actionContainer)
         dialog.setContentView(root)
+        // 焦点在按钮上时 DPAD 上/下不会路由进 ScrollView，由弹窗层转发驱动正文滚动；
+        // 左右/确认/返回不拦，按钮焦点切换与关闭行为不受影响
+        dialog.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            val step = resources.getDimensionPixelSize(R.dimen.px120)
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    notesScroll.smoothScrollBy(0, -step)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    notesScroll.smoothScrollBy(0, step)
+                    true
+                }
+                else -> false
+            }
+        }
         dialog.show()
         DialogWindowFit.apply(dialog.window, requireContext(), resources.getDimensionPixelSize(R.dimen.px800))
     }
