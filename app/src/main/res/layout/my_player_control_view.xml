@@ -100,9 +100,11 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/px5"
             app:layout_constraintTop_toBottomOf="@+id/view_title"
-            app:scrubber_dragged_size="23dp"
-            app:scrubber_focus_peak_size="30dp"
-            app:scrubber_enabled_size="16dp"
+            app:scrubber_dragged_size="46dp"
+            app:scrubber_focus_peak_size="54dp"
+            app:scrubber_enabled_size="34dp"
+            app:touch_target_height="60dp"
+            app:bar_height="@dimen/px6"
             app:scrubber_drawable="@drawable/ic_progress_head"
             app:played_color="#FF0088BB"/>
         <FrameLayout

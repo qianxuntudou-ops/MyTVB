@@ -154,11 +154,10 @@ class DefaultTimeBar @JvmOverloads constructor(
             playedAdMarkerPaint.color = 0x33FFFFFF
         }
 
-        scrubberPadding = if (scrubberDrawable != null) {
-            (scrubberDrawable.intrinsicWidth + 1) / 2
-        } else {
+        scrubberPadding = max(
+            if (scrubberDrawable != null) (scrubberDrawable.intrinsicWidth + 1) / 2 else 0,
             (max(scrubberDisabledSize, max(scrubberEnabledSize, max(scrubberDraggedSize, scrubberFocusPeakSize))) + 1) / 2
-        }
+        )
 
         isFocusable = true
         if (importantForAccessibility == IMPORTANT_FOR_ACCESSIBILITY_AUTO) {
@@ -296,10 +295,16 @@ class DefaultTimeBar @JvmOverloads constructor(
             }
         }
 
-        drawnUnplayed.set(barLeft, barTop, barRight, barBottom)
-        drawnPosition.set(barLeft, barTop, barLeft, barBottom)
-        drawnBuffered.set(barLeft, barTop, barLeft, barBottom)
-        drawnScrubber.set(barLeft, barTop, barLeft, barBottom)
+        // 焦点态轨道上下各加宽（TV 焦点提示；对称扩展，播放头中心不变）。
+        // 1dp 观感不足，用户要求再加粗 → 2dp
+        val focusBarExpand = if (isFocused) dpToPx(2) else 0
+        val drawnBarTop = barTop - focusBarExpand
+        val drawnBarBottom = barBottom + focusBarExpand
+
+        drawnUnplayed.set(barLeft, drawnBarTop, barRight, drawnBarBottom)
+        drawnPosition.set(barLeft, drawnBarTop, barLeft, drawnBarBottom)
+        drawnBuffered.set(barLeft, drawnBarTop, barLeft, drawnBarBottom)
+        drawnScrubber.set(barLeft, drawnBarTop, barLeft, drawnBarBottom)
 
         if (duration > 0) {
             val playedProgress = position.toFloat() / duration
@@ -318,8 +323,8 @@ class DefaultTimeBar @JvmOverloads constructor(
             val bufferedLeft = max(drawnPosition.right, drawnUnplayed.left)
             if (drawnBuffered.right > bufferedLeft) {
                 canvas.drawRect(
-                    bufferedLeft.toFloat(), barTop.toFloat(),
-                    drawnBuffered.right.toFloat(), barBottom.toFloat(),
+                    bufferedLeft.toFloat(), drawnBarTop.toFloat(),
+                    drawnBuffered.right.toFloat(), drawnBarBottom.toFloat(),
                     bufferedPaint
                 )
             }
@@ -337,7 +342,7 @@ class DefaultTimeBar @JvmOverloads constructor(
                 val left = barLeft + (barWidth * startRatio)
                 val right = barLeft + (barWidth * endRatio)
                 sponsorPaint.color = (segment.categoryColor() and 0x00FFFFFFL).toInt() or 0x99000000.toInt()
-                canvas.drawRect(left, barTop.toFloat(), right, barBottom.toFloat(), sponsorPaint)
+                canvas.drawRect(left, drawnBarTop.toFloat(), right, drawnBarBottom.toFloat(), sponsorPaint)
             }
         }
 

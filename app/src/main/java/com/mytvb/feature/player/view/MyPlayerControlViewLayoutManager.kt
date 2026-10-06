@@ -119,7 +119,8 @@ class MyPlayerControlViewLayoutManager(
         playerControlView.post {
             if (fromSeekProgress && !focusPlayPause) {
                 playerControlView.requestTimeBarFocus()
-            } else {
+            } else if (!timeBar.hasFocus()) {
+                // 焦点已在进度条上时不要抢给播放按钮（timebar 快进后恢复控制栏的场景）
                 playerControlView.requestPlayPauseFocus()
             }
         }
@@ -201,6 +202,18 @@ class MyPlayerControlViewLayoutManager(
         } else {
             playerControlView.postDelayed(hideMainBarRunnable, playerControlView.getShowTimeoutMs().toLong())
         }
+    }
+
+    /**
+     * 瞬时进度条模式的松手收尾（blbl 节奏）：保持只有进度条+时间，
+     * PROGRESS_ONLY_DURATION_MS 后由 hideProgressBar 动画淡出。
+     * 返回 false 表示当前状态不适用（如持久细条模式），调用方需自行立即收起。
+     */
+    fun scheduleProgressOnlyFadeOutIfApplicable(): Boolean {
+        if (uxState != UX_STATE_ONLY_PROGRESS_VISIBLE || !progressOnlyUiEnabled) return false
+        removeHideCallbacks()
+        playerControlView.postDelayed(hideProgressBarRunnable, PROGRESS_ONLY_DURATION_MS)
+        return true
     }
 
     fun hideInfoOnlyLeftTimeBar() {

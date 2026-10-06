@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 跟随进度条的缩略图浮窗底（对齐 blbl bg_rounded_preview）：
+     纯黑底 + 小圆角，配合根布局 clipToOutline 把内容图裁成同款圆角。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@android:color/black" />
+    <corners android:radius="@dimen/px12" />
+</shape>

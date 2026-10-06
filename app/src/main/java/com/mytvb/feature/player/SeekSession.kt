@@ -77,7 +77,8 @@ class SeekSession(
     fun beginHoldTickLoop() {
         if (mode != Mode.HOLD) return
         cancelTickRunnable()
-        doTick()
+        // 首跳不立即执行：先按 startHoldSeek 时记录的位置渲染预览，40ms 后才开始推进
+        // （对齐 blbl startHoldScrubSeek 的手感：起手画面静止，不凭空多跳一格）
         scheduleNextTick()
     }
 
@@ -163,13 +164,27 @@ class SeekSession(
             startMs = SystemClock.uptimeMillis()
         }
 
-        val step = 10_000L * if (isForward) 1 else -1
+        val step = holdScrubStepMs(durationMs = duration, tickMs = HOLD_SCRUB_TICK_MS) *
+            if (isForward) 1 else -1
         targetPositionMs = (targetPositionMs + step).coerceIn(0L, duration)
 
         val deltaMs = targetPositionMs - holdStartPositionMs
         coordinator.updateSeekPreview(targetPositionMs, duration)
         seekPreviewRenderer(targetPositionMs, duration)
         holdSeekOverlayRenderer?.invoke(targetPositionMs, duration, deltaMs)
+    }
+
+    /**
+     * 长按拖动步长按片长自适应：长按 HOLD_SCRUB_TRAVERSE_MS 走完全片。
+     * 30 分钟剧约 7.2s/tick（180s/s），2 小时电影约 28.8s/tick——片越长单步越远，
+     * 走完整个时间轴所需的长按时长恒定（blbl 同款模型，替代原"固定 10s 步长 +
+     * 200/120/60/30ms 加速曲线"的末端过猛问题）。
+     */
+    private fun holdScrubStepMs(durationMs: Long, tickMs: Long): Long {
+        val duration = durationMs.coerceAtLeast(0L)
+        if (duration <= 0L) return 0L
+        val step = (duration.toDouble() * tickMs.toDouble() / HOLD_SCRUB_TRAVERSE_MS.toDouble())
+        return kotlin.math.round(step).toLong().coerceAtLeast(1L)
     }
 
     private fun scheduleNextTick() {
@@ -185,18 +200,18 @@ class SeekSession(
         handler.postDelayed(runnable, interval)
     }
 
-    private fun getIntervalMs(): Long {
-        val elapsed = SystemClock.uptimeMillis() - startMs
-        return when {
-            elapsed < 1000L -> 200L
-            elapsed < 2000L -> 120L
-            elapsed < 3000L -> 60L
-            else -> 30L
-        }
-    }
+    private fun getIntervalMs(): Long = HOLD_SCRUB_TICK_MS
 
     private fun cancelTickRunnable() {
         tickRunnable?.let { handler.removeCallbacks(it) }
         tickRunnable = null
+    }
+
+    companion object {
+        /** 长按拖动 tick 间隔，恒定不加速 */
+        private const val HOLD_SCRUB_TICK_MS = 40L
+
+        /** 长按走完全片所需时长（10 秒 traverse，blbl 默认值） */
+        private const val HOLD_SCRUB_TRAVERSE_MS = 10_000L
     }
 }

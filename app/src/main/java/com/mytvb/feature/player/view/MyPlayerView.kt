@@ -107,7 +107,9 @@ class MyPlayerView @JvmOverloads constructor(
         private const val KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT = 282
         private const val KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT = 283
         private const val STARTUP_BUFFERING_INDICATOR_DELAY_MS = 700L
-        private const val REBUFFER_BUFFERING_INDICATOR_DELAY_MS = 150L
+        // 对齐 blbl DEFAULT_BUFFERING_OVERLAY_SHOW_DELAY_MS：播放中 BUFFERING 满 1s
+        // 才弹遮罩，seek 后几百 ms 的正常缓冲不打扰画面（原 150ms 近乎立弹）
+        private const val REBUFFER_BUFFERING_INDICATOR_DELAY_MS = 1_000L
         private const val DM_MASK_STARTUP_LOAD_DELAY_MS = 1500L
         private const val SHUTTER_FADE_DURATION_MS = 180L
         private const val SHUTTER_TIMEOUT_MS = 8_000L
@@ -344,7 +346,13 @@ class MyPlayerView @JvmOverloads constructor(
     private var tapAccumulateBaseMs = 0L
     private var tapAccumulateDeltaMs = 0L
     private var tapCommitRunnable: Runnable? = null
-    private val tapCommitDelayMs = 500L
+    private val tapCommitDelayMs = 450L
+
+    // --- Hold scrub playback freeze（对齐 blbl：长按拖动期间画面定格）---
+    // 进入长按 tick 时暂停播放器，松手提交 seek 后恢复原播放状态；
+    // 幂等：已冻结时重复进入不重复 pause。
+    private var holdPlaybackFrozen = false
+    private var holdPlaybackWasPlaying = false
 
     // OK/Enter 在控制器隐藏时的 DOWN 由自定义路径切换了播放/暂停，
     // 必须吞掉对应的 ACTION_UP，否则 UP 落到刚获焦的 buttonPlay 上会被框架
@@ -373,7 +381,7 @@ class MyPlayerView @JvmOverloads constructor(
     private var speedBadgeView: TextView? = null
     private var persistentRateIndicatorEnabled = false
 
-    // --- Timebar-focused seek state (fixed 10s step, interval decreases with hold time) ---
+    // --- Timebar-focused seek state（blbl 模型：40ms 恒定 tick + 步长按片长自适应，长按走完全片时长恒定）---
     private var timebarSeekActive = false
     private var timebarSeekForward = true
     private var timebarSeekRunnable: Runnable? = null
@@ -381,7 +389,14 @@ class MyPlayerView @JvmOverloads constructor(
     private var timebarSeekStartMs = 0L
     private var pendingTimebarHoldStartRunnable: Runnable? = null
     private var timebarSeekTargetMs = 0L
+
+    // --- Timeline thumb preview（跟随进度条滑块的缩略图浮窗，blbl videoShotPreview 形态）---
+    private var timelineThumbPreview: TimelineThumbPreviewView? = null
+    private val timelineTrackBounds = Rect()
+    private val timelineHostLoc = IntArray(2)
     private val timebarSeekIdleTimeoutMs = 200L
+    private val timebarSeekTickMs = 40L
+    private val timebarSeekTraverseMs = 10_000L
 
     // mask provider 的复用容器：videoBoundsProvider 由 host.dispatchDraw 60Hz 调用，
     // 每帧 new Rect + 2 个 IntArray 会触发可观的 minor GC，复用单例消除分配。
@@ -1253,6 +1268,7 @@ class MyPlayerView @JvmOverloads constructor(
             seekSession?.cancel()
             cancelPendingHoldStart()
             cancelPendingExitSeekProgressOnly()
+            endHoldPlaybackFreeze()
             controller?.cancelSeekPreview()
             seekOverlayView?.cancelSwipeSeek()
             controller?.exitSeekProgressOnly()
@@ -1280,8 +1296,10 @@ class MyPlayerView @JvmOverloads constructor(
         if (wasSeeking) {
             cancelPendingHoldStart()
             cancelPendingExitSeekProgressOnly()
+            endHoldPlaybackFreeze()
             controller?.cancelSeekPreview()
             seekOverlayView?.cancelSwipeSeek()
+            hideTimelineThumbPreviewNow()
             controller?.exitSeekProgressOnly()
             // Restore appropriate UI state
             if (wasTimebarSeek) {
@@ -1519,6 +1537,20 @@ class MyPlayerView @JvmOverloads constructor(
             hideController()
             return true
         }
+        // 对齐 blbl：控制栏可见时 UP 显式聚焦进度条（blbl UP = focusSeekBar）。
+        // 不依赖系统焦点导航——控制栏淡入/布局变化时 FocusFinder 会把 UP 导到
+        // 别的按钮上，进度条聚焦不稳定，长按/点按的 timebar 路径随之失效。
+        if (controllerVisible
+            && event.keyCode == KeyEvent.KEYCODE_DPAD_UP
+            && event.action == KeyEvent.ACTION_DOWN
+            && controller?.isTimebarFocused() != true
+        ) {
+            val focused = findFocus()
+            if (focused == null || isViewDescendant(focused)) {
+                controller?.requestTimeBarFocus()
+                return true
+            }
+        }
         // When controller is visible and a button (not timebar) has focus,
         // pressing DOWN opens the related videos panel if the related button is visible.
         if (controllerVisible
@@ -1657,6 +1689,7 @@ class MyPlayerView @JvmOverloads constructor(
                 cancelPendingHoldStart()
                 val startRunnable = Runnable {
                     if (seekSession?.isActive() == true) {
+                        beginHoldPlaybackFreeze()
                         seekSession?.beginHoldTickLoop()
                     }
                     pendingHoldStartRunnable = null
@@ -1669,6 +1702,7 @@ class MyPlayerView @JvmOverloads constructor(
                 // Restart hold delay for new direction
                 val startRunnable = Runnable {
                     if (seekSession?.isActive() == true) {
+                        beginHoldPlaybackFreeze()
                         seekSession?.beginHoldTickLoop()
                     }
                     pendingHoldStartRunnable = null
@@ -1687,30 +1721,73 @@ class MyPlayerView @JvmOverloads constructor(
                     handleTapAccumulate(forward)
                     session.resetSilently()
                 } else {
-                    // Long press: clear tap accumulation, finish hold seek
+                    // Long press: clear tap accumulation, finish hold seek.
+                    // 立即停 tick 并提交——原实现 postDelayed(150ms) 后才 finishSeek，
+                    // 150ms 窗口内 tick 仍在推进，松手后凭空多跳（用户反馈"快进过头"根因之一）。
                     resetTapAccumulate()
-                    val finishRunnable = Runnable {
-                        if (seekSession?.isActive() == true) {
-                            seekSession?.finishSeek()
-                            controller?.cancelSeekPreview()
-                            controller?.exitSeekProgressOnly()
-                            seekOverlayView?.finishSwipeSeek()
-                            syncDanmakuPosition(
-                                player?.currentPosition?.coerceAtLeast(0L) ?: 0L,
-                                forceSeek = true
-                            )
-                            if (player?.isPlaying == true) {
-                                resumeDanmaku()
-                            }
-                        }
-                    }
-                    pendingExitSeekProgressOnly = finishRunnable
-                    postDelayed(finishRunnable, 150L)
+                    finishHoldSeekNow()
                 }
             }
             return true
         }
         return session.isActive()
+    }
+
+    /** 长按会话收尾：停 tick → 提交 seek → 解冻恢复播放 → 清 UI。 */
+    private fun finishHoldSeekNow() {
+        val session = seekSession ?: return
+        if (!session.isActive()) return
+        session.finishSeek()
+        val resumedPlayback = endHoldPlaybackFreeze()
+        // 长按松手同 blbl：进度条停留淡出，浮窗 500ms 先走
+        controller?.finishSeekPreviewProgressOnly()
+        timelineThumbPreview?.hideAfter(500L)
+        seekOverlayView?.finishSwipeSeek()
+        syncDanmakuPosition(
+            player?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+            forceSeek = true
+        )
+        // play() 后 isPlaying 异步翻转，恢复弹幕以"本次解冻确实恢复了播放"为准；
+        // 长按前就在暂停的用户，松手后保持暂停
+        if (resumedPlayback || player?.isPlaying == true) {
+            resumeDanmaku()
+        }
+    }
+
+    /** 长按拖动期间暂停播放器（画面定格），幂等。 */
+    private fun beginHoldPlaybackFreeze() {
+        if (holdPlaybackFrozen) return
+        val currentPlayer = player ?: return
+        holdPlaybackWasPlaying = currentPlayer.playWhenReady
+        holdPlaybackFrozen = true
+        if (holdPlaybackWasPlaying) {
+            currentPlayer.pause()
+        }
+    }
+
+    /**
+     * 长按结束后恢复原播放状态；未冻结时为空操作。
+     * 返回值：本次调用是否把播放从冻结暂停中恢复（长按前就在暂停的用户返回 false）。
+     */
+    private fun endHoldPlaybackFreeze(): Boolean {
+        if (!holdPlaybackFrozen) return false
+        holdPlaybackFrozen = false
+        val shouldResume = holdPlaybackWasPlaying
+        holdPlaybackWasPlaying = false
+        if (shouldResume) {
+            player?.play()
+        }
+        return shouldResume
+    }
+
+    /**
+     * 视图离屏兜底：只清冻结标志不恢复播放——离屏后播放器的播放/暂停
+     * 交还生命周期管理（onStop 已强制 playWhenReady=false，此处再 play()
+     * 会造成后台播放）。
+     */
+    private fun discardHoldPlaybackFreeze() {
+        holdPlaybackFrozen = false
+        holdPlaybackWasPlaying = false
     }
 
     private fun cancelPendingHoldStart() {
@@ -1740,7 +1817,9 @@ class MyPlayerView @JvmOverloads constructor(
         val targetMs = (tapAccumulateBaseMs + tapAccumulateDeltaMs).coerceIn(0L, duration)
 
         controller?.beginSeekPreview(targetMs)
+        showTimelineThumbPreview(targetMs, duration)
         val seekSeconds = kotlin.math.abs(tapAccumulateDeltaMs / 1000L).toInt().coerceAtLeast(1)
+        // blbl smartSeek：中央只有"快进 Xs"文字提示，缩略图由跟随浮窗展示
         ensureSeekOverlay("tap_seek")?.showSwipeSeek(
             targetPositionMs = targetMs,
             durationMs = duration,
@@ -1757,9 +1836,12 @@ class MyPlayerView @JvmOverloads constructor(
             p.seekTo(finalTarget)
             onUserSeekListener?.invoke(finalTarget)
             syncDanmakuPosition(finalTarget, forceSeek = true)
-            controller?.cancelSeekPreview()
-            seekOverlayView?.finishSwipeSeek()
             if (wasTimebarSeek) {
+                // timebar 场景焦点始终在进度条上、语义是完整控制栏：恢复信息层即可
+                // （finishSeekPreviewProgressOnly 在持久细条模式下会 exit 整个控制器，
+                //  show() 随之把焦点抢给播放按钮——短按后焦点丢失的回归根因）
+                controller?.cancelSeekPreview()
+                hideTimelineThumbPreviewNow()
                 timebarSeekActive = false
                 timebarSeekStartMs = 0L
                 controller?.show()
@@ -1767,9 +1849,12 @@ class MyPlayerView @JvmOverloads constructor(
                 controller?.requestTimeBarFocus()
                 uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekFinished)
             } else {
-                controller?.exitSeekProgressOnly()
+                // blbl commitDeferredKeySeekPreview → scheduleHideVideoShotPreviewAfterSeek
+                controller?.finishSeekPreviewProgressOnly()
+                timelineThumbPreview?.hideAfter(500L)
                 uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekFinished)
             }
+            seekOverlayView?.finishSwipeSeek()
             tapAccumulateDeltaMs = 0L
             tapAccumulateBaseMs = 0L
             tapCommitRunnable = null
@@ -1812,7 +1897,8 @@ class MyPlayerView @JvmOverloads constructor(
                             timebarSeekForward = forward
                             timebarSeekStartMs = 0L
                         }
-                        doTimebarSeekTick()
+                        // 首跳不立即执行（blbl 手感：起手画面静止），tick 循环 40ms 后开始推进
+                        beginHoldPlaybackFreeze()
                         startTimebarSeekLoop()
                     }
                     pendingTimebarHoldStartRunnable = null
@@ -1836,7 +1922,11 @@ class MyPlayerView @JvmOverloads constructor(
                     onUserSeekListener?.invoke(timebarSeekTargetMs)
                     syncDanmakuPosition(timebarSeekTargetMs, forceSeek = true)
                 }
+                if (endHoldPlaybackFreeze()) {
+                    resumeDanmaku()
+                }
                 controller?.cancelSeekPreview()
+                timelineThumbPreview?.hideAfter(500L)
                 startTimebarSeekIdle()
             }
             return true
@@ -1859,10 +1949,22 @@ class MyPlayerView @JvmOverloads constructor(
             timebarSeekStartMs = android.os.SystemClock.uptimeMillis()
         }
 
-        val step = 60_000L * if (timebarSeekForward) 1 else -1
+        // 步长按片长自适应：长按 timebarSeekTraverseMs 走完全片（与 UI 隐藏长按
+        // 路径同一模型），替代原固定 60s 步长（30 分钟剧 3 秒后即 2000s/s，快进过头）
+        val step = timebarScrubStepMs(durationMs = duration) * if (timebarSeekForward) 1 else -1
         timebarSeekTargetMs = (timebarSeekTargetMs + step).coerceIn(0L, duration)
 
         controller?.beginSeekPreview(timebarSeekTargetMs)
+        // blbl 形态：缩略图浮窗跟随进度条滑块（不是中央 overlay）
+        showTimelineThumbPreview(timebarSeekTargetMs, duration)
+    }
+
+    /** 长按拖动步长：duration × tick / traverse，长按恒定时长走完全片。 */
+    private fun timebarScrubStepMs(durationMs: Long): Long {
+        val duration = durationMs.coerceAtLeast(0L)
+        if (duration <= 0L) return 0L
+        val step = duration.toDouble() * timebarSeekTickMs.toDouble() / timebarSeekTraverseMs.toDouble()
+        return kotlin.math.round(step).toLong().coerceAtLeast(1L)
     }
 
     private fun startTimebarSeekLoop() {
@@ -1878,15 +1980,7 @@ class MyPlayerView @JvmOverloads constructor(
         postDelayed(runnable, interval)
     }
 
-    private fun getTimebarSeekIntervalMs(): Long {
-        val elapsed = android.os.SystemClock.uptimeMillis() - timebarSeekStartMs
-        return when {
-            elapsed < 1000L -> 200L
-            elapsed < 2000L -> 120L
-            elapsed < 3000L -> 60L
-            else -> 30L
-        }
-    }
+    private fun getTimebarSeekIntervalMs(): Long = timebarSeekTickMs
 
     private fun cancelTimebarSeekLoop() {
         timebarSeekRunnable?.let { removeCallbacks(it) }
@@ -1911,6 +2005,34 @@ class MyPlayerView @JvmOverloads constructor(
     private fun cancelTimebarSeekIdle() {
         timebarSeekIdleRunnable?.let { removeCallbacks(it) }
         timebarSeekIdleRunnable = null
+    }
+
+    // ==================== Timeline thumb preview helpers ====================
+
+    private fun ensureTimelineThumbPreview(): TimelineThumbPreviewView {
+        timelineThumbPreview?.let { return it }
+        val preview = TimelineThumbPreviewView(context)
+        addView(
+            preview,
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        )
+        preview.translationZ = 3f
+        pendingSeekPreviewSnapshot?.let { preview.setSnapshot(it) }
+        timelineThumbPreview = preview
+        return preview
+    }
+
+    /** 把缩略图浮窗定位到进度条上方、水平跟随预览位置（blbl positionVideoShotPreviewX 语义）。 */
+    private fun showTimelineThumbPreview(positionMs: Long, durationMs: Long) {
+        val controllerRef = controller ?: return
+        if (!controllerRef.getTimeBarTrackBounds(timelineTrackBounds)) return
+        getLocationInWindow(timelineHostLoc)
+        timelineTrackBounds.offset(-timelineHostLoc[0], -timelineHostLoc[1])
+        ensureTimelineThumbPreview().show(positionMs, durationMs, timelineTrackBounds)
+    }
+
+    private fun hideTimelineThumbPreviewNow() {
+        timelineThumbPreview?.hideNow()
     }
 
     // ==================== End timebar seek ====================
@@ -2331,13 +2453,9 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun showHoldSeekOverlay(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
-        ensureSeekOverlay("hold_seek")?.showSwipeSeek(
-            targetPositionMs = targetPositionMs,
-            durationMs = durationMs,
-            deltaMs = deltaMs,
-            showBottomProgress = false,
-            showThumbnails = false
-        )
+        // blbl 长按 scrub 无中央指示（startHoldScrubSeek 只走 showSeekOsd）：
+        // 瞬时进度条由 seekPreviewRenderer 驱动，这里只驱动跟随滑块的缩略图浮窗
+        showTimelineThumbPreview(targetPositionMs, durationMs)
     }
 
     fun finishHoldSeekOverlay() {
@@ -3000,6 +3118,14 @@ class MyPlayerView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         cancelOkLongPressSpeed()
+        cancelPendingHoldStart()
+        cancelPendingExitSeekProgressOnly()
+        cancelTimebarSeekLoop()
+        cancelTimebarSeekIdle()
+        timebarSeekActive = false
+        seekSession?.cancel()
+        discardHoldPlaybackFreeze()
+        hideTimelineThumbPreviewNow()
         stopUiFrameMonitor()
     }
 
@@ -3040,6 +3166,7 @@ class MyPlayerView @JvmOverloads constructor(
     fun setSeekPreviewSnapshot(snapshot: VideoSnapshotData?) {
         pendingSeekPreviewSnapshot = snapshot
         seekOverlayView?.setSeekPreviewSnapshot(snapshot)
+        timelineThumbPreview?.setSnapshot(snapshot)
     }
 
     fun setControllerAutoShow(autoShow: Boolean) {
@@ -3356,36 +3483,34 @@ class MyPlayerView @JvmOverloads constructor(
                     if (!horizontalDrag) {
                         return false
                     }
-                    isSwipeSeeking = true
-                    swipeSeekUsesControllerPreview = true
-                    uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekTypeChanged(
-                        com.mytvb.feature.player.SeekType.SWIPE
-                    ))
-                    controller?.enterSeekProgressOnly()
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                    val deltaMs = (deltaX / width.coerceAtLeast(1)) * currentPlayer.duration
-                    renderSwipeSeekPreview(
-                        targetPositionMs = swipeSeekStartPositionMs + deltaMs.toLong()
-                            .coerceIn(0L, currentPlayer.duration),
-                        durationMs = currentPlayer.duration,
-                        deltaMs = deltaMs.toLong()
-                    )
-                }
-                val durationMs = currentPlayer.duration.coerceAtLeast(0L)
-                val widthPx = width.coerceAtLeast(1)
-                val offsetRatio = (deltaX / widthPx.toFloat()).coerceIn(-1f, 1f)
-                val targetPositionMs =
-                    (swipeSeekStartPositionMs + (durationMs * offsetRatio).toLong())
-                        .coerceIn(0L, durationMs)
-                swipeSeekTargetPositionMs = targetPositionMs
-                val deltaMs = swipeSeekTargetPositionMs - swipeSeekStartPositionMs
+                isSwipeSeeking = true
+                swipeSeekUsesControllerPreview = true
+                uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekTypeChanged(
+                    com.mytvb.feature.player.SeekType.SWIPE
+                ))
+                // controller 懒加载：从未呼出过控制栏的会话（外链 PlayerActivity 宿主 autoShow=false，
+                // 或主宿主起播即滑）controller 为 null，瞬时进度条/浮窗会被 controller?. 全部吞掉
+                (controller ?: ensureController("swipe_seek"))?.enterSeekProgressOnly()
+                parent?.requestDisallowInterceptTouchEvent(true)
+                val deltaMs = computeSwipeSeekDeltaMs(deltaX, currentPlayer.duration)
                 renderSwipeSeekPreview(
-                    targetPositionMs = targetPositionMs,
-                    durationMs = durationMs,
-                    deltaMs = deltaMs
+                    targetPositionMs = (swipeSeekStartPositionMs + deltaMs)
+                        .coerceIn(0L, currentPlayer.duration),
+                    durationMs = currentPlayer.duration
                 )
-                return true
             }
+            val durationMs = currentPlayer.duration.coerceAtLeast(0L)
+            val deltaMs = computeSwipeSeekDeltaMs(deltaX, durationMs)
+            val targetPositionMs =
+                (swipeSeekStartPositionMs + deltaMs)
+                    .coerceIn(0L, durationMs)
+            swipeSeekTargetPositionMs = targetPositionMs
+            renderSwipeSeekPreview(
+                targetPositionMs = targetPositionMs,
+                durationMs = durationMs
+            )
+            return true
+        }
 
             MotionEvent.ACTION_UP -> {
                 if (!isSwipeSeeking) {
@@ -3394,9 +3519,10 @@ class MyPlayerView @JvmOverloads constructor(
                 currentPlayer.seekTo(swipeSeekTargetPositionMs)
                 onUserSeekListener?.invoke(swipeSeekTargetPositionMs)
                 syncDanmakuPosition(swipeSeekTargetPositionMs, forceSeek = true)
-                controller?.endSeekPreview(swipeSeekTargetPositionMs, 180L)
+                // blbl 节奏：松手后进度条+时间停留 ~1s 再动画淡出，浮窗 500ms 先走
+                controller?.finishSeekPreviewProgressOnly()
+                timelineThumbPreview?.hideAfter(500L)
                 uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekFinished)
-                controller?.exitSeekProgressOnly()
                 seekOverlayView?.finishSwipeSeek()
                 isSwipeSeeking = false
                 swipeSeekUsesControllerPreview = false
@@ -3408,10 +3534,10 @@ class MyPlayerView @JvmOverloads constructor(
                 if (!isSwipeSeeking) {
                     return false
                 }
-                controller?.cancelSeekPreview()
+                controller?.finishSeekPreviewProgressOnly()
+                hideTimelineThumbPreviewNow()
                 uiCoordinator?.clearSeekPreview()
                 uiCoordinator?.transition(com.mytvb.feature.player.UiEvent.SeekCancelled)
-                controller?.exitSeekProgressOnly()
                 seekOverlayView?.cancelSwipeSeek()
                 isSwipeSeeking = false
                 swipeSeekUsesControllerPreview = false
@@ -3432,14 +3558,20 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.resetHideCallbacks()
     }
 
-    private fun renderSwipeSeekPreview(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
+    /** 触摸滑动预览（blbl 形态）：瞬时进度条+右下时间由 beginSeekPreview 驱动，缩略图浮窗跟随进度条滑块。 */
+    private fun renderSwipeSeekPreview(targetPositionMs: Long, durationMs: Long) {
         controller?.beginSeekPreview(targetPositionMs)
-        ensureSeekOverlay("swipe_seek")?.showSwipeSeek(
-            targetPositionMs = targetPositionMs,
-            durationMs = durationMs,
-            deltaMs = deltaMs,
-            showBottomProgress = false
-        )
+        showTimelineThumbPreview(targetPositionMs, durationMs)
+    }
+
+    /**
+     * 触摸滑动快进映射（保留 MyBLBL 原有手感，用户指定不采用 blbl 的 18% 方案）：
+     * 滑满一整屏宽 = 100% 时长，滑动比例即时长比例。
+     */
+    private fun computeSwipeSeekDeltaMs(deltaX: Float, durationMs: Long): Long {
+        val widthPx = width.coerceAtLeast(1).toFloat()
+        val offsetRatio = (deltaX / widthPx).coerceIn(-1f, 1f)
+        return (durationMs * offsetRatio).toLong()
     }
 
 }

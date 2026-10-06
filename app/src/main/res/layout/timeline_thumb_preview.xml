@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 跟随进度条滑块的缩略图预览浮窗（blbl videoShotPreview 形态）：
+     小窗约占屏宽 12%（blbl 实测 ~300px@1440p），纯黑圆角底 + clipToOutline
+     让内容图与浮窗同圆角，无描边（对齐 blbl bg_rounded_preview 方案）。 -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <FrameLayout
+        android:layout_width="@dimen/px225"
+        android:layout_height="@dimen/px127"
+        android:background="@drawable/timeline_thumb_preview_bg"
+        android:clipToOutline="true"
+        android:elevation="@dimen/px8">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/image_timeline_thumb"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+    </FrameLayout>
+</merge>

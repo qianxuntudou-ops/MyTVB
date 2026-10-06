@@ -40,6 +40,8 @@ class MyPlayerControlView @JvmOverloads constructor(
         const val DEFAULT_FAST_FORWARD_MS = 10000L
         const val DEFAULT_REWIND_MS = 10000L
         const val DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS = 200
+        /** BUFFERING 持续满此时长才弹 loading 转圈（对齐 blbl DEFAULT_BUFFERING_OVERLAY_SHOW_DELAY_MS） */
+        private const val BUFFERING_SHOW_DELAY_MS = 1_000L
         private const val ENABLED_BUTTON_ALPHA = 1f
         private const val DISABLED_BUTTON_ALPHA = 0.3f
         private const val LIVE_UI_LOG_ENABLED = false
@@ -469,7 +471,24 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     private fun updateLoadingState() {
         val isLoading = player?.playbackState == Player.STATE_BUFFERING
-        loadingProgressBar.visibility = if (isLoading) VISIBLE else GONE
+        if (isLoading) {
+            // blbl 同款观感（DEFAULT_BUFFERING_OVERLAY_SHOW_DELAY_MS）：
+            // BUFFERING 持续满 1s 才弹转圈——seek 后几百 ms 的正常缓冲不打扰画面
+            if (loadingProgressBar.visibility != VISIBLE) {
+                postDelayed(loadingIndicatorCheckRunnable, BUFFERING_SHOW_DELAY_MS)
+            }
+        } else {
+            removeCallbacks(loadingIndicatorCheckRunnable)
+            if (loadingProgressBar.visibility != GONE) {
+                loadingProgressBar.visibility = GONE
+            }
+        }
+    }
+
+    private val loadingIndicatorCheckRunnable = Runnable {
+        if (player?.playbackState == Player.STATE_BUFFERING) {
+            loadingProgressBar.visibility = VISIBLE
+        }
     }
 
     private fun calculateProgressUpdateDelay(): Long {
@@ -863,6 +882,16 @@ class MyPlayerControlView @JvmOverloads constructor(
         focusCoordinator.requestTimeBarFocus()
     }
 
+    /** 进度条 track 在窗口坐标系下的矩形；timeBar 未初始化/未附着时返回 false。 */
+    fun getTimeBarTrackBounds(out: Rect): Boolean {
+        if (!::timeBar.isInitialized) return false
+        if (!timeBar.isAttachedToWindow || timeBar.width <= 0) return false
+        val loc = IntArray(2)
+        timeBar.getLocationInWindow(loc)
+        out.set(loc[0], loc[1], loc[0] + timeBar.width, loc[1] + timeBar.height)
+        return true
+    }
+
     fun beginSeekPreview(positionMs: Long) {
         removeCallbacks(externalSeekPreviewFinishRunnable)
         if (!externalSeekPreviewActive) {
@@ -884,6 +913,20 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun cancelSeekPreview() {
         cancelExternalSeekPreview(resetHideCallbacks = true)
+    }
+
+    /**
+     * 瞬时进度条模式的松手收尾：结束预览但**不**恢复标题/按钮排
+     * （cancelSeekPreview 的 showInfoAfterEndFF 会把信息层闪出来），
+     * 进度条+时间停留后动画淡出；淡出不可用时立即收起。
+     */
+    fun finishSeekPreviewProgressOnly() {
+        removeCallbacks(externalSeekPreviewFinishRunnable)
+        if (!externalSeekPreviewActive) return
+        externalSeekPreviewActive = false
+        if (!controlViewLayoutManager.scheduleProgressOnlyFadeOutIfApplicable()) {
+            exitSeekProgressOnly()
+        }
     }
 
     fun isTouchWithinInteractiveArea(x: Float, y: Float): Boolean {
@@ -1052,6 +1095,7 @@ class MyPlayerControlView @JvmOverloads constructor(
         controlViewLayoutManager.onDetachedFromWindow()
         attachedToWindow = false
         handler.removeCallbacks(progressRunnable)
+        removeCallbacks(loadingIndicatorCheckRunnable)
         focusCoordinator.clearPendingFocusStabilization(handler)
         removeHideCallbacks()
     }

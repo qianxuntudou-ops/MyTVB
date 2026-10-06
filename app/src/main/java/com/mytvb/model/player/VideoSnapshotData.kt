@@ -22,6 +22,7 @@ data class VideoSnapshotData(
 
     data class Frame(
         val imageUrl: String,
+        val imageIndex: Int,
         val offsetX: Int,
         val offsetY: Int,
         val width: Int,
@@ -65,6 +66,7 @@ data class VideoSnapshotData(
 
         return Frame(
             imageUrl = sheetUrl,
+            imageIndex = imageIndex,
             offsetX = offsetX,
             offsetY = offsetY,
             width = imgXSize,
