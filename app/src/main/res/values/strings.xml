@@ -205,7 +205,10 @@
     <string name="live_entry">直播入口</string>
     <string name="cctv_live">CCTV直播</string>
     <string name="cctv_live_subtitle">央视频道列表</string>
-    <string name="cctv_player_hint">上下键/上下滑动切换频道 · 确定键显示控制栏</string>
+    <string name="cctv_player_hint">上下键切换频道 · 确定键/点击屏幕呼出控制栏 · 菜单键选择频道</string>
+    <string name="cctv_channel_select">频道选择</string>
+    <string name="channel">频道</string>
+    <string name="marmot_player_hint">上下键切换频道 · 确定键/点击屏幕呼出控制栏 · 菜单键选择频道</string>
     <string name="cctv_quality">画质</string>
     <string name="minor_protection">青少年保护</string>
     <string name="teen_mode">青少年模式</string>

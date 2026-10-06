@@ -100,7 +100,7 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var buttonRefresh: ImageView
     private lateinit var buttonLine: ImageView
     private lateinit var buttonClose: ImageView
-    private lateinit var buttonBack: ImageView
+    private lateinit var buttonBack: PlayerControlButton
     private lateinit var textLiveDuration: TextView
     private lateinit var loadingProgressBar: ProgressBar
     private lateinit var titleContainer: View
@@ -198,6 +198,8 @@ class MyPlayerControlView @JvmOverloads constructor(
         buttonLine = findViewById(R.id.button_line)
         buttonClose = findViewById(R.id.button_close)
         buttonBack = findViewById(R.id.button_back)
+        // 返回按钮触摸点击给按压变色反馈（同设置页按钮，一次性动作需要确认点到了）
+        buttonBack.touchPressFeedback = true
         textLiveDuration = findViewById(R.id.text_live_duration)
         loadingProgressBar = findViewById(R.id.loading_progress_bar)
         centerControls = findViewById(R.id.exo_center_controls)

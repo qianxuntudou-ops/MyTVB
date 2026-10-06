@@ -143,7 +143,10 @@
     <string name="live_entry">Live entry</string>
     <string name="cctv_live">CCTV Live</string>
     <string name="cctv_live_subtitle">CCTV channel list</string>
-    <string name="cctv_player_hint">Up/Down to switch channels · OK to show controls</string>
+    <string name="cctv_player_hint">Up/Down to switch channels · OK/tap to show controls · MENU for channel list</string>
+    <string name="cctv_channel_select">Channels</string>
+    <string name="channel">Channel</string>
+    <string name="marmot_player_hint">Up/Down to switch channels · OK/tap to show controls · MENU for channel list</string>
     <string name="cctv_quality">Quality</string>
     <string name="minor_protection">Teen protection</string>
     <string name="teen_mode">Teen mode</string>

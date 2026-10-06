@@ -64,6 +64,8 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var exitTime = 0L
+    /** 按钮的 OK 已在 DOWN 消费，对应 UP 直接吞掉（防误触 performClick）。 */
+    private var consumeNextOkUp = false
 
     override fun getViewBinding(): ActivityCctvPlayerBinding {
         return ActivityCctvPlayerBinding.inflate(layoutInflater)
@@ -81,13 +83,18 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
 
     private fun setupController() {
         binding.controller.visibility = View.VISIBLE
+        binding.buttonBack.touchPressFeedback = true
+        binding.buttonBack.setOnClickListener {
+            // 与普通视频播放器 button_back 一致：单击直接退出播放器
+            finish()
+        }
         binding.buttonRefresh.setOnClickListener {
             playCurrentChannel(showHint = true)
         }
         binding.buttonQuality.setOnClickListener {
             showQualityDialog()
         }
-        // 焦点进入按钮行后取消自动隐藏，避免操作中途控制栏消失
+        // 焦点进入按钮后取消自动隐藏，避免操作中途控制栏消失
         val cancelAutoHide = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 handler.removeCallbacks(hideControllerRunnable)
@@ -95,6 +102,7 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         }
         binding.buttonQuality.onFocusChangeListener = cancelAutoHide
         binding.buttonRefresh.onFocusChangeListener = cancelAutoHide
+        binding.buttonBack.onFocusChangeListener = cancelAutoHide
         updateQualityButton()
         scheduleControllerHide()
     }
@@ -301,9 +309,26 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         playCurrentChannel(showHint = true)
     }
 
+    private fun showChannelDialog() {
+        if (channels.isEmpty()) return
+        // 面板期间控制栏重新计时自动隐藏，避免面板关闭后控制栏常驻
+        showController()
+        val checkedIndex = currentIndex.coerceIn(0, channels.lastIndex)
+        ChoiceDialog.show(
+            context = this,
+            title = getString(R.string.cctv_channel_select),
+            options = channels.map { it.title },
+            selectedIndex = checkedIndex
+        ) { which ->
+            if (which == currentIndex) return@show
+            currentIndex = which
+            playCurrentChannel(showHint = true)
+        }
+    }
+
     private fun showController() {
         binding.controller.visibility = View.VISIBLE
-        binding.textClock.visibility = View.VISIBLE
+        binding.topBar.visibility = View.VISIBLE
         scheduleControllerHide()
     }
 
@@ -318,7 +343,7 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     private fun hideController() {
         handler.removeCallbacks(hideControllerRunnable)
         binding.controller.visibility = View.GONE
-        binding.textClock.visibility = View.GONE
+        binding.topBar.visibility = View.GONE
         // 收起后焦点回到播放区，避免落在已隐藏的按钮上
         if (!binding.playerRoot.isFocused) {
             binding.playerRoot.requestFocus()
@@ -581,21 +606,32 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) {
+            // 按钮的 OK 已在 DOWN 消费（聚焦/激活），吞掉对应 UP，
+            // 防止 UP 落到刚获焦的按钮上触发默认 performClick
+            if (consumeNextOkUp && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
+                consumeNextOkUp = false
+                return true
+            }
             return super.dispatchKeyEvent(event)
         }
         val controllerVisible = binding.controller.visibility == View.VISIBLE
         return when (event.keyCode) {
-            // 上下：控制栏隐藏时切台；呼出后用于离开/进入按钮行（不再切台）
+            // 上下：控制栏隐藏时切台；呼出后在 底部按钮行↔右上返回按钮 间移动
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (!controllerVisible) {
                     switchChannel(if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
                     true
                 } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                    // 离开按钮行，收起控制栏回到切台模式
-                    hideController()
+                    if (isControllerButtonFocused()) {
+                        // 从底部按钮行上移到右上角返回按钮
+                        binding.buttonBack.requestFocus()
+                    } else {
+                        // 已在返回按钮或无焦点：收起控制栏回到切台模式
+                        hideController()
+                    }
                     true
                 } else {
-                    // 下：进入按钮行（已在内则不重复聚焦）
+                    // 下：进入按钮行（已在内则不重复聚焦；从返回按钮下来同样入行）
                     if (!isControllerButtonFocused()) {
                         binding.buttonQuality.requestFocus()
                     }
@@ -617,10 +653,16 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
                     true
                 }
             }
-            // OK：隐藏时呼出控制栏；呼出后激活当前按钮
+            // OK：隐藏时呼出控制栏；呼出后激活当前按钮（含右上返回）
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                consumeNextOkUp = true
                 if (!controllerVisible) {
                     showController()
+                    true
+                } else if (binding.buttonBack.isFocused) {
+                    if (event.repeatCount == 0) {
+                        binding.buttonBack.performClick()
+                    }
                     true
                 } else if (!isControllerButtonFocused()) {
                     binding.buttonQuality.requestFocus()
@@ -640,6 +682,13 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
                 } else {
                     true // 长按重复不重复触发
                 }
+            }
+            // 菜单键：呼出频道选择（对应普通播放器菜单键呼出设置面板）
+            KeyEvent.KEYCODE_MENU -> {
+                if (event.repeatCount == 0) {
+                    showChannelDialog()
+                }
+                true
             }
             else -> super.dispatchKeyEvent(event)
         }

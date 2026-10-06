@@ -74,6 +74,163 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
+    <!-- 播放UI：顶栏（左上返回按钮 + 右上时钟），与普通视频播放器一致随呼出显隐；
+         容器全宽透明不消费空白触摸（命中判定按内部具体控件） -->
+    <FrameLayout
+        android:id="@+id/top_bar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/px170"
+        android:layout_gravity="top"
+        android:background="@drawable/player_top_gradient"
+        android:visibility="gone">
+
+        <com.mytvb.feature.player.view.PlayerControlButton
+            android:id="@+id/button_back"
+            android:layout_width="@dimen/px80"
+            android:layout_height="@dimen/px80"
+            android:layout_gravity="start|top"
+            android:layout_marginStart="@dimen/px30"
+            android:layout_marginTop="@dimen/px30"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:contentDescription="@string/back"
+            android:focusable="true"
+            android:nextFocusDown="@id/button_channel"
+            android:nextFocusRight="@id/button_channel"
+            android:padding="@dimen/px18"
+            android:src="@drawable/ic_back" />
+
+        <TextClock
+            android:id="@+id/text_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|top"
+            android:layout_marginTop="@dimen/px30"
+            android:layout_marginEnd="@dimen/px50"
+            android:shadowColor="@color/black"
+            android:shadowRadius="7"
+            android:textColor="@color/white"
+            android:textSize="@dimen/px50"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <!-- 播放UI：底部控制栏（分组/频道名 + 频道/画质/刷新 图标文字按钮），背景与普通视频播放器同款底部渐变 -->
+    <LinearLayout
+        android:id="@+id/controller"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/focus_background"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px45"
+        android:paddingTop="@dimen/px20"
+        android:paddingEnd="@dimen/px45"
+        android:paddingBottom="@dimen/px20"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/text_channel_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/px36"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/text_channel_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px5"
+                android:text="@string/marmot_player_hint"
+                android:textColor="#B3FFFFFF"
+                android:textSize="@dimen/px22" />
+        </LinearLayout>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/button_channel"
+            android:layout_width="@dimen/px130"
+            android:layout_height="@dimen/px113"
+            android:layout_marginEnd="@dimen/px20"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="@dimen/px48"
+                android:layout_height="@dimen/px48"
+                android:src="@drawable/ic_tv" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px6"
+                android:text="@string/channel"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/px22" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/button_quality"
+            android:layout_width="@dimen/px130"
+            android:layout_height="@dimen/px113"
+            android:layout_marginEnd="@dimen/px20"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="@dimen/px48"
+                android:layout_height="@dimen/px48"
+                android:src="@drawable/ic_quality" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px6"
+                android:text="@string/cctv_quality"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/px22" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/button_refresh"
+            android:layout_width="@dimen/px130"
+            android:layout_height="@dimen/px113"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="@dimen/px48"
+                android:layout_height="@dimen/px48"
+                android:src="@drawable/ic_refresh" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px6"
+                android:text="@string/refresh"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/px22" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+    </LinearLayout>
+
     <!-- 频道列表浮层（对标参考 menu_dual_column：左分组140dp + 右频道300dp + 空白关闭区） -->
     <LinearLayout
         android:id="@+id/menu_container"

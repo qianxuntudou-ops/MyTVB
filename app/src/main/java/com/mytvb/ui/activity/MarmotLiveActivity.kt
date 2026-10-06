@@ -61,6 +61,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         private const val TAG = "MarmotLiveActivity"
         /** DataStore key：上次观看频道的 URL（下次进直播恢复）。 */
         private const val KEY_LAST_CHANNEL_URL = "marmot_last_channel_url"
+        /** 播放UI无操作自动隐藏延时（对齐普通视频播放器控制栏 5s）。 */
+        private const val CONTROLLER_HIDE_DELAY_MS = 5_000L
 
         /** 启动入口。 */
         fun start(context: Context) {
@@ -125,6 +127,12 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     /** 两次返回退出计时（对标 PlayerActivity.setupBackHandler）。 */
     private var exitTime: Long = 0
     private val exitInterval = 2000L
+    /** 播放UI（顶部栏+底部控制栏）是否显示。 */
+    private var isControllerShowing = false
+    /** 播放UI按钮的 OK 已在 DOWN 消费，对应 UP 直接吞掉（防误触 performClick）。 */
+    private var consumeNextOkUp = false
+    /** 播放UI无操作 5s 自动收起（焦点在按钮上时不计时）。 */
+    private val hideControllerRunnable = Runnable { hideController() }
 
     /** 切台防抖：延迟 1s 后真正加载（避免快速连按）。 */
     private val switchChannelRunnable = Runnable {
@@ -187,6 +195,7 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         setupChannelMenu()
         setupQualityMenu()
         setupMenuDismiss()
+        setupPlayerController()
     }
 
     /** 创建并配置 WebView（对标参考 `BaseActivity.initWebView`）。
@@ -339,6 +348,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
             }
         }
         showLiveName(vod.name)
+        // 播放UI若还显示着（刷新按钮触发），同步刷新控制栏标题
+        if (isControllerShowing) updateControllerTitle()
         // 记录上次观看频道（IO 写入，不阻塞）
         appSettings.putStringAsync(KEY_LAST_CHANNEL_URL, vod.url)
     }
@@ -708,6 +719,84 @@ $scriptTags
         }
     }
 
+    // ==================== 播放UI（顶栏返回+时钟、底部控制栏，呼出/自动隐藏对齐普通视频播放器） =====================
+
+    private fun setupPlayerController() {
+        // 返回：与普通视频播放器 button_back 一致，单击直接退出播放器；触摸点击带按压缩放反馈
+        binding.buttonBack.touchPressFeedback = true
+        binding.buttonBack.setOnClickListener { finish() }
+        binding.buttonChannel.setOnClickListener {
+            hideController()
+            showChannelMenu()
+        }
+        binding.buttonQuality.setOnClickListener {
+            hideController()
+            showQualityMenu()
+        }
+        binding.buttonRefresh.setOnClickListener {
+            hideController()
+            playCurrent()
+        }
+        // 焦点进入按钮后取消自动隐藏，避免操作中途控制栏消失
+        val cancelAutoHide = View.OnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) mainHandler.removeCallbacks(hideControllerRunnable)
+        }
+        binding.buttonBack.onFocusChangeListener = cancelAutoHide
+        binding.buttonChannel.onFocusChangeListener = cancelAutoHide
+        binding.buttonQuality.onFocusChangeListener = cancelAutoHide
+        binding.buttonRefresh.onFocusChangeListener = cancelAutoHide
+    }
+
+    private fun showController() {
+        isControllerShowing = true
+        updateControllerTitle()
+        binding.topBar.visibility = View.VISIBLE
+        binding.controller.visibility = View.VISIBLE
+        mainHandler.removeCallbacks(hideControllerRunnable)
+        mainHandler.postDelayed(hideControllerRunnable, CONTROLLER_HIDE_DELAY_MS)
+    }
+
+    private fun hideController() {
+        isControllerShowing = false
+        mainHandler.removeCallbacks(hideControllerRunnable)
+        binding.topBar.visibility = View.GONE
+        binding.controller.visibility = View.GONE
+        // 收起后焦点回到播放区，避免落在已隐藏的按钮上
+        if (!binding.marmotRoot.isFocused) {
+            binding.marmotRoot.requestFocus()
+        }
+    }
+
+    private fun toggleController() {
+        if (isControllerShowing) hideController() else showController()
+    }
+
+    /** 控制栏标题 = 分组名 · 频道名（切台/刷新后若控制栏仍显示则同步刷新）。 */
+    private fun updateControllerTitle() {
+        val vod = currentVod
+        val groupName = provinces.getOrNull(vod?.tagIndex ?: -1)?.name
+        binding.textChannelTitle.text = when {
+            vod == null -> ""
+            groupName != null -> "$groupName · ${vod.name}"
+            else -> vod.name
+        }
+    }
+
+    /** 焦点是否在底部控制栏按钮（频道/画质/刷新）上。 */
+    private fun isBottomControllerButtonFocused(): Boolean =
+        binding.buttonChannel.isFocused || binding.buttonQuality.isFocused || binding.buttonRefresh.isFocused
+
+    /** 触摸是否落在播放UI可交互元素（左上返回按钮、底部控制栏）范围内，命中则正常分发。 */
+    private fun isTouchInPlayerUi(ev: MotionEvent): Boolean {
+        if (!isControllerShowing) return false
+        val rect = android.graphics.Rect()
+        return listOf(binding.buttonBack, binding.controller).any { target ->
+            target.visibility == View.VISIBLE &&
+                target.getGlobalVisibleRect(rect) &&
+                rect.contains(ev.rawX.toInt(), ev.rawY.toInt())
+        }
+    }
+
     // ==================== 按键交互 ====================
 
     /**
@@ -754,18 +843,34 @@ $scriptTags
         webEngine?.evaluateJavascript(js)
     }
 
-    /** 触屏点击：呼出频道列表（对标参考 `LiveActivity.dispatchTouchEvent`），阻止 WebView video 默认暂停。 */
+    /**
+     * 触屏点击：呼出/收起播放UI（对标普通视频播放器点击屏幕 toggle 控制栏，统一交互），
+     * 同时拦截触摸阻止 WebView video 默认暂停。
+     * 浮层显示时触摸交给浮层；落在播放UI按钮上时正常分发（按钮可点）。
+     */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        // 浮层显示时，触摸交给浮层处理
         if (!isChannelMenuShowing && !isQualityMenuShowing && ev.action == MotionEvent.ACTION_DOWN) {
-            showChannelMenu()
+            if (isTouchInPlayerUi(ev)) {
+                AppLog.i(TAG, "touch: 命中播放UI按钮区域")
+                return super.dispatchTouchEvent(ev)
+            }
+            AppLog.i(TAG, "touch: toggle 控制栏 showing=$isControllerShowing")
+            toggleController()
             return true
         }
         return super.dispatchTouchEvent(ev)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_UP) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_UP) {
+            // 播放UI按钮的 OK 已在 ACTION_DOWN 消费（聚焦/激活），吞掉对应 UP
+            // 防止 UP 落到刚获焦的按钮上触发默认 performClick（如聚焦即弹出画质菜单）
+            if (consumeNextOkUp && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER)) {
+                consumeNextOkUp = false
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
         val keyCode = event.keyCode
 
         // —— 频道列表浮层（双排：FocusLockRecyclerView 在 focusSearch 层防溢出）——
@@ -800,12 +905,60 @@ $scriptTags
             return super.dispatchKeyEvent(event)
         }
 
+        // —— 播放UI显示时：方向键在 返回↔底部按钮行 间导航，BACK 收起 ——
+        if (isControllerShowing) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK -> { hideController(); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    if (isBottomControllerButtonFocused()) {
+                        // 底部按钮行上移到右上角返回按钮
+                        binding.buttonBack.requestFocus()
+                    } else {
+                        // 已在返回按钮或无焦点：收起播放UI回到切台模式
+                        hideController()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    // 进入底部按钮行（已在内则不重复聚焦；从返回按钮下来同样入行，默认聚焦频道）
+                    if (!isBottomControllerButtonFocused()) binding.buttonChannel.requestFocus()
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    // 底部三按钮 频道→画质→刷新 左右循环；返回按钮左右进入按钮行
+                    when {
+                        binding.buttonBack.isFocused -> binding.buttonChannel.requestFocus()
+                        binding.buttonChannel.isFocused -> binding.buttonQuality.requestFocus()
+                        binding.buttonQuality.isFocused -> binding.buttonRefresh.requestFocus()
+                        else -> binding.buttonChannel.requestFocus()
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    consumeNextOkUp = true
+                    when {
+                        binding.buttonBack.isFocused -> binding.buttonBack.performClick()
+                        binding.buttonChannel.isFocused -> binding.buttonChannel.performClick()
+                        binding.buttonQuality.isFocused -> binding.buttonQuality.performClick()
+                        binding.buttonRefresh.isFocused -> binding.buttonRefresh.performClick()
+                        else -> {
+                            val ok = binding.buttonChannel.requestFocus()
+                            AppLog.i(TAG, "controller OK 聚焦频道按钮: requestFocus=$ok focused=${binding.buttonChannel.isFocused} rootFocused=${binding.marmotRoot.isFocused}")
+                        }
+                    }
+                    return true
+                }
+                KeyEvent.KEYCODE_MENU -> { showChannelMenu(); return true }
+                else -> return super.dispatchKeyEvent(event)
+            }
+        }
+
         // —— 无浮层时 ——
         when (keyCode) {
-            // 确认键 → 频道列表
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showChannelMenu(); return true }
-            // 菜单键 → 画质选择
-            KeyEvent.KEYCODE_MENU -> { showQualityMenu(); return true }
+            // 确认键 → 呼出播放UI（统一普通视频播放器的确定键行为）
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showController(); return true }
+            // 菜单键 → 频道选择（统一普通视频播放器的菜单键呼出面板行为）
+            KeyEvent.KEYCODE_MENU -> { showChannelMenu(); return true }
             // 上下左右 → 切台 + 转发页面脚本
             KeyEvent.KEYCODE_DPAD_UP -> { forwardKeyToPage("up"); return goNext("up") }
             KeyEvent.KEYCODE_DPAD_DOWN -> { forwardKeyToPage("down"); return goNext("down") }
@@ -837,6 +990,7 @@ $scriptTags
     override fun onDestroy() {
         mainHandler.removeCallbacks(switchChannelRunnable)
         mainHandler.removeCallbacks(teenModeTicker)
+        mainHandler.removeCallbacks(hideControllerRunnable)
         webEngine?.let { engine ->
             engine.removeJavascriptInterface(jsBridge.bridgeName)
             engine.loadUrl("about:blank")

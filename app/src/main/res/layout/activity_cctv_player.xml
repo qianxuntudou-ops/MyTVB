@@ -126,17 +126,38 @@
 
     </LinearLayout>
 
-    <TextClock
-        android:id="@+id/text_clock"
+    <LinearLayout
+        android:id="@+id/top_bar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end|top"
         android:layout_marginTop="@dimen/px30"
         android:layout_marginEnd="@dimen/px50"
-        android:shadowColor="@color/black"
-        android:shadowRadius="7"
-        android:textColor="@color/white"
-        android:textSize="@dimen/px50"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.mytvb.feature.player.view.PlayerControlButton
+            android:id="@+id/button_back"
+            android:layout_width="@dimen/px80"
+            android:layout_height="@dimen/px80"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:contentDescription="@string/back"
+            android:focusable="true"
+            android:nextFocusDown="@id/button_quality"
+            android:padding="@dimen/px18"
+            android:src="@drawable/ic_back" />
+
+        <TextClock
+            android:id="@+id/text_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px20"
+            android:shadowColor="@color/black"
+            android:shadowRadius="7"
+            android:textColor="@color/white"
+            android:textSize="@dimen/px50"
+            android:textStyle="bold" />
+    </LinearLayout>
 
 </FrameLayout>

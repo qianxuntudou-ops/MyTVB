@@ -143,7 +143,10 @@
     <string name="live_entry">直播入口</string>
     <string name="cctv_live">CCTV直播</string>
     <string name="cctv_live_subtitle">央視頻道列表</string>
-    <string name="cctv_player_hint">上下鍵/上下滑動切換頻道 · 確定鍵顯示控制列</string>
+    <string name="cctv_player_hint">上下鍵切換頻道 · 確定鍵/點擊屏幕呼出控制列 · 選單鍵選擇頻道</string>
+    <string name="cctv_channel_select">頻道選擇</string>
+    <string name="channel">頻道</string>
+    <string name="marmot_player_hint">上下鍵切換頻道 · 確定鍵/點擊屏幕呼出控制列 · 選單鍵選擇頻道</string>
     <string name="cctv_quality">畫質</string>
     <string name="minor_protection">青少年保護</string>
     <string name="teen_mode">青少年模式</string>
