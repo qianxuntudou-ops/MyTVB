@@ -373,16 +373,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         return focusNearestVisibleListItem()
     }
 
-    override fun scrollToTopAndFocus(): Boolean {
-        scrollToTop()
-        recyclerView?.post {
-            if (isAdded && view != null) {
-                focusPrimaryContent()
-            }
-        }
-        return true
-    }
-
     override fun focusPrimaryContent(): Boolean {
         if (!isAdded || view == null) {
             return false

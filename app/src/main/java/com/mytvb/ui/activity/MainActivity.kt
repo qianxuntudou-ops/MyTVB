@@ -6,6 +6,7 @@ import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.tabs.TabLayout
 import androidx.annotation.OptIn
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
@@ -931,6 +932,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             val focused = currentFocus
             if (focused != null && isInsideRecyclerView(focused)) {
                 mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MenuPressed)
+            } else if (focused != null && isInsideTabLayout(focused)) {
+                // 焦点停在二级 tab 栏时菜单键同样触发刷新（对齐 blbl：MENU 即刷新键，
+                // 重选 tab 后焦点在 tab 上，不能因此丢刷新入口）
+                mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MenuPressed)
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -940,6 +945,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         var current: View? = view
         while (current != null) {
             if (current is RecyclerView) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
+    private fun isInsideTabLayout(view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current is TabLayout) return true
             current = current.parent as? View
         }
         return false

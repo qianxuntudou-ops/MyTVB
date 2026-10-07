@@ -502,19 +502,6 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         return focusNearestVisibleListItem()
     }
 
-    override fun scrollToTopAndFocus(): Boolean {
-        scrollToTop()
-        val rv = recyclerView ?: return false
-        val controller = tvFocusController ?: return false
-        // scrollToPosition(0) 后目标 holder 需等一帧布局，post 后再请求聚焦第一项
-        rv.post {
-            if (isAdded && view != null) {
-                controller.requestRefreshFocus(0)
-            }
-        }
-        return true
-    }
-
     protected fun isCurrentHomePage(): Boolean {
         return (parentFragment as? HomeFragment)?.isCurrentPage(secondaryTabPosition) != false
     }

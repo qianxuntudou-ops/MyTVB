@@ -77,13 +77,9 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
             onNavigateDown = ::focusCurrentPageNearestContent,
             onNavigateLeft = ::focusLeftFunctionArea,
             onTabReselected = { index ->
-                // 重选当前 tab = 回顶聚焦第一卡（快速回顶入口）。
-                // 刷新只保留 MENU 键触发：推荐页误刷新会把没看完的视频刷掉。
-                (adapter.getCurrentFragment(index) as? HomeTabPage)?.let { page ->
-                    if (!page.scrollToTopAndFocus()) {
-                        page.scrollToTop()
-                    }
-                }
+                // 重选当前 tab = 刷新（v2.0.9 行为，对齐 blbl refreshCurrentPageFromTabReselect；
+                // feed 页 refresh 自带刷新后回顶，"没看完的视频"顾虑在 blbl 同语义下未成立）
+                (adapter.getCurrentFragment(index) as? HomeTabPage)?.refresh()
             }
         )
 
