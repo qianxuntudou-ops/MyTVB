@@ -112,3 +112,4 @@ AGENTS.md
 app/debug/output-metadata.json
 .codebuddy/
 /.zcode
+.zcodeignore
