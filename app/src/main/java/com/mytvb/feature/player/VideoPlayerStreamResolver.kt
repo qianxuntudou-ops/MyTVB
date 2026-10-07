@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.exoplayer.source.ConcatenatingMediaSource2
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -317,7 +318,7 @@ internal class VideoPlayerStreamResolver(
                             resolution = formatNames[playInfo.quality]?.displayDesc
                                 ?.takeIf { it.isNotBlank() }
                                 ?: VideoQuality.fromId(playInfo.quality).resolution,
-                            bandwidth = currentStream.size,
+                            bandwidth = playInfo.durl.orEmpty().sumOf { it.size },
                             baseUrl = currentStream.url,
                             backupUrls = currentStream.backupUrl
                         )
@@ -422,13 +423,39 @@ internal class VideoPlayerStreamResolver(
             )
         }
 
-        val durl = playInfo.durl?.firstOrNull()?.url ?: return null
-        val progressiveSource = createProgressiveSource(listOf(durl), "video/mp4")
+        // durl 分段流：无 DASH 转码的视频服务端返回多段 durl（单段约 20 分钟），
+        // 必须把全部段拼成单一时间轴，否则长视频只播第一段（50 分钟视频 20:00 即自动结束）。
+        val durlSegments = playInfo.durl.orEmpty().filter { it.url.isNotBlank() }
+        if (durlSegments.isEmpty()) return null
+        val durlMimeType = if (
+            playInfo.from.contains("flv", ignoreCase = true) ||
+            playInfo.format.contains("flv", ignoreCase = true)
+        ) "video/x-flv" else "video/mp4"
+        AppLog.i(
+            TAG,
+            "durl playback: segments=${durlSegments.size} " +
+                "segmentLengthMs=[${durlSegments.joinToString(",") { it.length.toString() }}] " +
+                "sumLengthMs=${durlSegments.sumOf { it.length }} timeLengthMs=${playInfo.timeLength} " +
+                "from=${playInfo.from} format=${playInfo.format}"
+        )
+        val segmentSources = durlSegments.map { segment ->
+            createProgressiveSource(
+                urls = buildDistinctUrls(primaryUrl = segment.url, backupUrls = segment.backupUrl),
+                mimeType = durlMimeType
+            )
+        }
+        val durlMediaSource = if (segmentSources.size == 1) {
+            segmentSources.first().mediaSource
+        } else {
+            segmentSources.fold(ConcatenatingMediaSource2.Builder()) { builder, source ->
+                builder.add(source.mediaSource)
+            }.build()
+        }
         return MediaSourceSelection(
-            mediaSource = progressiveSource.mediaSource,
+            mediaSource = durlMediaSource,
             availableCodecs = emptyList(),
             selectedCodec = null,
-            cdnFailoverStates = progressiveSource.cdnFailoverStates
+            cdnFailoverStates = segmentSources.flatMap { it.cdnFailoverStates }
         )
     }
 
