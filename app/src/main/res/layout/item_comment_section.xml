@@ -1,20 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 楼中楼小节行：粗分隔线（主评论与回复列表之间）+ "相关回复共N条"，不可聚焦不可点击 -->
+<!-- 楼中楼小节行："相关回复共N条"，不可聚焦不可点击。
+     粗分隔线由 CommentDividerItemDecoration 绘制（布局内的线 View 会被列表 padding 缩进） -->
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/px6"
-        android:layout_marginTop="@dimen/px20"
-        android:background="#66666666"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/tv_section_title"
         android:textSize="@dimen/px22"
         android:textColor="@color/subTextColor"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="@dimen/px20"
+        android:paddingTop="@dimen/px40"
         android:paddingBottom="@dimen/px10"/>
 </androidx.appcompat.widget.LinearLayoutCompat>

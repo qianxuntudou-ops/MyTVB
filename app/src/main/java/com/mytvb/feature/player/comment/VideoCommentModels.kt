@@ -81,13 +81,19 @@ internal fun parseVideoCommentReplyItem(
     val replyPreviews =
         if (canOpenThread && replyCount > 0) {
             val replies = obj.optJSONArray("replies") ?: JSONArray()
-            parseVideoCommentReplyPreviewList(replies)
+            parseVideoCommentReplyPreviewList(replies, upMid = upMid)
         } else {
             emptyList()
         }
     val isUp = upMid > 0L && mid == upMid
-    // UP 主对该评论点过赞（官方"UP主觉得很赞"标签）
-    val isUpLiked = obj.optJSONObject("up_action")?.optInt("like", 0) == 1
+    // UP 主对该评论点过赞（官方"UP主觉得很赞"标签）；up_action.like 网页版 wbi/main
+    // 下发 boolean、老接口下发 int 0/1，optInt/optBoolean 各只认一种，按实际类型取
+    val upActionLike = obj.optJSONObject("up_action")?.opt("like")
+    val isUpLiked = when (upActionLike) {
+        is Boolean -> upActionLike
+        is Number -> upActionLike.toInt() == 1
+        else -> false
+    }
 
     return VideoCommentItem(
         key = rpid.toString(),
@@ -156,6 +162,10 @@ internal data class VideoCommentReplyPreview(
     val userName: String,
     val message: String,
     val emotes: Map<String, String> = emptyMap(),
+    /** 点赞数（官方预览行行尾的 👍N；0 不显示） */
+    val likeCount: Long = 0L,
+    /** UP 主回复（官方预览行用户名后的粉底 UP 徽章） */
+    val isUp: Boolean = false,
 )
 
 internal data class VideoCommentPicture(
@@ -204,7 +214,7 @@ internal data class VideoCommentItem(
     val threadSectionTitle: String? = null,
 )
 
-private fun parseVideoCommentReplyPreviewList(arr: JSONArray, limit: Int = 2): List<VideoCommentReplyPreview> {
+private fun parseVideoCommentReplyPreviewList(arr: JSONArray, upMid: Long, limit: Int = 2): List<VideoCommentReplyPreview> {
     if (arr.length() <= 0) return emptyList()
     val max = minOf(limit.coerceAtLeast(0), arr.length())
     if (max <= 0) return emptyList()
@@ -217,7 +227,19 @@ private fun parseVideoCommentReplyPreviewList(arr: JSONArray, limit: Int = 2): L
         val message = content.optString("message", "").trim()
         val emotes = parseVideoCommentEmoteMap(content.optJSONObject("emote"))
         if (uname.isBlank() && message.isBlank()) continue
-        out.add(VideoCommentReplyPreview(userName = uname, message = message, emotes = emotes))
+        val like = obj.optLong("like", 0L).coerceAtLeast(0L)
+        val mid =
+            member.optString("mid", "").trim().toLongOrNull()
+                ?: member.optLong("mid", 0L)
+        out.add(
+            VideoCommentReplyPreview(
+                userName = uname,
+                message = message,
+                emotes = emotes,
+                likeCount = like,
+                isUp = upMid > 0L && mid == upMid,
+            )
+        )
     }
     return out
 }

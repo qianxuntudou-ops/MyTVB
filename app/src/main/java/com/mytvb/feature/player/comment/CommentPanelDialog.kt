@@ -110,10 +110,14 @@ internal class CommentPanelDialog(
         binding.recyclerComments.addItemDecoration(dividerDecoration)
         // 楼中楼回复之间保留细分割线（官方），但小节行（粗线）与其上下项之间不叠线
         binding.recyclerCommentThread.addItemDecoration(
-            CommentDividerItemDecoration(activity) { adapter, position ->
-                val a = adapter as? VideoCommentsAdapter
-                a != null && (a.isSectionAt(position) || a.isSectionAt(position + 1))
-            }
+            CommentDividerItemDecoration(
+                activity,
+                sectionTopLine = true,
+                skipAfter = { adapter, position ->
+                    val a = adapter as? VideoCommentsAdapter
+                    a != null && (a.isSectionAt(position) || a.isSectionAt(position + 1))
+                },
+            )
         )
 
         commentsAdapter = VideoCommentsAdapter(
@@ -139,6 +143,8 @@ internal class CommentPanelDialog(
 
         threadAdapter = VideoCommentsAdapter(
             expandedRpids = expandedRpids,
+            // 楼中楼面板主评论默认全文展开，不出"展开/收起"
+            expandMessageFully = true,
             onClick = { item -> onThreadCommentClick(item) },
             onPictureClick = { item, index -> openItemPictures(item, index) },
             onItemFocused = { maybeLoadMoreThreadFromLayout() },
@@ -329,24 +335,14 @@ internal class CommentPanelDialog(
     }
 
     private fun onRootCommentTouchClick(item: VideoCommentItem) {
-        if (isThreadVisible()) return
-        if (item.replyCount <= 0) {
-            Toast.makeText(activity, activity.getString(R.string.player_comment_thread_empty), Toast.LENGTH_SHORT).show()
-            return
-        }
-        openThread(rootRpid = item.rpid)
+        // 触摸单击正文不再进楼中楼：链接文案统一为"长按查看全部"，进楼统一走长按
+        // （onRootCommentLongClick），单击保留展开/收起等既有分流
     }
 
     private fun onRootCommentLongClick(item: VideoCommentItem): Boolean {
         if (isThreadVisible()) return false
-
-        val hasPictures = item.pictures.isNotEmpty() || item.noteCvid > 0L
-        if (!hasPictures) return false
-
-        if (item.replyCount <= 0) {
-            Toast.makeText(activity, activity.getString(R.string.player_comment_thread_empty), Toast.LENGTH_SHORT).show()
-            return true
-        }
+        // 长按进楼中楼：与"长按查看全部 N 条回复"文案一致，不再区分是否带图
+        if (item.replyCount <= 0) return false
         openThread(rootRpid = item.rpid)
         return true
     }
@@ -635,27 +631,37 @@ internal class CommentPanelDialog(
     }
 }
 
-/** 评论列表分隔线：每条评论底部一条细线（最后一项不画），左右与列表内容对齐。 */
+/** 评论列表分隔线：每条评论底部一条细线（最后一项不画），撑满弹窗宽度。
+ *  楼中楼面板（[sectionTopLine]=true）另在小节行顶部画撑满粗线——布局里的线 View
+ *  会被列表 padding 缩进（负 margin + clipChildren 也不可靠），Decoration 画必贴边。 */
 private class CommentDividerItemDecoration(
     context: Context,
     // 返回 true 表示该 position 与下一项之间不画线（楼中楼小节行粗线区域不叠细线）
     private val skipAfter: (RecyclerView.Adapter<*>, Int) -> Boolean = { _, _ -> false },
+    private val sectionTopLine: Boolean = false,
 ) : RecyclerView.ItemDecoration() {
 
     private val paint = Paint().apply { color = 0xFF6B6B6B.toInt() }
-    private val heightPx = context.resources.getDimensionPixelSize(R.dimen.px2)
-    private val insetHorizontalPx = context.resources.getDimensionPixelSize(R.dimen.px20)
+    private val heightPx = context.resources.getDimensionPixelSize(R.dimen.px1)
+    private val sectionPaint = Paint().apply { color = 0x66666666.toInt() }
+    private val sectionLineHeightPx = context.resources.getDimensionPixelSize(R.dimen.px8)
+    private val sectionLineTopOffsetPx = context.resources.getDimensionPixelSize(R.dimen.px20)
 
     override fun onDraw(c: Canvas, parent: RecyclerView, state: RecyclerView.State) {
         if (parent.layoutManager !is LinearLayoutManager) return
         val adapter = parent.adapter ?: return
-        val left = (parent.paddingLeft + insetHorizontalPx).toFloat()
-        val right = (parent.width - parent.paddingRight - insetHorizontalPx).toFloat()
-        if (right <= left) return
+        // 撑满弹窗：无视 RecyclerView 自身的 paddingStart/End（那是卡片内容边距，clipToPadding=false）
+        val left = 0f
+        val right = parent.width.toFloat()
+        val sectionAdapter = adapter as? VideoCommentsAdapter
         for (i in 0 until parent.childCount) {
             val child = parent.getChildAt(i)
             val position = parent.getChildAdapterPosition(child)
             if (position == RecyclerView.NO_POSITION) continue
+            if (sectionTopLine && sectionAdapter?.isSectionAt(position) == true) {
+                val lineTop = (child.top + sectionLineTopOffsetPx).toFloat()
+                c.drawRect(left, lineTop, right, lineTop + sectionLineHeightPx, sectionPaint)
+            }
             if (position == adapter.itemCount - 1) continue
             if (skipAfter(adapter, position)) continue
             val top = child.bottom.toFloat()

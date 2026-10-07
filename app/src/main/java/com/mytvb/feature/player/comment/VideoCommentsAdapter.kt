@@ -1,10 +1,12 @@
 package com.mytvb.feature.player.comment
 
 import android.graphics.drawable.GradientDrawable
+import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.AbsoluteSizeSpan
 import android.text.style.ForegroundColorSpan
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -27,7 +29,8 @@ import com.mytvb.databinding.ItemCommentSectionBinding
  * blbl.cat3399.feature.video.comment.VideoCommentsAdapter：
  * stableIds 按 key、长评展开/收起（运行时判 ellipsis 后提示"展开"、展开后提示"收起"，触摸点文字收起、焦点模式无图无楼时整卡 OK 收起）、
  * 回复预览用户名高亮 + 大表情、图片缩略图、笔记图片异步补载、
- * 焦点 OK 与触摸点击分流（带图评论：OK=开图、触摸=进楼中楼，图片子 view 触摸开图）。
+ * 焦点 OK 与触摸点击分流（遥控 OK：带图=开图/无图有楼=进楼中楼；触摸：长按=进楼中楼（与
+ * "长按查看全部"文案一致）、图片子 view 触摸开图）。
  *
  * 焦点交互按 MyBLBL 合集列表惯例：第一项按"上"回 [onTopEdge]
  * （根列表=排序 tab），最后一项按"下"消费防飞出；[onItemFocused]
@@ -41,6 +44,8 @@ internal class VideoCommentsAdapter(
     private val onLongClick: (VideoCommentItem) -> Boolean = { false },
     private val onItemFocused: () -> Unit = {},
     private val onTopEdge: () -> Unit = {},
+    // true=楼中楼面板：主评论正文恒展开、不出"展开/收起"（点进详情就是要看全文）
+    private val expandMessageFully: Boolean = false,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val items = ArrayList<VideoCommentItem>()
     private val requestedNotePictures = HashSet<Long>()
@@ -115,7 +120,8 @@ internal class VideoCommentsAdapter(
         maybeRequestNotePictures(item)
         (holder as Vh).bind(
             item = item,
-            isExpanded = expandedRpids.contains(item.rpid),
+            isExpanded = expandMessageFully || expandedRpids.contains(item.rpid),
+            expandFully = expandMessageFully,
             onToggleExpand = { rpid ->
                 // toggle：remove 成功=原本展开→收起，否则补 add=展开
                 if (!expandedRpids.remove(rpid)) expandedRpids.add(rpid)
@@ -198,6 +204,7 @@ internal class VideoCommentsAdapter(
         fun bind(
             item: VideoCommentItem,
             isExpanded: Boolean,
+            expandFully: Boolean,
             onToggleExpand: (Long) -> Unit,
             onClick: (VideoCommentItem) -> Unit,
             onTouchClick: (VideoCommentItem) -> Unit,
@@ -230,7 +237,7 @@ internal class VideoCommentsAdapter(
             }
             // 官方楼中楼规范：@用户名 用蓝色链接色高亮
             highlightMentions(binding.tvMessage, previewUserColor)
-            updateExpandHint(itemRpid = item.rpid, isExpanded = isExpanded)
+            updateExpandHint(itemRpid = item.rpid, isExpanded = isExpanded, expandFully = expandFully)
             bindPictures(item, onPictureClick)
 
             run {
@@ -268,13 +275,9 @@ internal class VideoCommentsAdapter(
 
             if (item.canOpenThread && item.replyCount > 0) {
                 val rc = NumberUtils.formatCount(ctx, item.replyCount.toLong())
-                val hasPictures = item.pictures.isNotEmpty() || item.noteCvid > 0L
+                // 统一"长按查看全部"文案（官方 TV 触摸/焦点双路径，长按语义对全部评论一致）
                 binding.tvReply.text =
-                    if (hasPictures) {
-                        ctx.getString(R.string.player_comment_view_all_replies_long_press_format, rc)
-                    } else {
-                        ctx.getString(R.string.player_comment_view_all_replies_format, rc)
-                    }
+                    ctx.getString(R.string.player_comment_view_all_replies_long_press_format, rc)
                 binding.tvReply.visibility = View.VISIBLE
             } else {
                 binding.tvReply.text = ""
@@ -341,7 +344,8 @@ internal class VideoCommentsAdapter(
                     // 触摸点正文 = 进楼中楼等既有行为；收起走 tv_expand 自己的点击
                     wasTouch -> onTouchClick(item)
                     // 焦点模式展开后：无图可开、无楼可进（原本只剩 toast/无动作）时 OK 收起
-                    isExpanded && item.pictures.isEmpty() && item.noteCvid <= 0L &&
+                    // （楼中楼面板 expandFully 恒展开，无收起语义，OK 走 onClick）
+                    !expandFully && isExpanded && item.pictures.isEmpty() && item.noteCvid <= 0L &&
                         !(item.canOpenThread && item.replyCount > 0) -> onToggleExpand(item.rpid)
                     else -> onClick(item)
                 }
@@ -357,8 +361,13 @@ internal class VideoCommentsAdapter(
             binding.tvLevel.bind(level, isSeniorMember)
         }
 
-        private fun updateExpandHint(itemRpid: Long, isExpanded: Boolean) {
+        private fun updateExpandHint(itemRpid: Long, isExpanded: Boolean, expandFully: Boolean) {
             val ctx = binding.root.context
+            if (expandFully) {
+                // 楼中楼面板：正文恒展开，无展开/收起交互
+                binding.tvExpand.visibility = View.GONE
+                return
+            }
             if (isExpanded) {
                 // expandedRpids 只收点过"展开"（当时确实省略）的 rpid，收起按钮无条件显示
                 binding.tvExpand.text = ctx.getString(R.string.player_comment_collapse)
@@ -451,27 +460,77 @@ internal class VideoCommentsAdapter(
         }
 
         private fun bindReplyPreviewText(view: TextView, preview: VideoCommentReplyPreview, userColor: Int) {
+            val ctx = view.context
             val u = preview.userName.ifBlank { "-" }
             val m = preview.message.ifBlank { "-" }
-            val s = "$u：$m"
-            val ssb = SpannableStringBuilder(s)
-            ssb.setSpan(ForegroundColorSpan(userColor), 0, u.length.coerceAtMost(s.length), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            view.setTag(R.id.tag_emote_text_key, s)
-            CommentEmoteSpannable.applyEmotes(view, ssb, start = 0, end = ssb.length, emotes = preview.emotes)
+            // messagePart = 用户名(蓝色高亮) + UP徽章(UP主回复，官方同款) + "：" + 内容
+            val messagePart = SpannableStringBuilder(u)
+            messagePart.setSpan(ForegroundColorSpan(userColor), 0, u.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (preview.isUp) {
+                val badgeStart = messagePart.length
+                messagePart.append("\uFFFC")
+                messagePart.setSpan(
+                    CommentNoteTag.upBadgeSpan(view),
+                    badgeStart,
+                    badgeStart + 1,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+            messagePart.append("：").append(m)
+            // likePart = "｜ 👍N"（官方预览行行尾点赞，0 不显示）
+            val likePart = buildPreviewLikePart(view, preview.likeCount)
+            val ssb = SpannableStringBuilder(messagePart)
+            if (likePart != null) ssb.append(likePart)
+            view.setTag(R.id.tag_emote_text_key, messagePart)
+            CommentEmoteSpannable.applyEmotes(view, ssb, start = 0, end = messagePart.length, emotes = preview.emotes)
             // 官方预览行规范：行内 @某人 与行首用户名同为蓝色链接色（同正文 highlightMentions）
             highlightMentions(view, userColor)
             // 走默认 buffer 对齐正文正常路径；实测 SPANNABLE 下（含 ImageSpan）TextView 的
             // maxLines/ellipsize 失效——layout 自然折行、高度被钳成 1 行、永无"…"
             view.text = ssb
-            // 兜底：万一系统 ellipsize 仍未生效（layout 多行、只显示第一行），
-            // 手动按可用宽度截成单行并补"…"（TextUtils.ellipsize 保留既有 span）
+            // 兜底：系统 ellipsize 未生效（layout 折成多行）或截到了点赞尾巴时，
+            // 只对内容段手动省略，再接回点赞数——点赞恒显对齐官方
             view.post {
-                if (view.getTag(R.id.tag_emote_text_key) != s) return@post
+                if (view.getTag(R.id.tag_emote_text_key) != messagePart) return@post
                 val layout = view.layout ?: return@post
-                if (layout.lineCount <= 1 || view.width <= 0) return@post
+                if (view.width <= 0) return@post
+                val last = layout.lineCount - 1
+                if (last < 0) return@post
+                if (layout.lineCount <= 1 && layout.getEllipsisCount(last) <= 0) return@post
                 val avail = (view.width - view.paddingLeft - view.paddingRight).toFloat()
-                view.text = TextUtils.ellipsize(ssb, view.paint, avail, TextUtils.TruncateAt.END)
+                val likeW = likePart?.let { Layout.getDesiredWidth(it, view.paint) } ?: 0f
+                val contentW = (avail - likeW).coerceAtLeast(0f)
+                val finalSsb =
+                    SpannableStringBuilder(
+                        TextUtils.ellipsize(messagePart, view.paint, contentW, TextUtils.TruncateAt.END),
+                    )
+                if (likePart != null) finalSsb.append(likePart)
+                view.text = finalSsb
             }
+        }
+
+        /** 预览行行尾点赞段：" ｜ [👍]N"，数字略小（官方样式）；0 赞不显示返回 null。
+         *  分隔竖线比点赞数字更淡（官方同款弱分隔）。 */
+        private fun buildPreviewLikePart(view: TextView, likeCount: Long): SpannableStringBuilder? {
+            if (likeCount <= 0L) return null
+            val ctx = view.context
+            val res = view.resources
+            val gray = ContextCompat.getColor(ctx, R.color.subTextColor)
+            val sepColor = 0x66CCCCCC.toInt()
+            val icon = ContextCompat.getDrawable(ctx, R.drawable.ic_like)?.mutate() ?: return null
+            icon.setTint(gray)
+            val iconSize = res.getDimensionPixelSize(R.dimen.px22)
+            icon.setBounds(0, 0, iconSize, iconSize)
+            val ssb = SpannableStringBuilder(" ｜ ")
+            ssb.setSpan(ForegroundColorSpan(sepColor), 0, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val iconStart = ssb.length
+            ssb.append("\uFFFC ")
+            ssb.setSpan(CommentNoteTag.CenteredImageSpan(icon), iconStart, iconStart + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val numStart = ssb.length
+            ssb.append(NumberUtils.formatCount(ctx, likeCount))
+            ssb.setSpan(AbsoluteSizeSpan(res.getDimensionPixelSize(R.dimen.px18)), numStart, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            ssb.setSpan(ForegroundColorSpan(gray), numStart, ssb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            return ssb
         }
     }
 }

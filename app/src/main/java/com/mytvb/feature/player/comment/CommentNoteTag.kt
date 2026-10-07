@@ -2,32 +2,77 @@ package com.mytvb.feature.player.comment
 
 import android.content.Context
 import android.content.res.Resources
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RectF
+import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ImageSpan
+import android.util.TypedValue
+import android.view.View
 import android.widget.TextView
+import androidx.appcompat.widget.AppCompatTextView
 import com.mytvb.R
 
 /**
  * 评论正文行首的行内小标签（官方样式，ImageSpan 内联）：
  * [TagStyle.NOTE] "笔记"：浅灰实底圆角 + 灰色笔记本图标 + 灰字；
- * [TagStyle.TOP] "置顶"：透明底 + B站粉描边圆角 + 粉字（官方置顶样式，经用户官方截图确认）。
+ * [TagStyle.TOP] "置顶"：透明底 + B站粉描边圆角 + 粉字（官方置顶样式，经用户官方截图确认）；
+ * [TagStyle.UP] "UP"：粉底白字圆角（楼中楼预览行用户名后，官方样式）。
  */
 internal object CommentNoteTag {
 
-    enum class TagStyle { NOTE, TOP }
+    enum class TagStyle { NOTE, TOP, UP }
 
     /** 笔记标签（note_cvid>0）。 */
     fun prepend(textView: TextView) = prependTag(textView, TagStyle.NOTE)
 
     /** 置顶标签（top_replies）。 */
     fun prependTop(textView: TextView) = prependTag(textView, TagStyle.TOP)
+
+    /**
+     * UP 徽章 span（不自动拼接，由调用方插到用户名后的占位符上）。
+     * 产物就是 tv_up_badge（楼中楼详情/根评论行那个 UP 徽章）本身的离屏渲染：
+     * 用同款属性的真实 TextView measure+draw 出 Bitmap，字体/粗细/内边距与 TextView 渲染像素级一致。
+     */
+    fun upBadgeSpan(textView: TextView): ImageSpan {
+        val drawable = BitmapDrawable(textView.resources, upBadgeBitmap(textView.context))
+        drawable.setBounds(0, 0, drawable.bitmap.width, drawable.bitmap.height)
+        return CenteredImageSpan(drawable)
+    }
+
+    private var cachedUpBadgeBitmap: Bitmap? = null
+
+    private fun upBadgeBitmap(context: Context): Bitmap {
+        cachedUpBadgeBitmap?.let { return it }
+        val res = context.resources
+        // 与 item_comment.xml 的 tv_up_badge 逐项对齐：textSize px16 + bold + 白字 +
+        // padding 横 px8 纵 px2 + bg_comment_up_badge + includeFontPadding=false
+        val tv = AppCompatTextView(context)
+        tv.text = "UP"
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimensionPixelSize(R.dimen.px16).toFloat())
+        tv.setTypeface(tv.typeface, Typeface.BOLD)
+        tv.setTextColor(Color.WHITE)
+        tv.includeFontPadding = false
+        val padH = res.getDimensionPixelSize(R.dimen.px8)
+        val padV = res.getDimensionPixelSize(R.dimen.px2)
+        tv.setPadding(padH, padV, padH, padV)
+        tv.setBackgroundResource(R.drawable.bg_comment_up_badge)
+        val spec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        tv.measure(spec, spec)
+        tv.layout(0, 0, tv.measuredWidth, tv.measuredHeight)
+        val bmp = Bitmap.createBitmap(tv.measuredWidth, tv.measuredHeight, Bitmap.Config.ARGB_8888)
+        tv.draw(Canvas(bmp))
+        cachedUpBadgeBitmap = bmp
+        return bmp
+    }
 
     private fun prependTag(textView: TextView, style: TagStyle) {
         val drawable = NoteTagDrawable(textView.context, textView.resources, style)
@@ -43,7 +88,7 @@ internal object CommentNoteTag {
     }
 
     /** 标签与文字行垂直居中（ALIGN_BOTTOM 会让小标签沉到行底，观感偏坠）。 */
-    private class CenteredImageSpan(drawable: Drawable) : ImageSpan(drawable, ALIGN_BOTTOM) {
+    internal class CenteredImageSpan(drawable: Drawable) : ImageSpan(drawable, ALIGN_BOTTOM) {
         override fun draw(
             canvas: Canvas,
             text: CharSequence?,
@@ -73,9 +118,8 @@ internal object CommentNoteTag {
         private val style: TagStyle,
     ) : Drawable() {
         private val label =
-            context.getString(
-                if (style == TagStyle.TOP) R.string.player_comment_top_tag else R.string.player_comment_note_tag
-            )
+            if (style == TagStyle.TOP) context.getString(R.string.player_comment_top_tag)
+            else context.getString(R.string.player_comment_note_tag)
         private val gray = 0xFF9499A0.toInt()
         private val pink = 0xFFFB7299.toInt()
         private val textSizeDimen: Int = if (style == TagStyle.TOP) R.dimen.px14 else R.dimen.px16

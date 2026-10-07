@@ -107,29 +107,6 @@
                     android:maxLines="1"/>
             </androidx.appcompat.widget.LinearLayoutCompat>
         </androidx.appcompat.widget.LinearLayoutCompat>
-        <!-- 点赞组独立于文字块，在用户行右端与头像垂直居中（官方比例） -->
-        <androidx.appcompat.widget.LinearLayoutCompat
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/px10">
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/iv_like"
-                android:tint="@color/subTextColor"
-                android:layout_width="@dimen/px28"
-                android:layout_height="@dimen/px28"
-                android:src="@drawable/ic_like"
-                android:visibility="gone"/>
-            <androidx.appcompat.widget.AppCompatTextView
-                android:textSize="@dimen/px22"
-                android:textColor="@color/textColor"
-                android:id="@+id/tv_like"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/px6"
-                android:visibility="gone"/>
-        </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>
     <!-- 正文（大表情 ImageSpan 渲染，默认 6 行省略）；正文/图片/回复均与用户名左对齐（头像 70+15 缩进） -->
     <androidx.appcompat.widget.AppCompatTextView
@@ -181,6 +158,30 @@
             android:layout_width="@dimen/px200"
             android:layout_height="@dimen/px150"
             android:layout_marginStart="@dimen/px15"/>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+    <!-- 点赞行（官方：正文下方动作条，👍数字在最左；有赞数才显示） -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px85"
+        android:layout_marginTop="@dimen/px12">
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/iv_like"
+            android:tint="@color/subTextColor"
+            android:layout_width="@dimen/px28"
+            android:layout_height="@dimen/px28"
+            android:src="@drawable/ic_like"
+            android:visibility="gone"/>
+        <androidx.appcompat.widget.AppCompatTextView
+            android:textSize="@dimen/px22"
+            android:textColor="@color/textColor"
+            android:id="@+id/tv_like"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px6"
+            android:visibility="gone"/>
     </androidx.appcompat.widget.LinearLayoutCompat>
     <!-- UP主觉得很赞（官方：灰底胶囊，UP 主点过赞的评论显示） -->
     <androidx.appcompat.widget.AppCompatTextView

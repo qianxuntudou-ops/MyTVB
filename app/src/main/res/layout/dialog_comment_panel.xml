@@ -88,8 +88,6 @@
         android:id="@+id/divider"
         android:layout_width="0dp"
         android:layout_height="@dimen/px4"
-        android:layout_marginStart="@dimen/px25"
-        android:layout_marginEnd="@dimen/px25"
         android:background="#66666666"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
