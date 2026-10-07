@@ -8,6 +8,10 @@ internal const val VIDEO_COMMENT_TYPE_ARCHIVE = 1
 internal const val VIDEO_COMMENT_SORT_NEW = 0
 internal const val VIDEO_COMMENT_SORT_HOT = 1
 
+// 网页版 wbi/main 的排序模式（老接口 sort 的对应迁移）
+internal const val VIDEO_COMMENT_MODE_NEW = 2
+internal const val VIDEO_COMMENT_MODE_HOT = 3
+
 internal fun parseVideoCommentReplyList(
     arr: JSONArray,
     oid: Long,

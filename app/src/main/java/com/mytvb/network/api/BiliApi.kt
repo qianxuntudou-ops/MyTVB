@@ -161,28 +161,31 @@ object BiliApi {
         }
     }
 
-    /** 视频评论根列表（旧版 x/v2/reply，pn/ps 分页，无需 WBI 签名）。 */
-    suspend fun commentPage(
-        type: Int,
+    /**
+     * 视频评论根列表（网页版同款 x/v2/reply/wbi/main，WBI 签名 + 游标分页）。
+     * 首页传空游标，翻页传上一页返回的 cursor.pagination_reply.next_offset。
+     * mode：3=热门（默认）、2=最新（时间）。
+     */
+    suspend fun commentMainPage(
         oid: Long,
-        sort: Int = 1,
-        pn: Int = 1,
-        ps: Int = 20,
-        noHot: Int = 1
+        type: Int,
+        mode: Int,
+        cursorOffset: String,
     ): JSONObject {
-        val url = BiliClient.buildUrl(
-            path = "x/v2/reply",
+        val paginationStr = JSONObject().put("offset", cursorOffset).toString()
+        val url = BiliClient.signedWbiUrl(
+            path = "x/v2/reply/wbi/main",
             params = mapOf(
-                "type" to type.coerceAtLeast(1).toString(),
                 "oid" to oid.coerceAtLeast(1).toString(),
-                "sort" to sort.toString(),
-                "pn" to pn.coerceAtLeast(1).toString(),
-                "ps" to ps.coerceIn(1, 20).toString(),
-                "nohot" to noHot.toString()
+                "type" to type.coerceAtLeast(1).toString(),
+                "mode" to mode.toString(),
+                "pagination_str" to paginationStr,
+                "plat" to "1",
+                "web_location" to "1315875",
             )
         )
         val json = BiliClient.getJson(url, mapOf("Referer" to "https://www.bilibili.com/"))
-        BiliClient.checkResponse(json, "commentPage")
+        BiliClient.checkResponse(json, "commentMainPage")
         return json.optJSONObject("data") ?: JSONObject()
     }
 

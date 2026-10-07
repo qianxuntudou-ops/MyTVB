@@ -1,7 +1,8 @@
 package com.mytvb.feature.player.comment
 
 internal class VideoCommentRootPagingState {
-    var page: Int = 1
+    /** 下一页游标（wbi/main 的 pagination_reply.next_offset）；null=首页未拉或已到尾。 */
+    var nextCursorOffset: String? = null
         private set
     var totalCount: Int = -1
         private set
@@ -11,7 +12,7 @@ internal class VideoCommentRootPagingState {
     val items: ArrayList<VideoCommentItem> = ArrayList()
 
     fun reset() {
-        page = 1
+        nextCursorOffset = null
         totalCount = -1
         endReached = false
         items.clear()
@@ -25,21 +26,20 @@ internal class VideoCommentRootPagingState {
         totalCount = pageData.totalCount
         items.clear()
         items.addAll(pageData.items)
-        endReached =
-            pageData.items.isEmpty() ||
-                (totalCount >= 0 && items.size >= totalCount)
+        nextCursorOffset = pageData.nextCursorOffset
+        endReached = pageData.nextCursorOffset == null || pageData.items.isEmpty()
     }
 
-    fun append(nextPage: Int, pageData: VideoCommentRootPage): Boolean {
+    fun append(pageData: VideoCommentRootPage): Boolean {
         totalCount = pageData.totalCount
         if (pageData.items.isEmpty()) {
             endReached = true
             return false
         }
 
-        page = nextPage
         items.addAll(pageData.items)
-        endReached = totalCount >= 0 && items.size >= totalCount
+        nextCursorOffset = pageData.nextCursorOffset
+        endReached = pageData.nextCursorOffset == null
         return true
     }
 }

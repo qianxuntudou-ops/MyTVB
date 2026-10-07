@@ -425,7 +425,7 @@ internal class CommentPanelDialog(
         commentsFetchJob =
             scope.launch {
                 try {
-                    val pageData = dataSource.loadRootPage(oid = aid, sort = commentSort, page = 1)
+                    val pageData = dataSource.loadRootPage(oid = aid, sort = commentSort, cursorOffset = null)
                     if (token != commentsFetchToken) return@launch
 
                     commentsState.replace(pageData)
@@ -451,7 +451,7 @@ internal class CommentPanelDialog(
 
     private fun loadMoreComments() {
         if (commentsFetchJob?.isActive == true || commentsState.endReached) return
-        val nextPage = commentsState.page + 1
+        val cursorOffset = commentsState.nextCursorOffset ?: return
         val token = ++commentsFetchToken
 
         commentsFetchJob =
@@ -460,19 +460,19 @@ internal class CommentPanelDialog(
                     val pageData = dataSource.loadRootPage(
                         oid = aid,
                         sort = commentSort,
-                        page = nextPage,
+                        cursorOffset = cursorOffset,
                         fallbackTotalCount = commentsState.totalCount,
                     )
                     if (token != commentsFetchToken) return@launch
 
-                    if (!commentsState.append(nextPage = nextPage, pageData = pageData)) {
+                    if (!commentsState.append(pageData)) {
                         return@launch
                     }
                     commentsAdapter.appendItems(pageData.items)
                     checkCommentsFillScreen()
                 } catch (t: Throwable) {
                     if (t is CancellationException) return@launch
-                    AppLog.w(TAG, "loadMoreComments failed aid=$aid sort=$commentSort page=$nextPage", t)
+                    AppLog.w(TAG, "loadMoreComments failed aid=$aid sort=$commentSort cursor=$cursorOffset", t)
                     showCommentLoadError(t)
                 } finally {
                     if (token == commentsFetchToken) commentsFetchJob = null
