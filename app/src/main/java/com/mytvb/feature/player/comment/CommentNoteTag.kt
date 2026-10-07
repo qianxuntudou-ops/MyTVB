@@ -38,7 +38,8 @@ internal object CommentNoteTag {
         val ssb = SpannableStringBuilder("\uFFFC ")
         ssb.append(textView.text)
         ssb.setSpan(CenteredImageSpan(drawable), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        textView.setText(ssb, TextView.BufferType.SPANNABLE)
+        // 默认 buffer：SPANNABLE 会令 TextView 的 maxLines/ellipsize 失效（长评截断无"展开"）
+        textView.text = ssb
     }
 
     /** 标签与文字行垂直居中（ALIGN_BOTTOM 会让小标签沉到行底，观感偏坠）。 */

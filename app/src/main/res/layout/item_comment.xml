@@ -142,11 +142,13 @@
         android:layout_marginTop="@dimen/px12"
         android:maxLines="6"
         android:ellipsize="end"/>
+    <!-- 展开/收起：展开后变"收起"，触摸独立可点（拦截不冒泡到整卡）；TV 焦点模式由整卡 OK 兜底收起 -->
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px20"
         android:textColor="@color/biliBlue"
         android:id="@+id/tv_expand"
         android:text="@string/player_comment_expand"
+        android:clickable="true"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/px85"

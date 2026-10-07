@@ -117,6 +117,7 @@
     <string name="player_comment_top_tag">置顶</string>
     <string name="player_comment_no_aid">视频信息未加载</string>
     <string name="player_comment_expand">展开</string>
+    <string name="player_comment_collapse">收起</string>
     <string name="player_comment_view_all_replies_format">查看全部 %1$s 条回复</string>
     <string name="player_comment_view_all_replies_long_press_format">长按查看全部 %1$s 条回复</string>
     <string name="player_comment_note_image_loading">加载图片中…</string>

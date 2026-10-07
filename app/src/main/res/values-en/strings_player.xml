@@ -115,6 +115,7 @@
     <string name="player_comment_top_tag">Pinned</string>
     <string name="player_comment_no_aid">Video info not loaded</string>
     <string name="player_comment_expand">Expand</string>
+    <string name="player_comment_collapse">Collapse</string>
     <string name="player_comment_view_all_replies_format">View all %1$s replies</string>
     <string name="player_comment_view_all_replies_long_press_format">Long-press to view all %1$s replies</string>
     <string name="player_comment_note_image_loading">Loading image…</string>

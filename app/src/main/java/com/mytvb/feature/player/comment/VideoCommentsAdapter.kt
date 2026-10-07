@@ -4,6 +4,7 @@ import android.graphics.drawable.GradientDrawable
 import android.text.SpannableStringBuilder
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -15,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.common.format.NumberUtils
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.time.TimeUtils
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.ItemCommentBinding
@@ -23,7 +25,7 @@ import com.mytvb.databinding.ItemCommentSectionBinding
 /**
  * 评论面板列表 Adapter（根评论与楼中楼共用）。语义对齐
  * blbl.cat3399.feature.video.comment.VideoCommentsAdapter：
- * stableIds 按 key、长评展开/收起（运行时判 ellipsis 后提示"展开"）、
+ * stableIds 按 key、长评展开/收起（运行时判 ellipsis 后提示"展开"、展开后提示"收起"，触摸点文字收起、焦点模式无图无楼时整卡 OK 收起）、
  * 回复预览用户名高亮 + 大表情、图片缩略图、笔记图片异步补载、
  * 焦点 OK 与触摸点击分流（带图评论：OK=开图、触摸=进楼中楼，图片子 view 触摸开图）。
  *
@@ -114,8 +116,9 @@ internal class VideoCommentsAdapter(
         (holder as Vh).bind(
             item = item,
             isExpanded = expandedRpids.contains(item.rpid),
-            onExpand = { rpid ->
-                if (!expandedRpids.add(rpid)) return@bind
+            onToggleExpand = { rpid ->
+                // toggle：remove 成功=原本展开→收起，否则补 add=展开
+                if (!expandedRpids.remove(rpid)) expandedRpids.add(rpid)
                 val pos =
                     holder.bindingAdapterPosition
                         .takeIf { it != RecyclerView.NO_POSITION }
@@ -195,7 +198,7 @@ internal class VideoCommentsAdapter(
         fun bind(
             item: VideoCommentItem,
             isExpanded: Boolean,
-            onExpand: (Long) -> Unit,
+            onToggleExpand: (Long) -> Unit,
             onClick: (VideoCommentItem) -> Unit,
             onTouchClick: (VideoCommentItem) -> Unit,
             onPictureClick: (VideoCommentItem, Int) -> Unit,
@@ -236,6 +239,9 @@ internal class VideoCommentsAdapter(
                 val showReplyLink = item.canOpenThread && item.replyCount > 0
                 binding.rowReplyPreview.visibility =
                     if (previews.isNotEmpty() || showReplyLink) View.VISIBLE else View.GONE
+                // 无预览时预览行必须 GONE（仅清文本会占一行高度，框会空出一块）
+                binding.tvReplyPreview1.visibility =
+                    if (previews.isNotEmpty()) View.VISIBLE else View.GONE
                 if (previews.isNotEmpty()) {
                     bindReplyPreviewText(binding.tvReplyPreview1, previews[0], previewUserColor)
                     if (previews.size >= 2) {
@@ -246,9 +252,17 @@ internal class VideoCommentsAdapter(
                         binding.tvReplyPreview2.visibility = View.GONE
                     }
                 } else {
-                    binding.tvReplyPreview1.text = ""
                     binding.tvReplyPreview2.text = ""
                     binding.tvReplyPreview2.visibility = View.GONE
+                }
+                // 无预览时"查看全部"行贴框顶（免掉为预览行留的 marginTop）
+                binding.tvReply.layoutParams.let { lp ->
+                    if (lp is androidx.appcompat.widget.LinearLayoutCompat.LayoutParams) {
+                        lp.topMargin =
+                            if (previews.isEmpty()) 0
+                            else ctx.resources.getDimensionPixelSize(R.dimen.px10)
+                        binding.tvReply.layoutParams = lp
+                    }
                 }
             }
 
@@ -322,14 +336,18 @@ internal class VideoCommentsAdapter(
                 val wasTouch = rootClickFromTouch
                 rootClickFromTouch = false
                 val shouldExpand = !isExpanded && isMessageEllipsized(binding.tvMessage)
-                if (shouldExpand) {
-                    onExpand(item.rpid)
-                } else if (wasTouch) {
-                    onTouchClick(item)
-                } else {
-                    onClick(item)
+                when {
+                    shouldExpand -> onToggleExpand(item.rpid)
+                    // 触摸点正文 = 进楼中楼等既有行为；收起走 tv_expand 自己的点击
+                    wasTouch -> onTouchClick(item)
+                    // 焦点模式展开后：无图可开、无楼可进（原本只剩 toast/无动作）时 OK 收起
+                    isExpanded && item.pictures.isEmpty() && item.noteCvid <= 0L &&
+                        !(item.canOpenThread && item.replyCount > 0) -> onToggleExpand(item.rpid)
+                    else -> onClick(item)
                 }
             }
+            // 收起文字按钮：触摸独立可点；TV 上不加 focusable，收起由整卡 OK 兜底（见上）
+            binding.tvExpand.setOnClickListener { onToggleExpand(item.rpid) }
             binding.clickView.setOnLongClickListener {
                 onLongClick(item)
             }
@@ -340,8 +358,15 @@ internal class VideoCommentsAdapter(
         }
 
         private fun updateExpandHint(itemRpid: Long, isExpanded: Boolean) {
+            val ctx = binding.root.context
+            if (isExpanded) {
+                // expandedRpids 只收点过"展开"（当时确实省略）的 rpid，收起按钮无条件显示
+                binding.tvExpand.text = ctx.getString(R.string.player_comment_collapse)
+                binding.tvExpand.visibility = View.VISIBLE
+                return
+            }
+            binding.tvExpand.text = ctx.getString(R.string.player_comment_expand)
             binding.tvExpand.visibility = View.GONE
-            if (isExpanded) return
 
             // 只有运行时真的省略了才显示"展开"：post 等布局完成再判。
             binding.tvMessage.post {
@@ -370,7 +395,8 @@ internal class VideoCommentsAdapter(
                 ss.setSpan(ForegroundColorSpan(color), m.range.first, m.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 found = true
             }
-            if (found) view.setText(ss, TextView.BufferType.SPANNABLE)
+            // 默认 buffer：SPANNABLE 会触发 ellipsize 失效（见 bindReplyPreviewRows 注释）
+            if (found) view.text = ss
         }
 
         private fun bindPictures(
@@ -432,7 +458,20 @@ internal class VideoCommentsAdapter(
             ssb.setSpan(ForegroundColorSpan(userColor), 0, u.length.coerceAtMost(s.length), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             view.setTag(R.id.tag_emote_text_key, s)
             CommentEmoteSpannable.applyEmotes(view, ssb, start = 0, end = ssb.length, emotes = preview.emotes)
-            view.setText(ssb, TextView.BufferType.SPANNABLE)
+            // 官方预览行规范：行内 @某人 与行首用户名同为蓝色链接色（同正文 highlightMentions）
+            highlightMentions(view, userColor)
+            // 走默认 buffer 对齐正文正常路径；实测 SPANNABLE 下（含 ImageSpan）TextView 的
+            // maxLines/ellipsize 失效——layout 自然折行、高度被钳成 1 行、永无"…"
+            view.text = ssb
+            // 兜底：万一系统 ellipsize 仍未生效（layout 多行、只显示第一行），
+            // 手动按可用宽度截成单行并补"…"（TextUtils.ellipsize 保留既有 span）
+            view.post {
+                if (view.getTag(R.id.tag_emote_text_key) != s) return@post
+                val layout = view.layout ?: return@post
+                if (layout.lineCount <= 1 || view.width <= 0) return@post
+                val avail = (view.width - view.paddingLeft - view.paddingRight).toFloat()
+                view.text = TextUtils.ellipsize(ssb, view.paint, avail, TextUtils.TruncateAt.END)
+            }
         }
     }
 }

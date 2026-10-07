@@ -40,7 +40,9 @@ internal object CommentEmoteSpannable {
 
         val ssb = SpannableStringBuilder(text)
         applyEmotes(textView, ssb, start = 0, end = ssb.length, emotes = emotes)
-        textView.setText(ssb, TextView.BufferType.SPANNABLE)
+        // 默认 buffer：SPANNABLE 会令 TextView 的 maxLines/ellipsize 整体失效（6 行截断后
+        // 无省略号、"展开"检测失效，长评看起来被吃掉），span 在默认 buffer 下照常渲染
+        textView.text = ssb
     }
 
     fun applyEmotes(

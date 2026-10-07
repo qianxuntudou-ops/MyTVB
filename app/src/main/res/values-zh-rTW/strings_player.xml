@@ -115,6 +115,7 @@
     <string name="player_comment_top_tag">置頂</string>
     <string name="player_comment_no_aid">影片資訊未載入</string>
     <string name="player_comment_expand">展開</string>
+    <string name="player_comment_collapse">收起</string>
     <string name="player_comment_view_all_replies_format">查看全部 %1$s 條回覆</string>
     <string name="player_comment_view_all_replies_long_press_format">長按查看全部 %1$s 條回覆</string>
     <string name="player_comment_note_image_loading">載入圖片中…</string>
