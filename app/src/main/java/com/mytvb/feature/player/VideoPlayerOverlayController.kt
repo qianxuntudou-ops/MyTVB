@@ -32,6 +32,7 @@ import com.mytvb.ui.dialog.VideoInfoDialog
 import com.mytvb.feature.detail.UserSpaceFragment
 import com.mytvb.core.ui.base.VideoRecyclerViewTuning
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
+import com.mytvb.feature.player.comment.CommentPanelDialog
 import com.mytvb.feature.player.view.MyPlayerView
 import com.mytvb.core.ui.base.DialogWindowFit
 
@@ -602,6 +603,29 @@ class VideoPlayerOverlayController(
             }
             show()
         }
+    }
+
+    fun showCommentPanel() {
+        val video = resolveCurrentVideoInfo()
+        if (video == null || video.aid <= 0L) {
+            Toast.makeText(activity, activity.getString(R.string.player_video_info_not_loaded), Toast.LENGTH_SHORT).show()
+            return
+        }
+        overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.COMMENT_BUTTON)
+        keepControllerVisibleForOverlay()
+        uiCoordinator.transition(UiEvent.PanelOpened(PanelType.COMMENT))
+        CommentPanelDialog(
+            activity = activity,
+            aid = video.aid,
+            upMid = video.owner?.mid ?: 0L,
+            commentCount = video.stat?.reply ?: 0L,
+            onDismissed = {
+                uiCoordinator.transition(UiEvent.PanelClosed)
+                if (isViewActive()) {
+                    restoreControllerAfterOverlay()
+                }
+            }
+        ).showPanel()
     }
 
     private fun keepControllerVisibleForOverlay() {

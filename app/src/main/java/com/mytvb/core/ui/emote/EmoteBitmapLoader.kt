@@ -1,4 +1,4 @@
-package com.mytvb.feature.player.danmaku.emote
+package com.mytvb.core.ui.emote
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,18 +15,20 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /**
- * 弹幕表情位图加载器：LruCache（进程堆 1/32，至少 2MB）+ 在途请求去重 + waiter 扇出。
+ * B 站表情位图加载器：LruCache（进程堆 1/32，至少 2MB）+ 在途请求去重 + waiter 扇出。
+ * 弹幕引擎（建图渲染路径）与评论列表（TextView ImageSpan 渲染路径）共用。
  *
  * 使用方约定：
- * - 渲染路径只调 [getCached]（内存命中或 null，绝不触发网络）；
- * - [prefetch] 由建图调度在表情未就绪时触发；加载完成后引擎下一帧轮询会发现就绪并建图，
+ * - 弹幕渲染路径只调 [getCached]（内存命中或 null，绝不触发网络）；
+ *   [prefetch] 由建图调度在表情未就绪时触发；加载完成后引擎下一帧轮询会发现就绪并建图，
  *   因此无需完成回调。
+ * - 评论等 TextView 路径用 [load]，回调里拿位图重绘。
  * - B 站 CDN 的 http 表情 URL 归一化为 https（hdslb/bilibili/bilivideo 域）。
  *
  * 对齐 blbl.cat3399.core.emote.EmoteBitmapLoader。
  */
 internal object EmoteBitmapLoader {
-    private const val TAG = "DanmakuEmoteLoader"
+    private const val TAG = "EmoteBitmapLoader"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val lock = Any()

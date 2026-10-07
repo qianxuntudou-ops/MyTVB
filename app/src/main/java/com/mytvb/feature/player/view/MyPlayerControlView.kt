@@ -95,6 +95,7 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var buttonChooseEpisode: ImageView
     private lateinit var buttonMore: ImageView
     private lateinit var buttonUpInfo: ImageView
+    private lateinit var buttonComment: ImageView
     private lateinit var buttonSubtitle: ImageView
     private lateinit var buttonRelated: ImageView
     private lateinit var buttonRepeat: ImageView
@@ -192,6 +193,7 @@ class MyPlayerControlView @JvmOverloads constructor(
         buttonChooseEpisode = findViewById(R.id.button_choose_episode)
         buttonMore = findViewById(R.id.button_more)
         buttonUpInfo = findViewById(R.id.button_up_info)
+        buttonComment = findViewById(R.id.button_comment)
         buttonSubtitle = findViewById(R.id.button_subtitle)
         buttonRelated = findViewById(R.id.button_related)
         buttonRepeat = findViewById(R.id.button_repeat)
@@ -221,6 +223,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonChooseEpisode = buttonChooseEpisode,
             buttonMore = buttonMore,
             buttonUpInfo = buttonUpInfo,
+            buttonComment = buttonComment,
             buttonSubtitle = buttonSubtitle,
             buttonRelated = buttonRelated,
             buttonRepeat = buttonRepeat,
@@ -248,6 +251,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonChooseEpisode,
             buttonMore,
             buttonUpInfo,
+            buttonComment,
             buttonSubtitle,
             buttonRelated,
             buttonRepeat,
@@ -331,6 +335,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         buttonUpInfo.setOnClickListener {
             resetHideCallbacks()
             onVideoSettingChangeListener?.onUpInfo()
+        }
+        buttonComment.setOnClickListener {
+            resetHideCallbacks()
+            onVideoSettingChangeListener?.onComments()
         }
 
         buttonSubtitle.setOnClickListener {
@@ -612,6 +620,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         setButtonVisibility(buttonRelated, show)
     }
 
+    fun showHideCommentButton(show: Boolean) {
+        setButtonVisibility(buttonComment, show)
+    }
+
     fun isRelatedButtonVisible(): Boolean {
         return buttonRelated.visibility == View.VISIBLE
     }
@@ -866,6 +878,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         focusCoordinator.requestOwnerButtonFocus()
     }
 
+    fun requestCommentButtonFocus() {
+        focusCoordinator.requestCommentButtonFocus()
+    }
+
     fun requestSubtitleButtonFocus() {
         focusCoordinator.requestSubtitleButtonFocus()
     }
@@ -973,6 +989,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonChooseEpisode,
             buttonMore,
             buttonUpInfo,
+            buttonComment,
             buttonSubtitle,
             buttonRelated,
             buttonRepeat,

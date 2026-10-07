@@ -10,7 +10,7 @@ import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.player.danmaku.common.BiliDanmakuStyle
 import com.mytvb.feature.player.danmaku.common.DanmakuInlineParser
 import com.mytvb.feature.player.danmaku.emote.DanmakuEmoteRepository
-import com.mytvb.feature.player.danmaku.emote.EmoteBitmapLoader
+import com.mytvb.core.ui.emote.EmoteBitmapLoader
 import com.mytvb.feature.player.danmaku.model.DanmakuCacheState
 import com.mytvb.feature.player.danmaku.model.DanmakuInlineSegment
 import com.mytvb.feature.player.danmaku.model.DanmakuItem

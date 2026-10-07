@@ -32,6 +32,7 @@ class PlaybackUiCoordinator {
         Related,
         Action,
         Owner,
+        Comment,
         NextUp,
         Interaction,
         ResumeHint
@@ -254,6 +255,7 @@ class PlaybackUiCoordinator {
             PanelType.RELATED -> PanelState.Related
             PanelType.ACTION -> PanelState.Action
             PanelType.OWNER -> PanelState.Owner
+            PanelType.COMMENT -> PanelState.Comment
             PanelType.NEXT_UP -> PanelState.NextUp
             PanelType.INTERACTION -> PanelState.Interaction
             PanelType.RESUME_HINT -> PanelState.ResumeHint
@@ -264,7 +266,8 @@ class PlaybackUiCoordinator {
         focusOwner = when (panel) {
             PanelType.EPISODE,
             PanelType.ACTION,
-            PanelType.OWNER -> FocusOwner.Dialog
+            PanelType.OWNER,
+            PanelType.COMMENT -> FocusOwner.Dialog
             PanelType.RELATED,
             PanelType.NEXT_UP,
             PanelType.SETTINGS -> FocusOwner.Panel

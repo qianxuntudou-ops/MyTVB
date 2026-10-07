@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "UP主觉得很赞"胶囊底（官方：浅灰圆角胶囊+灰字，暗色模式半透明白） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#33FFFFFF" />
+    <corners android:radius="@dimen/px8" />
+</shape>

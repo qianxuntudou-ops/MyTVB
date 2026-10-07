@@ -255,6 +255,10 @@
         <item name="android:windowEnterAnimation">@null</item>
         <item name="android:windowExitAnimation">@null</item>
     </style>
+    <style name="CommentPanelWindowAnimation" parent="">
+        <item name="android:windowEnterAnimation">@anim/comment_panel_slide_enter_right</item>
+        <item name="android:windowExitAnimation">@anim/comment_panel_slide_exit_right</item>
+    </style>
     <style name="SeekOverlaySecondsTextAppearance" parent="@style/TextAppearance.AppCompat">
         <item name="android:textSize">@dimen/px48</item>
         <item name="android:textColor">@android:color/white</item>

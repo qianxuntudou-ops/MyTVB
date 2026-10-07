@@ -721,6 +721,7 @@ class VideoPlayerFragment : Fragment() {
         playerView.showHideActionButton(false)
         playerView.showHideEpisodeButton(false)
         playerView.showHideRelatedButton(false)
+        playerView.showHideCommentButton(false)
         playerView.showHideDmSwitchButton(false)
         playerView.showHideLiveSettingButton(false)
         playerView.showHideSubtitleButton(false)
@@ -808,6 +809,10 @@ class VideoPlayerFragment : Fragment() {
 
             override fun onMore() {
                 showPlayerActionDialog()
+            }
+
+            override fun onComments() {
+                showCommentPanel()
             }
 
             override fun onVideoInfo() {
@@ -1023,7 +1028,7 @@ class VideoPlayerFragment : Fragment() {
                     viewModel.videoInfo.collect { info ->
                         latestVideoInfo = info
                         sessionCoordinator.updateVideoInfo(info)
-                        resetDouyinModeIfNeeded()
+                                resetDouyinModeIfNeeded()
                         ensureDouyinQueueStarted()
                         schedulePreloadAndHeaderRefresh()
                         updatePrimaryActionVisibility()
@@ -1424,6 +1429,7 @@ class VideoPlayerFragment : Fragment() {
     private fun updatePrimaryActionVisibility() {
         val (hasOwner, hasVideoIdentity) = PlayerScreenLogic.primaryActionFlags(latestVideoInfo?.view)
         playerView.setShowHideOwnerInfo(hasOwner)
+        playerView.showHideCommentButton(hasVideoIdentity)
         playerView.showHideActionButton(hasVideoIdentity)
         playerView.showSettingButton(hasVideoIdentity)
     }
@@ -1542,6 +1548,10 @@ class VideoPlayerFragment : Fragment() {
 
     private fun showOwnerDetailDialog() {
         overlayUiController.showOwnerDetailDialog()
+    }
+
+    private fun showCommentPanel() {
+        overlayUiController.showCommentPanel()
     }
 
     private fun openFragmentFromPlayerHost(fragment: Fragment, tag: String) {

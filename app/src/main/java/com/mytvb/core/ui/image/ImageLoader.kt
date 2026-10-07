@@ -177,6 +177,37 @@ object ImageLoader {
         )
     }
 
+    /** 原始尺寸加载（评论图片查看器等全屏场景），不做图床尺寸后缀优化。 */
+    fun loadOriginal(
+        imageView: ImageView,
+        url: String?,
+        priority: Priority = Priority.VISIBLE_HIGH
+    ) {
+        loadInto(
+            imageView = imageView,
+            url = normalizeUrl(url),
+            placeholderRes = 0,
+            errorRes = 0,
+            priority = priority
+        )
+    }
+
+    /** 评论图片缩略图（评论面板），圆角与回复预览框一致（px10）。 */
+    fun loadCommentPicture(
+        imageView: ImageView,
+        url: String?,
+        priority: Priority = Priority.NORMAL
+    ) {
+        val optimizedUrl = buildOptimizedCommonImageUrl(url)
+        val normalizedUrl = normalizeUrl(url)
+        val radiusPx = imageView.context.resources.getDimensionPixelSize(R.dimen.px10).toFloat()
+        loadInto(imageView, optimizedUrl, 0, 0,
+            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null,
+            cornerRadius = radiusPx,
+            priority = priority
+        )
+    }
+
     fun loadDrawableRes(
         imageView: ImageView,
         @DrawableRes resId: Int,

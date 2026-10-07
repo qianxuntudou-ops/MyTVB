@@ -11,4 +11,5 @@
     <item type="id" name="tag_image_loader_predraw_listener" />
     <item type="id" name="tag_first_screen_render_token" />
     <item type="id" name="tag_first_screen_append_runnable" />
+    <item type="id" name="tag_emote_text_key" />
 </resources>

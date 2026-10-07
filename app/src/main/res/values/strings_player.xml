@@ -97,4 +97,27 @@
     <string name="series_error_timeline_failed">时间线加载失败</string>
     <string name="series_error_recommend_failed">推荐加载失败</string>
     <string name="player_hdr_unsupported_hint">电视或播放设备可能不支持「%1$s」，若播放异常请切回其他画质</string>
+
+    <!-- 视频评论 / Video comments -->
+    <string name="player_comment_title">评论</string>
+    <string name="player_comment_title_with_count_format">评论(%1$s)</string>
+    <string name="player_comment_sort_hot">热门</string>
+    <string name="player_comment_sort_new">最新</string>
+    <string name="player_comment_loading">加载中…</string>
+    <string name="player_comment_empty">暂无评论</string>
+    <string name="player_comment_load_failed">评论加载失败</string>
+    <string name="player_comment_thread_empty">暂无回复</string>
+    <string name="player_comment_thread_title">评论详情</string>
+    <string name="player_comment_thread_section">相关回复</string>
+    <string name="player_comment_thread_section_format">相关回复共%1$s条</string>
+    <string name="player_comment_level_accessibility">用户等级 %1$d</string>
+    <string name="player_comment_level_senior_accessibility">硬核会员，用户等级 %1$d</string>
+    <string name="player_comment_note_tag">笔记</string>
+    <string name="player_comment_up_liked">UP主觉得很赞</string>
+    <string name="player_comment_top_tag">置顶</string>
+    <string name="player_comment_no_aid">视频信息未加载</string>
+    <string name="player_comment_expand">展开</string>
+    <string name="player_comment_view_all_replies_format">查看全部 %1$s 条回复</string>
+    <string name="player_comment_view_all_replies_long_press_format">长按查看全部 %1$s 条回复</string>
+    <string name="player_comment_note_image_loading">加载图片中…</string>
 </resources>

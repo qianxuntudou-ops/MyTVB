@@ -48,6 +48,7 @@ enum class PanelType {
     RELATED,
     ACTION,
     OWNER,
+    COMMENT,
     NEXT_UP,
     INTERACTION,
     RESUME_HINT

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "查看全部N条回复"行尾小箭头（ic_arrow_right 同形小号版，颜色由 drawableTint 控制） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:height="18dp"
+    android:width="18dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M593.5,512.1L360.1,278.6l45.3,-45.2 278.6,278.8L405.3,790.6l-45.2,-45.3z"/>
+</vector>

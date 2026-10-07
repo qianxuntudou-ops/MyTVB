@@ -16,7 +16,8 @@ class PlayerOverlayCoordinator(
         RELATED_BUTTON,
         EPISODE_BUTTON,
         MORE_BUTTON,
-        OWNER_BUTTON
+        OWNER_BUTTON,
+        COMMENT_BUTTON
     }
 
     private var visiblePanel: Panel = Panel.NONE
@@ -45,6 +46,7 @@ class PlayerOverlayCoordinator(
             FocusTarget.EPISODE_BUTTON -> playerView.requestEpisodeButtonFocus()
             FocusTarget.MORE_BUTTON -> playerView.requestMoreButtonFocus()
             FocusTarget.OWNER_BUTTON -> playerView.requestOwnerButtonFocus()
+            FocusTarget.COMMENT_BUTTON -> playerView.requestCommentButtonFocus()
             FocusTarget.PLAY_PAUSE -> playerView.requestPlayPauseFocus()
         }
     }

@@ -21,6 +21,7 @@ internal class PlayerControlFocusCoordinator(
     private val buttonChooseEpisode: View,
     private val buttonMore: View,
     private val buttonUpInfo: View,
+    private val buttonComment: View,
     private val buttonSubtitle: View,
     private val buttonRelated: View,
     private val buttonRepeat: View,
@@ -45,6 +46,7 @@ internal class PlayerControlFocusCoordinator(
         EPISODE,
         MORE,
         OWNER,
+        COMMENT,
         SUBTITLE,
         RELATED,
         REPEAT,
@@ -207,6 +209,10 @@ internal class PlayerControlFocusCoordinator(
         requestFocusOrFallback(buttonUpInfo)
     }
 
+    fun requestCommentButtonFocus() {
+        requestFocusOrFallback(buttonComment)
+    }
+
     fun requestSubtitleButtonFocus() {
         requestFocusOrFallback(buttonSubtitle)
     }
@@ -224,6 +230,7 @@ internal class PlayerControlFocusCoordinator(
             buttonChooseEpisode.isFocused -> FocusTarget.EPISODE
             buttonMore.isFocused -> FocusTarget.MORE
             buttonUpInfo.isFocused -> FocusTarget.OWNER
+            buttonComment.isFocused -> FocusTarget.COMMENT
             buttonSubtitle.isFocused -> FocusTarget.SUBTITLE
             buttonRelated.isFocused -> FocusTarget.RELATED
             buttonRepeat.isFocused -> FocusTarget.REPEAT
@@ -249,6 +256,7 @@ internal class PlayerControlFocusCoordinator(
             FocusTarget.EPISODE -> requestEpisodeButtonFocus()
             FocusTarget.MORE -> requestMoreButtonFocus()
             FocusTarget.OWNER -> requestOwnerButtonFocus()
+            FocusTarget.COMMENT -> requestCommentButtonFocus()
             FocusTarget.SUBTITLE -> requestSubtitleButtonFocus()
             FocusTarget.RELATED -> requestRelatedButtonFocus()
             FocusTarget.REPEAT -> requestViewOrFallback(buttonRepeat)
@@ -273,6 +281,7 @@ internal class PlayerControlFocusCoordinator(
             buttonChooseEpisode.isFocused ||
             buttonMore.isFocused ||
             buttonUpInfo.isFocused ||
+            buttonComment.isFocused ||
             buttonSubtitle.isFocused ||
             buttonRelated.isFocused ||
             buttonRepeat.isFocused ||

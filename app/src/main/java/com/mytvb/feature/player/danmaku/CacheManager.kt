@@ -26,7 +26,7 @@ import com.mytvb.feature.player.danmaku.common.estimatedArgb8888Bytes
 import com.mytvb.feature.player.danmaku.common.reclaimUntilBitmapBudgetFits
 import com.mytvb.feature.player.danmaku.common.resolveDanmakuBitmapBudgetBytes
 import com.mytvb.feature.player.danmaku.emote.DanmakuEmoteRepository
-import com.mytvb.feature.player.danmaku.emote.EmoteBitmapLoader
+import com.mytvb.core.ui.emote.EmoteBitmapLoader
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong

@@ -161,6 +161,54 @@ object BiliApi {
         }
     }
 
+    /** 视频评论根列表（旧版 x/v2/reply，pn/ps 分页，无需 WBI 签名）。 */
+    suspend fun commentPage(
+        type: Int,
+        oid: Long,
+        sort: Int = 1,
+        pn: Int = 1,
+        ps: Int = 20,
+        noHot: Int = 1
+    ): JSONObject {
+        val url = BiliClient.buildUrl(
+            path = "x/v2/reply",
+            params = mapOf(
+                "type" to type.coerceAtLeast(1).toString(),
+                "oid" to oid.coerceAtLeast(1).toString(),
+                "sort" to sort.toString(),
+                "pn" to pn.coerceAtLeast(1).toString(),
+                "ps" to ps.coerceIn(1, 20).toString(),
+                "nohot" to noHot.toString()
+            )
+        )
+        val json = BiliClient.getJson(url, mapOf("Referer" to "https://www.bilibili.com/"))
+        BiliClient.checkResponse(json, "commentPage")
+        return json.optJSONObject("data") ?: JSONObject()
+    }
+
+    /** 评论楼中楼回复列表（x/v2/reply/reply，pn/ps 分页，无需 WBI 签名）。 */
+    suspend fun commentRepliesPage(
+        type: Int,
+        oid: Long,
+        rootRpid: Long,
+        pn: Int = 1,
+        ps: Int = 20
+    ): JSONObject {
+        val url = BiliClient.buildUrl(
+            path = "x/v2/reply/reply",
+            params = mapOf(
+                "type" to type.coerceAtLeast(1).toString(),
+                "oid" to oid.coerceAtLeast(1).toString(),
+                "root" to rootRpid.coerceAtLeast(1).toString(),
+                "pn" to pn.coerceAtLeast(1).toString(),
+                "ps" to ps.coerceIn(1, 49).toString()
+            )
+        )
+        val json = BiliClient.getJson(url, mapOf("Referer" to "https://www.bilibili.com/"))
+        BiliClient.checkResponse(json, "commentRepliesPage")
+        return json.optJSONObject("data") ?: JSONObject()
+    }
+
     suspend fun liveHomeList(): LiveListWrapper {
         val t0 = SystemClock.elapsedRealtime()
         val url = BiliClient.buildUrl(

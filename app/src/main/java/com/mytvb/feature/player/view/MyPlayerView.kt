@@ -184,6 +184,7 @@ class MyPlayerView @JvmOverloads constructor(
     private var pendingEpisodeButtonVisible: Boolean? = null
     private var pendingActionButtonVisible: Boolean? = null
     private var pendingRelatedButtonVisible: Boolean? = null
+    private var pendingCommentButtonVisible: Boolean? = null
     private var pendingRepeatButtonVisible: Boolean? = null
     private var pendingSubtitleButtonVisible: Boolean? = null
     private var pendingLiveSettingButtonVisible: Boolean? = null
@@ -728,6 +729,7 @@ class MyPlayerView @JvmOverloads constructor(
         pendingEpisodeButtonVisible?.let(target::showHideEpisodeButton)
         pendingActionButtonVisible?.let(target::showHideActionButton)
         pendingRelatedButtonVisible?.let(target::showHideRelatedButton)
+        pendingCommentButtonVisible?.let(target::showHideCommentButton)
         pendingRepeatButtonVisible?.let(target::showHideRepeatButton)
         pendingSubtitleButtonVisible?.let(target::showHideSubtitleButton)
         pendingLiveSettingButtonVisible?.let(target::showHideLiveSettingButton)
@@ -2850,12 +2852,21 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.showHideRelatedButton(show)
     }
 
+    fun showHideCommentButton(show: Boolean) {
+        pendingCommentButtonVisible = show
+        controller?.showHideCommentButton(show)
+    }
+
     fun requestRelatedButtonFocus() {
         controller?.requestRelatedButtonFocus()
     }
 
     fun requestOwnerButtonFocus() {
         controller?.requestOwnerButtonFocus()
+    }
+
+    fun requestCommentButtonFocus() {
+        controller?.requestCommentButtonFocus()
     }
 
     fun rememberCurrentFocusTarget() {

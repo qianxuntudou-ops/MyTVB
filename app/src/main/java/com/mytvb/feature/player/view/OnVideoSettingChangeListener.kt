@@ -9,6 +9,7 @@ interface OnVideoSettingChangeListener {
     fun onEpisodeClick() {}
     fun onRelatedClick() {}
     fun onUpInfo() {}
+    fun onComments() {}
     fun onRelated() {}
     fun onRepeat() {}
     fun onSubtitle() {}

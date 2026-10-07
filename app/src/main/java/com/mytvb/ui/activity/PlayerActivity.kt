@@ -907,6 +907,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             playerView.showHideActionButton(false)
             playerView.showHideEpisodeButton(false)
             playerView.showHideRelatedButton(false)
+            playerView.showHideCommentButton(false)
             playerView.showHideDmSwitchButton(false)
             playerView.showHideLiveSettingButton(false)
             playerView.showHideSubtitleButton(false)
@@ -1006,6 +1007,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         playerView.showHideActionButton(false)
         playerView.showHideEpisodeButton(false)
         playerView.showHideRelatedButton(false)
+        playerView.showHideCommentButton(false)
         playerView.showHideDmSwitchButton(false)
         playerView.showHideLiveSettingButton(false)
         playerView.showHideSubtitleButton(false)
@@ -1057,6 +1059,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             override fun onRelated() { showRelatedPanel() }
             override fun onUpInfo() { showOwnerDetailDialog() }
             override fun onMore() { showPlayerActionDialog() }
+            override fun onComments() { showCommentPanel() }
             override fun onVideoInfo() { showVideoInfoDialog() }
             override fun onSubtitle() {
                 if (viewModel.subtitles.value.isNotEmpty()) {
@@ -1725,6 +1728,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun updatePrimaryActionVisibility() {
         val (hasOwner, hasVideoIdentity) = PlayerScreenLogic.primaryActionFlags(latestVideoInfo?.view)
         playerView.setShowHideOwnerInfo(hasOwner)
+        playerView.showHideCommentButton(hasVideoIdentity)
         playerView.showHideActionButton(hasVideoIdentity)
         playerView.showSettingButton(hasVideoIdentity)
     }
@@ -1937,6 +1941,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun showRelatedPanel() { overlayUiController.showRelatedPanel() }
     private fun showOwnerDetailDialog() { overlayUiController.showOwnerDetailDialog() }
     private fun showPlayerActionDialog() { overlayUiController.showPlayerActionDialog() }
+    private fun showCommentPanel() { overlayUiController.showCommentPanel() }
     private fun showVideoInfoDialog() { overlayUiController.showVideoInfoDialog() }
 
     private fun applyPlayerSettings(settings: PlayerSettings) {

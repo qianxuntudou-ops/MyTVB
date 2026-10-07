@@ -182,6 +182,7 @@ class LivePlayerFragment : Fragment() {
         binding.playerView.showHideEpisodeButton(false)
         binding.playerView.showHideActionButton(false)
         binding.playerView.showHideRelatedButton(false)
+        binding.playerView.showHideCommentButton(false)
         binding.playerView.showHideRepeatButton(false)
         binding.playerView.showHideSubtitleButton(false)
         binding.playerView.showHideDmSwitchButton(true)
