@@ -47,27 +47,43 @@
         android:textStyle="bold"
         app:layout_constrainedWidth="true"
         app:layout_constraintBottom_toTopOf="@id/text_subtitle"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/user_action_row"
         app:layout_constraintHorizontal_bias="0"
         app:layout_constraintStart_toEndOf="@id/image_avatar"
         app:layout_constraintTop_toTopOf="@id/image_avatar" />
 
-    <androidx.appcompat.widget.AppCompatButton
-        android:id="@+id/button_follow"
+    <!-- 名字右侧操作行：等级徽章 + 关注按钮线性排列，徽章 GONE 时自动收起（约束链对 GONE 处理不稳，改容器最稳） -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/user_action_row"
         android:layout_width="wrap_content"
-        android:layout_height="@dimen/px56"
-        android:layout_marginStart="@dimen/px30"
-        android:background="@drawable/bg_follow_space_btn"
-        android:drawablePadding="@dimen/px8"
-        android:minWidth="@dimen/px40"
-        android:paddingStart="@dimen/px20"
-        android:paddingEnd="@dimen/px20"
-        android:text="@string/follow"
-        android:textColor="@android:color/white"
-        android:textSize="@dimen/px24"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px15"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="@id/text_title"
         app:layout_constraintStart_toEndOf="@id/text_title"
-        app:layout_constraintTop_toTopOf="@id/text_title" />
+        app:layout_constraintTop_toTopOf="@id/text_title">
+
+        <com.mytvb.core.ui.user.UserLevelBadgeView
+            android:id="@+id/level_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px30"
+            android:layout_marginEnd="@dimen/px15"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/button_follow"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px56"
+            android:background="@drawable/bg_follow_space_btn"
+            android:drawablePadding="@dimen/px8"
+            android:minWidth="@dimen/px40"
+            android:paddingStart="@dimen/px20"
+            android:paddingEnd="@dimen/px20"
+            android:text="@string/follow"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/px24" />
+    </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/text_subtitle"

@@ -1,4 +1,4 @@
-package com.mytvb.feature.player.comment
+package com.mytvb.core.ui.user
 
 import android.content.Context
 import android.graphics.Canvas
@@ -11,13 +11,23 @@ import android.view.View
 import com.mytvb.R
 import kotlin.math.roundToInt
 
+private fun videoCommentLevelColor(level: Int): Int =
+    when (level) {
+        0, 1 -> 0xFFC0C0C0.toInt()
+        2 -> 0xFF8BD29B.toInt()
+        3 -> 0xFF7BCDEF.toInt()
+        4 -> 0xFFFEBB8B.toInt()
+        5 -> 0xFFEE672A.toInt()
+        else -> 0xFFF04C49.toInt()
+    }
+
 /**
- * 评论用户等级徽章（移植自 blbl.cat3399 VideoCommentLevelView）。
+ * 用户等级徽章（评论/空间/弹窗等共用，绘制移植自 blbl.cat3399）。
  *
  * 阶梯底、"LV"字形与七段数码数字按官方徽章比例本地矢量绘制，
  * 任意缩放密度下保持清晰；硬核会员附加闪电。
  */
-internal class VideoCommentLevelView
+class UserLevelBadgeView
     @JvmOverloads
     constructor(
         context: Context,

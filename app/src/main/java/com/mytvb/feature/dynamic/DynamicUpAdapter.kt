@@ -9,6 +9,8 @@ import com.mytvb.R
 import com.mytvb.databinding.CellFollowingBinding
 import com.mytvb.model.user.FollowingModel
 import com.mytvb.core.ui.image.ImageLoader
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 
 class DynamicUpAdapter(
     private val onItemClick: (FollowingModel) -> Unit,
@@ -111,17 +113,22 @@ class DynamicUpAdapter(
         fun bind(item: FollowingModel, isSelected: Boolean) {
             binding.root.isSelected = isSelected
             binding.indicator.visibility = if (isSelected) android.view.View.VISIBLE else android.view.View.INVISIBLE
-            binding.textName.text = if (item.mid == 0L) {
+            // 关注接口本身下发 vip（大会员），头像框 pendant 仍只有空间接口才有
+            val isVip = item.vip != null && item.vip.vipStatus == 1 && item.vip.vipType > 0
+            val displayName = if (item.mid == 0L) {
                 binding.root.context.getString(R.string.all_dynamic)
             } else {
                 item.uname
             }
+            UserBadgeText.bind(binding.textName, displayName, isVip && item.mid != 0L)
 
             if (item.mid == 0L) {
                 ImageLoader.clear(binding.imageAvatar)
                 binding.imageAvatar.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
                 binding.imageAvatar.setImageResource(R.drawable.ic_dynamic)
                 binding.imageAvatar.setBadge(officialVerifyType = -1)
+                binding.imageAvatar.tag = 0L
+                binding.imageAvatar.setPendant(null)
             } else {
                 if (avatarLoadsEnabled || isSelected) {
                     ImageLoader.loadFastAvatar(
@@ -138,8 +145,18 @@ class DynamicUpAdapter(
                     binding.imageAvatar.setImageResource(R.drawable.default_avatar)
                 }
                 binding.imageAvatar.setBadge(
-                    officialVerifyType = item.officialVerify?.type ?: -1
+                    officialVerifyType = item.officialVerify?.type ?: -1,
+                    vipStatus = item.vip?.vipStatus ?: 0,
+                    vipType = item.vip?.vipType ?: 0,
+                    vipAvatarSubscript = item.vip?.avatarSubscript ?: 0
                 )
+                binding.imageAvatar.tag = item.mid
+                binding.imageAvatar.setPendant(null)
+                // 头像框仅空间接口下发；只读缓存升级，防列表请求风暴
+                UserBadgesStore.enqueue(item.mid, allowFetch = false) { badges ->
+                    if (binding.imageAvatar.tag != badges.mid) return@enqueue
+                    binding.imageAvatar.setPendant(badges.pendantUrl)
+                }
             }
         }
 

@@ -186,6 +186,29 @@ object BiliApi {
         return json.optJSONObject("data") ?: JSONObject()
     }
 
+    /** 用户空间信息（x/space/wbi/acc/info，WBI 签名）——用户标识补齐（大会员/头像框/等级）。 */
+    suspend fun spaceAccInfo(mid: Long): com.mytvb.core.ui.user.UserBadges? {
+        val url = BiliClient.signedWbiUrl(
+            path = "x/space/wbi/acc/info",
+            params = mapOf("mid" to mid.toString())
+        )
+        val json = BiliClient.getJson(url, mapOf("Referer" to "https://space.bilibili.com/"))
+        BiliClient.checkResponse(json, "spaceAccInfo")
+        val data = json.optJSONObject("data") ?: return null
+        val vip = data.optJSONObject("vip")
+        return com.mytvb.core.ui.user.UserBadges(
+            mid = data.optLong("mid", mid),
+            name = data.optString("name", ""),
+            avatar = data.optString("face", "").trim().takeIf { it.isNotBlank() },
+            level = data.optInt("level", 0).takeIf { it > 0 },
+            isVip = vip != null && vip.optInt("status", 0) == 1 && vip.optInt("type", 0) > 0,
+            pendantUrl = data.optJSONObject("pendant")
+                ?.optString("image_enhance", "")
+                ?.trim()
+                ?.takeIf { it.startsWith("http") },
+        )
+    }
+
     /** 评论楼中楼回复列表（x/v2/reply/reply，pn/ps 分页，无需 WBI 签名）。 */
     suspend fun commentRepliesPage(
         type: Int,

@@ -68,18 +68,11 @@
             android:text="@string/dialog_normal_member"
             android:textSize="@dimen/px20"
             android:textStyle="bold" />
-        <androidx.appcompat.widget.AppCompatTextView
+        <com.mytvb.core.ui.user.UserLevelBadgeView
             android:id="@+id/text_level"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/px10"
-            android:background="@color/red"
-            android:paddingStart="@dimen/px15"
-            android:paddingEnd="@dimen/px15"
-            android:text="@string/level_"
-            android:textColor="@color/textColor"
-            android:textSize="@dimen/px25"
-            android:textStyle="bold" />
+            android:layout_height="@dimen/px30"
+            android:layout_marginStart="@dimen/px10" />
     </androidx.appcompat.widget.LinearLayoutCompat>
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/text_coin"

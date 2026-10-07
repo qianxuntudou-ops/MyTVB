@@ -6,6 +6,8 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 import com.mytvb.R
 import com.mytvb.databinding.CellFollowUserBinding
 import com.mytvb.model.user.FollowingModel
@@ -92,7 +94,9 @@ class FollowUserAdapter(
         fun bind(item: FollowingModel, isFocused: Boolean) {
             binding.root.isSelected = isFocused
             binding.textView.isSelected = isFocused
-            binding.textView.text = item.uname
+            // 关注接口本身下发 vip（大会员），头像框 pendant 仍只有空间接口才有
+            val isVip = item.vip != null && item.vip.vipStatus == 1 && item.vip.vipType > 0
+            UserBadgeText.bind(binding.textView, item.uname, isVip)
             binding.textSub.text = item.sign
             binding.textSub.isVisible = item.sign.isNotBlank()
 
@@ -106,8 +110,18 @@ class FollowUserAdapter(
                 targetCount = 16
             )
             binding.imageView.setBadge(
-                officialVerifyType = item.officialVerify?.type ?: -1
+                officialVerifyType = item.officialVerify?.type ?: -1,
+                vipStatus = item.vip?.vipStatus ?: 0,
+                vipType = item.vip?.vipType ?: 0,
+                vipAvatarSubscript = item.vip?.avatarSubscript ?: 0
             )
+            binding.imageView.tag = item.mid
+            binding.imageView.setPendant(null)
+            // 头像框仅空间接口下发；只读缓存升级，防列表请求风暴
+            UserBadgesStore.enqueue(item.mid, allowFetch = false) { badges ->
+                if (binding.imageView.tag != badges.mid) return@enqueue
+                binding.imageView.setPendant(badges.pendantUrl)
+            }
         }
     }
 }

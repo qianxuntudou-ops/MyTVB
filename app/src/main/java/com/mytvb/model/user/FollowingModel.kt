@@ -29,5 +29,8 @@ data class FollowingModel(
     val sign: String = "",
 
     @SerializedName("official_verify")
-    val officialVerify: OfficialVerifySimple? = null
+    val officialVerify: OfficialVerifySimple? = null,
+
+    @SerializedName("vip")
+    val vip: VipSimple? = null
 ) : Serializable

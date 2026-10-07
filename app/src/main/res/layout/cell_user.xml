@@ -43,18 +43,11 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_chainStyle="packed" />
 
-    <androidx.appcompat.widget.AppCompatTextView
+    <com.mytvb.core.ui.user.UserLevelBadgeView
         android:id="@+id/text_level"
         android:layout_width="wrap_content"
-        android:layout_height="@dimen/px28"
-        android:background="@drawable/bg_search_user_level"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:minWidth="@dimen/px40"
-        android:text="LV6"
-        android:textColor="@android:color/white"
-        android:textSize="@dimen/px18"
-        android:textStyle="bold"
+        android:layout_height="@dimen/px24"
+        android:visibility="gone"
         app:layout_constrainedWidth="true"
         app:layout_constraintBottom_toBottomOf="@id/text_view"
         app:layout_constraintEnd_toEndOf="parent"

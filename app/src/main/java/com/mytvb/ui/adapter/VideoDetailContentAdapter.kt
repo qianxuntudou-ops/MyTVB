@@ -23,6 +23,8 @@ import com.mytvb.core.ui.system.ScreenUtils
 import com.mytvb.core.common.format.NumberUtils
 import com.mytvb.core.common.time.TimeUtils
 import com.mytvb.databinding.CellSeriesLaneBinding
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 import com.mytvb.databinding.CellVideoDetailHeadBinding
 import com.mytvb.model.video.VideoModel
 import com.mytvb.model.video.detail.Tag
@@ -326,7 +328,7 @@ class VideoDetailContentAdapter(
 
             val owner = view.owner
             if (owner != null) {
-                binding.textName.text = owner.name
+                UserBadgeText.bind(binding.textName, owner.name, isVip = false)
                 ImageLoader.loadCircle(
                     imageView = binding.imageAvatar,
                     url = owner.face,
@@ -336,6 +338,23 @@ class VideoDetailContentAdapter(
                 binding.imageAvatar.setBadge(
                     officialVerifyType = owner.officialVerify?.type ?: -1
                 )
+                binding.imageAvatar.tag = owner.mid
+                binding.imageAvatar.setPendant(null)
+                // owner 接口不带会员/头像框，按 mid 补齐（回调校验 tag 防 holder 复用错位）
+                UserBadgesStore.enqueue(owner.mid) { badges ->
+                    if (binding.imageAvatar.tag != badges.mid) return@enqueue
+                    binding.imageAvatar.setPendant(badges.pendantUrl)
+                    if (badges.isVip) {
+                        binding.imageAvatar.setBadge(
+                            officialVerifyType = owner.officialVerify?.type ?: -1,
+                            vipStatus = 1,
+                            vipType = 2,
+                        )
+                    }
+                    if (view.owner?.mid == badges.mid) {
+                        UserBadgeText.bind(binding.textName, owner.name, badges.isVip)
+                    }
+                }
             }
 
             currentDescription = view.desc.orEmpty()

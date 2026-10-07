@@ -7,6 +7,8 @@ import android.view.Window
 import androidx.appcompat.app.AppCompatDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 import com.mytvb.R
 import com.mytvb.databinding.DialogUserInfoBinding
 import com.mytvb.model.user.UserDetailInfoModel
@@ -125,14 +127,25 @@ class UserInfoDialog(context: Context) : AppCompatDialog(context, R.style.Dialog
         } else {
             binding.imageAvatar.setBadge(officialVerifyType = -1)
         }
-        binding.textName.text = info?.uname.orEmpty().ifBlank { "Nickname" }
+        val isVip = info != null &&
+            info.vipStatus.coerceAtLeast(info.vip?.vipStatus ?: 0) > 0
+        UserBadgeText.bind(binding.textName, info?.uname.orEmpty().ifBlank { "Nickname" }, isVip)
+        // 头像框不在本地会话数据里，按 mid 补齐（单实例无复用错位）
+        val selfMid = info?.mid ?: 0L
+        binding.imageAvatar.setPendant(null)
+        if (selfMid > 0L) {
+            UserBadgesStore.enqueue(selfMid) { badges ->
+                binding.imageAvatar.setPendant(badges.pendantUrl)
+            }
+        }
         binding.textVip.text = info?.vipLabel?.text
             .orEmpty()
             .ifBlank { info?.vip?.label?.text.orEmpty() }
             .ifBlank { context.getString(R.string.dialog_normal_member) }
-        binding.textLevel.text = context.getString(
-            R.string.level_,
-            info?.levelInfo?.currentLevel ?: 0
+        // 官方等级徽章（硬核会员闪电）
+        binding.textLevel.bind(
+            info?.levelInfo?.currentLevel,
+            isSeniorMember = (info?.isSeniorMember ?: 0) > 0,
         )
         val coinValue = info?.wallet?.bcoinBalance?.takeIf { it > 0 }?.toDouble()
             ?: info?.money

@@ -16,6 +16,8 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.ViewConfiguration
 import androidx.recyclerview.widget.RecyclerView
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 import com.mytvb.R
 import com.mytvb.databinding.CellLiveRoomBinding
 import com.mytvb.databinding.CellMovieBinding
@@ -344,9 +346,9 @@ class SearchItemAdapter(
         }
 
         fun bind(item: SearchItemModel) {
-            binding.textView.text = item.uname
-            binding.textLevel.visibility = if (item.level > 0) View.VISIBLE else View.INVISIBLE
-            binding.textLevel.text = "LV${item.level}"
+            val mid = item.mid.toLongOrNull() ?: 0L
+            UserBadgeText.bind(binding.textView, item.uname, isVip = false)
+            binding.textLevel.bind(item.level, isSeniorMember = false)
             binding.textMeta.text = buildUserMetaTextWithVerify(binding.root.context, item)
             bindRelationButton(item)
 
@@ -359,6 +361,21 @@ class SearchItemAdapter(
             binding.imageView.setBadge(
                 officialVerifyType = item.officialVerify?.type ?: -1
             )
+            binding.imageView.tag = mid
+            binding.imageView.setPendant(null)
+            // 搜索接口无会员/头像框；仅读缓存升级（看过空间/详情的用户自然点亮），防列表请求风暴
+            UserBadgesStore.enqueue(mid, allowFetch = false) { badges ->
+                if (binding.imageView.tag != badges.mid) return@enqueue
+                binding.imageView.setPendant(badges.pendantUrl)
+                if (badges.isVip) {
+                    binding.imageView.setBadge(
+                        officialVerifyType = item.officialVerify?.type ?: -1,
+                        vipStatus = 1,
+                        vipType = 2,
+                    )
+                }
+                UserBadgeText.bind(binding.textView, item.uname, badges.isVip)
+            }
         }
 
         fun bindRelationButton(item: SearchItemModel) {

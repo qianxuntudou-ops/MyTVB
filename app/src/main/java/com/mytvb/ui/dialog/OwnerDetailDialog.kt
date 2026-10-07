@@ -8,6 +8,8 @@ import android.view.Window
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDialog
 import androidx.core.view.isVisible
+import com.mytvb.core.ui.user.UserBadgeText
+import com.mytvb.core.ui.user.UserBadgesStore
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.databinding.DialogOwnerDetailBinding
@@ -127,7 +129,7 @@ class OwnerDetailDialog(
     }
 
     private fun bindOwnerHeader() {
-        binding.textName.text = owner.name
+        UserBadgeText.bind(binding.textName, owner.name, isVip = false)
         ImageLoader.loadCircle(
             imageView = binding.imageAvatar,
             url = owner.face,
@@ -137,6 +139,19 @@ class OwnerDetailDialog(
         binding.imageAvatar.setBadge(
             officialVerifyType = owner.officialVerify?.type ?: -1
         )
+        binding.imageAvatar.setPendant(null)
+        // owner 接口不带会员/头像框，按 mid 补齐（dialog 单实例无复用错位）
+        UserBadgesStore.enqueue(owner.mid) { badges ->
+            binding.imageAvatar.setPendant(badges.pendantUrl)
+            if (badges.isVip) {
+                binding.imageAvatar.setBadge(
+                    officialVerifyType = owner.officialVerify?.type ?: -1,
+                    vipStatus = 1,
+                    vipType = 2,
+                )
+            }
+            UserBadgeText.bind(binding.textName, owner.name, badges.isVip)
+        }
 
         val isSelf = sessionGateway.getUserInfo()?.mid == owner.mid
         binding.buttonFollow.isVisible = !isSelf

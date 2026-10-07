@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.recyclerview.widget.RecyclerView
+import com.mytvb.core.ui.user.UserBadgeText
 import com.mytvb.R
 import com.mytvb.databinding.CellUserSpaceHeaderBinding
 import com.mytvb.model.user.UserSpaceInfo
@@ -171,7 +172,11 @@ class UserSpaceHeaderAdapter(
         }
 
         fun bind(state: HeaderState) {
-            binding.userSpaceTop.textTitle.text = state.userInfo?.name.orEmpty()
+            val user = state.userInfo
+            val isVip = user?.vip?.vipStatus == 1 && (user.vip?.vipType ?: 0) > 0
+            UserBadgeText.bind(binding.userSpaceTop.textTitle, user?.name.orEmpty(), isVip)
+            // 官方等级徽章（空间接口直接下发 level）
+            binding.userSpaceTop.levelBadge.bind(user?.level, isSeniorMember = false)
             binding.userSpaceTop.textSubtitle.text =
                 state.userInfo?.sign?.takeIf { it.isNotBlank() }
                     ?: binding.root.context.getString(R.string.adapter_default_sign)
@@ -220,6 +225,9 @@ class UserSpaceHeaderAdapter(
                 vipStatus = state.userInfo?.vip?.vipStatus ?: 0,
                 vipType = state.userInfo?.vip?.vipType ?: 0,
                 vipAvatarSubscript = state.userInfo?.vip?.avatarSubscript ?: 0
+            )
+            binding.userSpaceTop.imageAvatar.setPendant(
+                state.userInfo?.pendant?.imageEnhance?.takeIf { it.startsWith("http") }
             )
 
             ImageLoader.loadWideBanner(
