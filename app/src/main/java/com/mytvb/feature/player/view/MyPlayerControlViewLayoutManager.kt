@@ -37,6 +37,8 @@ class MyPlayerControlViewLayoutManager(
     private val overflowHideButton: View = playerControlView.findViewById(R.id.exo_overflow_hide)
     private val orderedButtons: List<View> = listOf(
         playerControlView.findViewById(R.id.button_play),
+        playerControlView.findViewById(R.id.button_comment),
+        playerControlView.findViewById(R.id.button_more),
         playerControlView.findViewById(R.id.button_refresh),
         playerControlView.findViewById(R.id.button_previous),
         playerControlView.findViewById(R.id.button_next),
@@ -47,9 +49,7 @@ class MyPlayerControlViewLayoutManager(
         playerControlView.findViewById(R.id.button_play_speed),
         playerControlView.findViewById(R.id.exo_settings),
         playerControlView.findViewById(R.id.button_choose_episode),
-        playerControlView.findViewById(R.id.button_more),
         playerControlView.findViewById(R.id.button_up_info),
-        playerControlView.findViewById(R.id.button_comment),
         playerControlView.findViewById(R.id.button_subtitle),
         playerControlView.findViewById(R.id.button_related),
         playerControlView.findViewById(R.id.button_repeat),

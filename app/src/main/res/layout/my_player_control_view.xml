@@ -135,6 +135,28 @@
                     <requestFocus/>
                 </com.mytvb.feature.player.view.PlayerControlButton>
                 <com.mytvb.feature.player.view.PlayerControlButton
+                    android:id="@+id/button_comment"
+                    android:background="@drawable/cell_background"
+                    android:padding="@dimen/px29"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:nextFocusUp="@id/exo_progress"
+                    android:layout_width="@dimen/px113"
+                    android:layout_height="@dimen/px113"
+                    android:src="@drawable/ic_comment"
+                    android:contentDescription="@string/player_comment_title"/>
+                <com.mytvb.feature.player.view.PlayerControlButton
+                    android:id="@+id/button_more"
+                    android:background="@drawable/cell_background"
+                    android:padding="@dimen/px23"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:nextFocusUp="@id/exo_progress"
+                    android:layout_width="@dimen/px113"
+                    android:layout_height="@dimen/px113"
+                    android:src="@drawable/ic_more"
+                    android:contentDescription="@string/more"/>
+                <com.mytvb.feature.player.view.PlayerControlButton
                     android:id="@+id/button_refresh"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px25"
@@ -249,17 +271,6 @@
                     android:src="@drawable/ic_list"
                     android:contentDescription="@string/choose_episode"/>
                 <com.mytvb.feature.player.view.PlayerControlButton
-                    android:id="@+id/button_more"
-                    android:background="@drawable/cell_background"
-                    android:padding="@dimen/px23"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:nextFocusUp="@id/exo_progress"
-                    android:layout_width="@dimen/px113"
-                    android:layout_height="@dimen/px113"
-                    android:src="@drawable/ic_more"
-                    android:contentDescription="@string/more"/>
-                <com.mytvb.feature.player.view.PlayerControlButton
                     android:id="@+id/button_up_info"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px29"
@@ -270,17 +281,6 @@
                     android:layout_height="@dimen/px113"
                     android:src="@drawable/ic_user"
                     android:contentDescription="@string/up_info"/>
-                <com.mytvb.feature.player.view.PlayerControlButton
-                    android:id="@+id/button_comment"
-                    android:background="@drawable/cell_background"
-                    android:padding="@dimen/px29"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:nextFocusUp="@id/exo_progress"
-                    android:layout_width="@dimen/px113"
-                    android:layout_height="@dimen/px113"
-                    android:src="@drawable/ic_comment"
-                    android:contentDescription="@string/player_comment_title"/>
                 <com.mytvb.feature.player.view.PlayerControlButton
                     android:id="@+id/button_subtitle"
                     android:background="@drawable/cell_background"
