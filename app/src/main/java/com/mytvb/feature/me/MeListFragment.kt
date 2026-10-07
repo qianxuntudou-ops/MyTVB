@@ -775,9 +775,18 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
             logMeFirstDraw(currentContentCount(), source = "visible_content")
         }
         when (type) {
-            TYPE_HISTORY, TYPE_LATER -> {
-                // 内容仍新鲜（未过 TTL）：保留滚动位置/焦点原样，不再回顶重拉
-                // （切 tab 保进度；重复点击 tab / 菜单键走 refresh() 仍是显式刷新回顶）
+            TYPE_HISTORY -> {
+                // 历史记录：每次选中都拉最新（从其它主 tab 切回 / 切到历史 tab 均触发），
+                // 不再做 TTL 内保状态；播放器返回保焦点的 early-return 在上方，不受影响
+                pendingHistoryScrollToTop = true
+                tvFocusController?.clearAnchorForUserRefresh()
+                binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                AppLog.d("MeDebug", "[$type] onTabSelected: reload latest, pendingHistoryScroll=$pendingHistoryScrollToTop")
+                currentPage = 1
+                loadData()
+            }
+            TYPE_LATER -> {
+                // 稍后再看：内容仍新鲜（未过 TTL）时保留滚动位置/焦点原样，不回顶重拉
                 val listFresh = hasContentItems() &&
                         System.currentTimeMillis() - lastListLoadedAtMs < CACHE_TTL_MS
                 if (listFresh) {
@@ -785,11 +794,10 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                     AppLog.d("MeDebug", "[$type] onTabSelected: keep state (fresh within TTL)")
                     return
                 }
-                pendingHistoryScrollToTop = type == TYPE_HISTORY
-                pendingLaterScrollToTop = type == TYPE_LATER
+                pendingLaterScrollToTop = true
                 tvFocusController?.clearAnchorForUserRefresh()
                 binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                AppLog.d("MeDebug", "[$type] onTabSelected: network_only loadData, pendingLaterScroll=$pendingLaterScrollToTop, pendingHistoryScroll=$pendingHistoryScrollToTop")
+                AppLog.d("MeDebug", "[$type] onTabSelected: network_only loadData, pendingLaterScroll=$pendingLaterScrollToTop")
                 currentPage = 1
                 loadData()
             }
