@@ -1,5 +1,6 @@
 package com.mytvb.feature.player.comment
 
+import com.mytvb.core.common.log.AppLog
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -62,7 +63,17 @@ internal fun parseVideoCommentReplyItem(
             ?: obj.optLong("note_cvid", 0L)
     val ctime = obj.optLong("ctime", 0L).takeIf { it > 0L } ?: 0L
     val like = obj.optLong("like", 0L).coerceAtLeast(0L)
-    val replyCount = obj.optInt("count", 0).coerceAtLeast(0)
+    // 楼中楼回复数：rcount=当前可见数（官方"共N条回复"同款，不含已删/风控隐藏），
+    // count=累计数会虚高（显示 3 条点进去只有 1 条）；老响应缺 rcount 时退回 count
+    val replyCountRaw = obj.optInt("rcount", -1).takeIf { it >= 0 } ?: obj.optInt("count", 0)
+    val replyCount = replyCountRaw.coerceAtLeast(0)
+    if (AppLog.isEnabled) {
+        val c = obj.optInt("count", -1)
+        val r = obj.optInt("rcount", -1)
+        if (c != r) {
+            AppLog.d("ReplyCount", "rpid=$rpid count=$c rcount=$r -> use=$replyCount")
+        }
+    }
     val replyPreviews =
         if (canOpenThread && replyCount > 0) {
             val replies = obj.optJSONArray("replies") ?: JSONArray()
