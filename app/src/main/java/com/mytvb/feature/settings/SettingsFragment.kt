@@ -965,10 +965,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         // 更新日志可能很长：正文钳到 55% 屏高转为滚动，避免整个弹窗高度超屏把按钮顶出屏幕
         val notesScroll = NonFocusableScrollView(requireContext()).apply {
             maxHeight = (resources.displayMetrics.heightPixels * 0.55f).toInt()
-            // 滚动条常驻且加粗（内容不满 maxHeight 时系统不绘制，不会误显示），
+            // 滚动条常驻且加粗（内容不满 maxHeight 不显示，不会误显示），
             // 上下渐隐边缘提示还有未滚到的内容
-            setScrollbarFadingEnabled(false)
-            setScrollBarSize(resources.getDimensionPixelSize(R.dimen.px8))
+            persistentScrollBar = true
+            // ScrollView 构造默认 focusable，不关掉会抢走弹窗初始焦点，按钮永远落不上
+            isFocusable = false
+            scrollBarWidth = resources.getDimensionPixelSize(R.dimen.px8)
             isVerticalFadingEdgeEnabled = true
             setFadingEdgeLength(resources.getDimensionPixelSize(R.dimen.px30))
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -999,12 +1001,13 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             layoutParams = lp
         }
 
+        var cancelButton: ScaledTextView? = null
         listOf(getString(R.string.cancel) to { dialog.dismiss() }, getString(R.string.update_download_action) to {
             dialog.dismiss()
             val apkUrl = cachedReleaseInfo?.apkUrl
             if (apkUrl != null) startDownloadApk(apkUrl)
         }).forEach { (text, action) ->
-            actionContainer.addView(ScaledTextView(requireContext()).apply {
+            val button = ScaledTextView(requireContext()).apply {
                 this.text = text
                 setTextColor(textColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.px32))
@@ -1013,7 +1016,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 isFocusable = true
                 setOnClickListener { action() }
                 setBackgroundResource(R.drawable.bg_dialog_button)
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            }
+            if (text == getString(R.string.cancel)) cancelButton = button
+            actionContainer.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(px10, 0, px10, 0)
             })
         }
@@ -1039,6 +1044,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         }
         dialog.show()
         DialogWindowFit.apply(dialog.window, requireContext(), resources.getDimensionPixelSize(R.dimen.px800))
+        // TV 弹窗惯例显式落焦点（其余弹窗均有）：默认在「取消」安全侧，防误触直接开下载；
+        // 遥控器左右在两按钮间切换，上下滚正文。show 后立即调会被 ViewRootImpl 的
+        // 初始焦点分配覆盖，必须等首次布局完成
+        root.post {
+            cancelButton?.requestFocus()
+        }
     }
 
     private fun startDownloadApk(apkUrl: String) {
