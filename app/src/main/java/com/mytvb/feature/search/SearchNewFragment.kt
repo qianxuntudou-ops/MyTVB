@@ -286,7 +286,11 @@ class SearchNewFragment :
         val adapter = SearchResultPagerAdapter(
             onItemClick = ::onResultItemClick,
             onLoadMore = ::onResultPageLoadMore,
-            onTopEdgeUp = ::focusResultHeader
+            onTopEdgeUp = ::focusResultHeader,
+            onCachedRelation = viewModel::cachedRelation,
+            onQueryRelation = { mid ->
+                viewModel.queryRelation(mid) { resultPagerAdapter?.updateRelation(mid) }
+            }
         )
         resultPagerAdapter = adapter
         adapter.setPages(emptyList())
@@ -597,6 +601,9 @@ class SearchNewFragment :
     override fun onResume() {
         super.onResume()
         if (isResultPanelVisible) {
+            // 从用户空间等页面返回：关注状态缓存可能已过期，失效并重查
+            viewModel.clearRelationCache()
+            resultPagerAdapter?.refreshRelations()
             AppLog.d(TAG, "onResume: isResultPanelVisible=true, posting restore")
             binding.root.postDelayed({
                 if (!isAdded || view == null) {

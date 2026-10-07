@@ -5,6 +5,9 @@ import android.content.Context
 import android.graphics.Outline
 import android.os.Handler
 import android.os.Looper
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -44,7 +47,10 @@ class SearchItemAdapter(
     private val onTopEdgeUp: ((View) -> Boolean)? = null,
     private val onItemFocused: ((View, Int) -> Unit)? = null,
     private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
-    private val onItemsChanged: (() -> Unit)? = null
+    private val onItemsChanged: (() -> Unit)? = null,
+    // 用户条目「关注」按钮状态：读缓存（null=未加载，触发 query），query 完成后外部调 updateRelation 回流
+    private val onCachedRelation: ((Long) -> Boolean?)? = null,
+    private val onQueryRelation: ((Long) -> Unit)? = null
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>(), TvFocusableAdapter {
 
     private val portraitDetectedUrls = mutableSetOf<String>()
@@ -166,6 +172,31 @@ class SearchItemAdapter(
             is LiveViewHolder -> holder.bind(item)
             is SeriesViewHolder -> holder.bind(item)
             is UserViewHolder -> holder.bind(item)
+        }
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_RELATION) && holder is UserViewHolder) {
+            holder.bindRelationButton(items[position])
+            return
+        }
+        super.onBindViewHolder(holder, position, payloads)
+    }
+
+    /** 关注状态查询完成后按 mid 局部刷新对应条目。 */
+    fun updateRelation(mid: Long) {
+        if (mid <= 0L) return
+        items.forEachIndexed { index, item ->
+            if (item.mid.toLongOrNull() == mid) {
+                notifyItemChanged(index, PAYLOAD_RELATION)
+            }
+        }
+    }
+
+    /** 缓存已清空时整页重绑，条目 bind 时会重新发起关注状态查询。 */
+    fun refreshAllRelations() {
+        if (searchType == SearchType.User && items.isNotEmpty()) {
+            notifyItemRangeChanged(0, itemCount, PAYLOAD_RELATION)
         }
     }
 
@@ -316,8 +347,8 @@ class SearchItemAdapter(
             binding.textView.text = item.uname
             binding.textLevel.visibility = if (item.level > 0) View.VISIBLE else View.INVISIBLE
             binding.textLevel.text = "LV${item.level}"
-            binding.textMeta.text = buildUserMetaText(binding.root.context, item)
-            binding.textSub.text = item.usign.ifBlank { item.desc }
+            binding.textMeta.text = buildUserMetaTextWithVerify(binding.root.context, item)
+            bindRelationButton(item)
 
             ImageLoader.loadCircle(
                 imageView = binding.imageView,
@@ -329,6 +360,53 @@ class SearchItemAdapter(
                 officialVerifyType = item.officialVerify?.type ?: -1
             )
         }
+
+        fun bindRelationButton(item: SearchItemModel) {
+            val mid = item.mid.toLongOrNull() ?: 0L
+            val followed = when (val cached = onCachedRelation?.invoke(mid)) {
+                null -> {
+                    if (mid > 0L) onQueryRelation?.invoke(mid)
+                    false
+                }
+                else -> cached
+            }
+            applyFollowState(followed)
+        }
+
+        private fun applyFollowState(followed: Boolean) {
+            val context = binding.root.context
+            if (followed) {
+                binding.textAction.text = context.getString(R.string.followed)
+                binding.textAction.setBackgroundResource(R.drawable.bg_follow_btn_followed)
+                binding.textAction.setTextColor(FOLLOWED_TEXT_COLOR)
+            } else {
+                binding.textAction.text = context.getString(R.string.follow)
+                binding.textAction.setBackgroundResource(R.drawable.bg_follow_btn_follow)
+                binding.textAction.setTextColor(android.graphics.Color.WHITE)
+            }
+        }
+    }
+
+    /** 第二行「粉丝 · 视频 + 认证说明」连排（认证部分黄/蓝着色），对齐官方样式。 */
+    private fun buildUserMetaTextWithVerify(context: Context, item: SearchItemModel): CharSequence {
+        val meta = buildUserMetaText(context, item)
+        val verify = item.officialVerify
+        val verifyType = verify?.type ?: -1
+        val verifyDesc = verify?.desc.orEmpty()
+        if (!(verifyType == 0 || verifyType == 1) || verifyDesc.isBlank()) {
+            return meta
+        }
+        val spannable = SpannableStringBuilder(meta)
+        val colorRes = if (verifyType == 0) R.color.official_verify_yellow else R.color.official_verify_blue
+        val startPos = spannable.length
+        spannable.append("  ").append(verifyDesc)
+        spannable.setSpan(
+            ForegroundColorSpan(context.getColor(colorRes)),
+            startPos,
+            spannable.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        return spannable
     }
 
     private fun buildUserMetaText(context: Context, item: SearchItemModel): String {
@@ -443,6 +521,8 @@ class SearchItemAdapter(
         const val VIEW_TYPE_USER_OFFSET = 3
         const val VIEW_TYPE_STRIDE = 8
         val nextViewTypeBase = AtomicInteger(0x5C0100)
+        const val PAYLOAD_RELATION = "payload_relation"
+        val FOLLOWED_TEXT_COLOR = android.graphics.Color.argb(0x99, 0xFF, 0xFF, 0xFF)
     }
 }
 

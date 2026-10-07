@@ -13,11 +13,13 @@ import com.mytvb.model.search.SearchType
 import com.mytvb.model.search.SearchVideoOrder
 import com.mytvb.repository.SearchRepository
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.network.api.BiliApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 class SearchViewModel(
     private val searchRepository: SearchRepository
@@ -52,6 +54,36 @@ class SearchViewModel(
     private val pageJobs = mutableMapOf<SearchType, Job>()
     private var suggestJob: Job? = null
     private var activeKeyword: String = ""
+
+    /** 搜索用户条目「关注」按钮状态缓存（mid → 是否已关注），会话级。 */
+    private val relationStates = ConcurrentHashMap<Long, Boolean>()
+    private val relationInFlight = ConcurrentHashMap<Long, Boolean>()
+
+    fun cachedRelation(mid: Long): Boolean? = relationStates[mid]
+
+    /** 从用户空间等页面返回时失效缓存（用户可能在那里变更了关注状态）。 */
+    fun clearRelationCache() {
+        relationStates.clear()
+    }
+
+    /**
+     * 查询关注状态并回调；未登录/失败按「未关注」缓存，避免列表滚动重复请求。
+     */
+    fun queryRelation(mid: Long, onLoaded: (Boolean) -> Unit) {
+        relationStates[mid]?.let(onLoaded)
+        if (relationInFlight.putIfAbsent(mid, true) != null) return
+        viewModelScope.launch {
+            val followed = try {
+                (BiliApi.relationAttribute(mid) ?: 0) > 0
+            } catch (e: Exception) {
+                AppLog.w("SearchViewModel", "queryRelation mid=$mid failed: ${e.message}")
+                false
+            }
+            relationStates[mid] = followed
+            relationInFlight.remove(mid)
+            onLoaded(followed)
+        }
+    }
 
     fun loadHotSearch() {
         viewModelScope.launch {

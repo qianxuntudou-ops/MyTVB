@@ -27,7 +27,9 @@ import com.mytvb.core.ui.focus.tv.TvListFocusController
 class SearchResultPagerAdapter(
     private val onItemClick: (SearchResultEntry) -> Unit,
     private val onLoadMore: (SearchType) -> Unit,
-    private val onTopEdgeUp: ((View) -> Boolean)? = null
+    private val onTopEdgeUp: ((View) -> Boolean)? = null,
+    private val onCachedRelation: ((Long) -> Boolean?)? = null,
+    private val onQueryRelation: ((Long) -> Unit)? = null
 ) : RecyclerView.Adapter<SearchResultPagerAdapter.ViewHolder>() {
 
     private companion object {
@@ -71,6 +73,20 @@ class SearchResultPagerAdapter(
     fun getPageTitle(position: Int): String = pages.getOrNull(position)?.title.orEmpty()
 
     fun getPageType(position: Int): SearchType? = pages.getOrNull(position)?.type
+
+    /** 关注状态查询完成后，把结果分发到各页的条目适配器做局部刷新。 */
+    fun updateRelation(mid: Long) {
+        holders.values.forEach { holder ->
+            holder.dispatchRelationUpdate(mid)
+        }
+    }
+
+    /** 缓存失效后整页重绑（重查关注状态）。 */
+    fun refreshRelations() {
+        holders.values.forEach { holder ->
+            holder.dispatchRelationRefresh()
+        }
+    }
 
     fun setPages(
         categories: List<SearchCategoryItem>,
@@ -227,8 +243,11 @@ class SearchResultPagerAdapter(
                 currentType = page.type
                 val spanCount = when (page.type) {
                     SearchType.Video,
-                    SearchType.LiveRoom,
-                    SearchType.User -> binding.root.resources.adaptiveSpanCount()
+                    SearchType.LiveRoom -> binding.root.resources.adaptiveSpanCount()
+
+                    // 用户条目三行文字（昵称/粉丝·视频·认证/签名），窄列下文字区不足会截断，
+                    // 对齐官方 TV 端 2 列大条目
+                    SearchType.User -> binding.root.resources.adaptiveSpanCount(base = 2, wide = 4)
 
                     SearchType.Animation,
                     SearchType.FilmAndTv -> binding.root.resources.adaptiveSpanCount(base = 6, wide = 8)
@@ -246,7 +265,9 @@ class SearchResultPagerAdapter(
                     },
                     onItemsChanged = {
                         tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
-                    }
+                    },
+                    onCachedRelation = onCachedRelation,
+                    onQueryRelation = onQueryRelation
                 )
                 binding.recyclerViewResult.layoutManager =
                     WrapContentGridLayoutManager(binding.root.context, spanCount)
@@ -332,8 +353,19 @@ class SearchResultPagerAdapter(
             return tvFocusController?.hasFocusInList() == true
         }
 
-        fun isPageVisible(): Boolean {
-            return itemView.isShown
+        fun dispatchRelationUpdate(mid: Long) {
+            if (currentType == SearchType.User) {
+                currentAdapter?.updateRelation(mid)
+            }
+        }
+
+        fun dispatchRelationRefresh() {
+            if (currentType == SearchType.User) {
+                currentAdapter?.refreshAllRelations()
+            }
+        }
+
+        fun isPageVisible(): Boolean {            return itemView.isShown
         }
 
         fun restoreFocusAnchor(): Boolean {

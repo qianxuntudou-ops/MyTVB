@@ -176,4 +176,33 @@ object BiliApi {
         AppLog.i(TAG, "liveHomeList net=${t1 - t0}ms parse=${t2 - t1}ms total=${t2 - t0}ms")
         return result
     }
+
+    /**
+     * 查询当前登录用户对目标用户的关注关系（x/relation，需登录 cookie）。
+     *
+     * 返回 attribute：0=未关注、1=悄悄关注、2=已关注、6=互相关注；
+     * 未登录（-101）或网络失败返回 null，由调用方决定缓存策略。
+     */
+    suspend fun relationAttribute(fid: Long): Int? {
+        if (fid <= 0L) return null
+        val url = BiliClient.buildUrl(
+            path = "x/relation",
+            params = mapOf("fid" to fid.toString())
+        )
+        return try {
+            val json = BiliClient.getJson(url, mapOf("Referer" to "https://www.bilibili.com/"))
+            val code = json.optInt("code", -1)
+            if (code != 0) {
+                AppLog.i(TAG, "relationAttribute fid=$fid code=$code msg=${json.optString("message", "")}")
+                null
+            } else {
+                val attribute = json.optJSONObject("data")?.optInt("attribute", 0)
+                AppLog.i(TAG, "relationAttribute fid=$fid ok attribute=$attribute raw=${json.toString().take(160)}")
+                attribute
+            }
+        } catch (e: Exception) {
+            AppLog.w(TAG, "relationAttribute fid=$fid failed: ${e.message}")
+            null
+        }
+    }
 }
