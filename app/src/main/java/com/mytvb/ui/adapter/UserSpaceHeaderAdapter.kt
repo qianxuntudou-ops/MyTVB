@@ -34,11 +34,14 @@ class UserSpaceHeaderAdapter(
         val videoCount: Int = 0,
         val showFollow: Boolean = false,
         @StringRes val followLabelRes: Int = R.string.follow,
-        @DrawableRes val followBackgroundRes: Int = R.drawable.button_common
+        @DrawableRes val followBackgroundRes: Int = R.drawable.bg_follow_space_btn,
+        @DrawableRes val followIconRes: Int = R.drawable.ic_plus,
+        val followDimmed: Boolean = false
     )
 
     companion object {
         const val VIEW_TYPE_HEADER = 1001
+        val FOLLOW_DIM_COLOR = android.graphics.Color.argb(0xB3, 0xFF, 0xFF, 0xFF)
     }
 
     private var state = HeaderState()
@@ -104,12 +107,16 @@ class UserSpaceHeaderAdapter(
 
     fun updateFollowState(
         @StringRes labelRes: Int,
-        @DrawableRes backgroundRes: Int
+        @DrawableRes backgroundRes: Int,
+        @DrawableRes iconRes: Int = R.drawable.ic_plus,
+        dimmed: Boolean = false
     ) {
         submitState(
             state.copy(
                 followLabelRes = labelRes,
-                followBackgroundRes = backgroundRes
+                followBackgroundRes = backgroundRes,
+                followIconRes = iconRes,
+                followDimmed = dimmed
             )
         )
     }
@@ -175,6 +182,7 @@ class UserSpaceHeaderAdapter(
             }
             binding.userSpaceTop.buttonFollow.setText(state.followLabelRes)
             binding.userSpaceTop.buttonFollow.setBackgroundResource(state.followBackgroundRes)
+            bindFollowIcon(state.followIconRes, state.followDimmed)
             binding.layoutStatActions.visibility =
                 if (state.followingCount != null && state.followerCount != null) View.VISIBLE else View.GONE
             binding.tvFollowing.text = buildString {
@@ -229,6 +237,20 @@ class UserSpaceHeaderAdapter(
                 FocusTarget.FOLLOWER -> binding.tvFollower.takeIf { it.isShown }
             } ?: return false
             return view.requestFocus()
+        }
+
+        /** 官方描边式按钮的左侧图标（+ / ✓），随已关注态弱化。 */
+        private fun bindFollowIcon(iconRes: Int, dimmed: Boolean) {
+            val context = binding.root.context
+            val size = context.resources.getDimensionPixelSize(R.dimen.px30)
+            val icon = androidx.core.content.ContextCompat.getDrawable(context, iconRes)?.mutate()?.apply {
+                setTint(if (dimmed) FOLLOW_DIM_COLOR else android.graphics.Color.WHITE)
+                setBounds(0, 0, size, size)
+            }
+            binding.userSpaceTop.buttonFollow.setCompoundDrawables(icon, null, null, null)
+            binding.userSpaceTop.buttonFollow.setTextColor(
+                if (dimmed) FOLLOW_DIM_COLOR else android.graphics.Color.WHITE
+            )
         }
     }
 }

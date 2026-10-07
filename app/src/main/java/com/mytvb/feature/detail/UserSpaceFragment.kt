@@ -37,6 +37,7 @@ import com.mytvb.core.ui.focus.tv.TvDataChangeReason
 import com.mytvb.core.ui.focus.tv.TvListFocusController
 import com.mytvb.core.navigation.VideoRouteNavigator
 import com.mytvb.core.ui.refresh.SwipeRefreshHelper
+import com.mytvb.core.common.log.AppLog
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -55,6 +56,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     }
 
     companion object {
+        private const val TAG = "UserSpace"
         private const val ARG_MID = "mid"
 
         fun newInstance(mid: Long): UserSpaceFragment {
@@ -380,14 +382,19 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
 
     private fun loadRelationState() {
         if (!sessionGateway.isLoggedIn() || sessionGateway.getUserInfo()?.mid == mid) {
+            AppLog.i(TAG, "loadRelationState skip: loggedIn=${sessionGateway.isLoggedIn()} selfMid=${sessionGateway.getUserInfo()?.mid} targetMid=$mid")
             return
         }
         lifecycleScope.launch {
             userRepository.checkUserRelation(mid)
                 .onSuccess { response ->
+                    AppLog.i(TAG, "loadRelationState result: code=${response.code} attr=${response.data?.attribute}")
                     if (response.isSuccess && response.data != null) {
                         updateRelationState(response.data)
                     }
+                }
+                .onFailure {
+                    AppLog.w(TAG, "loadRelationState failed: ${it.message}")
                 }
         }
     }
@@ -398,6 +405,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     }
 
     private fun renderFollowButton() {
+        val following = isFollowing()
         val labelRes = when {
             relationAttribute == 6 -> R.string.follow_as_friend
             relationAttribute == 2 -> R.string.followed
@@ -405,11 +413,13 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
         }
         headerAdapter.updateFollowState(
             labelRes = labelRes,
-            backgroundRes = if (isFollowing()) {
-                R.drawable.button_common_2
+            backgroundRes = if (following) {
+                R.drawable.bg_follow_space_btn_followed
             } else {
-                R.drawable.button_common
-            }
+                R.drawable.bg_follow_space_btn
+            },
+            iconRes = if (following) R.drawable.ic_check else R.drawable.ic_plus,
+            dimmed = following
         )
     }
 

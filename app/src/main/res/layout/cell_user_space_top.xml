@@ -35,42 +35,53 @@
         app:layout_constraintWidth_percent="0.1"
         app:srcCompat="@drawable/default_avatar" />
 
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/view_name"
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/px50"
-        android:layout_marginEnd="@dimen/px100"
-        android:orientation="vertical"
-        app:layout_constraintBottom_toBottomOf="@+id/image_avatar"
-        app:layout_constraintStart_toEndOf="@+id/image_avatar"
-        app:layout_constraintTop_toTopOf="@+id/image_avatar">
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="@dimen/px40"
-            android:textStyle="bold" />
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/px15"
-            android:textColor="?attr/tabBarNormal"
-            android:textSize="@dimen/px25" />
-    </androidx.appcompat.widget.LinearLayoutCompat>
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="@dimen/px40"
+        android:textStyle="bold"
+        app:layout_constrainedWidth="true"
+        app:layout_constraintBottom_toTopOf="@id/text_subtitle"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0"
+        app:layout_constraintStart_toEndOf="@id/image_avatar"
+        app:layout_constraintTop_toTopOf="@id/image_avatar" />
 
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_follow"
         android:layout_width="wrap_content"
-        android:layout_height="@dimen/px80"
-        android:layout_marginStart="@dimen/px49"
-        android:background="@drawable/button_common"
+        android:layout_height="@dimen/px56"
+        android:layout_marginStart="@dimen/px30"
+        android:background="@drawable/bg_follow_space_btn"
+        android:drawablePadding="@dimen/px8"
+        android:minWidth="@dimen/px40"
+        android:paddingStart="@dimen/px20"
+        android:paddingEnd="@dimen/px20"
         android:text="@string/follow"
-        android:textSize="@dimen/px30"
-        app:layout_constraintBottom_toBottomOf="@+id/view_name"
-        app:layout_constraintStart_toEndOf="@+id/view_name" />
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/px24"
+        app:layout_constraintBottom_toBottomOf="@id/text_title"
+        app:layout_constraintStart_toEndOf="@id/text_title"
+        app:layout_constraintTop_toTopOf="@id/text_title" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_subtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px50"
+        android:layout_marginTop="@dimen/px15"
+        android:layout_marginEnd="@dimen/px60"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="?attr/tabBarNormal"
+        android:textSize="@dimen/px25"
+        app:layout_constraintBottom_toBottomOf="@id/image_avatar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/image_avatar"
+        app:layout_constraintTop_toBottomOf="@id/text_title" />
 </androidx.constraintlayout.widget.ConstraintLayout>
