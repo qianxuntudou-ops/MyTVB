@@ -286,7 +286,9 @@ class HistoryVideoAdapter(
         }
 
         fun isWatchedComplete(progress: Long, duration: Long): Boolean {
-            return duration > 3L && progress >= duration - 3L
+            // 对齐官方"播满才算看完"：progress 到达 duration 才显示已看完，
+            // 提前 3 秒标记会与官方历史记录（还差 1 秒时官方显示未看完）不一致
+            return duration > 3L && progress >= duration
         }
     }
 }

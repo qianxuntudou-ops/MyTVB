@@ -368,7 +368,7 @@ class VideoAdapter(
                 views.progressBar.visibility = View.VISIBLE
                 views.progressBar.max = duration.toInt()
                 views.progressBar.progress = progress.coerceAtMost(duration).toInt()
-                durationText = if (duration > 3 && progress >= duration - 3) {
+                durationText = if (isWatchedComplete(progress, duration)) {
                     views.root.context.getString(R.string.adapter_watched_complete)
                 } else {
                     views.root.context.getString(
@@ -472,7 +472,9 @@ class VideoAdapter(
         }
 
         private fun isWatchedComplete(progress: Long, duration: Long): Boolean {
-            return duration > 3L && progress >= duration - 3L
+            // 对齐官方"播满才算看完"：progress 到达 duration 才显示已看完，
+            // 提前 3 秒标记会与官方历史记录（还差 1 秒时官方显示未看完）不一致
+            return duration > 3L && progress >= duration
         }
 
         private fun setTitleColor(color: Int) {
