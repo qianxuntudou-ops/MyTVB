@@ -87,6 +87,8 @@ android {
                 "META-INF/LICENSE*",
                 "META-INF/NOTICE*",
                 "META-INF/*.kotlin_module",
+                // protobuf 描述文件只有 protoc 编译期用得到，运行时不需要
+                "google/**/*.proto",
             )
         }
     }
