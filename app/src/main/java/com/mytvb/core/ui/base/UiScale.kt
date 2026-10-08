@@ -82,12 +82,21 @@ object UiScale {
     /**
      * 设计倍率：档位匹配倍率保底（常规屏与旧版一致），超宽屏按高边基准增强，
      * 避免带鱼屏纵向溢出（按宽 5120/1920=2.667 会把纵向 UI 撑到设计的 1.7 倍）。
+     *
+     * 无分配实现（保持 filter+maxByOrNull 语义）：[ensureApplied] 会在每次 XML
+     * inflate 的 View 创建前调用，不能在此产生临时对象。
      */
     fun designScale(screenW: Int, screenH: Int): Float {
-        val tier = TIERS.filter { screenW >= it.w && screenH >= it.h }.maxByOrNull { it.w }
-            ?: TIERS.first()
+        var tierScale = TIERS.first().scale
+        var bestW = -1
+        for (tier in TIERS) {
+            if (screenW >= tier.w && screenH >= tier.h && tier.w > bestW) {
+                bestW = tier.w
+                tierScale = tier.scale
+            }
+        }
         val fit = minOf(screenW / 1920f, screenH / 1008f)
-        return maxOf(tier.scale, fit)
+        return maxOf(tierScale, fit)
     }
 
     /**
@@ -110,5 +119,32 @@ object UiScale {
                 "design=${designScale(metrics.widthPixels, metrics.heightPixels)} " +
                 "percent=$cachedPercent density=$target dpi=${metrics.densityDpi} fontScale=$fontScale"
         )
+    }
+
+    /**
+     * 廉价守卫：density 与当前设计值不一致才重钉，一致时零副作用。
+     *
+     * 系统在 config 变化（系统栏显隐、多窗口、分辨率切换等）的无重建路径上会用
+     * 真实显示指标重置 DisplayMetrics，抹掉这里钉的 density——从播放页返回等窗口
+     * 状态切换后，已布局视图不受影响、新 inflate 的页面却会按系统 density 放大
+     * 数倍。故在 inflate 入口（UiTextScaleFactory）与配置/窗口回调处补钉。
+     */
+    fun ensureApplied(resources: Resources) {
+        val metrics = resources.displayMetrics
+        val target = designScale(metrics.widthPixels, metrics.heightPixels) * scale()
+        val fontScale = resources.configuration.fontScale.takeIf { it > 0f } ?: 1f
+        @Suppress("DEPRECATION")
+        val scaledTarget = target * fontScale
+        @Suppress("DEPRECATION")
+        val scaledCurrent = metrics.scaledDensity
+        if (metrics.density != target || scaledCurrent != scaledTarget) {
+            AppLog.w(
+                TAG,
+                "density reset by system: density ${metrics.density}->$target " +
+                    "scaledDensity $scaledCurrent->$scaledTarget " +
+                    "screen=${metrics.widthPixels}x${metrics.heightPixels} percent=$cachedPercent"
+            )
+            apply(resources)
+        }
     }
 }

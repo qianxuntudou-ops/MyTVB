@@ -49,7 +49,44 @@ object UiTextScaleFactory {
         }
     }
 
+    /**
+     * 仅安装"密度守卫"的 Factory：校验/补钉 density 后返回 null，把 View 创建完全
+     * 交还系统（不影响组件替换行为）。
+     *
+     * 需要单独安装的原因：`LayoutInflater.from(activity)` 返回的是 ContextThemeWrapper
+     * 自己缓存的 inflater（AOSP ContextThemeWrapper#getSystemService），与
+     * `activity.layoutInflater`（PhoneWindow 的）是两个实例；RecyclerView 的 item、
+     * 代码构造的 Dialog 布局多走前者，[install] 装不到，密度被系统重置时这些页面
+     * 仍会放大。两个实例都装、守卫逻辑幂等，覆盖所有 XML inflate。
+     */
+    fun installDensityGuard(inflater: LayoutInflater) {
+        if (inflater.factory2 != null) return
+        inflater.factory2 = object : LayoutInflater.Factory2 {
+            override fun onCreateView(
+                parent: View?,
+                name: String,
+                context: Context,
+                attrs: AttributeSet
+            ): View? {
+                UiScale.ensureApplied(context.resources)
+                return null
+            }
+
+            override fun onCreateView(
+                name: String,
+                context: Context,
+                attrs: AttributeSet
+            ): View? {
+                UiScale.ensureApplied(context.resources)
+                return null
+            }
+        }
+    }
+
     private fun createView(context: Context, attrs: AttributeSet, name: String): View? {
+        // 每个 View 创建前校验密度：系统 config 变化（系统栏显隐等）会重置 displayMetrics，
+        // 若不管，本次 inflate 的尺寸解析会整体按系统 density 放大数倍（density 已改、View 未建）
+        UiScale.ensureApplied(context.resources)
         if (name == "TextView" || name == APPCOMPAT_TEXT_VIEW) {
             return ScaledTextView(context, attrs).apply { syncFromInflation() }
         }
