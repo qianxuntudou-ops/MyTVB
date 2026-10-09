@@ -10,6 +10,8 @@ import com.mytvb.model.video.HistoryListResponse
 import com.mytvb.model.video.LaterWatchWrapper
 import com.mytvb.model.video.UserDynamicResponse
 import com.mytvb.model.video.AllDynamicResponse
+import com.mytvb.model.series.SeasonArchivesResponse
+import com.mytvb.model.series.SeasonsSeriesListResponse
 import com.mytvb.network.WbiGenerator
 import com.mytvb.network.api.ApiService
 import com.mytvb.network.security.NetworkSecurityGateway
@@ -249,6 +251,54 @@ class UserRepository(
             sessionGateway.syncAuthState(
                 apiService.getAllDynamic(page, offset),
                 source = "getAllDynamic"
+            )
+        }
+
+    suspend fun getSeasonsSeriesList(
+        mid: Long,
+        pageNum: Int = 1,
+        // 实测该接口 page_size 上限 20，>20 返回 -400（网页版用 10/20）
+        pageSize: Int = 20
+    ): Result<BaseResponse<SeasonsSeriesListResponse>> =
+        runCatching {
+            // 网页版新版接口（home/seasons_series）无需 WBI 签名；老 seasons_series_list 已实测 -400。
+            // Referer 必须是空间页，HeaderInterceptor 对 web-space 路径统一处理。
+            sessionGateway.syncAuthState(
+                apiService.getSeasonsSeriesList(
+                    mapOf(
+                        "mid" to mid.toString(),
+                        "page_num" to pageNum.toString(),
+                        "page_size" to pageSize.toString(),
+                        "web_location" to "333.1387"
+                    )
+                ),
+                source = "getSeasonsSeriesList"
+            )
+        }
+
+    suspend fun getSeriesArchives(
+        mid: Long,
+        seriesId: Long,
+        page: Int,
+        pageSize: Int = 20
+    ): Result<BaseResponse<UserDynamicResponse>> =
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getSeriesArchives(mid, seriesId, page, pageSize),
+                source = "getSeriesArchives"
+            )
+        }
+
+    suspend fun getSeasonArchives(
+        mid: Long,
+        seasonId: Long,
+        page: Int,
+        pageSize: Int = 20
+    ): Result<BaseResponse<SeasonArchivesResponse>> =
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getSeasonArchives(mid, seasonId, page = page, pageSize = pageSize),
+                source = "getSeasonArchives"
             )
         }
 

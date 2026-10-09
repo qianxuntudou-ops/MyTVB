@@ -703,7 +703,8 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 )
             },
             currentAid = currentAid,
-            currentVideoId = currentBvid
+            currentVideoId = currentBvid,
+            currentSeasonId = videoView?.ugcSeason?.id ?: 0L
         ).apply {
             show()
         }

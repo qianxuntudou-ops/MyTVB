@@ -9,6 +9,8 @@
     <item android:state_focused="true">
         <shape>
             <solid android:color="?attr/colorControlHighlight"/>
+            <!-- TV 焦点态仅靠 colorControlHighlight 色块在深色弹窗上几乎不可见，加 accent 描边 -->
+            <stroke android:width="@dimen/px3" android:color="@color/colorAccent"/>
             <corners android:radius="@dimen/px20"/>
         </shape>
     </item>

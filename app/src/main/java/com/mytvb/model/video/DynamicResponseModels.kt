@@ -16,7 +16,7 @@ data class UserDynamicResponse(
         get() = archivesData ?: listData?.vlist.orEmpty()
 
     val hasMore: Boolean
-        get() = hasMoreData ?: page?.let { it.pageNumber * it.pageSize < it.totalCount } ?: false
+        get() = hasMoreData ?: page?.let { it.pageSize > 0 && it.pageNumber * it.pageSize < it.totalCount } ?: false
 
     val totalCount: Int
         get() = page?.totalCount ?: archives.size
@@ -27,12 +27,13 @@ data class UserDynamicList(
     val vlist: List<VideoModel> = emptyList()
 )
 
+// 兼容两个同构接口的分页字段：x/space/arc/list 用 count/pn/ps，x/series/archives 用 total/num/size
 data class UserDynamicPage(
-    @SerializedName("count")
+    @SerializedName(value = "count", alternate = ["total"])
     val totalCount: Int = 0,
-    @SerializedName("pn")
+    @SerializedName(value = "pn", alternate = ["num"])
     val pageNumber: Int = 1,
-    @SerializedName("ps")
+    @SerializedName(value = "ps", alternate = ["size"])
     val pageSize: Int = 0
 )
 

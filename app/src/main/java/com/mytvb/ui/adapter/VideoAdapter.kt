@@ -386,7 +386,9 @@ class VideoAdapter(
                 playCountText = views.root.context.let { NumberUtils.formatCount(it, video.viewCount) },
                 showPlayCount = true,
                 danmakuText = views.root.context.let { NumberUtils.formatCount(it, video.danmakuCount) },
-                showDanmakuCount = true,
+                // 弹幕数为 0 不画弹幕段：直播回放（x/series/archives）接口不返回弹幕数，
+                // 显示固定 "0" 会误导（与搜索页 showDanmakuCount = danmaku > 0 同款降级）
+                showDanmakuCount = video.danmakuCount > 0L,
                 durationText = durationText,
                 showChargeBadge = video.isChargingExclusive,
                 showInteractionBadge = video.isSteinsGate

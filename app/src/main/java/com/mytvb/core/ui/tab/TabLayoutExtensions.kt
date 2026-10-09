@@ -178,6 +178,45 @@ fun TabLayout.enableTouchNavigation(
     }
 }
 
+/**
+ * 无 ViewPager 场景（如弹窗内单列表按 tab 切数据源）的轻量 tab 导航：
+ * 每个 tab 独立背景实例防串台、焦点/触摸文字提亮、DPAD 上下边界交给业务接管；
+ * 选中切换走 TabLayout 默认点击/OK 键行为，业务在 OnTabSelectedListener 里换数据。
+ */
+fun TabLayout.enableDirectTabNavigation(
+    onNavigateDown: (() -> Boolean)? = null,
+    onNavigateUp: (() -> Boolean)? = null
+) {
+    post {
+        val tabStrip = getChildAt(0) as? ViewGroup ?: return@post
+        for (index in 0 until tabStrip.childCount) {
+            val tabView = tabStrip.getChildAt(index)
+            tabView.isClickable = true
+            tabView.isFocusable = true
+            tabView.isFocusableInTouchMode = true
+            suppressLongPressTooltip(tabView)
+            applyTabBackground(tabView)
+            bindTabTouchTextColor(tabView)
+            bindTabFocusTextColor(tabView)
+            // tab 宽度随文字自适应的前提：文字永远单行（material 默认 maxLines=2，长合集名会换行被固定高度裁切）
+            findFirstTextView(tabView)?.setSingleLine(true)
+            tabView.setOnKeyListener { _, keyCode, event ->
+                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+                when (keyCode) {
+                    KeyEvent.KEYCODE_DPAD_DOWN -> onNavigateDown?.invoke() ?: false
+                    KeyEvent.KEYCODE_DPAD_UP -> onNavigateUp?.invoke() ?: false
+                    // 首/末 tab 的越界左右键一律消费：放行会被 FocusFinder 几何搜索
+                    // 把焦点送到关注按钮等不可预期的位置（tab 栏内到边界就是不动）
+                    KeyEvent.KEYCODE_DPAD_LEFT -> index == 0
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> index == tabStrip.childCount - 1
+                    else -> false
+                }
+            }
+        }
+        reapplyTextColorOnSelectionChange()
+    }
+}
+
 fun TabLayout.focusSelectedTab(): Boolean {
     val selectedIndex = selectedTabPosition
     if (selectedIndex < 0) {

@@ -593,7 +593,8 @@ class VideoPlayerOverlayController(
                 onPlayRelatedVideo(video, playQueue)
             },
             currentAid = view.aid,
-            currentVideoId = view.bvid
+            currentVideoId = view.bvid,
+            currentSeasonId = view.ugcSeason?.id ?: 0L
         ).apply {
             setOnDismissListener {
                 uiCoordinator.transition(UiEvent.PanelClosed)

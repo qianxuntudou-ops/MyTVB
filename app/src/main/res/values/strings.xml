@@ -13,6 +13,7 @@
     <string name="androidx_startup">androidx.startup</string>
     <string name="animation">番剧</string>
     <string name="video">视频</string>
+    <string name="live_replay">直播回放</string>
     <string name="video_watch_progress_format">%1$s/%2$s</string>
     <string name="app_exit">再按一次返回退出应用</string>
     <string name="usage_tip_title">使用提示</string>

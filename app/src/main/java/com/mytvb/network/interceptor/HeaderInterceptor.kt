@@ -18,7 +18,14 @@ class HeaderInterceptor(
 
         val isMainSite = host == "www.bilibili.com"
         val isHtmlDocumentRequest = isMainSite && (path == "/" || path.endsWith(".html"))
-        val referer = "https://www.bilibili.com"
+        // 空间页专属接口（web-space/*）校验 Referer 必须是 space.bilibili.com，
+        // 用 www 的值会被 -400 拒掉（实测 home/seasons_series）；带 mid 时拼全路径更仿真网页版。
+        val referer = if (path.contains("web-space")) {
+            val mid = url.queryParameter("mid")
+            if (mid != null) "https://space.bilibili.com/$mid" else "https://space.bilibili.com"
+        } else {
+            "https://www.bilibili.com"
+        }
 
         val requestBuilder = originalRequest.newBuilder()
             .header("Origin", referer)

@@ -223,6 +223,13 @@
         <item name="android:textStyle">bold</item>
         <item name="android:background">@android:color/transparent</item>
     </style>
+    <!-- UP主弹窗 tab：文字大小固定、单行不换行，tab 宽度随文字自适应（tabMode=scrollable 可滑），
+         tabTextAppearance 与 tabSelectedTextAppearance 用同一 style，避免选中态字号变大 -->
+    <style name="OwnerDetailTabText" parent="@android:style/TextAppearance.Widget.TabWidget">
+        <item name="android:textSize">@dimen/px40</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:background">@android:color/transparent</item>
+    </style>
     <style name="WhiteTheme" parent="@style/Theme.AppCompat.Light.NoActionBar">
         <item name="android:textColorPrimary">@color/textColorLight</item>
         <item name="android:textColorSecondary">@color/subTextColorLight</item>
