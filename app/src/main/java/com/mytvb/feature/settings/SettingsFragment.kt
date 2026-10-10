@@ -962,7 +962,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             layoutParams = lp
         })
 
-        // 更新日志可能很长：正文钳到 55% 屏高转为滚动，避免整个弹窗高度超屏把按钮顶出屏幕
+        // 更新日志可能很长：正文钳到 55% 屏高转为滚动，避免整个弹窗高度超屏把按钮顶出屏幕。
+        // weight=1：部分系统（如华为 Android 10 电视）window WRAP_CONTENT 时会把超限内容的
+        // 尾部（按钮行）直接裁掉——weight 让正文吃剩余空间，标题与按钮行永远优先保留
         val notesScroll = NonFocusableScrollView(requireContext()).apply {
             maxHeight = (resources.displayMetrics.heightPixels * 0.55f).toInt()
             // 滚动条常驻且加粗（内容不满 maxHeight 不显示，不会误显示），
@@ -975,6 +977,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             setFadingEdgeLength(resources.getDimensionPixelSize(R.dimen.px30))
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             lp.setMargins(px40, px20, px40, 0)
+            lp.weight = 1f
             layoutParams = lp
         }
         notesScroll.addView(ScaledTextView(requireContext()).apply {
