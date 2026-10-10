@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 直播页底部控制栏渐变：上半段"透明→深黑"做上缘羽化，下半段恒定深底给内容区
+     （标题/提示/按钮都落在恒定段，避免与新闻白色大字幕融在一起；
+     内容靠 paddingTop 下压到恒定段，见 activity_marmot_live.xml 的 controller） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:startColor="#00000000"
+        android:centerColor="#CC000000"
+        android:endColor="#CC000000"
+        android:angle="270"/>
+</shape>

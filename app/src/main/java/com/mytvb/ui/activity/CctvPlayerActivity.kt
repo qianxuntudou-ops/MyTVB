@@ -27,6 +27,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import com.mytvb.core.ui.base.ChoiceDialog
 import androidx.lifecycle.lifecycleScope
 import com.mytvb.R
@@ -63,6 +64,7 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     private var selectedQuality = CctvQuality.P1080
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    /** 播放UI隐藏时连按两次 BACK 退出的计时锚点：上一次 BACK 的时间戳，0 表示连击未开始。 */
     private var exitTime = 0L
     /** 按钮的 OK 已在 DOWN 消费，对应 UP 直接吞掉（防误触 performClick）。 */
     private var consumeNextOkUp = false
@@ -73,6 +75,10 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // BACK 兜底：统一走 dispatcher callback（与普通视频播放器/直播页同构）
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleBackKey()
+        })
         currentIndex = CctvChannels.defaultIndex(intent.getIntExtra(EXTRA_CHANNEL_INDEX, 0))
         gestureDetector = GestureDetector(this, PlayerGestureListener())
         binding.playerRoot.requestFocus()
@@ -85,8 +91,9 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         binding.controller.visibility = View.VISIBLE
         binding.buttonBack.touchPressFeedback = true
         binding.buttonBack.setOnClickListener {
-            // 与普通视频播放器 button_back 一致：单击直接退出播放器
-            finish()
+            // 播放UI显示时点击返回按钮 = 收起播放UI（与 BACK 键同一套逻辑）；
+            // 退出播放器需在播放UI隐藏后快速连按两次 BACK
+            hideController()
         }
         binding.buttonRefresh.setOnClickListener {
             playCurrentChannel(showHint = true)
@@ -344,6 +351,8 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
         handler.removeCallbacks(hideControllerRunnable)
         binding.controller.visibility = View.GONE
         binding.topBar.visibility = View.GONE
+        // 收起播放UI即打断退出连击：避免「关UI」那一下被算作双击退出的第一下
+        exitTime = 0L
         // 收起后焦点回到播放区，避免落在已隐藏的按钮上
         if (!binding.playerRoot.isFocused) {
             binding.playerRoot.requestFocus()
@@ -697,19 +706,31 @@ class CctvPlayerActivity : BaseActivity<ActivityCctvPlayerBinding>() {
     private fun isControllerButtonFocused(): Boolean =
         binding.buttonQuality.isFocused || binding.buttonRefresh.isFocused
 
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    override fun onBackPressed() {
-        if (binding.controller.visibility == View.VISIBLE || binding.textError.visibility == View.VISIBLE) {
+    /**
+     * BACK 统一处理，优先级：错误提示直退 > 播放UI收起 > 双击退出。
+     *
+     * 由 [onBackPressedDispatcher] 的 callback 调用（与普通视频播放器/直播页同构）。
+     * 不能 override onBackPressed：Android 13+ 的 BACK 走 OnBackInvoked →
+     * dispatcher → 默认 fallback（静态绑定 Activity.onBackPressed），会绕过 override。
+     */
+    private fun handleBackKey() {
+        // 错误提示展示中：直接退出，不再走连击
+        if (binding.textError.visibility == View.VISIBLE) {
             finish()
             return
         }
+        // 播放UI显示：先收起播放UI（频道菜单/画质弹窗由 Dialog 自身消费 BACK 关闭，不会走到这里）
+        if (binding.controller.visibility == View.VISIBLE) {
+            hideController()
+            return
+        }
+        // 播放UI隐藏：快速连按两次 BACK 才退出
         val now = System.currentTimeMillis()
         if (now - exitTime <= EXIT_INTERVAL_MS) {
             finish()
         } else {
             exitTime = now
             Toast.makeText(applicationContext, R.string.activity_exit_player_hint, Toast.LENGTH_SHORT).show()
-            showController()
         }
     }
 

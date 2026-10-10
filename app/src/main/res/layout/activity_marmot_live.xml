@@ -114,17 +114,20 @@
             android:textStyle="bold" />
     </FrameLayout>
 
-    <!-- 播放UI：底部控制栏（分组/频道名 + 频道/画质/刷新 图标文字按钮），背景与普通视频播放器同款底部渐变 -->
+    <!-- 播放UI：底部控制栏（分组/频道名 + 频道/画质/刷新 图标文字按钮）。
+         背景用直播页专用渐变：上半段"透明→深黑"羽化，下半段恒定深底；
+         paddingTop 让内容整体落在恒定深底段（= 渐变中位），避免标题/按钮
+         与新闻白色大字幕融在一起。改 paddingTop 时需同步核对渐变中位比例 -->
     <LinearLayout
         android:id="@+id/controller"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@drawable/focus_background"
+        android:background="@drawable/live_bottom_gradient"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="@dimen/px45"
-        android:paddingTop="@dimen/px20"
+        android:paddingTop="@dimen/px147"
         android:paddingEnd="@dimen/px45"
         android:paddingBottom="@dimen/px20"
         android:visibility="gone">
@@ -140,6 +143,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
+                android:shadowColor="@color/black"
+                android:shadowDx="1.5"
+                android:shadowDy="1.3"
+                android:shadowRadius="1.6"
                 android:singleLine="true"
                 android:textColor="@android:color/white"
                 android:textSize="@dimen/px36"
@@ -150,6 +157,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/px5"
+                android:shadowColor="@color/black"
+                android:shadowDx="1.5"
+                android:shadowDy="1.3"
+                android:shadowRadius="1.6"
                 android:text="@string/marmot_player_hint"
                 android:textColor="#B3FFFFFF"
                 android:textSize="@dimen/px22" />

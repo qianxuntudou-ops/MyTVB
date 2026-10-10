@@ -19,6 +19,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.gson.Gson
 import com.mytvb.feature.marmot.quality.CctvQualityProvider
@@ -49,11 +50,11 @@ import kotlinx.coroutines.withContext
  * 3. **画质选择**（菜单键弹）：[showQualityMenu] 横向列表，数据来自页面 JS 上报的 videoQuality。
  * 4. **切台**：上下左右键触发 [goNext]，调 [MarmotLiveData.liveNext] 四向环形切台，延迟 1s 加载防抖。
  *
- * 按键映射（按需求，与参考不同）：
- * - **确认键(OK/ENTER)** → [showChannelMenu] 频道列表
- * - **菜单键(MENU)** → [showQualityMenu] 画质选择
- * - **上下左右** → [goNext] 切台 + 转发页面脚本
- * - **返回键** → 关闭浮层/退出
+ * 按键映射（按需求）：
+ * - **确认键(OK/ENTER)** → 呼出/导航播放UI
+ * - **菜单键(MENU)** → [showChannelMenu] 频道列表
+ * - **上下左右** → 无浮层时 [goNext] 切台 + 转发页面脚本；播放UI显示时在按钮间导航
+ * - **返回键** → 优先级 浮层关闭 > 收起播放UI > 双击退出（见 [handleBackKey]）
  */
 class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
 
@@ -189,6 +190,11 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun initView() {
         jsBridge = MarmotJsBridge(this, jsCallbacks)
+        // BACK 兜底：手势返回等非按键路径统一走 handleBackKey，
+        // 防止 OnBackPressedDispatcher 无回调时落到默认 fallback 直接 finish
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = handleBackKey()
+        })
         // 青少年模式：启动观看时长定时器
         mainHandler.postDelayed(teenModeTicker, 15_000L)
         initWebView()
@@ -722,9 +728,10 @@ $scriptTags
     // ==================== 播放UI（顶栏返回+时钟、底部控制栏，呼出/自动隐藏对齐普通视频播放器） =====================
 
     private fun setupPlayerController() {
-        // 返回：与普通视频播放器 button_back 一致，单击直接退出播放器；触摸点击带按压缩放反馈
+        // 返回按钮 = UI 显示时的 BACK 键：单击只收起播放UI，不退出；
+        // 退出播放器需在 UI 隐藏后快速连按两次 BACK。触摸点击带按压缩放反馈
         binding.buttonBack.touchPressFeedback = true
-        binding.buttonBack.setOnClickListener { finish() }
+        binding.buttonBack.setOnClickListener { hideController() }
         binding.buttonChannel.setOnClickListener {
             hideController()
             showChannelMenu()
@@ -754,6 +761,10 @@ $scriptTags
         binding.controller.visibility = View.VISIBLE
         mainHandler.removeCallbacks(hideControllerRunnable)
         mainHandler.postDelayed(hideControllerRunnable, CONTROLLER_HIDE_DELAY_MS)
+        // 呼出即默认聚焦频道按钮（对齐普通播放器 requestFocus(button_play)）；
+        // 聚焦成功会触发 onFocusChange 取消上面排的自动隐藏（焦点在按钮上不计时），
+        // 触摸模式下按钮不可 touch 聚焦，requestFocus 失败则 5s 照常收起
+        binding.buttonChannel.requestFocus()
     }
 
     private fun hideController() {
@@ -761,6 +772,8 @@ $scriptTags
         mainHandler.removeCallbacks(hideControllerRunnable)
         binding.topBar.visibility = View.GONE
         binding.controller.visibility = View.GONE
+        // 收起播放UI即打断退出连击：避免「关UI」那一下被算作双击退出的第一下
+        exitTime = 0L
         // 收起后焦点回到播放区，避免落在已隐藏的按钮上
         if (!binding.marmotRoot.isFocused) {
             binding.marmotRoot.requestFocus()
@@ -791,9 +804,14 @@ $scriptTags
         if (!isControllerShowing) return false
         val rect = android.graphics.Rect()
         return listOf(binding.buttonBack, binding.controller).any { target ->
-            target.visibility == View.VISIBLE &&
-                target.getGlobalVisibleRect(rect) &&
-                rect.contains(ev.rawX.toInt(), ev.rawY.toInt())
+            if (target.visibility != View.VISIBLE || !target.getGlobalVisibleRect(rect)) {
+                return@any false
+            }
+            // controller 顶部是渐变羽化 padding（视觉上仍属视频区），点击应照常 toggle 控制栏
+            if (target === binding.controller) {
+                rect.top += binding.controller.paddingTop
+            }
+            rect.contains(ev.rawX.toInt(), ev.rawY.toInt())
         }
     }
 
@@ -861,6 +879,30 @@ $scriptTags
         return super.dispatchTouchEvent(ev)
     }
 
+    /**
+     * BACK 统一处理，优先级：频道/画质浮层 > 播放UI > 双击退出。
+     *
+     * 由 [onBackPressedDispatcher] 的 callback 调用（与普通视频播放器同构）：
+     * BACK 不在 [dispatchKeyEvent] 里处理——按键 DOWN 走系统 dispatch、UP 走
+     * OnBackInvoked 两条路各来一次，DOWN 处再处理会与 UP 形成「伪双击」秒退。
+     */
+    private fun handleBackKey() {
+        AppLog.i(TAG, "handleBackKey ch=$isChannelMenuShowing q=$isQualityMenuShowing ui=$isControllerShowing")
+        when {
+            isChannelMenuShowing -> hideChannelMenu()
+            isQualityMenuShowing -> hideQualityMenu()
+            isControllerShowing -> hideController()
+            else -> {
+                if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                    finish()
+                } else {
+                    exitTime = System.currentTimeMillis()
+                    Toast.makeText(this, R.string.activity_exit_live_hint, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_UP) {
             // 播放UI按钮的 OK 已在 ACTION_DOWN 消费（聚焦/激活），吞掉对应 UP
@@ -874,15 +916,17 @@ $scriptTags
         val keyCode = event.keyCode
 
         // —— 频道列表浮层（双排：FocusLockRecyclerView 在 focusSearch 层防溢出）——
+        // BACK 不在此处理：统一走 OnBackPressedCallback → handleBackKey，避免
+        // DOWN（本方法）与 UP（系统 OnBackInvoked）各触发一次形成「伪双击」秒退
         if (isChannelMenuShowing) {
             when (keyCode) {
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU -> { hideChannelMenu(); return true }
+                KeyEvent.KEYCODE_MENU -> { hideChannelMenu(); return true }
             }
             return super.dispatchKeyEvent(event)
         }
         if (isQualityMenuShowing) {
             when (keyCode) {
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU -> {
+                KeyEvent.KEYCODE_MENU -> {
                     AppLog.i(TAG, "画质菜单关闭: keyCode=$keyCode")
                     hideQualityMenu(); return true
                 }
@@ -905,10 +949,9 @@ $scriptTags
             return super.dispatchKeyEvent(event)
         }
 
-        // —— 播放UI显示时：方向键在 返回↔底部按钮行 间导航，BACK 收起 ——
+        // —— 播放UI显示时：方向键在 返回↔底部按钮行 间导航 ——
         if (isControllerShowing) {
             when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> { hideController(); return true }
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     if (isBottomControllerButtonFocused()) {
                         // 底部按钮行上移到右上角返回按钮
@@ -925,12 +968,24 @@ $scriptTags
                     return true
                 }
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    // 底部三按钮 频道→画质→刷新 左右循环；返回按钮左右进入按钮行
-                    when {
-                        binding.buttonBack.isFocused -> binding.buttonChannel.requestFocus()
-                        binding.buttonChannel.isFocused -> binding.buttonQuality.requestFocus()
-                        binding.buttonQuality.isFocused -> binding.buttonRefresh.requestFocus()
-                        else -> binding.buttonChannel.requestFocus()
+                    // 左右按直觉移动、不循环；最左（频道）/最右（刷新）边界原地不动。
+                    // 返回按钮在左上角：LEFT 不动，RIGHT 进入按钮行
+                    if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                        when {
+                            binding.buttonQuality.isFocused -> binding.buttonChannel.requestFocus()
+                            binding.buttonRefresh.isFocused -> binding.buttonQuality.requestFocus()
+                            binding.buttonChannel.isFocused -> Unit
+                            binding.buttonBack.isFocused -> Unit
+                            else -> binding.buttonChannel.requestFocus()
+                        }
+                    } else {
+                        when {
+                            binding.buttonBack.isFocused -> binding.buttonChannel.requestFocus()
+                            binding.buttonChannel.isFocused -> binding.buttonQuality.requestFocus()
+                            binding.buttonQuality.isFocused -> binding.buttonRefresh.requestFocus()
+                            binding.buttonRefresh.isFocused -> Unit
+                            else -> binding.buttonChannel.requestFocus()
+                        }
                     }
                     return true
                 }
@@ -955,8 +1010,13 @@ $scriptTags
 
         // —— 无浮层时 ——
         when (keyCode) {
-            // 确认键 → 呼出播放UI（统一普通视频播放器的确定键行为）
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { showController(); return true }
+            // 确认键 → 呼出播放UI并默认聚焦频道按钮（对齐普通播放器确定键行为）；
+            // OK 的 UP 吞掉：防止 UP 落到刚聚焦的频道按钮上触发 performClick 秒开频道菜单
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                consumeNextOkUp = true
+                showController()
+                return true
+            }
             // 菜单键 → 频道选择（统一普通视频播放器的菜单键呼出面板行为）
             KeyEvent.KEYCODE_MENU -> { showChannelMenu(); return true }
             // 上下左右 → 切台 + 转发页面脚本
@@ -964,15 +1024,6 @@ $scriptTags
             KeyEvent.KEYCODE_DPAD_DOWN -> { forwardKeyToPage("down"); return goNext("down") }
             KeyEvent.KEYCODE_DPAD_LEFT -> { forwardKeyToPage("left"); return goNext("left") }
             KeyEvent.KEYCODE_DPAD_RIGHT -> { forwardKeyToPage("right"); return goNext("right") }
-            KeyEvent.KEYCODE_BACK -> {
-                if (System.currentTimeMillis() - exitTime <= exitInterval) {
-                    finish()
-                } else {
-                    exitTime = System.currentTimeMillis()
-                    Toast.makeText(this, R.string.activity_exit_live_hint, Toast.LENGTH_SHORT).show()
-                }
-                return true
-            }
         }
         return super.dispatchKeyEvent(event)
     }
