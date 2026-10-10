@@ -29,5 +29,11 @@ object DialogWindowFit {
             minOf(designHeightPx, (dm.heightPixels * 0.92f).toInt())
         }
         w.setLayout(width, height)
+        // 兜底：从播放页返回等系统 insets/config 未稳的场景弹窗，首帧绘制会被吞——
+        // 表现为只有变暗遮罩、整个弹窗内容不渲染，任意按键触发重绘后立即恢复。
+        // （4K 模拟器 + v2.1.2 实测必现；window/view 布局均正常，仅 Surface 首帧未提交。）
+        // 布局后强制补走一帧绘制；本方法均在 show() 之后调用，decorView 此时可用。
+        val decor = w.decorView ?: return
+        decor.post { decor.invalidate() }
     }
 }
