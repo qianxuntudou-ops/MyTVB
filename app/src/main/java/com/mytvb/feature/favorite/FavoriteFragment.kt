@@ -94,7 +94,9 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             onItemFocused = { position ->
                 lastFocusedPosition = position
             },
-            onTopEdgeUp = ::focusTopTab
+            onTopEdgeUp = ::focusTopTab,
+            onLeftEdge = ::switchToPrevMeTab,
+            onRightEdge = ::switchToNextMeTab
         )
 
         binding.buttonBack.setOnFocusChangeListener { _, hasFocus ->
@@ -504,6 +506,14 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
 
     private fun focusTopTab(): Boolean {
         return (parentFragment as? MeFragment)?.focusCurrentTab() == true
+    }
+
+    private fun switchToPrevMeTab(): Boolean {
+        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+    }
+
+    private fun switchToNextMeTab(): Boolean {
+        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(1) == true
     }
 
     private fun requestEmptyStateFocus(): Boolean {

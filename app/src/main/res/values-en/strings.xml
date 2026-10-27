@@ -153,6 +153,7 @@
     <string name="liked_">Liked</string>
     <string name="live">Live</string>
     <string name="live_entry">Live entry</string>
+    <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="cctv_live">CCTV Live</string>
     <string name="cast_receive">Phone casting</string>
     <string name="cast_device_name">Cast device name</string>

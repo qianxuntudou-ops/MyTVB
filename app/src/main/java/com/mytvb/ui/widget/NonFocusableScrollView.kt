@@ -98,6 +98,9 @@ class NonFocusableScrollView @JvmOverloads constructor(
         if (scrollY != 0) {
             shift = try {
                 val m = android.graphics.Matrix()
+                // Canvas.getMatrix(Matrix) API35 起被标记弃用但无等价替代（平台 jar 已验证），
+                // 硬件画布上的差异由外层 try-catch 兜底，维持原行为
+                @Suppress("DEPRECATION")
                 canvas.getMatrix(m)
                 val values = FloatArray(9)
                 m.getValues(values)

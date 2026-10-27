@@ -217,6 +217,7 @@
     <string name="liked_">已点赞</string>
     <string name="live">直播</string>
     <string name="live_entry">直播入口</string>
+    <string name="edge_tab_switch">卡片边缘切换标签</string>
     <string name="cctv_live">CCTV直播</string>
     <string name="cctv_vod">CCTV影视</string>
     <string name="cast_receive">手机投屏</string>

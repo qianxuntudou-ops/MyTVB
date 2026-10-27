@@ -46,6 +46,7 @@ import com.mytvb.core.ui.base.UiTextScale
 import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.decoration.LinearSpacingItemDecoration
 import com.mytvb.core.ui.decoration.SettingGroupSpacingDecoration
+import com.mytvb.core.ui.focus.EdgeTabSwitch
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.cache.FileCacheManager
 import com.mytvb.core.common.settings.AppSettingsDataStore
@@ -100,6 +101,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_IMAGE_QUALITY = "image_quality"
         private const val KEY_THEME = "theme"
         private const val KEY_LIVE_ENTRY = "live_entry"
+        // 与 EdgeTabSwitch 同键（存储值"开/关"），默认开：卡片左右移到列表边缘切换顶部 tab
+        private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
         private const val KEY_CAST_RECEIVE = "cast_receive"
@@ -280,6 +283,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HOME_FEED_SOURCE, R.string.home_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
+                stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "开"),
                 stored(KEY_CCTV_LIVE_ENTRY, R.string.cctv_live, "关"),
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
@@ -710,6 +714,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyLiveEntryVisibility()
             }
+            KEY_EDGE_TAB_SWITCH -> toggle(key)
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyCctvLiveEntryVisibility()
@@ -1315,6 +1320,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
         }
         applyStored(KEY_LIVE_ENTRY)
+        applyStored(KEY_EDGE_TAB_SWITCH)
         applyStored(KEY_CCTV_LIVE_ENTRY)
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_HOME_FEED_SOURCE)

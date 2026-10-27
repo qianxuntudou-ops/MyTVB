@@ -18,7 +18,9 @@ import com.mytvb.core.ui.focus.VideoCardFocusHelper
 class FavoriteFolderAdapter(
     private val onItemClick: ((position: Int, item: FavoriteFolderModel) -> Unit)? = null,
     private val onItemFocused: ((Int) -> Unit)? = null,
-    private val onTopEdgeUp: (() -> Boolean)? = null
+    private val onTopEdgeUp: (() -> Boolean)? = null,
+    private val onLeftEdge: (() -> Boolean)? = null,
+    private val onRightEdge: (() -> Boolean)? = null
 ) : ListAdapter<FavoriteFolderModel, FavoriteFolderAdapter.FolderViewHolder>(DIFF_CALLBACK) {
 
     private var focusedPosition = RecyclerView.NO_POSITION
@@ -138,7 +140,9 @@ class FavoriteFolderAdapter(
             }
             VideoCardFocusHelper.bindSidebarExit(
                 binding.root,
-                onTopEdgeUp = onTopEdgeUp
+                onTopEdgeUp = onTopEdgeUp,
+                onLeftEdge = onLeftEdge,
+                onRightEdge = onRightEdge
             )
         }
 

@@ -178,8 +178,9 @@ object VideoCardFocusHelper {
                 if (!atLeftEdge) {
                     return false
                 }
+                // 页面未显式接线时的统一兜底：环绕回主边栏当前激活主 tab 对应按钮
                 val result = onLeftEdge?.invoke()
-                    ?: (target.context.findMainActivity()?.focusLeftFunctionArea() == true)
+                    ?: (target.context.findMainActivity()?.focusSidebarCurrentTab() == true)
                 AppLog.d(TAG, "DPAD_LEFT pos=$pos edge→sidebar=$result")
                 return result
             }
@@ -193,6 +194,8 @@ object VideoCardFocusHelper {
                 if (!atRightEdge) {
                     return false
                 }
+                // 页面未显式接线时吞键停原地（对齐 blbl "No outflow on the right edge"）；
+                // 不环绕去侧栏——右边缘向右按键焦点跳到左侧属反直觉（用户实测反馈）
                 val result = onRightEdge?.invoke() ?: true
                 AppLog.d(TAG, "DPAD_RIGHT pos=$pos edge→handled=$result")
                 return result

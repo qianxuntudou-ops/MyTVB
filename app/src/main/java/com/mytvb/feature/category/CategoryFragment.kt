@@ -15,6 +15,8 @@ import com.mytvb.R
 import com.mytvb.databinding.FragmentCategoryBinding
 import com.mytvb.model.CategoryModel
 import com.mytvb.core.ui.base.BaseFragment
+import com.mytvb.core.common.settings.AppSettingsDataStore
+import com.mytvb.core.ui.focus.EdgeTabSwitch
 import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
 import com.mytvb.core.ui.tab.enableTouchNavigation
@@ -24,6 +26,7 @@ import com.mytvb.core.ui.base.OnBackPressedHandler
 import com.mytvb.core.ui.tab.disableAdjacentPagePrefetch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 
 class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTarget, OnBackPressedHandler {
 
@@ -38,6 +41,7 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
     private var tabSelectedListener: TabLayout.OnTabSelectedListener? = null
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
+    private val appSettings: AppSettingsDataStore by inject()
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -206,6 +210,14 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
 
     /** 内容网格左右边缘切分区 tab；首/末 tab 越界方向保持原有行为。 */
     fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
+        // 设置「卡片边缘切换标签」关闭：只关「切 tab」——左边缘环绕回主边栏
+        // 当前主 tab 对应按钮；右边缘吞键停原地（对齐 blbl 右边缘无外流）
+        if (!EdgeTabSwitch.enabled(appSettings)) {
+            if (delta < 0) {
+                return (activity as? com.mytvb.ui.activity.MainActivity)?.focusSidebarCurrentTab() == true
+            }
+            return true
+        }
         val target = viewPager.currentItem + delta
         if (target < 0) {
             return (activity as? com.mytvb.ui.activity.MainActivity)?.focusLeftFunctionArea() == true

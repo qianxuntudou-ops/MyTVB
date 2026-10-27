@@ -25,8 +25,11 @@ import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.core.ui.tab.disableAdjacentPagePrefetch
 import com.mytvb.core.ui.tab.retainAllPagesAfterFirstLayout
 import com.mytvb.core.ui.focus.SpatialFocusNavigator
+import com.mytvb.core.ui.focus.EdgeTabSwitch
+import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.core.common.ext.getHomeDefaultStartPageIndex
 import com.mytvb.core.common.log.AppLog
+import org.koin.android.ext.android.inject
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -41,6 +44,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
+    private val appSettings: AppSettingsDataStore by inject()
     private lateinit var adapter: HomeFragmentStateAdapter
     private var tabMediator: TabLayoutMediator? = null
     private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
@@ -183,6 +187,14 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
      */
     fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
         val currentBinding = _binding ?: return false
+        // 设置「卡片边缘切换标签」关闭：只关「切 tab」——左边缘环绕回主边栏
+        // 当前主 tab 对应按钮；右边缘吞键停原地（对齐 blbl 右边缘无外流）
+        if (!EdgeTabSwitch.enabled(appSettings)) {
+            if (delta < 0) {
+                return (activity as? MainActivity)?.focusSidebarCurrentTab() == true
+            }
+            return true
+        }
         val target = currentBinding.viewPager.currentItem + delta
         if (target < 0) {
             return focusLeftFunctionArea()

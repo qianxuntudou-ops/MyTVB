@@ -21,6 +21,7 @@ import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
 import com.mytvb.feature.settings.SignInFragment
 import com.mytvb.core.common.settings.AppSettingsDataStore
+import com.mytvb.core.ui.focus.EdgeTabSwitch
 import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusNearestTabTo
 import com.mytvb.core.ui.tab.focusSelectedTab
@@ -264,6 +265,14 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
 
     /** 内容网格左右边缘切二级 tab（与 HomeFragment 一致）；首/末 tab 越界方向保持原有行为。 */
     fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
+        // 设置「卡片边缘切换标签」关闭：只关「切 tab」——左边缘环绕回主边栏
+        // 当前主 tab 对应按钮；右边缘吞键停原地（对齐 blbl 右边缘无外流）
+        if (!EdgeTabSwitch.enabled(appSettings)) {
+            if (delta < 0) {
+                return (activity as? com.mytvb.ui.activity.MainActivity)?.focusSidebarCurrentTab() == true
+            }
+            return true
+        }
         val target = viewPager.currentItem + delta
         if (target < 0) {
             return (activity as? com.mytvb.ui.activity.MainActivity)?.focusLeftFunctionArea() == true

@@ -117,7 +117,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
                 }
             },
-            onLeftEdge = { (activity as? MainActivity)?.focusLeftFunctionArea() == true },
+            // 左栏 UP 列表左边缘：环绕回主边栏当前主 tab 对应按钮（「动态」），几何就近落点不保证
+            onLeftEdge = { (activity as? MainActivity)?.focusSidebarCurrentTab() == true },
             onRightEdge = { focusNearestVideoCard() },
         )
         binding.recyclerViewLeft.layoutManager = LinearLayoutManager(requireContext())

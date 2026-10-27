@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class DynamicVideoAdapter(
     private val onItemClick: (VideoModel) -> Unit,
     onItemFocused: (Int) -> Unit,
-    onLeftEdge: () -> Boolean = { false },
+    onLeftEdge: (() -> Boolean)? = null,
+    onRightEdge: (() -> Boolean)? = null,
     onItemFocusedWithView: ((View, Int) -> Unit)? = null,
     onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
     onItemsChanged: (() -> Unit)? = null
@@ -40,6 +41,7 @@ class DynamicVideoAdapter(
         this.onItemFocused = onItemFocused
         this.onItemFocusedWithView = onItemFocusedWithView
         this.onLeftEdge = onLeftEdge
+        this.onRightEdge = onRightEdge
         this.onItemDpad = onItemDpad
         this.onItemsChanged = onItemsChanged
     }
@@ -144,6 +146,7 @@ class DynamicVideoAdapter(
             VideoCardFocusHelper.bindSidebarExit(
                 view = views.root,
                 onLeftEdge = onLeftEdge,
+                onRightEdge = onRightEdge,
                 handleListDpadDown = false,
                 chainedListener = keyListener
             )
