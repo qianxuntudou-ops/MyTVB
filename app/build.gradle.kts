@@ -81,8 +81,8 @@ android {
         applicationId = (project.findProperty("applicationId") as? String) ?: "com.mytvb"
         minSdk = 23
         targetSdk = 35
-        versionCode = 112
-        versionName = "2.1.18"
+        versionCode = 113
+        versionName = "2.1.19"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
