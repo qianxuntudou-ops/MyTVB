@@ -12,12 +12,15 @@ import android.view.Display
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.RendererCapabilities
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.model.video.quality.VideoCodecEnum
+import com.mytvb.model.video.quality.VideoQuality
 
 object VideoCodecSupport {
 
@@ -361,10 +364,15 @@ object VideoCodecSupport {
     @Suppress("unused")
     fun isDolbyVisionSupported(context: Context? = null): Boolean {
         cachedDolbyVisionSupported?.let { return it }
-        val decoderOk = hasDecoder("video/dolby-vision") ||
+        val mediaCodecListHit = hasDecoder("video/dolby-vision") ||
             hasDecoder("video/dvhe") ||
             hasDecoder("video/dvav")
-        if (!decoderOk) {
+        val media3Hit = hasMedia3DolbyVisionDecoder()
+        AppLog.i(
+            TAG,
+            "dolby vision decoder probe: mediaCodecList=$mediaCodecListHit media3=$media3Hit"
+        )
+        if (!mediaCodecListHit && !media3Hit) {
             cachedDolbyVisionSupported = false
             return false
         }
@@ -374,6 +382,35 @@ object VideoCodecSupport {
         val result = hasDolbyVisionDisplaySupport(context)
         cachedDolbyVisionSupported = result
         return result
+    }
+
+    /**
+     * 该视频轨是否为杜比视界流。
+     *
+     * B 站 126 档杜比视界流的 codecs 是 HEVC 形态（实测 hvc1.2.4.H150.90），不带 dvhe
+     * 前缀，必须按档位 id 判定；dvhe/dvh1/dovi 前缀与 MIME 判定兜底其它下发形态。
+     */
+    fun isDolbyVisionTrack(qualityId: Int, mimeType: String?, codecs: String?): Boolean {
+        if (qualityId == VideoQuality.QUALITY_DOLBY_VISION.id) return true
+        if (mimeType?.lowercase()?.contains("dolby-vision") == true) return true
+        val c = codecs?.lowercase().orEmpty()
+        return c.startsWith("dvhe") || c.startsWith("dvh1") || c.contains("dovi")
+    }
+
+    /**
+     * media3 级杜比视界解码器查询，与 [hasDecoder] 的 MediaCodecList 原生查询并联：
+     * media3 额外认厂商私有别名（如 OMX.MS.HEVCDV 的 video/hevcdv、RealTek 的
+     * video/dv_hevc），部分电视只以别名暴露 DV 解码器。
+     */
+    @OptIn(UnstableApi::class)
+    private fun hasMedia3DolbyVisionDecoder(): Boolean {
+        return runCatching {
+            MediaCodecUtil.getDecoderInfos(
+                MimeTypes.VIDEO_DOLBY_VISION,
+                /* requiresSecureDecoder = */ false,
+                /* requiresTunnelingDecoder = */ false
+            ).isNotEmpty()
+        }.getOrDefault(false)
     }
 
     private fun hasDecoder(mimeType: String): Boolean {

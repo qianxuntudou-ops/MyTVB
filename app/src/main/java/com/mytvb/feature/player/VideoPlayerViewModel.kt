@@ -1341,10 +1341,19 @@ class VideoPlayerViewModel(
      * 避免选了杜比视界/HDR 后静默降级或播放失败被误认为「激活不了」。不阻断切换。
      */
     private fun warnHdrUnsupportedIfNecessary(qualityId: Int) {
-        val unsupportedNameRes = when (qualityId) {
-            126 -> if (VideoCodecSupport.isDolbyVisionSupported(appContext)) 0 else R.string.setting_quality_dolby_vision
-            125, 129 -> if (VideoCodecSupport.isHdrSupported(appContext)) 0 else R.string.quality_hdr
+        val isDolbyVisionTrack = VideoCodecSupport.isDolbyVisionTrack(qualityId, mimeType = null, codecs = null)
+        val unsupportedNameRes = when {
+            isDolbyVisionTrack -> if (VideoCodecSupport.isDolbyVisionSupported(appContext)) 0 else R.string.setting_quality_dolby_vision
+            qualityId == 125 || qualityId == 129 -> if (VideoCodecSupport.isHdrSupported(appContext)) 0 else R.string.quality_hdr
             else -> 0
+        }
+        if (isDolbyVisionTrack) {
+            // DV 档选择必打一条识别日志：真机排查「电视不进杜比视界模式」时据此
+            // 区分「设备无 DV 解码器（含厂商别名）」与「解码器在但管线未点亮」。
+            AppLog.i(
+                TAG,
+                "dolby vision track selected: qn=$qualityId deviceSupported=${VideoCodecSupport.isDolbyVisionSupported(appContext)}"
+            )
         }
         if (unsupportedNameRes != 0) {
             val name = appContext.getString(unsupportedNameRes)
