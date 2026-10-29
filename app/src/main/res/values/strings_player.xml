@@ -102,6 +102,8 @@
     <string name="series_error_recommend_failed">推荐加载失败</string>
     <string name="player_hdr_unsupported_hint">电视或播放设备可能不支持「%1$s」，若播放异常请切回其他画质</string>
     <string name="player_audio_track_silent_hint">设备不支持「%1$s」解码，已保持当前音轨</string>
+    <string name="player_quality_switching_hint">正在为您切换到「%1$s」，请稍候…</string>
+    <string name="player_quality_switched_hint">已切换至「%1$s」</string>
 
     <!-- 同时观看人数 / Online watching count -->
     <string name="online_watching_format">%1$s人正在看</string>

@@ -336,6 +336,8 @@ class VideoPlayerFragment : Fragment() {
             // 回读给 VM 纠正 UI 选择态与心跳上报档位；非无缝源 id 解析为 null，无副作用。
             parseVideoRepresentationId(format.id)?.let { (qn, codecid) ->
                 viewModel.onSeamlessVideoTrackChanged(qn, codecid)
+                // 新档真实出流 = 切换完成，撤掉左下角「画质切换中」提示
+                playerView.hideQualitySwitchingHint()
             }
         }
 
@@ -401,6 +403,8 @@ class VideoPlayerFragment : Fragment() {
                     viewModel.setLoading(true)
                 }
                 Player.STATE_READY -> {
+                    // 非无缝切换重建完成后回到 READY，撤掉「画质切换中」提示（超时兜底之外的主路径之一）
+                    playerView.hideQualitySwitchingHint()
                     startupTrace
                         ?.takeIf { !it.readyLogged }
                         ?.also {
@@ -432,6 +436,7 @@ class VideoPlayerFragment : Fragment() {
             viewModel.setLoading(false)
             viewModel.handlePlaybackError(error, player?.currentPosition ?: 0L)
             AppLog.e(TAG, "player error: ${error.message} code=${error.errorCode}", error)
+            playerView.cancelQualitySwitchingHint()
             playerView.pauseDanmaku()
             syncPlaybackEnvironment()
         }
@@ -815,6 +820,7 @@ class VideoPlayerFragment : Fragment() {
         syncPlaybackEnvironment()
         playerView.setOnPlayerSettingChange(object : OnPlayerSettingChange {
             override fun onVideoQualityChange(quality: VideoQuality) {
+                playerView.showQualitySwitchingHint(quality.displayName(requireContext()))
                 val playbackSnapshot = capturePlaybackSnapshot()
                 viewModel.selectVideoQuality(
                     quality = quality,

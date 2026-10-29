@@ -100,6 +100,8 @@
     <string name="series_error_recommend_failed">Failed to load recommendations</string>
     <string name="player_hdr_unsupported_hint">Your TV or player may not support %1$s. Switch back to another quality if playback fails</string>
     <string name="player_audio_track_silent_hint">Device cannot decode %1$s, current audio track kept</string>
+    <string name="player_quality_switching_hint">Switching to %1$s, please wait…</string>
+    <string name="player_quality_switched_hint">Switched to %1$s</string>
 
     <!-- 同时观看人数 / Online watching count -->
     <string name="online_watching_format">%1$s watching</string>

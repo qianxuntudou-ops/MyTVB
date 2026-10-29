@@ -302,6 +302,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 ?: qualities.filter { it.id <= qn }.maxByOrNull { it.id }
                 ?: return
             val p = player ?: return
+            if (::playerView.isInitialized) {
+                playerView.showQualitySwitchingHint(target.displayName(this@PlayerActivity))
+            }
             viewModel.selectVideoQuality(target, p.currentPosition, p.playWhenReady)
         }
 
@@ -574,6 +577,16 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             )
         }
 
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: androidx.media3.common.Format,
+            decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
+        ) {
+            // 无缝切档时状态恒为 READY 不触发状态回调，视频格式变化即切换真实生效，
+            // 以此作为「画质切换中」提示的撤除信号（起播首次回调时无提示，hide 幂等无害）。
+            if (::playerView.isInitialized) playerView.hideQualitySwitchingHint()
+        }
+
         override fun onAudioUnderrun(
             eventTime: AnalyticsListener.EventTime,
             bufferSize: Int,
@@ -634,6 +647,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     playerView.pauseDanmaku()
                 }
                 Player.STATE_READY -> {
+                    // 非无缝切换重建完成后回到 READY，撤掉「画质切换中」提示
+                    if (::playerView.isInitialized) playerView.hideQualitySwitchingHint()
                     startupTrace
                         ?.takeIf { !it.readyLogged }
                         ?.also {
@@ -683,6 +698,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             viewModel.setLoading(false)
             viewModel.handlePlaybackError(error, player?.currentPosition ?: 0L)
             AppLog.e(TAG, "player error: ${error.message} code=${error.errorCode}", error)
+            if (::playerView.isInitialized) playerView.cancelQualitySwitchingHint()
             playerView.pauseDanmaku()
             syncPlaybackEnvironment()
         }
@@ -1200,6 +1216,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         syncPlaybackEnvironment()
         playerView.setOnPlayerSettingChange(object : OnPlayerSettingChange {
             override fun onVideoQualityChange(quality: VideoQuality) {
+                playerView.showQualitySwitchingHint(quality.displayName(this@PlayerActivity))
                 val snapshot = capturePlaybackSnapshot()
                 viewModel.selectVideoQuality(quality = quality, currentPositionMs = snapshot.first, playWhenReady = snapshot.second)
                 playerView.showHideSettingView(false)

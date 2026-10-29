@@ -119,6 +119,8 @@ class MyPlayerView @JvmOverloads constructor(
         private const val MASK_GEOMETRY_LOG_INTERVAL_MS = 2_000L
         private const val RESUME_HINT_MARGIN_START_DP = 28
         private const val RESUME_HINT_MARGIN_BOTTOM_DP = 22
+        private const val QUALITY_SWITCHING_HINT_TIMEOUT_MS = 8000L
+        private const val QUALITY_SWITCHED_CONFIRM_MS = 3000L
         private const val RESUME_HINT_CONTROLLER_OFFSET_DP = 130
         private const val RESUME_HINT_ANIMATION_MS = 120L
 
@@ -152,6 +154,8 @@ class MyPlayerView @JvmOverloads constructor(
     private var pauseIndicatorView: View? = null
     private var resumeHintView: LinearLayout? = null
     private var resumeHintPositionText: TextView? = null
+    private var qualitySwitchingHideRunnable: Runnable? = null
+    private var qualitySwitchingTargetName: String? = null
 
     private var player: ExoPlayer? = null
     private var showBuffering: Int = SHOW_BUFFERING_WHEN_PLAYING
@@ -2835,6 +2839,12 @@ class MyPlayerView @JvmOverloads constructor(
 
     fun showResumeHint(text: String) {
         val hintView = ensureResumeHintView()
+        // 若此前处于画质切换的单行模式，还原结构（动作按钮/点击语义）并取消其定时与 pending
+        qualitySwitchingHideRunnable?.let { removeCallbacks(it) }
+        qualitySwitchingHideRunnable = null
+        qualitySwitchingTargetName = null
+        hintView.getChildAt(1)?.visibility = VISIBLE
+        hintView.isClickable = true
         resumeHintPositionText?.text = text
         updateResumeHintPosition(animate = false)
         hintView.animate().cancel()
@@ -2849,6 +2859,67 @@ class MyPlayerView @JvmOverloads constructor(
             view.visibility = GONE
             view.alpha = 1f
         }
+    }
+
+    /**
+     * 画质切换提示（官方两段式，复用恢复播放进度提示条容器）：
+     * 1. 切换中：单行「正在为您切换到「XX」，请稍候…」，由宿主在发起切换时调用；
+     * 2. 切换完成：宿主的完成信号（渲染器格式回读/READY）调用 [hideQualitySwitchingHint]，
+     *    若仍有 pending 切换则转显「已切换至「XX」」3 秒后自动消失（官方截图同款）。
+     * 8 秒超时兜底直接消失（不显示完成确认）；播放出错走 [cancelQualitySwitchingHint]。
+     */
+    fun showQualitySwitchingHint(qualityName: String) {
+        qualitySwitchingTargetName = qualityName
+        val hint = ensureResumeHintView()
+        resumeHintPositionText?.text =
+            context.getString(R.string.player_quality_switching_hint, qualityName)
+        // 单行模式：隐藏右侧动作按钮、禁用点击（恢复进度模式的「点击从头播放」不适用）
+        hint.getChildAt(1)?.visibility = GONE
+        hint.isClickable = false
+        qualitySwitchingHideRunnable?.let { removeCallbacks(it) }
+        val hide = Runnable { cancelQualitySwitchingHint() }
+        qualitySwitchingHideRunnable = hide
+        postDelayed(hide, QUALITY_SWITCHING_HINT_TIMEOUT_MS)
+        hint.visibility = VISIBLE
+        updateResumeHintPosition(animate = false)
+        restoreOverlayZOrder()
+    }
+
+    /** 切换完成信号：pending 存在时转显「已切换至XX」确认 3 秒，否则纯还原（幂等）。 */
+    fun hideQualitySwitchingHint() {
+        val target = qualitySwitchingTargetName
+        if (target == null) {
+            // 确认提示展示期间（3 秒）的重复完成信号（如短暂缓冲后再次 READY）不打断展示；
+            // 无任何进行中的提示时还原结构（幂等，兼容起播时的首次格式回调）。
+            if (qualitySwitchingHideRunnable != null) return
+            restoreResumeHintStructureAndHide()
+            return
+        }
+        qualitySwitchingTargetName = null
+        qualitySwitchingHideRunnable?.let { removeCallbacks(it) }
+        val hint = ensureResumeHintView()
+        // 同一提示条原地换文案：快速切换（秒级完成）时「请稍候」立即被「已切换至」替换，无消失间隙
+        resumeHintPositionText?.text =
+            context.getString(R.string.player_quality_switched_hint, target)
+        val hide = Runnable { restoreResumeHintStructureAndHide() }
+        qualitySwitchingHideRunnable = hide
+        postDelayed(hide, QUALITY_SWITCHED_CONFIRM_MS)
+    }
+
+    /** 直接撤除（切换失败/出错路径）：不显示完成确认。 */
+    fun cancelQualitySwitchingHint() {
+        qualitySwitchingTargetName = null
+        qualitySwitchingHideRunnable?.let { removeCallbacks(it) }
+        qualitySwitchingHideRunnable = null
+        restoreResumeHintStructureAndHide()
+    }
+
+    private fun restoreResumeHintStructureAndHide() {
+        resumeHintView?.let { hint ->
+            hint.getChildAt(1)?.visibility = VISIBLE
+            hint.isClickable = true
+        }
+        hideResumeHint()
     }
 
     private fun ensureResumeHintView(): LinearLayout {
