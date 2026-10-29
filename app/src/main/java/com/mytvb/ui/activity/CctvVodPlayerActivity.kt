@@ -83,9 +83,24 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private var resumeApplied = false
     /** 本集播完后是否已触发连播（页面会反复回传 ended，需防重入）。 */
     private var autoNextTriggered = false
+
+    /** 片尾页面收敛是否已执行：ended 状态每秒回传一次，防重复注入 restyle。 */
+    private var endedRestyleApplied = false
+
+    /** 最近一次文档开始加载时刻：片尾官方页面整文档自重载，会让 restarted 信号假阳性。 */
+    private var lastPageStartedAt = 0L
+
+    /** 最近一次文档开始加载的 URL：官方片尾连播走整文档跳转，按它精确确认换集。 */
+    private var lastPageStartedUrl = ""
     private var currentEpisodeIndex = 0
     private var episodeTitle = ""
     private var saveTickCounter = 0
+    /** 起播耗时打点：本次加载（进页/切集）开始时刻与各阶段开关（见 loadStage 日志）。 */
+    private var loadStartAt = 0L
+    private var loadStageFirstState = false
+    private var loadStageReady2 = false
+    private var qualitySwitchAt = 0L
+    private var loadStageQualitySettled = false
     /** 上一轮回传的位置，用于识别"官方页面自己连播了"。 */
     private var lastPositionMs = 0L
     /** 最近一次页面状态回传时间（elapsedRealtime），用于检测 JS 线程卡死。 */
@@ -180,6 +195,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             showError(getString(R.string.cctv_vod_stream_failed))
             return
         }
+        resetLoadStage()
         AppLog.i(TAG, "load page=$pageUrl")
         showLoading(true)
         webHost.loadUrl(pageUrl)
@@ -353,6 +369,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             listener = object : CctvVodWebViewHost.Listener {
                 override fun onPageStarted(url: String?) {
                     AppLog.i(TAG, "pageStarted url=$url")
+                    lastPageStartedAt = android.os.SystemClock.elapsedRealtime()
+                    lastPageStartedUrl = url.orEmpty()
                     // 幂等补丁：能赶在页面脚本前执行就赚到，赶不上还有主文档注入兜底
                     webHost.evaluateJavascript(POST_MESSAGE_PATCH_SCRIPT)
                 }
@@ -360,6 +378,22 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 override fun onPageFinished(url: String?) {
                     AppLog.i(TAG, "pageFinished url=$url")
                     injectPlayerModeRepeatedly()
+                    // 官方页面在片尾会自行重载文档（实测：露出完整网页布局、状态回传
+                    // 中断 stateGap 持续增长）。此时 playbackStarted 已为 true，上面的
+                    // 注入轮询会全部跳过——补两发延迟注入把 postMessage 补丁、页面收敛
+                    // 与状态回传定时器装到新文档上；第二发兜底补上第一发之后才出现的
+                    // video 元素（其 autoplay/监听初始化是按元素幂等的）。
+                    val session = playbackSession
+                    INJECT_RELOAD_DELAYS_MS.forEach { delay ->
+                        handler.postDelayed({
+                            if (session != playbackSession || isFinishing || isDestroyed) {
+                                return@postDelayed
+                            }
+                            webHost.evaluateJavascript(PLAYER_MODE_SCRIPT) { result ->
+                                AppLog.i(TAG, "inject tail-reload +${delay}ms result=$result")
+                            }
+                        }, delay)
+                    }
                 }
 
                 override fun onConsole(message: String) {
@@ -619,6 +653,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         pendingResumeMs = CctvVodProgressStore.load(this, albumId, currentEpisodeIndex)
         resumeApplied = false
         autoNextTriggered = false
+        endedRestyleApplied = false
         userPaused = false
         pagePaused = false
         qualityAutoApplied = false
@@ -627,6 +662,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         handler.postDelayed(loadTimeoutRunnable, LOAD_TIMEOUT_MS)
         saveTickCounter = 0
         lastPositionMs = 0L
+        resetLoadStage()
         webHost.loadUrl(pageUrl)
     }
 
@@ -646,6 +682,21 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         switchEpisode(next)
     }
 
+    /** 把当前集推进到 [episode]（官方片尾连播的两条路径共用），同步全部会话状态。 */
+    private fun advanceToEpisode(episode: CctvEpisode, reason: String) {
+        AppLog.i(TAG, "$reason -> index=${episode.index}")
+        persistProgress()
+        currentEpisodeIndex = episode.index
+        episodeTitle = episode.title
+        binding.textTitle.text = episodeTitle
+        pageUrl = episode.pageUrl
+        pendingResumeMs = 0L
+        resumeApplied = true
+        autoNextTriggered = false
+        endedRestyleApplied = false
+        saveTickCounter = 0
+    }
+
     /** 把当前进度写入本地（临近片尾会清掉记录）。 */
     private fun persistProgress() {
         if (albumId.isBlank() || currentEpisodeIndex <= 0) return
@@ -656,6 +707,15 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             positionMs = positionMs,
             durationMs = durationMs
         )
+    }
+
+    /** 重置起播耗时打点（进页与切集共用；各阶段日志见 Bridge.onVideoState 内 loadStage）。 */
+    private fun resetLoadStage() {
+        loadStartAt = android.os.SystemClock.elapsedRealtime()
+        loadStageFirstState = false
+        loadStageReady2 = false
+        qualitySwitchAt = 0L
+        loadStageQualitySettled = false
     }
 
     // ---------------------------------------------------------------- 状态回传
@@ -687,43 +747,61 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     ?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                 val buffered = Regex("\"buffered\":([\\d.]+)").find(state)
                     ?.groupValues?.getOrNull(1)?.toDoubleOrNull() ?: 0.0
+                val nowMs = android.os.SystemClock.elapsedRealtime()
+                if (!loadStageFirstState) {
+                    loadStageFirstState = true
+                    AppLog.i(TAG, "loadStage firstState ${nowMs - loadStartAt}ms ready=$ready")
+                }
                 if (dur > 0) {
                     durationMs = (dur * 1000).toLong()
                     if (!playbackStarted) {
                         playbackStarted = true
                         handler.removeCallbacks(loadTimeoutRunnable)
                         binding.textError.visibility = View.GONE
+                        AppLog.i(TAG, "loadStage metadata ${nowMs - loadStartAt}ms")
                     }
                 }
                 positionMs = (cur * 1000).toLong()
                 pagePaused = paused
-                lastStateAt = android.os.SystemClock.elapsedRealtime()
+                lastStateAt = nowMs
                 updatePlayPauseIcon(paused)
                 updatePauseIndicator(paused, ready)
                 AppLog.i(TAG, "state ready=$ready paused=$paused ended=$ended pos=${positionMs / 1000}s dur=${durationMs / 1000}s buf=${buffered.toLong()}s video=${videoW}x$videoH")
-                // 官方页面自己会连播（播完自动换下一集），而且是页面内换流：URL 与
-                // document.title 都不变，页面层没有可观测的变化。只能按行为特征判断：
-                // 上一轮位置已接近片尾、这一轮却从头开始 ⇒ 已经切到下一集。
-                // 不跟着推进集号的话，下一集的进度会被记到上一集头上。
+                // 官方页面的片尾连播有两条路径，都要跟着推进集号（否则下一集的进度
+                // 会被记到上一集头上）：
+                // ①整文档跳转（实测主路径）：官方脚本 location 跳到下一集 URL，
+                //   pageStarted 已给出确切目标——按 URL 匹配直接推进，精确无猜测；
+                // ②页面内换流（无文档加载）：URL 不变，只能按行为特征判断——
+                //   上一轮位置已接近片尾、这一轮却从头开始 ⇒ 切到下一集。
+                //   文档刚加载过的 10 秒压制窗内不走该启发式：整文档跳转/重载后回传
+                //   恢复同样"从头开始"，压住防止与①重复推进或误推进。
+                val startedUrl = lastPageStartedUrl
+                if (startedUrl.isNotEmpty() && startedUrl != pageUrl) {
+                    episodes.firstOrNull { it.pageUrl == startedUrl && it.index != currentEpisodeIndex }
+                        ?.let { advanceToEpisode(it, "pageJumped") }
+                }
                 val nearEndLastRound = durationMs > 0 && lastPositionMs >= durationMs - NEAR_END_MS
                 val restartedNow = positionMs < RESTART_MS && lastPositionMs > 60_000L
-                if (nearEndLastRound && restartedNow) {
-                    val next = episodes.firstOrNull { it.index == currentEpisodeIndex + 1 }
-                    if (next != null) {
-                        AppLog.i(TAG, "pageSelfAdvanced -> index=${next.index}")
-                        persistProgress()
-                        currentEpisodeIndex = next.index
-                        episodeTitle = next.title
-                        binding.textTitle.text = episodeTitle
-                        pageUrl = next.pageUrl
-                        pendingResumeMs = 0L
-                        resumeApplied = true
-                        autoNextTriggered = false
-                        saveTickCounter = 0
-                    }
+                val docReloadedRecently = nowMs - lastPageStartedAt < PAGE_RELOAD_ADVANCE_GUARD_MS
+                if (nearEndLastRound && restartedNow && !docReloadedRecently) {
+                    episodes.firstOrNull { it.index == currentEpisodeIndex + 1 }
+                        ?.let { advanceToEpisode(it, "pageSelfAdvanced") }
                 }
                 lastPositionMs = positionMs
 
+                if (ready >= 2 && !loadStageReady2) {
+                    loadStageReady2 = true
+                    AppLog.i(TAG, "loadStage ready2 ${nowMs - loadStartAt}ms")
+                }
+                // 升档换流完成的时刻。必须放在下方 autoQualityUp 之前判定：
+                // 触发升档的同一条回传里 ready>=2 也成立，放在后面会把刚触发的
+                // 升档误判为已完成（0ms）。
+                if (qualitySwitchAt > 0 && !loadStageQualitySettled &&
+                    ready >= 2 && !paused && durationMs > 0
+                ) {
+                    loadStageQualitySettled = true
+                    AppLog.i(TAG, "loadStage qualitySettled ${nowMs - qualitySwitchAt}ms total=${nowMs - loadStartAt}ms")
+                }
                 if (ready >= 2 && !paused) showLoading(false)
 
                 // 元数据一到位就按本地记录续播（ready=1 时 duration 已有），
@@ -743,7 +821,17 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     if (!seekingByUser) persistProgress()
                 }
 
-                if (ended) playNextEpisode()
+                if (ended) {
+                    playNextEpisode()
+                    // 官方页面在片尾会滚回顶部并展示网页自身布局（header 等）盖过
+                    // 视频区，这里重放一次收敛样式把页面压回纯播放态。本集只做
+                    // 一次（ended 每秒回传），切集时复位；若已连播到下一集，新
+                    // 页面的首次样式段自会执行，这次重放无副作用。
+                    if (!endedRestyleApplied && playbackStarted) {
+                        endedRestyleApplied = true
+                        js("restyle")
+                    }
+                }
 
                 // 页面初始流是 360P（实测 640x360），而菜单默认勾着"超清"，
                 // 不主动切一次的话用户看到的就是标清画质。源最高只有 720P。
@@ -751,7 +839,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     videoH in 1 until MAX_VIDEO_HEIGHT
                 ) {
                     qualityAutoApplied = true
-                    AppLog.i(TAG, "autoQualityUp -> ${QUALITY_LABELS.first()} (from ${videoW}x$videoH)")
+                    qualitySwitchAt = nowMs
+                    loadStageQualitySettled = false
+                    AppLog.i(TAG, "loadStage autoQualityUp ${nowMs - loadStartAt}ms (from ${videoW}x$videoH)")
                     js("quality", 0L)
                 }
 
@@ -1031,6 +1121,12 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         private const val BRIDGE_NAME = "MyBiliCctvVodBridge"
         private const val INJECT_ATTEMPTS = 12
         private const val INJECT_INTERVAL_MS = 1_500L
+
+        /** 片尾官方页面自重载后的补注入延迟：第一发装收敛样式，第二发补 video 初始化。 */
+        private val INJECT_RELOAD_DELAYS_MS = listOf(800L, 3_000L)
+
+        /** 文档加载后的压制窗口：其内的 restarted 信号视为自重载回播而非换集。 */
+        private const val PAGE_RELOAD_ADVANCE_GUARD_MS = 10_000L
         private const val PROGRESS_INTERVAL_MS = 500L
         private const val CONTROLLER_HIDE_DELAY_MS = 5_000L
         private const val SEEK_STEP_MS = 10_000L
@@ -1094,7 +1190,19 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             "2019dlbhyjs",
             "login190120home.js",
             "login_new.js",
-            "mylogin.js"
+            "mylogin.js",
+            // 2026-10-29 扩充（vset 详情页实抓脚本清单；播放相关只保留
+            // jquery/swfobject/vodplayer/ptjszx_player/cctvnew.videcreat/cctvnew_video_h5）
+            "2019bar/",         // www.cctv.com/newcctv/2019bar/ 系列（顶栏/侧栏/提示条）
+            "2019whitetop",     // 顶部白条导航
+            "pc_nav",           // tv.cctv.com/common/pc_nav PC 版导航
+            "echo.min.js",      // 图片懒加载
+            "swiper4.min.js",   // 轮播组件
+            "nativeShareXY.js", // 分享
+            "jweixin",          // 微信 JSSDK
+            "dingtalk.js",      // 钉钉 SDK
+            "jiezi.js",         // 文本截断工具
+            "diceng_"           // 底层评论/图文模块
         )
 
         /**
@@ -1126,6 +1234,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             if(cmd==='pause'){if(P){P.pause();}else{v.pause();}markPaused(true);return 'ok';}
             if(cmd==='seek'){var d=v.duration||0;var t=v.currentTime+arg/1000;if(t<0)t=0;if(d>0&&t>d)t=d;v.currentTime=t;return 'ok';}
             if(cmd==='seekTo'){var d0=v.duration||0;var t0=arg/1000;if(t0<0)t0=0;if(d0>0&&t0>d0)t0=d0;v.currentTime=t0;return 'ok';}
+            if(cmd==='restyle'){
+              if(window.__mybiliRestyle){window.__mybiliRestyle();}
+              try{window.scrollTo(0,0);}catch(e){}
+              try{
+                var hp=document.querySelector('.headernew');
+                var vfix=(function(){var vp=document.getElementsByTagName('video')[0];if(!vp)return 'novideo';var pe=vp;for(var di=0;di<4&&pe;di++){if(getComputedStyle(pe).position==='fixed')return 'fixed@depth'+di;pe=pe.parentElement;}return 'notfixed';})();
+                console.log('mybili restyle probe headernew='+(hp?(hp.tagName||'?')+'/display='+getComputedStyle(hp).display:'absent')+' scrollY='+window.scrollY+' video='+vfix);
+              }catch(e){}
+              return 'ok';
+            }
             if(cmd==='quality'){
               var li=document.querySelectorAll('#_video_player .vjs-playback-quality li');
               if(!li||!li[arg])return 'noitems';
@@ -1159,9 +1277,11 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
               try {
                 if (!document.documentElement || !document.body) return 'not-ready';
 
-                // 页面级样式只做一次。X5(Chrome 66) 的 H5 video 在主线程被反复重排时
-                // 会出现"音频继续、画面冻结"；本脚本每 1.5s 重跑，不能每次都改布局。
-                if (!window.__mybiliVodStyled) {
+                // 页面收敛样式为可重入函数（__mybiliRestyle）：官方页面在片尾等状态
+                // 会滚回顶部并展示网页自身布局（header 等）盖过视频，此时由 restyle
+                // 命令低频重放（每次操作均幂等，频度极低不构成 X5 重排卡顿）；
+                // 首次进入仍只执行一次，避免注入轮询期间的反复重排。
+                window.__mybiliRestyle = function() {
                   document.documentElement.style.background = '#000';
                   document.body.style.background = '#000';
                   document.body.style.margin = '0';
@@ -1215,6 +1335,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                       el.style.setProperty('height', '100%', 'important');
                     }
                   });
+                };
+                if (!window.__mybiliVodStyled) {
+                  window.__mybiliRestyle();
                   window.__mybiliVodStyled = true;
                 }
 
