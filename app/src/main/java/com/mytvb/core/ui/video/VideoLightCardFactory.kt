@@ -23,6 +23,7 @@ import android.view.ViewTreeObserver
 import android.widget.ImageView
 import androidx.core.content.ContextCompat
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.log.VideoCardPerfLogger
 import com.mytvb.core.ui.base.UiTextScale
 import pl.droidsonroids.gif.GifDrawable
@@ -145,8 +146,8 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val metrics = LightCardMetrics.get(context)
-    private val assets = OverlayAssets.get(context, metrics.metaIconSize)
+    private var metrics = LightCardMetrics.get(context)
+    private var assets = OverlayAssets.get(context, metrics.metaIconSize)
     private val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val gradientClipPath = Path()
     private val gradientClipRect = RectF()
@@ -187,6 +188,10 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         badgeFitDirty = true
+        rebuildCoverGradient(w, h)
+    }
+
+    private fun rebuildCoverGradient(w: Int, h: Int) {
         val top = (h - metrics.coverGradientHeight).coerceAtLeast(0).toFloat()
         gradientPaint.shader = LinearGradient(
             0f,
@@ -205,6 +210,23 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
             metrics.cardRadius.toFloat(),
             Path.Direction.CW
         )
+    }
+
+    /**
+     * 密度/档位漂移自愈（issue#102）：字号在 View 构造时固化进 Paint，ViewHolder
+     * 复用永不重读 metrics——运行中系统重置 displayMetrics（电视分辨率/系统栏变化
+     * 等）窗口期构造的卡片会永久偏离，回收池复用即同屏大小不一且不自愈。父布局在
+     * 测到新 metrics 时调用这里整体换档。
+     */
+    internal fun applyMetrics(next: LightCardMetrics) {
+        if (next === metrics) return
+        metrics = next
+        assets = OverlayAssets.get(context, next.metaIconSize)
+        metaPaint.textSize = next.metaTextSize
+        badgeTextPaint.textSize = next.badgeTextSize
+        badgeFitDirty = true
+        if (width > 0 && height > 0) rebuildCoverGradient(width, height)
+        invalidate()
     }
 
     fun bind(
@@ -460,10 +482,10 @@ class VideoCardTextLayerView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
-    private val metrics = LightCardMetrics.get(context)
+    private var metrics = LightCardMetrics.get(context)
     private val defaultTitleColor = ContextCompat.getColor(context, R.color.textColor)
     private val ownerTextColor = ContextCompat.getColor(context, R.color.subTextColor)
-    private val assets = TextLayerAssets.get(context, metrics, ownerTextColor)
+    private var assets = TextLayerAssets.get(context, metrics, ownerTextColor)
     private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = defaultTitleColor
         textSize = metrics.titleTextSize
@@ -596,6 +618,19 @@ class VideoCardTextLayerView @JvmOverloads constructor(
         if (titleColor == color) return
         titleColor = color
         titlePaint.color = color
+        invalidate()
+    }
+
+    /** 密度/档位漂移自愈（issue#102），同 [VideoCoverMetaOverlayView.applyMetrics]。 */
+    internal fun applyMetrics(next: LightCardMetrics) {
+        if (next === metrics) return
+        metrics = next
+        titlePaint.textSize = next.titleTextSize
+        ownerPaint.textSize = next.ownerTextSize
+        badgeTextPaint.textSize = next.badgeTextSize
+        assets = TextLayerAssets.get(context, next, ownerTextColor)
+        setTitleScrollEnabled(false)
+        clearTitleCache()
         invalidate()
     }
 
@@ -1084,7 +1119,7 @@ class VideoCardTextLayerView @JvmOverloads constructor(
 
 private class FlatVideoLightCardLayout @JvmOverloads constructor(
     context: Context,
-    private val metrics: LightCardMetrics = LightCardMetrics.get(context),
+    private var metrics: LightCardMetrics = LightCardMetrics.get(context),
     private val perfSource: String = "VideoLightCard.flat",
     private val coverRatio: VideoCardCoverRatio = VideoCardCoverRatio.LANDSCAPE_16_9,
     attrs: AttributeSet? = null
@@ -1092,8 +1127,8 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
 
     lateinit var imageView: View
     lateinit var progressBar: View
-    lateinit var coverMetaOverlay: View
-    lateinit var textLayer: View
+    lateinit var coverMetaOverlay: VideoCoverMetaOverlayView
+    lateinit var textLayer: VideoCardTextLayerView
 
     private var coverLeft = 0
     private var coverTop = 0
@@ -1107,6 +1142,28 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val startNs = SystemClock.elapsedRealtimeNanos()
         val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+        // 密度/档位漂移自愈（issue#102）：字号固化于构造，复用路径不会重读 metrics；
+        // 系统重置 displayMetrics 的窗口期构造的卡片会永久偏离。卡片是纯代码构造，
+        // XML inflate 的密度守卫（UiTextScaleFactory）罩不到，只能在 measure 总入口
+        // 校验快照（LightCardMetrics.get 带缓存与快照校验，未漂移时纳秒级返回）。
+        val fresh = LightCardMetrics.get(context)
+        // 必须按快照值判漂移而非实例同一性：get 缓存是 WeakHashMap，滚动中的 GC
+        // 会清掉缓存条目并重建一个值相同的新实例，实例比较会把这种重建误判为漂移，
+        // 每次都走无意义的 assets 重建并刷屏日志，劣化滚动性能。全部派生值由
+        // scale+density 两输入决定，二者相等即整卡绘制参数相等。
+        if (fresh.scaleSnapshot != metrics.scaleSnapshot || fresh.densitySnapshot != metrics.densitySnapshot) {
+            AppLog.w(
+                TAG,
+                "metrics drift healed[$perfSource]: density ${metrics.densitySnapshot}->${fresh.densitySnapshot} " +
+                    "textScale ${metrics.scaleSnapshot}->${fresh.scaleSnapshot} " +
+                    "titlePx ${metrics.titleTextSize}->${fresh.titleTextSize}"
+            )
+            metrics = fresh
+            coverMetaOverlay.applyMetrics(fresh)
+            textLayer.applyMetrics(fresh)
+            lastContentWidth = -1
+            lastDesiredHeight = -1
+        }
         val contentWidth = (widthSize - metrics.horizontalMargin * 2).coerceAtLeast(0)
         if (canReuseMeasuredChildren(widthSize, contentWidth)) {
             setMeasuredDimension(
@@ -1183,9 +1240,13 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
         params is LayoutParams
 
     private fun exact(size: Int): Int = MeasureSpec.makeMeasureSpec(size.coerceAtLeast(0), MeasureSpec.EXACTLY)
+
+    private companion object {
+        private const val TAG = "VideoCard"
+    }
 }
 
-private class LightCardMetrics private constructor(context: Context) {
+internal class LightCardMetrics private constructor(context: Context) {
     val cardRadius = dimen(context, R.dimen.px15)
     val paddingTop = dimen(context, R.dimen.px20)
     val paddingBottom = dimen(context, R.dimen.px15)
