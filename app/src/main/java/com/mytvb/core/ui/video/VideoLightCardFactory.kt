@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.log.VideoCardPerfLogger
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.base.UiTextScale
 import pl.droidsonroids.gif.GifDrawable
 import kotlin.math.ceil
@@ -1146,6 +1147,9 @@ private class FlatVideoLightCardLayout @JvmOverloads constructor(
         // 系统重置 displayMetrics 的窗口期构造的卡片会永久偏离。卡片是纯代码构造，
         // XML inflate 的密度守卫（UiTextScaleFactory）罩不到，只能在 measure 总入口
         // 校验快照（LightCardMetrics.get 带缓存与快照校验，未漂移时纳秒级返回）。
+        // v2 教训：自愈信的 fresh 必须是设计密度档——系统重置窗口内裸读会拿到物理
+        // 密度巨字档，把正常卡整批"治愈"成巨字（真机日志 8 卡全中）。重钉已在
+        // LightCardMetrics.get 内部完成，这里拿到的 fresh 恒为设计档，真换档才会判漂移。
         val fresh = LightCardMetrics.get(context)
         // 必须按快照值判漂移而非实例同一性：get 缓存是 WeakHashMap，滚动中的 GC
         // 会清掉缓存条目并重建一个值相同的新实例，实例比较会把这种重建误判为漂移，
@@ -1303,14 +1307,24 @@ internal class LightCardMetrics private constructor(context: Context) {
         private val cache = java.util.WeakHashMap<android.content.res.Resources, LightCardMetrics>()
 
         fun get(context: Context): LightCardMetrics {
+            val appContext = context.applicationContext ?: context
             val resources = context.resources
             val scale = UiTextScale.scale()
+            // 系统重置显示指标（前台 Activity 切换 / config change 无重建路径，荣耀
+            // Android16 高频发生）会把共享 DisplayMetrics 打回物理密度；UiScale 的
+            // 事件守卫（onResume/focus）在滚动 measure 之后才跑。get 是卡片字号唯一
+            // 解析通道，必须先重钉再读，保证构造与快照恒为设计密度档——否则系统
+            // 重置窗口内这里返回物理密度档巨字，onMeasure 的自愈会信这个坏真值把
+            // 正常卡整批切到巨字（issue#102 真机日志实锤：返回主页 20ms 内 8 卡
+            // 全切 108.5px，60ms 后守卫重钉又切回，同屏大小不一+闪变）。
+            UiScale.ensureApplied(resources)
+            UiScale.ensureApplied(appContext.resources)
             val density = resources.displayMetrics.density
             synchronized(cache) {
                 // Resources 实例在 Activity recreate 后可能复用，档位/密度变化时按快照失效重建
                 cache[resources]?.takeIf { it.scaleSnapshot == scale && it.densitySnapshot == density }
                     ?: cache.remove(resources)
-                return cache.getOrPut(resources) { LightCardMetrics(context.applicationContext ?: context) }
+                return cache.getOrPut(resources) { LightCardMetrics(appContext) }
             }
         }
     }
