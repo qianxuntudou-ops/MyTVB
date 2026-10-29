@@ -41,6 +41,14 @@ object ApkUpdater {
     private const val VERSION_JSON_URL =
         "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/$VERSION_JSON_NAME"
 
+    /**
+     * 仓库 main 分支的 version.json（发版三件套之一，与 release 附件同源同内容）。
+     * 二级容错数据源：release 附件漏传时（网页手动上传靠人脑记清单，v2.1.20 曾漏），
+     * 仓库文件因走 git 提交几乎不可能漏，用它兜住检查链路，避免落回被限流的 API。
+     */
+    private const val RAW_VERSION_JSON_URL =
+        "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/raw/main/$VERSION_JSON_NAME"
+
     /** 镜像站普遍校验/拒绝无 UA 或 okhttp UA 的请求，统一伪装浏览器 UA */
     private const val USER_AGENT =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -154,10 +162,10 @@ object ApkUpdater {
 
     suspend fun fetchLatestRelease(): ReleaseInfo {
         return withContext(Dispatchers.IO) {
-            // 首选走与 APK 下载同一套镜像链拉 version.json：不查 api.github.com（国内
-            // 间歇可达 + 匿名限流 60 次/小时/出口 IP，运营商 NAT 下容易 403），元数据与
-            // 安装包同源同链路。latest release 尚未携带 version.json（存量过渡期）或
-            // 全部镜像不可用时，落回 API 直连老路径。
+            // 三级容错链：release 附件 version.json → 仓库 main 的 version.json → API 直连。
+            // 前两级走与 APK 下载同一套镜像链，不查 api.github.com（国内间歇可达 + 匿名
+            // 限流 60 次/小时/出口 IP，运营商 NAT 下容易 403），元数据与安装包同源同链路。
+            // API 仅兜存量远古 release（两条 version.json 都没有）与镜像全灭的极端场景。
             fetchLatestViaVersionJson()?.let { return@withContext it }
             fetchLatestViaApi()
         }
@@ -167,7 +175,17 @@ object ApkUpdater {
     private class VersionJsonAbsentException(url: String) : IOException("version.json absent: $url")
 
     private suspend fun fetchLatestViaVersionJson(): ReleaseInfo? {
-        val candidates = downloadCandidates(VERSION_JSON_URL)
+        // 一级：latest release 附件。404=该 release 未携带，换镜像结果一致直接降级；
+        // 不再直接落 API——API 匿名限流国内常态 403，落它身上检查必挂。
+        fetchVersionJsonViaCandidates(VERSION_JSON_URL, "release")?.let { return it }
+        // 二级容错：仓库 main 的 version.json。覆盖「三件套已提交但网页漏传附件」
+        // 的事故窗口。注意 raw 文件可能略领先 release（提交后、发 Release 前的几分钟），
+        // 极端时提示有新版但 latest/download/<apk> 尚 404 下载失败——窗口极小，可接受。
+        return fetchVersionJsonViaCandidates(RAW_VERSION_JSON_URL, "repo raw")
+    }
+
+    private suspend fun fetchVersionJsonViaCandidates(url: String, sourceLabel: String): ReleaseInfo? {
+        val candidates = downloadCandidates(url)
         for (candidate in candidates) {
             currentCoroutineContext().ensureActive()
             try {
@@ -175,7 +193,7 @@ object ApkUpdater {
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 if (t is VersionJsonAbsentException) {
-                    AppLog.i(TAG, "release has no version.json yet, fallback to api")
+                    AppLog.i(TAG, "$sourceLabel has no version.json, give up this source")
                     return null
                 }
                 AppLog.w(TAG, "version.json fetch failed via ${candidate.take(48)}: ${t.message}")
