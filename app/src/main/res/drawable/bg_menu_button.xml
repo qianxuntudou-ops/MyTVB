@@ -13,7 +13,7 @@
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>
-    <!-- 当前画质高亮（state_selected，由 QualityAdapter 的 isSelected=true 触发） -->
+    <!-- 选中态高亮（state_selected，由使用方 setIsSelected(true) 触发） -->
     <item android:state_selected="true">
         <shape>
             <solid android:color="?attr/colorPrimary" />

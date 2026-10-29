@@ -17,17 +17,17 @@ import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
-import android.widget.ArrayAdapter
 
 import androidx.activity.OnBackPressedCallback
-import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.gson.Gson
 import com.mytvb.feature.marmot.quality.CctvQualityProvider
 import com.mytvb.feature.marmot.quality.LiveQualityProvider
 import com.mytvb.feature.marmot.quality.MarmotQualityProvider
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.ext.toast
+import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
+import com.mytvb.core.ui.base.ChoiceDialog
 import com.mytvb.databinding.ActivityMarmotLiveBinding
 import com.mytvb.feature.cctv.CctvLiveQuality
 import com.mytvb.feature.cctv.CctvLiveQualityHook
@@ -37,12 +37,10 @@ import com.mytvb.feature.marmot.MarmotLiveData
 import com.mytvb.feature.marmot.domain.HzItem
 import com.mytvb.feature.marmot.domain.MarmotModels.Live
 import com.mytvb.feature.marmot.domain.MarmotModels.Vod
-import com.mytvb.ui.adapter.QualityAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.mytvb.core.ui.base.AppToast
 
 /**
  * TV 直播主界面（对标参考 utao `LiveActivity.java`，基于系统 WebView）。
@@ -50,7 +48,7 @@ import com.mytvb.core.ui.base.AppToast
  * 核心能力：
  * 1. **播放**：系统 WebView 加载官网直播页（如 tv.cctv.com），[MarmotWebViewClient] 注入 tv.user.js 劫持播放。
  * 2. **频道列表**（确认键弹）：[showChannelMenu] 显示分组+频道，D-pad 左右切分组、上下选频道。
- * 3. **画质选择**（菜单键弹）：[showQualityMenu] 横向列表，数据来自页面 JS 上报的 videoQuality。
+ * 3. **画质选择**（播放UI画质按钮弹）：[showQualityMenu] ChoiceDialog 纵向列表（与 CCTV 影视同款），数据按源路由（见 [LiveQualityProvider]）。
  * 4. **切台**：上下左右键触发 [goNext]，调 [MarmotLiveData.liveNext] 四向环形切台，延迟 1s 加载防抖。
  *
  * 按键映射（按需求）：
@@ -120,8 +118,6 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     private var currentProvinceIndex = 0
     /** 频道列表是否显示。 */
     private var isChannelMenuShowing = false
-    /** 画质列表是否显示。 */
-    private var isQualityMenuShowing = false
     /** 页面上报的画质数据（JSON 字符串）。 */
     private var videoQualityData: String? = null
     /** 已自动应用最高画质的频道 URL（避免重复执行）。 */
@@ -202,7 +198,6 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         mainHandler.postDelayed(teenModeTicker, 15_000L)
         initWebView()
         setupChannelMenu()
-        setupQualityMenu()
         setupMenuDismiss()
         setupPlayerController()
     }
@@ -271,16 +266,14 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     }
 
     override fun initData() {
-        // 协程：云端更新 + 加载频道 + 播放首个频道
+        // 协程：加载频道 + 播放首个频道；云端更新在首播发起后转后台执行
         CoroutineScope(Dispatchers.Main).launch {
-            // 1. 云端更新 tv-web（静默失败，用内置种子兜底）
-            val updated = withContext(Dispatchers.IO) {
-                runCatching { MarmotCloudUpdate.checkAndUpdateRes(this@MarmotLiveActivity) }
-                    .onFailure { AppLog.e(TAG, "云端更新异常: ${it.javaClass.simpleName}: ${it.message}", it) }
-                    .getOrDefault(false)
-            }
-            AppLog.i(TAG, "initData: 云端更新结果=$updated")
-            // 2. 加载频道表
+            // 云端更新 tv-web 不在首播路径上串行等待：频道表有 assets 内置种子兜底，
+            // 而 MarmotCloudUpdate 的独立 client connectTimeout 有 30s——api.vonchange.com
+            // 慢/不可达时会把「点进直播到出画面」拖到半分钟。也不能与 load 并行：
+            // 解压 tv2.json 与 load 读取有竞态，半截文件会被 load 判损坏删除，
+            // 云端版本号却已记新，更新机制就此假死。故顺序固定为 load → playCurrent → 后台更新。
+            // 1. 加载频道表
             val loaded = withContext(Dispatchers.IO) { MarmotLiveData.load(this@MarmotLiveActivity) }
             AppLog.i(TAG, "initData: 频道表加载结果=$loaded")
             if (!loaded) {
@@ -331,6 +324,15 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
             }
             playCurrent()
             AppToast.show(this@MarmotLiveActivity, R.string.activity_remote_switch_channel_tip)
+            // 2. 首播已发起：后台更新 tv-web（版本变化下次进入生效，不打断当前播放）
+            launch {
+                val updated = withContext(Dispatchers.IO) {
+                    runCatching { MarmotCloudUpdate.checkAndUpdateRes(this@MarmotLiveActivity) }
+                        .onFailure { AppLog.e(TAG, "云端更新异常: ${it.javaClass.simpleName}: ${it.message}", it) }
+                        .getOrDefault(false)
+                }
+                AppLog.i(TAG, "initData: 云端更新结果=$updated（后台，下次进入生效）")
+            }
         }
     }
 
@@ -651,21 +653,18 @@ $scriptTags
         binding.menuContainer.visibility = View.GONE
     }
 
-    // ==================== 画质选择浮层（菜单键弹出）====================
-
-    private fun setupQualityMenu() {
-        binding.qualityList.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        binding.qualityContainer.setOnClickListener { hideQualityMenu() }
-    }
+    // ==================== 画质选择弹窗（与 CCTV 影视同款 ChoiceDialog） ====================
 
     /**
-     * 显示画质选择浮层。
+     * 显示画质选择弹窗。
      *
      * 按当前频道 url 路由到对应的 [LiveQualityProvider]（方案 C：逐播放源维护画质）：
      * - CCTV（tv.cctv.com/live/）→ [CctvQualityProvider]（写死 4 档，createLivePlayer br 重建）
      * - 其它源 → 沿用 Marmot 方式（页面上报的 videoQualityData + hzChoose 脚本）
      *
-     * 菜单 UI（横向列表 + 当前项高亮 + 焦点定位）对所有源统一，只有「可用画质/当前项/切换动作」三件事按源不同。
+     * 弹窗 UI（ChoiceDialog 纵向列表 + 当前项「当前」标记 + 焦点定位）对所有源统一，
+     * 只有「可用画质/当前项/切换动作」三件事按源不同。弹窗是独立 Dialog 窗口，
+     * 按键/触摸由弹窗自己消费，不走本页 dispatchKeyEvent/dispatchTouchEvent。
      */
     private fun showQualityMenu() {
         val provider = resolveQualityProvider()
@@ -675,32 +674,18 @@ $scriptTags
             AppToast.show(this, R.string.activity_no_quality_options)
             return
         }
-        val currentIdx = provider.currentQualityIndex(items)
-        isQualityMenuShowing = true
-        binding.qualityContainer.visibility = View.VISIBLE
-        binding.qualityList.adapter = QualityAdapter(items) { item ->
+        ChoiceDialog.show(
+            context = this,
+            title = getString(R.string.cctv_quality),
+            options = items.map { it.name.orEmpty().ifBlank { "-" } },
+            selectedIndex = provider.currentQualityIndex(items)
+        ) { index ->
+            val item = items.getOrNull(index) ?: return@show
             val switched = provider.switchTo(item) { AppLog.i(TAG, "画质切换：${item.name}") }
             if (!switched) {
                 AppLog.w(TAG, "画质切换：${item.name} 无效或与当前相同")
             }
-            hideQualityMenu()
         }
-        // 焦点稳定定位到当前画质项：setAdapter 后 itemView 尚未布局，单次 post 可能落空，
-        // 用 OnGlobalLayoutListener 等布局真正完成后再 scrollToPosition + requestFocus。
-        binding.qualityList.requestFocus()
-        binding.qualityList.viewTreeObserver.addOnGlobalLayoutListener(
-            object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
-                override fun onGlobalLayout() {
-                    binding.qualityList.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                    if (!isQualityMenuShowing) return // 菜单已关闭，不抢焦点
-                    binding.qualityList.scrollToPosition(currentIdx)
-                    binding.qualityList.post {
-                        binding.qualityList.layoutManager?.findViewByPosition(currentIdx)?.requestFocus()
-                            ?: binding.qualityList.requestFocus()
-                    }
-                }
-            }
-        )
     }
 
     /**
@@ -716,11 +701,6 @@ $scriptTags
         return MarmotQualityProvider({ videoQualityData }) { action ->
             webEngine?.evaluateJavascript(action)
         }
-    }
-
-    private fun hideQualityMenu() {
-        isQualityMenuShowing = false
-        binding.qualityContainer.visibility = View.GONE
     }
 
     /**
@@ -745,11 +725,10 @@ $scriptTags
         }
     }
 
-    /** 点击空白处关闭浮层。 */
+    /** 点击空白处关闭浮层（画质弹窗已是独立 Dialog 窗口，点击由弹窗自消费）。 */
     private fun setupMenuDismiss() {
         binding.marmotRoot.setOnClickListener {
             if (isChannelMenuShowing) hideChannelMenu()
-            if (isQualityMenuShowing) hideQualityMenu()
         }
     }
 
@@ -896,7 +875,7 @@ $scriptTags
      * 浮层显示时触摸交给浮层；落在播放UI按钮上时正常分发（按钮可点）。
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (!isChannelMenuShowing && !isQualityMenuShowing && ev.action == MotionEvent.ACTION_DOWN) {
+        if (!isChannelMenuShowing && ev.action == MotionEvent.ACTION_DOWN) {
             if (isTouchInPlayerUi(ev)) {
                 AppLog.i(TAG, "touch: 命中播放UI按钮区域")
                 return super.dispatchTouchEvent(ev)
@@ -916,10 +895,9 @@ $scriptTags
      * OnBackInvoked 两条路各来一次，DOWN 处再处理会与 UP 形成「伪双击」秒退。
      */
     private fun handleBackKey() {
-        AppLog.i(TAG, "handleBackKey ch=$isChannelMenuShowing q=$isQualityMenuShowing ui=$isControllerShowing")
+        AppLog.i(TAG, "handleBackKey ch=$isChannelMenuShowing ui=$isControllerShowing")
         when {
             isChannelMenuShowing -> hideChannelMenu()
-            isQualityMenuShowing -> hideQualityMenu()
             isControllerShowing -> hideController()
             else -> {
                 if (System.currentTimeMillis() - exitTime <= exitInterval) {
@@ -950,30 +928,6 @@ $scriptTags
         if (isChannelMenuShowing) {
             when (keyCode) {
                 KeyEvent.KEYCODE_MENU -> { hideChannelMenu(); return true }
-            }
-            return super.dispatchKeyEvent(event)
-        }
-        if (isQualityMenuShowing) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_MENU -> {
-                    AppLog.i(TAG, "画质菜单关闭: keyCode=$keyCode")
-                    hideQualityMenu(); return true
-                }
-                // 确认键：若焦点在画质项上则触发其点击（执行切换）再关闭；
-                // 否则仅关闭。不能把确认键一并拦截——否则 TV 上选画质永远不触发切换。
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                    val focused = currentFocus
-                    val inList = focused != null &&
-                        generateSequence(focused.parent) { it.parent }.contains(binding.qualityList)
-                    if (inList) {
-                        AppLog.i(TAG, "画质确认：点击项 ${(focused as? android.widget.TextView)?.text}")
-                        focused?.performClick()
-                    } else {
-                        AppLog.w(TAG, "画质确认：未命中画质项，焦点=$focused，仅关闭")
-                    }
-                    hideQualityMenu()
-                    return true
-                }
             }
             return super.dispatchKeyEvent(event)
         }

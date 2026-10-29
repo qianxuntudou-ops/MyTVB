@@ -24,7 +24,9 @@ class CctvQualityProvider(
         private set
 
     override fun availableQualities(): List<HzItem> =
-        CctvLiveQuality.entries.map { HzItem(name = it.label, level = it.level) }
+        CctvLiveQuality.entries.map {
+            HzItem(name = it.label, level = it.level, isCurrent = it == current)
+        }
 
     override fun currentQualityIndex(items: List<HzItem>): Int =
         items.indexOfFirst { it.name == current.label }.coerceAtLeast(0)

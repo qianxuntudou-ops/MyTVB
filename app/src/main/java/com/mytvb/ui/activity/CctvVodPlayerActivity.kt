@@ -1191,17 +1191,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             "login190120home.js",
             "login_new.js",
             "mylogin.js",
-            // 2026-10-29 扩充（vset 详情页实抓脚本清单；播放相关只保留
-            // jquery/swfobject/vodplayer/ptjszx_player/cctvnew.videcreat/cctvnew_video_h5）
+            // 2026-10-29 扩充（vset 详情页实抓脚本清单）。注意不可拦的三个库：
+            // swiper4/echo 被 cctvnew_video_h5.js（播放器创建脚本）直接调用，
+            // jiezi.js 的 wrapText 在 window.onload 被调用——拦任何一个都会让
+            // 播放器创建流程抛 ReferenceError 中断（MuMu 实测 videoCount=0）。
             "2019bar/",         // www.cctv.com/newcctv/2019bar/ 系列（顶栏/侧栏/提示条）
             "2019whitetop",     // 顶部白条导航
             "pc_nav",           // tv.cctv.com/common/pc_nav PC 版导航
-            "echo.min.js",      // 图片懒加载
-            "swiper4.min.js",   // 轮播组件
             "nativeShareXY.js", // 分享
             "jweixin",          // 微信 JSSDK
             "dingtalk.js",      // 钉钉 SDK
-            "jiezi.js",         // 文本截断工具
             "diceng_"           // 底层评论/图文模块
         )
 
