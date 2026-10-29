@@ -527,12 +527,17 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     /** 画质菜单：项的顺序与官方控制条里的列表一致（超清/高清/标清/流畅）。 */
     private fun showQualityDialog() {
         showController()
+        // 弹窗是独立窗口，按键不经过本页 dispatchKeyEvent，自动隐藏计时不会被重置；
+        // 5 秒到点会把弹窗底下的控制条藏掉并把焦点收回播放区，弹窗关闭后体验割裂。
+        // 弹窗期间暂停计时，关闭后重新计时。
+        handler.removeCallbacks(hideControllerRunnable)
         val options = QUALITY_LABELS
         ChoiceDialog.show(
             context = this,
             title = getString(R.string.cctv_quality),
             options = options,
-            selectedIndex = currentQualityIndex
+            selectedIndex = currentQualityIndex,
+            onDismiss = { scheduleControllerHide() }
         ) { index ->
             val label = options.getOrNull(index) ?: return@show
             currentQualityIndex = index
@@ -568,12 +573,27 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         val options = episodes.map { episode ->
             episode.title.ifBlank { getString(R.string.cctv_vod_episode_title_format, episode.index) }
         }
-        val selected = episodes.indexOfFirst { it.pageUrl == pageUrl }.coerceAtLeast(0)
+        // "当前"优先按内部集号推导（switchEpisode/连播误判都同步维护它），
+        // 页面 URL 匹配只作兜底；两者对不上说明内部状态已漂移，打日志便于定位
+        // "实际播的是某集、弹窗却把当前标在另一集"这类问题。
+        val byIndex = episodes.indexOfFirst { it.index == currentEpisodeIndex }
+        val byUrl = episodes.indexOfFirst { it.pageUrl == pageUrl }
+        if (byIndex != byUrl) {
+            AppLog.w(TAG, "epPickerDrift byIndex=$byIndex byUrl=$byUrl index=$currentEpisodeIndex page=$pageUrl")
+        }
+        val selected = when {
+            byIndex >= 0 -> byIndex
+            byUrl >= 0 -> byUrl
+            else -> 0
+        }
+        // 弹窗期间暂停控制条自动隐藏（见 showQualityDialog 内注释）
+        handler.removeCallbacks(hideControllerRunnable)
         ChoiceDialog.show(
             context = this,
             title = getString(R.string.choose_episode),
             options = options,
-            selectedIndex = selected
+            selectedIndex = selected,
+            onDismiss = { scheduleControllerHide() }
         ) { index ->
             val episode = episodes.getOrNull(index) ?: return@show
             if (episode.pageUrl == pageUrl) return@show
@@ -643,7 +663,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private inner class Bridge {
         @JavascriptInterface
         fun onVideoState(state: String) {
+            // 会话隔离：切集（switchEpisode）后旧页面的残留回调（ended、临尾位置等）
+            // 可能晚于状态重置到达，不丢弃的话会被当成新集状态，触发错误的连播/
+            // 连播误判，表现为"手动选了某集却被推到别的集"。回调归属按捕获时的
+            // 会话号判定：捕获后发生过切集 ⇒ 这是旧页面的状态，整体丢弃。
+            val session = playbackSession
             handler.post {
+                if (session != playbackSession) {
+                    AppLog.i(TAG, "dropStaleState session=$session now=$playbackSession")
+                    return@post
+                }
                 val ready = Regex("\"readyState\":(\\d+)").find(state)
                     ?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
                 val paused = state.contains("\"paused\":true")
@@ -882,26 +911,19 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 }
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                when {
-                    // 进度条上左右用于移动焦点；快进/快退只在播放区生效，
-                    // 否则焦点一落到进度条上，左右就永远在调进度、再也走不出来。
-                    isSeekBarFocused() -> focusView(binding.buttonPlay, "seek-left")
-                    buttonFocused -> moveButtonFocus(-1)
-                    else -> {
-                        showController()
-                        seekBy(-SEEK_STEP_MS)
-                    }
+                // 进度条上左右同为快进快退（对齐主播放器"进度条聚焦时左右=seek"的行为，
+                // 长按按 repeat 连续快进）；离开进度条走上下层级导航（上→返回 / 下→播放），
+                // 不存在"左右永远在调进度走不出来"的问题。
+                if (buttonFocused) moveButtonFocus(-1) else {
+                    showController()
+                    seekBy(-SEEK_STEP_MS)
                 }
                 true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                when {
-                    isSeekBarFocused() -> focusView(binding.buttonQuality, "seek-right")
-                    buttonFocused -> moveButtonFocus(1)
-                    else -> {
-                        showController()
-                        seekBy(SEEK_STEP_MS)
-                    }
+                if (buttonFocused) moveButtonFocus(1) else {
+                    showController()
+                    seekBy(SEEK_STEP_MS)
                 }
                 true
             }

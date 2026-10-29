@@ -34,11 +34,25 @@ class SettingSelectionDialogAdapter(
 
     override fun getItemCount(): Int = options.size
 
+    /**
+     * 初始聚焦逐帧重试：弹窗复显/页面加载中时，post 一帧后目标行可能尚未绑定
+     * （scrollToPosition 的布局 pass 未完成，findViewHolderForAdapterPosition 返回
+     * null），焦点就会悬空，表现为"行无高亮、按确定无反应"。没落上就再等一帧，
+     * 最多重试 20 帧（约 330ms，覆盖慢设备上弹窗首个布局+滚动完成）；仍未成功时
+     * 由 ChoiceDialog 的上下键自愈兜底把焦点拉回列表。
+     */
     fun requestInitialFocus(recyclerView: RecyclerView?) {
         val targetPosition = selectedIndex.coerceIn(0, options.lastIndex.coerceAtLeast(0))
         recyclerView?.scrollToPosition(targetPosition)
-        recyclerView?.post {
-            recyclerView.findViewHolderForAdapterPosition(targetPosition)?.itemView?.requestFocus()
+        focusAfterLayout(recyclerView, targetPosition, attemptsLeft = 20)
+    }
+
+    private fun focusAfterLayout(recyclerView: RecyclerView?, position: Int, attemptsLeft: Int) {
+        if (recyclerView == null || attemptsLeft <= 0) return
+        recyclerView.post {
+            val target = recyclerView.findViewHolderForAdapterPosition(position)?.itemView
+            if (target != null && target.requestFocus()) return@post
+            focusAfterLayout(recyclerView, position, attemptsLeft - 1)
         }
     }
 
