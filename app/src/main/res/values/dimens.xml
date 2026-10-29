@@ -104,4 +104,12 @@
     <dimen name="px1100">1100dip</dimen>
     <dimen name="px1200">1200dip</dimen>
     <dimen name="px1400">1400dip</dimen>
+
+    <!-- media3 播放器内置错误提示浮层（exo_error_message，setCustomErrorMessage
+         的载体）默认 14sp/32dp 小字，是全项目唯一游离在 px 池外的 UI——电视远距离
+         勉强可读、手机近距离明显过小。覆盖为 px 池档位，走 UiScale 密度链自动适配 -->
+    <dimen name="exo_error_message_text_size">@dimen/px28</dimen>
+    <dimen name="exo_error_message_height">@dimen/px60</dimen>
+    <dimen name="exo_error_message_text_padding_horizontal">@dimen/px20</dimen>
+    <dimen name="exo_error_message_text_padding_vertical">@dimen/px8</dimen>
 </resources>
