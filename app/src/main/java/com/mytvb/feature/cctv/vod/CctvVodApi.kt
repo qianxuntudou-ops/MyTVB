@@ -47,16 +47,18 @@ class CctvVodApi(
     }
 
     /**
-     * 拉取某专辑的分集列表。同一接口在不同分类下用不同 mode，且同一接口会混入
-     * 看点/花絮条目，因此优先取带 part（正片集号）的条目，其次回退到全部条目。
+     * 拉取某专辑的分集列表。**恒以 mode=0（正片）优先，mode=1 只作空列表兜底**：
+     * 官方播放页的 cuqie 写死 mode=0 拉列表、按当前页 URL 里的视频 id 匹配后才创建
+     * 播放器；mode=1 返回的是碎片看点、id 体系与正片完全不同（同一集两个 vid），
+     * 拿 mode=1 的 URL 进播放页永远匹配不上 → video 元素不创建 → 25s 超时报
+     * 「播放地址获取失败」（issue#103，纪录片/动画片 category.episodeMode=1 误用所致）。
      */
-    fun fetchEpisodes(albumId: String, episodeMode: Int): List<CctvEpisode> {
+    fun fetchEpisodes(albumId: String, @Suppress("UNUSED_PARAMETER") episodeMode: Int): List<CctvEpisode> {
         if (albumId.isBlank()) return emptyList()
-        val primary = requestEpisodes(albumId, episodeMode)
+        val primary = requestEpisodes(albumId, 0)
         if (primary.isNotEmpty()) return primary
-        val fallbackMode = if (episodeMode == 0) 1 else 0
-        AppLog.w(TAG, "episodeModeFallback albumId=$albumId mode=$episodeMode -> $fallbackMode")
-        return requestEpisodes(albumId, fallbackMode)
+        AppLog.w(TAG, "episodeModeFallback albumId=$albumId mode=0 -> 1")
+        return requestEpisodes(albumId, 1)
     }
 
     /** guid → HLS 地址 + 清晰度档位。 */

@@ -862,10 +862,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private fun showLoading(show: Boolean) {
         binding.loading.visibility = if (show) View.VISIBLE else View.GONE
         binding.textLoading.visibility = if (show) View.VISIBLE else View.GONE
+        // 起播盖层随 loading 同步显隐：loading 结束时 video 已出画面、收敛样式
+        // 也已注入，收起后露出的是纯播放态而不是网页原文。
+        binding.webCover.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     private fun showError(message: String) {
-        showLoading(false)
+        // 出错时只收转圈与提示文字：盖层保持盖住网页原文（黑底上居中显示错误，
+        // 起播失败时露出的网页对用户只有干扰）
+        binding.loading.visibility = View.GONE
+        binding.textLoading.visibility = View.GONE
         binding.textError.text = message
         binding.textError.visibility = View.VISIBLE
         showController()
@@ -1201,7 +1207,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             "nativeShareXY.js", // 分享
             "jweixin",          // 微信 JSSDK
             "dingtalk.js",      // 钉钉 SDK
-            "diceng_"           // 底层评论/图文模块
+            // 底层图文评论模块（电视剧页）。**只能拦 tuwen，不能整个拦 "diceng_"**
+            // （issue#103）：纪录片/特别节目模板（jlp/tb）在窄视口（TV WebView 恒
+            // ≤1024）下，播放器创建源头 playerlist() 被安排在 cctvnew_video_h5.js
+            // 的 $.getScript(swiper4) 回调里，回调第一步 pinglun() 依赖 #pl_textarea
+            // 评论输入框——该元素由 phonejs（已拦）或 diceng_pinglun 动态创建、互为
+            // 兜底。v2.1.20 曾用 "diceng_" 把两个兜底全拦，回调在 pinglun() 抛
+            // TypeError 中断，playerlist() 永不执行 → video 元素不创建 → 25s 超时
+            // 报「播放地址获取失败」；电视剧模板的创建链在 index_data_dsj.js、不经
+            // 此回调，故不受影响（浏览器逐脚本删改复现+修复验证，pl:0→3）。
+            "diceng_tuwen"
         )
 
         /**

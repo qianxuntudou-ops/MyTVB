@@ -15,6 +15,15 @@
         android:layout_height="match_parent"
         android:background="@android:color/black" />
 
+    <!-- 起播黑盖层：收敛样式要等 onPageFinished 后才注入，此前 WebView 会渲染出
+         央视网页原文（白底 header/正文），盖住它让加载期只见转圈不见网页（issue#103）。 -->
+    <View
+        android:id="@+id/web_cover"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone" />
+
     <ProgressBar
         android:id="@+id/loading"
         android:layout_width="@dimen/px80"
