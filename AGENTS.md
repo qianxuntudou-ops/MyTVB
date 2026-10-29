@@ -41,7 +41,13 @@
    - 筛选重大变更，按模块分类归纳
    - 用简洁的用户可读语言（非 commit message 原文）撰写更新说明
    - 将新版本内容追加到 `CHANGELOG.md` 顶部
-3. **提交**：将 `build.gradle.kts` 和 `CHANGELOG.md` 一起提交，commit message 格式：`v{版本号}`
+3. **更新 `version.json`**（app 内更新检查的元数据，改仓库根目录的 `version.json`）：
+   ```json
+   { "version": "x.y.z", "apk": "MyTVB-vx.y.z-release.apk", "notes": "本版更新说明（可 \\n 换行）" }
+   ```
+   - `version` 不带 v 前缀，与 `versionName` 一致；`apk` 文件名必须与实际发版上传的 release APK 完全一致；`notes` 取本版 CHANGELOG 内容
+   - 发 GitHub Release 时，将 release APK 与这份 `version.json` **一并作为附件上传**（缺失 `version.json` 时 app 端会退回 api.github.com 查询，国内直连经常失败）
+4. **提交**：将 `build.gradle.kts`、`CHANGELOG.md` 和 `version.json` 一起提交，commit message 格式：`v{版本号}`
 
 ### CHANGELOG 格式规范
 

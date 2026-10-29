@@ -32,9 +32,18 @@ import kotlin.time.Duration.Companion.milliseconds
 object ApkUpdater {
 
     private const val GITHUB_OWNER = "qianxuntudou-ops"
-    private const val GITHUB_REPO = "MyBili"
+    private const val GITHUB_REPO = "MyTVB"
     private const val RELEASE_API_URL =
         "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
+
+    /** release 附带的版本元数据文件名，与 APK 一起上传；内容见 AGENTS.md 版本升级流程 */
+    private const val VERSION_JSON_NAME = "version.json"
+    private const val VERSION_JSON_URL =
+        "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/$VERSION_JSON_NAME"
+
+    /** 镜像站普遍校验/拒绝无 UA 或 okhttp UA 的请求，统一伪装浏览器 UA */
+    private const val USER_AGENT =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
     private const val COOLDOWN_MS = 5_000L
     private const val TAG = "ApkUpdater"
@@ -42,12 +51,16 @@ object ApkUpdater {
 
     /**
      * GitHub release 资产下载镜像（国内加速；前缀拼接到原始直链前，如
-     * https://ghfast.top/https://github.com/.../xxx.apk）。镜像列表与顺序参考
-     * 同类 TV 客户端 BT（chinasoul/BT）的实测组合；GitHub 直连永远作为最后兜底。
+     * https://ghfast.top/https://github.com/.../xxx.apk）。GitHub 直连永远作为最后兜底。
+     * 2026-10-29 真实 APK 直连实测三轮：ghfast(~2MB/s 稳)、gh.ddlc.top(~2.7MB/s)为
+     * 第一梯队；ghproxy.net 慢(~300KB/s)但通；boki 抖动剧烈(2.4MB/s↔15KB/s)垫底。
+     * gh-proxy.com 持续 403、akams/dgithub/ygxz/99988866/gitmirror 等直连全灭，均不收。
+     * 镜像属公益服务，快慢随时间漂移，列表需定期复核（地址发布站：ghproxy.link）。
      */
     private val DOWNLOAD_MIRRORS = listOf(
         "https://ghfast.top/",
-        "https://gh-proxy.com/",
+        "https://gh.ddlc.top/",
+        "https://ghproxy.net/",
         "https://github.boki.moe/",
     )
 
@@ -71,6 +84,15 @@ object ApkUpdater {
             .connectTimeout(12, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** 版本元数据（version.json）专用：小文件，紧超时让失败的镜像快速让位换源 */
+    private val metaOkHttpLazy: Lazy<OkHttpClient> = lazy {
+        OkHttpClient.Builder()
+            .dns(IPv4OnlyDns)
+            .connectTimeout(6, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
             .build()
     }
 
@@ -132,30 +154,90 @@ object ApkUpdater {
 
     suspend fun fetchLatestRelease(): ReleaseInfo {
         return withContext(Dispatchers.IO) {
-            var lastError: Throwable? = null
-            val maxAttempts = 3
-            for (attempt in 1..maxAttempts) {
-                ensureActive()
-                try {
-                    return@withContext fetchLatestReleaseOnce()
-                } catch (t: Throwable) {
-                    if (t is CancellationException) throw t
-                    lastError = t
-                    val shouldRetry =
-                        attempt < maxAttempts &&
-                            (t is IOException || t.message?.startsWith("HTTP ") == true)
-                    if (!shouldRetry) throw t
-                    delay((400L * attempt).milliseconds)
-                }
-            }
-            throw lastError ?: IllegalStateException("fetch latest release failed")
+            // 首选走与 APK 下载同一套镜像链拉 version.json：不查 api.github.com（国内
+            // 间歇可达 + 匿名限流 60 次/小时/出口 IP，运营商 NAT 下容易 403），元数据与
+            // 安装包同源同链路。latest release 尚未携带 version.json（存量过渡期）或
+            // 全部镜像不可用时，落回 API 直连老路径。
+            fetchLatestViaVersionJson()?.let { return@withContext it }
+            fetchLatestViaApi()
         }
     }
 
-    private fun fetchLatestReleaseOnce(): ReleaseInfo {
+    /** latest release 不携带 version.json（404 透传）时无需再试其他镜像——同一 origin 结果一致 */
+    private class VersionJsonAbsentException(url: String) : IOException("version.json absent: $url")
+
+    private suspend fun fetchLatestViaVersionJson(): ReleaseInfo? {
+        val candidates = downloadCandidates(VERSION_JSON_URL)
+        for (candidate in candidates) {
+            currentCoroutineContext().ensureActive()
+            try {
+                return parseVersionJson(fetchText(candidate))
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                if (t is VersionJsonAbsentException) {
+                    AppLog.i(TAG, "release has no version.json yet, fallback to api")
+                    return null
+                }
+                AppLog.w(TAG, "version.json fetch failed via ${candidate.take(48)}: ${t.message}")
+            }
+        }
+        return null
+    }
+
+    private fun fetchText(url: String): String {
+        val req = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
+        metaOkHttpLazy.value.newCall(req).execute().use { r ->
+            if (r.code == 404) throw VersionJsonAbsentException(url)
+            check(r.isSuccessful) { "HTTP ${r.code} ${r.message}" }
+            return r.body?.string() ?: error("empty body")
+        }
+    }
+
+    private fun parseVersionJson(raw: String): ReleaseInfo {
+        val json = JSONObject(raw)
+        val versionName = json.optString("version", "").trim().removePrefix("v")
+        check(versionName.isNotBlank()) { "version.json version 为空" }
+        check(parseVersion(versionName) != null) { "版本号格式不正确：$versionName" }
+        val apkName = json.optString("apk", "").trim()
+        check(apkName.isNotBlank()) { "version.json apk 为空" }
+        // latest/download/<资产名>：version.json 与 APK 同属 latest release，无需感知 tag 名
+        val apkUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/$apkName"
+        return ReleaseInfo(
+            versionName = versionName,
+            apkUrl = apkUrl,
+            releaseNotes = json.optString("notes", "").trim(),
+        )
+    }
+
+    private suspend fun fetchLatestViaApi(): ReleaseInfo {
+        var lastError: Throwable? = null
+        val maxAttempts = 3
+        for (attempt in 1..maxAttempts) {
+            currentCoroutineContext().ensureActive()
+            try {
+                return fetchLatestViaApiOnce()
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                lastError = t
+                val shouldRetry =
+                    attempt < maxAttempts &&
+                        (t is IOException || t.message?.startsWith("HTTP ") == true)
+                if (!shouldRetry) throw t
+                delay((400L * attempt).milliseconds)
+            }
+        }
+        throw lastError ?: IllegalStateException("fetch latest release failed")
+    }
+
+    private fun fetchLatestViaApiOnce(): ReleaseInfo {
         val req = Request.Builder()
             .url(RELEASE_API_URL)
             .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", USER_AGENT)
             .get()
             .build()
         val call = okHttp.newCall(req)
@@ -287,7 +369,11 @@ object ApkUpdater {
         runCatching { part.delete() }
         runCatching { target.delete() }
 
-        val req = Request.Builder().url(url).get().build()
+        val req = Request.Builder()
+            .url(url)
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
         val call = okHttp.newCall(req)
         val res = call.execute()
         res.use { r ->
