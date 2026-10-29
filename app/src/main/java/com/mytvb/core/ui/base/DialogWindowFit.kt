@@ -2,12 +2,16 @@ package com.mytvb.core.ui.base
 
 import android.app.Dialog
 import android.content.Context
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.widget.FrameLayout
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.ui.widget.NonFocusableScrollView
 
@@ -24,8 +28,53 @@ object DialogWindowFit {
     private const val TAG = "DialogWindowFit"
     private const val MAX_SCREEN_RATIO = 0.92f
 
+    /**
+     * 弹窗链密度守卫：弹窗显示期间 Activity 失焦，[android.app.Activity]
+     * 的 onWindowFocusChanged 补钉不跑；而 fill 弹窗本身引发的系统栏显隐/
+     * 窗口 frame 变化会让系统用真实显示指标重置 DisplayMetrics——重置窗口
+     * 内取的 pxN（卡片宽高、字号、间距）全部按系统原始 density 放大数倍
+     * （2848x1312 手机实测下载弹窗被钳到 92% 屏宽，正常应为 37%）。
+     * 在 apply/overlay 入口把 context 的 density 补钉回设计值（幂等、廉价），
+     * 保证窗口尺寸与卡片钳制正确；调用方须在构造 content 取 px 值之前自行
+     * 调 [UiScale.ensureApplied]（如 UpdateFlowDialog 两个入口），内容字号
+     * 才能同步回正。电视上 density 恒正确，此调用零副作用。
+     */
+    private fun ensureDesignDensity(context: Context) {
+        UiScale.ensureApplied(context.resources)
+    }
+
+    /**
+     * 弹窗窗口跟随 Activity 隐藏系统栏。弹窗是独立焦点窗口，不继承 Activity 的
+     * 沉浸状态：手机上 fill 弹窗一弹出，状态栏/导航栏就被系统按新焦点窗口的
+     * 默认 insets 重新拉出来（表现为"弹窗一开手机 UI 就下来，关了才消失"）；
+     * 电视无系统栏，此调用无副作用。BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+     * 让边缘滑出的系统栏半透明临时显示、几秒后自动收回，与 BaseActivity 同款。
+     */
+    private fun followHostImmersive(w: Window) {
+        if (!followHostFullscreen) return
+        val decor = w.decorView ?: return
+        WindowCompat.getInsetsController(w, decor).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+        // 挖孔/刘海屏：遮罩铺进 cutout 区，否则隐藏状态栏后屏幕顶部仍留一条未暗化区域
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            w.attributes = w.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
+
     /** 自绘遮罩色：60% 黑，等效系统默认 dimAmount(0.6)。 */
     private const val DIM_BACKGROUND = 0x99000000.toInt()
+
+    /**
+     * 宿主全屏开关镜像（默认开=沉浸），由 BaseActivity.applyFullscreenMode
+     * 随设置项同步。用户显式关掉全屏时弹窗跟随显示系统栏，不强行 hide。
+     */
+    @Volatile
+    var followHostFullscreen: Boolean = true
 
     /**
      * 诊断：弹窗显示后按"首帧 / +0.8s / +2.5s"三次记录当时的 density、实测宽高与窗口
@@ -83,6 +132,7 @@ object DialogWindowFit {
         designHeightPx: Int = 0
     ) {
         val w = window ?: return
+        ensureDesignDensity(context)
         val dm = context.resources.displayMetrics
         val width = minOf(designWidthPx, (dm.widthPixels * MAX_SCREEN_RATIO).toInt())
         val height = if (designHeightPx <= 0) {
@@ -91,6 +141,7 @@ object DialogWindowFit {
             minOf(designHeightPx, (dm.heightPixels * MAX_SCREEN_RATIO).toInt())
         }
         w.setLayout(width, height)
+        followHostImmersive(w)
         // 兜底：从播放页返回等系统 insets/config 未稳的场景弹窗，首帧绘制会被吞——
         // 表现为只有变暗遮罩、整个弹窗内容不渲染，任意按键触发重绘后立即恢复。
         // （4K 模拟器 + v2.1.2 实测必现；window/view 布局均正常，仅 Surface 首帧未提交。）
@@ -137,6 +188,7 @@ object DialogWindowFit {
         tag: String = "overlay"
     ): View {
         val context = dialog.context
+        ensureDesignDensity(context)
         val dm = context.resources.displayMetrics
         val width = minOf(widthPx, (dm.widthPixels * MAX_SCREEN_RATIO).toInt())
         val maxHeight = if (maxHeightPx > 0) {
@@ -169,6 +221,7 @@ object DialogWindowFit {
         // LAYOUT_IN_SCREEN 让窗口覆盖整个屏幕，遮罩才能真正铺满四边。
         w?.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
         w?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        w?.let { followHostImmersive(it) }
         if (cancelOnOutside) {
             // 只响应落在容器自身（卡片外暗区）的点击；卡片内的点击由内容消费。
             container.setOnClickListener { dialog.dismiss() }

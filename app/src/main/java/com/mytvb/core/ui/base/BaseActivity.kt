@@ -159,6 +159,8 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
     }
 
     private fun applyFullscreenMode() {
+        // 弹窗跟随宿主全屏开关：用户显式关全屏时，弹窗不强行 hide 系统栏
+        DialogWindowFit.followHostFullscreen = isFullscreenEnabled()
         if (isFullscreenEnabled()) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             enterImmersiveFullscreen()

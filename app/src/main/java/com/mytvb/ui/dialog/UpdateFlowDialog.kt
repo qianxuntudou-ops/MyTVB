@@ -16,6 +16,7 @@ import com.mytvb.core.common.update.ApkUpdater
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.DialogWindowFit
 import com.mytvb.core.ui.base.ScaledTextView
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.ui.widget.NonFocusableScrollView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +65,11 @@ object UpdateFlowDialog {
     ) {
         if (isBusy) return
         isConfirmShowing = true
+
+        // 弹窗密度守卫：上个弹窗（如确认弹窗→下载弹窗连续流程）引发的系统栏显隐
+        // 会在 Activity 失焦窗口内重置 DisplayMetrics，onWindowFocusChanged 补钉
+        // 不跑；此处必须在取 px 值之前补回，否则字号/间距按系统原始 density 放大
+        UiScale.ensureApplied(context.resources)
 
         val resources = context.resources
         val px40 = resources.getDimensionPixelSize(R.dimen.px40)
@@ -260,6 +266,10 @@ object UpdateFlowDialog {
             return
         }
         isDownloading = true
+
+        // 密度守卫须在取 px 值之前：确认弹窗 dismiss 后 Activity 尚未重获焦点，
+        // 期间系统重置的 DisplayMetrics 无人补钉，取值会按原始 density 放大数倍
+        UiScale.ensureApplied(context.resources)
 
         val resources = context.resources
         val px40 = resources.getDimensionPixelSize(R.dimen.px40)

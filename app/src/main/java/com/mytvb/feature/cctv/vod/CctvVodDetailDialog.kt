@@ -21,6 +21,7 @@ import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.DialogWindowFit
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.DialogCctvVodDetailBinding
 import kotlinx.coroutines.CoroutineScope
@@ -269,6 +270,10 @@ class CctvVodDetailDialog(
             parent: ViewGroup
         ): Triple<FrameLayout, AppCompatTextView, AppCompatTextView> {
             val context = parent.context
+            // 密度守卫：格子尺寸在弹窗 show 之后的选集数据回调里才创建，若期间
+            // 发生系统密度重置（弹窗引发的系统栏/窗口变化），这里取的 px80 格高、
+            // px30 字号会按系统原始密度放大数倍（实测 2848x1312 手机格子高 3 倍）
+            UiScale.ensureApplied(context.resources)
             val margin = context.resources.getDimensionPixelSize(R.dimen.px5)
             val episodeText = AppCompatTextView(context).apply {
                 gravity = Gravity.CENTER
