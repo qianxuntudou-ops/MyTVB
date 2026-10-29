@@ -298,6 +298,13 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.9.3")
     implementation("androidx.media3:media3-exoplayer-hls:1.9.3")
 
+    // FFmpeg 音频软解扩展（Jellyfin 预编译，跟随 media3 1.9 系列）：
+    // EXTENSION_RENDERER_MODE_PREFER 下自动优先接管——多数手机无 AC-3/EAC3 系统解码器
+    // （杜比全景声静默跳轨无声），系统 FLAC 解码器 input buffer 32KB 上限解不了 Hi-Res
+    // 大帧（34KB+，skip 容错顿挫）；FFmpeg 的 eac3 解码器为 AC-3/E-AC-3 超集实现，
+    // flac 同在启用集，一并补齐。体积约 1.4MB/ABI。LGPL 动态链接，合规。
+    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
+
     // 腾讯 TBS X5 WebView 内核（TV 直播可选内核）。版本取自参考反编译 tbs APP（SDK_VERSION_CODE 44286 / 4.3.0.386）。
     implementation("com.tencent.tbs:tbssdk:44286")
 

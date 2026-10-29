@@ -476,17 +476,29 @@ object VideoCodecSupport {
     }
 
     /**
-     * 杜比全景声音轨（B 站 id=30250，AC-3 5.1）本机能否真正出声。
+     * 杜比全景声音轨（B 站 id=30250，EAC3 码流，API 泛标 ac-3）本机能否真正出声。
      *
-     * 多数手机不带 Dolby Digital 解码授权（MediaCodecList 无 audio/ac-3、audio/eac3
-     * 解码器），media3 对解不了的音频轨不报错、直接跳轨，表现为「视频正常但无声」
-     * （华为真机实测：切杜比全景声后 audio decoder init 一次都不出现）。音轨选择前
-     * 用它预检：UI 主动选择时拦截提示，初始偏好/重建选轨时回落到可用 AAC 档。
+     * 判定两路并联：系统 MediaCodecList 有 audio/ac-3 或 audio/eac3 解码器（电视常见，
+     * 走硬解）；或 media3 FFmpeg 扩展可用（org.jellyfin.media3:media3-ffmpeg-decoder，
+     * eac3 解码器为 AC-3/E-AC-3 超集实现）。两者皆无的设备 media3 对解不了的音频轨
+     * 不报错、直接跳轨，表现为「视频正常但无声」（华为真机实测：切杜比全景声后
+     * audio decoder init 一次都不出现）。音轨选择前用它预检：UI 主动选择时拦截提示，
+     * 初始偏好/重建选轨时回落到可用 AAC 档。
      */
     fun isDolbyAtmosTrackPlayable(): Boolean {
         cachedDolbyAtmosPlayable?.let { return it }
-        val result = hasDecoder("audio/ac-3") || hasDecoder("audio/eac3")
-        AppLog.i(TAG, "dolby atmos decoder probe: playable=$result")
+        val systemDecoder = hasDecoder("audio/ac-3") || hasDecoder("audio/eac3")
+        val ffmpegDecoder = runCatching {
+            androidx.media3.decoder.ffmpeg.FfmpegLibrary.supportsFormat(
+                androidx.media3.common.MimeTypes.AUDIO_E_AC3
+            )
+        }.getOrDefault(false)
+        val result = systemDecoder || ffmpegDecoder
+        AppLog.i(
+            TAG,
+            "dolby atmos decoder probe: playable=$result " +
+                "system=$systemDecoder ffmpeg=$ffmpegDecoder"
+        )
         cachedDolbyAtmosPlayable = result
         return result
     }

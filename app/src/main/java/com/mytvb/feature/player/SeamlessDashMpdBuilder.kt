@@ -82,13 +82,28 @@ internal object SeamlessDashMpdBuilder {
                 .append("\">\n")
             appendRepresentation(
                 mimeType = audio.mimeType.ifBlank { "audio/mp4" },
-                representation = audio,
+                representation = withDolbyAtmosCodecsCorrected(audio),
                 representationId = "audio_${audio.id}"
             )
             append("    </AdaptationSet>\n")
             append("  </Period>\n")
             append("</MPD>\n")
         }
+    }
+
+    /**
+     * 杜比全景声音轨 codecs 纠偏：B 站 API 对 30250 档泛标 "ac-3"，但实测码率 1.67Mbps
+     * 远超 AC-3 规范上限（5.1 最大 640kbps），码流实为 EAC3（官方 app 亦按 EAC3 解，
+     * ijkplayer eac3-type 配置实证）。
+     *
+     * 纠正为 "ec-3" 后 media3 解析为 audio/eac3：有 EAC3 硬解的电视走系统解码器更精准；
+     * 无系统解码器的手机由 FFmpeg 扩展的 eac3 解码器（AC-3/E-AC-3 超集实现，纯 AC-3
+     * 码流同样能解）软解出声，杜比全景声不再静默跳轨。非 ac-3 的音轨不动。
+     */
+    private fun withDolbyAtmosCodecsCorrected(audio: DashRepresentation): DashRepresentation {
+        if (audio.codecs.lowercase() != "ac-3") return audio
+        AppLog.i(TAG, "dolby atmos mpd codecs rewrite: audio=${audio.id} \"ac-3\" -> \"ec-3\"")
+        return audio.copy(codecs = "ec-3")
     }
 
     /**
