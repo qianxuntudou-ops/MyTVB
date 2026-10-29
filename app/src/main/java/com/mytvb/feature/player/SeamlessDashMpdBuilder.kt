@@ -1,6 +1,9 @@
 package com.mytvb.feature.player
 
+import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.model.video.quality.VideoCodecEnum
+import com.mytvb.model.video.quality.VideoQuality
 
 /** 无缝目录里的一个可选视频轨：某个 (qn, codec) 组合对应的 DASH 流。 */
 internal data class SeamlessVideoOption(
@@ -35,6 +38,8 @@ internal data class SeamlessQualityCatalog(
  */
 internal object SeamlessDashMpdBuilder {
 
+    private const val TAG = "SeamlessQuality"
+
     fun videoRepresentationId(qn: Int, codecid: Int, index: Int): String =
         "video_qn_${qn}_codec_${codecid}_index_$index"
 
@@ -65,7 +70,7 @@ internal object SeamlessDashMpdBuilder {
                 options.forEachIndexed { index, option ->
                     appendRepresentation(
                         mimeType = option.representation.mimeType.ifBlank { "video/mp4" },
-                        representation = option.representation,
+                        representation = withDolbyVisionCodecsRewritten(option),
                         representationId = videoRepresentationId(option.qn, option.codec.id, index)
                     )
                 }
@@ -84,6 +89,29 @@ internal object SeamlessDashMpdBuilder {
             append("  </Period>\n")
             append("</MPD>\n")
         }
+    }
+
+    /**
+     * 杜比视界档（qn=126）且设备具备 DV 解码器时，把服务端下发的 HEVC 形态 codecs
+     * （实测 hvc1.2.4.H150.90，不带 dvhe 前缀）改写为 [VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS]。
+     *
+     * B 站 126 档的真实内容是 DV Profile 5，但装在 hvc1 标记的普通 HEVC 容器里，
+     * 不改写时 media3 全链路按 video/hevc 配给解码器，电视 DV 管线收不到 DV 标记
+     * 永远不点亮（海信 MT9952 实测）。改写后 media3 按 video/dolby-vision 选解码器
+     * （配合 VideoCodecSupport 选择器里的 dvhe 组件前插），流内容不变。
+     * 无 DV 解码器的设备保持原样——按普通 HEVC 播放，行为与现状完全一致。
+     */
+    private fun withDolbyVisionCodecsRewritten(option: SeamlessVideoOption): DashRepresentation {
+        if (option.qn != VideoQuality.QUALITY_DOLBY_VISION.id) return option.representation
+        if (!VideoCodecSupport.isDolbyVisionSupported()) return option.representation
+        val original = option.representation.codecs
+        if (original.startsWith("dvhe") || original.startsWith("dvh1")) return option.representation
+        AppLog.i(
+            TAG,
+            "dolby vision mpd codecs rewrite: qn=${option.qn} " +
+                "\"$original\" -> \"${VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS}\""
+        )
+        return option.representation.copy(codecs = VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS)
     }
 
     private fun StringBuilder.appendRepresentation(

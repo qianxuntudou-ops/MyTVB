@@ -236,8 +236,86 @@ object VideoCodecSupport {
             } else {
                 MediaCodecSelector.DEFAULT
             }
-            selector.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+            val decoders = selector.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+            if (mimeType.equals(MimeTypes.VIDEO_DOLBY_VISION, ignoreCase = true) && !isSoftwareDecoderPreferred()) {
+                prependHevcDolbyVisionDecoders(decoders)
+            } else {
+                decoders
+            }
         }
+
+    /**
+     * 给杜比视界解码器候选表前插「HEVC 容器 DV」组件（名字含 dvhe/dvh1 的硬解）。
+     *
+     * 背景（海信 MT9952 实测）：MTK 的 c2.mtk.dvhe.* 组件在 MediaCodecList 里不注册
+     * video/dolby-vision 类型，media3 默认选择器永远查不到它们；而注册了该类型的
+     * dvav 系组件（AVC/AV1 容器 DV）解不了 HEVC-DV 码流。B 站 126 档恰是 HEVC 容器
+     * DV 流，这里按组件名定向补位并排到最前，让渲染器优先落到真正的 dvhe 组件上；
+     * 后续 dvhe 组件初始化失败时仍有 decoderFallback 逐个回退（dvav → 报错走
+     * PlaybackFallbackController 换编码），不会卡死。
+     *
+     * 软解偏好时不前插：用户显式选软解的意图优先（DV 无软解，交给回退链处理）。
+     */
+    @OptIn(UnstableApi::class)
+    private fun prependHevcDolbyVisionDecoders(decoders: List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo>):
+        List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> {
+        val existing = decoders.toMutableList()
+        val injected = ArrayList<androidx.media3.exoplayer.mediacodec.MediaCodecInfo>()
+        runCatching {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .asSequence()
+                .filter { androidInfo -> !androidInfo.isEncoder }
+                .filter(::isHardwareDecoder)
+                .filter { androidInfo ->
+                    val name = androidInfo.name.lowercase()
+                    name.contains("dvhe") || name.contains("dvh1")
+                }
+                .forEach { androidInfo ->
+                    if (existing.any { it.name == androidInfo.name }) return@forEach
+                    val codecMimeType = androidInfo.supportedTypes.firstOrNull() ?: return@forEach
+                    val capabilities = runCatching {
+                        androidInfo.getCapabilitiesForType(codecMimeType)
+                    }.getOrNull()
+                    val vendor = androidInfo.name.lowercase().let {
+                        it.startsWith("omx.") || it.startsWith("c2.")
+                    }
+                    injected.add(
+                        androidx.media3.exoplayer.mediacodec.MediaCodecInfo.newInstance(
+                            androidInfo.name,
+                            MimeTypes.VIDEO_DOLBY_VISION,
+                            codecMimeType,
+                            capabilities,
+                            /* hardwareAccelerated = */ true,
+                            /* softwareOnly = */ false,
+                            vendor,
+                            /* forceDisableAdaptive = */ false,
+                            /* forceSecure = */ false
+                        )
+                    )
+                }
+        }
+        if (injected.isEmpty()) return decoders
+        if (!loggedDolbyVisionInjection) {
+            loggedDolbyVisionInjection = true
+            AppLog.i(
+                TAG,
+                "dolby vision decoder injection: ${injected.joinToString { it.name }} " +
+                    "codecMimes=${injected.map { it.codecMimeType }.distinct()}"
+            )
+        }
+        return injected + existing
+    }
+
+    @Volatile
+    private var loggedDolbyVisionInjection: Boolean = false
+
+    /**
+     * 杜比视界 MPD 改写值：两段式串（无 level 段）。media3 对该形态既不做
+     * profile/level 能力拒绝（解析不出 profile 即假定支持），也不触发 HEVC
+     * base-layer 回落（拿不到 profile 无法判可回落），从而把流严格交给
+     * video/dolby-vision 解码器处理（配合上面的 dvhe 组件前插）。
+     */
+    const val DOLBY_VISION_REWRITE_CODECS = "dvhe.05"
 
     /**
      * 该视频轨本机能否解码——复用 media3 [MediaCodecVideoRenderer.supportsFormat] 全规格判定
