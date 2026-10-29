@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import java.nio.ByteBuffer
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
@@ -21,6 +22,7 @@ import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.feature.player.settings.AudioBalanceSettings
 import com.mytvb.feature.player.settings.PlayerSettingsStore
+import com.mytvb.model.video.quality.VideoCodecEnum
 
 @UnstableApi
 object PlayerInstancePool {
@@ -119,6 +121,9 @@ object PlayerInstancePool {
         val player = cachedPlayer ?: buildPlayer(context.applicationContext).also {
             cachedPlayer = it
         }
+        // 复用池实例时同步持久化的编码偏好：切编码重建不换 player，DefaultTrackSelector
+        // 的偏好参数可能还停在上个会话的值（PR#104 遗留问题的修复入口，见 setPreferredVideoCodec）。
+        setPreferredVideoCodec(PlayerSettingsStore.load(context).defaultVideoCodec)
         // 复用实例可能还挂着上一个视频的 MediaSource 与播放位置（softDetach 只 stop
         // 不清 position、不清 MediaItems）。本次要播的身份与挂载源不一致时必须立即硬
         // 重置，否则会有两个串台症状：
@@ -279,15 +284,46 @@ object PlayerInstancePool {
             // 不再丢弃数据重新走网络
             .setBackBuffer(DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, true)
             .build()
+        val trackSelector = DefaultTrackSelector(context, SeamlessQualityTrackSelectionFactory())
+        activeTrackSelector = trackSelector
         return ExoPlayer.Builder(context)
             .setRenderersFactory(createRenderersFactory(context))
             .setLoadControl(loadControl)
             // 无缝清晰度切换：多清晰度 DASH MPD 源的视频轨选择交给 SeamlessQualitySelector
             // 控制；非无缝源（format.id 解析不出 qn/codec）自动退回默认自适应逻辑，行为不变。
-            .setTrackSelector(DefaultTrackSelector(context, SeamlessQualityTrackSelectionFactory()))
+            .setTrackSelector(trackSelector)
             .build()
             .also(PlayerPlaybackPolicy::apply)
     }
+
+    /**
+     * 应用层编码偏好注入选轨器（PR#104 遗留问题修复）。
+     *
+     * 现状：编码选择只作用于拉流路由与 seamless 锁组，media3 DefaultTrackSelector 收不到
+     * 偏好，跨编码组时按默认排序自选——华为真机 route plan 写 HEVC 实际却 instantiate
+     * c2.qti.av1.decoder（能播但不符意图），TCL Amlogic 上 AV1 硬解是坏的则白等 3 秒回退
+     * HEVC（issue#100 停摆的源头之一）。设置 preferredVideoMimeType 后选轨器优先选对应
+     * 编码组的轨，偏好组不可用时仍回退其他组（media3 原生回退语义）。
+     */
+    @OptIn(UnstableApi::class)
+    fun setPreferredVideoCodec(codec: VideoCodecEnum?) {
+        val selector = activeTrackSelector ?: return
+        val mime = when (codec) {
+            VideoCodecEnum.HEVC -> MimeTypes.VIDEO_H265
+            VideoCodecEnum.AV1 -> MimeTypes.VIDEO_AV1
+            VideoCodecEnum.AVC -> MimeTypes.VIDEO_H264
+            null -> null
+        }
+        if (lastPreferredVideoMime == mime) return
+        lastPreferredVideoMime = mime
+        selector.setParameters(selector.buildUponParameters().setPreferredVideoMimeType(mime))
+        AppLog.i(TAG, "track selection preferred video mime=$mime codec=$codec")
+    }
+
+    private var lastPreferredVideoMime: String? = null
+
+    @Volatile
+    private var activeTrackSelector: DefaultTrackSelector? = null
 
     fun createRenderersFactory(context: Context): DefaultRenderersFactory {
         // 每个 player 一枚音量均衡处理器：档位读全局 store，关档 passthrough（仅一次 buffer 拷贝）。

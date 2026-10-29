@@ -3634,6 +3634,9 @@ class VideoPlayerViewModel(
         selectedQualityId = snapshot.selectedQualityId
         selectedAudioId = snapshot.selectedAudioId
         selectedCodec = snapshot.selectedCodec
+        // 编码偏好同步到 DefaultTrackSelector：应用层锁的编码要真正落到渲染器选轨上
+        // （PR#104 遗留问题——此前 route plan 写 HEVC 实际却开 AV1 解码器）。
+        PlayerInstancePool.setPreferredVideoCodec(selectedCodec)
         val audio = snapshot.audios.firstOrNull { it.id == selectedAudioId }
         AppLog.i(TAG, "applySelection: qualityId=$selectedQualityId audioId=$selectedAudioId " +
             "audioName=${audio?.name} audioCodecId=${audio?.codecId} audioBandwidth=${audio?.bandwidth} codec=$selectedCodec")
