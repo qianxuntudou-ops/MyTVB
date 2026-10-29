@@ -181,7 +181,9 @@ object UpdateFlowDialog {
         DialogWindowFit.overlay(
             dialog,
             DialogWindowFit.wrapContentInScroll(context, root),
-            resources.getDimensionPixelSize(R.dimen.px800),
+            // 更新日志单行动辄 20+ 字，px800 档正文区仅约 24 字宽必然折行破碎，
+            // 用使用技巧弹窗同款 px1100
+            resources.getDimensionPixelSize(R.dimen.px1100),
             cancelOnOutside = false,
             tag = "riskControl"
         )
