@@ -444,10 +444,12 @@ class VideoPlayerFragment : Fragment() {
                 // 青少年模式：累计观看时长埋点（仅时间限制启用时计时）
                 com.mytvb.core.common.content.TeenModeTimer.onPlayStart()
             } else if (!isPlaying) {
+                // BUFFERING 下 isPlaying 也为 false，但它不是"停了"——解码器停摆的现场就是 BUFFERING。
+                // 这里若照旧 stop()，卡顿监控与自救链会一并停摆，故缓冲中保留轮询。
                 if (player?.playbackState != Player.STATE_BUFFERING) {
                     playerView.pauseDanmaku()
+                    progressCoordinator.stop()
                 }
-                progressCoordinator.stop()
                 progressCoordinator.syncNow(publishProgressState = true)
                 // 青少年模式：结算本段观看时长，达上限则触发休息
                 com.mytvb.core.common.content.TeenModeTimer.onPlayStop()
@@ -1433,15 +1435,17 @@ class VideoPlayerFragment : Fragment() {
 
     private fun recoverFromPlaybackStall(positionMs: Long, stalledMs: Long) {
         val currentPlayer = player ?: return
-        if (
-            currentPlayer.playbackState != Player.STATE_READY ||
-            !currentPlayer.playWhenReady
-        ) {
+        // 播放中解码器停摆的表现就是掉进 BUFFERING 且时间轴不再推进（数据其实是够的），
+        // 旧守卫只放行 STATE_READY，等于把这类卡死挡在自救链之外。
+        val isStallableState =
+            currentPlayer.playbackState == Player.STATE_READY ||
+                currentPlayer.playbackState == Player.STATE_BUFFERING
+        if (!isStallableState || !currentPlayer.playWhenReady) {
             return
         }
         AppLog.w(
             TAG,
-            "playback stall detected: position=$positionMs, stalledMs=$stalledMs, isPlaying=${currentPlayer.isPlaying}, bufferedPosition=${currentPlayer.bufferedPosition}"
+            "playback stall detected: position=$positionMs, stalledMs=$stalledMs, state=${currentPlayer.playbackState.toPlaybackStateName()}, bufferedPosition=${currentPlayer.bufferedPosition}"
         )
         if (viewModel.handlePlaybackStall(positionMs, stalledMs)) {
             viewModel.setLoading(true)
