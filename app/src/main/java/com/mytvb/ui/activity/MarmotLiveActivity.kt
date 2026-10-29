@@ -348,9 +348,13 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 "#${com.mytvb.feature.marmot.web.MarmotSystemWebViewClient.MYBILI_CCTV_NATIVE_MARKER}"
             val html = buildCctvPlayerHtml(channelId, cctvQualityProvider.current)
             AppLog.i(TAG, "playCurrent: CCTV 原生播放 channelId=$channelId quality=${cctvQualityProvider.current.label}")
-            // CCTV 自构 HTML 无网页闪现，确保清掉可能残留的遮罩
-            hideVideoCover()
-            webEngine?.loadDataWithBaseURL(baseUrl, html)
+            // 自构 HTML 同样要走遮罩：页面本身虽无网页布局，但官方 liveplayer.js
+            // 初始化期间会显示自家 UI（大播放钮 + 红色 loading 圈），起播失败/慢时
+            // 还会露出官方错误组件——与 Marmot 分支同款盖层，轮询到 <video> 时间轴
+            // 真正推进再掀开（切画质重建页面时也顺带盖住换流空窗）
+            showVideoCover {
+                webEngine?.loadDataWithBaseURL(baseUrl, html)
+            }
         } else {
             AppLog.i(TAG, "playCurrent: Marmot 模式 url=${vod.url}")
             // 非 CCTV 整页劫持：先显示全黑遮罩，并确保遮罩真正绘制上屏后再加载官网网页，
@@ -544,10 +548,14 @@ $scriptTags
         override fun run() {
             // 遮罩已移除则停止轮询
             if (binding.videoCover.visibility == View.GONE) return
-            // 返回 <video> 的 currentTime：-1=无 video；0=有 video 未播；>0=时间轴（判断是否增长）
             webEngine?.evaluateJavascriptWithResult(
+                // 返回 <video> 的 currentTime：-1=无 video；0=有 video 未播（含尚未
+                // 拿到画面数据：readyState<2 或无 videoWidth——个别源时间轴会假推进
+                // 一下再卡住，只看 currentTime 会过早掀盖露出官方播放器 UI）；
+                // >0=时间轴（判断是否增长）
                 "(function(){try{var v=document.querySelector('video');" +
                     "if(!v){return '-1';}" +
+                    "if(v.readyState<2||(v.videoWidth||0)===0){return '0';}" +
                     "return (v.currentTime||0)+'';" +
                     "}catch(e){return '-1';}})();"
             ) { result ->
@@ -837,13 +845,25 @@ $scriptTags
         val next: Vod = when (direction) {
             "up" -> {
                 val group = provinces[tagIdx].vods
-                val ni = if (detailIdx == 0) group.lastIndex else detailIdx - 1
-                group[ni]
+                // 组内只有一个频道（如少儿组仅 CCTV-14）时上下键在组内环形会切回
+                // 自己，表现成"按了没反应"——跨组接续：上键到上一组的最后一个频道
+                if (group.size <= 1) {
+                    val ng = if (tagIdx == 0) provinces.lastIndex else tagIdx - 1
+                    provinces[ng].vods.last()
+                } else {
+                    val ni = if (detailIdx == 0) group.lastIndex else detailIdx - 1
+                    group[ni]
+                }
             }
             "down" -> {
                 val group = provinces[tagIdx].vods
-                val ni = if (detailIdx == group.lastIndex) 0 else detailIdx + 1
-                group[ni]
+                if (group.size <= 1) {
+                    val ng = if (tagIdx == provinces.lastIndex) 0 else tagIdx + 1
+                    provinces[ng].vods.first()
+                } else {
+                    val ni = if (detailIdx == group.lastIndex) 0 else detailIdx + 1
+                    group[ni]
+                }
             }
             "left" -> {
                 val ng = if (tagIdx == 0) provinces.lastIndex else tagIdx - 1
