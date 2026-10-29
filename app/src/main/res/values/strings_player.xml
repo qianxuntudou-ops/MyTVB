@@ -101,6 +101,7 @@
     <string name="series_error_timeline_failed">时间线加载失败</string>
     <string name="series_error_recommend_failed">推荐加载失败</string>
     <string name="player_hdr_unsupported_hint">电视或播放设备可能不支持「%1$s」，若播放异常请切回其他画质</string>
+    <string name="player_audio_track_silent_hint">设备不支持「%1$s」解码，已保持当前音轨</string>
 
     <!-- 同时观看人数 / Online watching count -->
     <string name="online_watching_format">%1$s人正在看</string>

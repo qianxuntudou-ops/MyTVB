@@ -99,6 +99,7 @@
     <string name="series_error_timeline_failed">時間軸載入失敗</string>
     <string name="series_error_recommend_failed">推薦載入失敗</string>
     <string name="player_hdr_unsupported_hint">電視或播放裝置可能不支援「%1$s」，若播放異常請切回其他畫質</string>
+    <string name="player_audio_track_silent_hint">裝置不支援「%1$s」解碼，已保持目前音軌</string>
 
     <!-- 同时观看人数 / Online watching count -->
     <string name="online_watching_format">%1$s人正在看</string>

@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import java.nio.ByteBuffer
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
@@ -322,7 +323,7 @@ object PlayerInstancePool {
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink {
-                return DefaultAudioSink.Builder(context)
+                val delegate = DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioOutputPlaybackParameters(enableAudioTrackPlaybackParams)
                     // 1.9.3 的 setAudioProcessors 是普通数组参数（非 vararg），需显式包装。
@@ -338,6 +339,44 @@ object PlayerInstancePool {
                             .build()
                     )
                     .build()
+                return SkipSampleTolerantAudioSink(delegate)
+            }
+        }
+    }
+
+    /**
+     * 兜住 media3 1.9.3 skip-sample 容错路径与 DefaultAudioSink same-buffer 断言的状态冲突。
+     *
+     * 因果链（issue#101 海信 DV「一帧一帧卡顿」/ 华为真机 error code=1004 风暴实测定位）：
+     * B 站 Hi-Res 无损 FLAC（id=30251，2.28Mbps）单帧可达 34KB，超过 c2.android.flac.decoder
+     * 的 32KB input buffer → MediaCodecRenderer.feedInputBuffer 捕获 InsufficientCapacityException
+     * 后走「跳过该样本 + flushCodec()」容错；但 codec flush 后输出的 buffer 实例已更换，而
+     * DefaultAudioSink.handleBuffer 首行 checkArgument(inputBuffer==null || buffer==inputBuffer)
+     * 仍持旧实例未消费完 → 断言炸成 ExoPlaybackException TYPE_UNEXPECTED（code=1004），
+     * fallback 重建不换音轨 → 每轮必炸 → 错误风暴死循环（表现为视频一帧一帧播放）。
+     *
+     * 修法：断言违例时 flush 重置 sink 状态后重试一次（flush 会释放残留 inputBuffer 并清空
+     * 待写数据，代价为丢一小段音频，好于整轮崩溃重建）。二次失败则上抛走原错误链。
+     */
+    private class SkipSampleTolerantAudioSink(
+        private val delegate: AudioSink
+    ) : AudioSink by delegate {
+
+        override fun handleBuffer(
+            buffer: ByteBuffer,
+            presentationTimeUs: Long,
+            encodedAccessUnitCount: Int
+        ): Boolean {
+            return try {
+                delegate.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+            } catch (e: IllegalArgumentException) {
+                AppLog.w(
+                    TAG,
+                    "audio sink same-buffer assert violated, flush and retry " +
+                        "(skip-sample path after flac large frame): ${e.message}"
+                )
+                delegate.flush()
+                delegate.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
             }
         }
     }

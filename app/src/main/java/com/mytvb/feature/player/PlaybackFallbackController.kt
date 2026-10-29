@@ -7,6 +7,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.model.player.PlayInfoModel
 import com.mytvb.model.video.quality.VideoCodecEnum
 import com.mytvb.model.video.quality.VideoQuality
@@ -230,19 +231,35 @@ internal class PlaybackFallbackController(
             tryRefreshPlayInfo(reason = "first_frame_timeout_refresh")
     }
 
-    /** 切集/重置入口：清空所有 fallback 状态。 */
+    /** 切集/重置入口：清空所有 fallback 状态（含降档去重记忆）。 */
     fun reset() {
+        resetAttemptState()
+        qualityStepdownAttemptedIds.clear()
+    }
+
+    /**
+     * 同视频内重建（applyPreparedPlayback）的计数复位：保留降档去重记忆。
+     *
+     * [qualityStepdownAttemptedIds] 若在此处一并清空，tryLowerQualityRebuild 自己触发的
+     * 降档重建（resetFallbackAttempts=true）会把"已试过降档"的记录抹掉，同一视频可以
+     * 无限次重复降档，错误风暴永不收敛（海信 DV runtime error 现场实测）。
+     */
+    fun resetAttemptState() {
         context.onStreamFallbackPlanUpdated(plan = null, routeIndex = 0, cdnIndex = 0)
         playInfoRefreshRetryCount = 0
         fallbackAttemptCount = 0
         attemptedFallbackSignatures.clear()
-        qualityStepdownAttemptedIds.clear()
     }
 
     /**
      * 全路由耗尽后的画质降档重建：HDR/杜比/4K 等高画质档在该档内往往只有 HEVC 一种流，
      * 没有 AVC 兜底路由，解码失败只会在同档换 CDN/刷新打转；此时跳到下一档重新拉流，
      * 请求层（requestPlayInfoWithQualityFallback）会自动落到服务端实际可用的最高档。
+     *
+     * 服务端回落陷阱（海信 DV runtime error 现场实测）：候选档（如 129 HDR Vivid/125 HDR10）
+     * 在该视频若无独立流，playinfo 响应回落到流内最高档——恰好又是降档起始档（126 杜比视界），
+     * 重建后播的还是同一条流，错误照旧。此处对"实际锁定档 == 降档起始档"的候选逐个跳过，
+     * 直到真正落到更低档；全部候选都回落同档才认输报错。
      */
     private fun tryLowerQualityRebuild(): Boolean {
         val lockedQualityId = context.dashSession?.routePlan?.qualityId
@@ -260,14 +277,31 @@ internal class PlaybackFallbackController(
             "fallback:quality_stepdown from=$lockedQualityId to=$nextQualityId position=$lastPlaybackPositionMs"
         )
         scope.launch {
-            val preparedPlayback = context.requestPreparedPlayback(
-                identity = identity,
-                preferLastPlayTime = false,
-                replaceInPlace = true,
-                playbackPositionMs = lastPlaybackPositionMs,
-                playWhenReady = true,
-                qualityCandidates = candidates
-            )
+            var remainingCandidates = candidates
+            var preparedPlayback: VmPreparedPlayback? = null
+            while (remainingCandidates.isNotEmpty()) {
+                val attempt = context.requestPreparedPlayback(
+                    identity = identity,
+                    preferLastPlayTime = false,
+                    replaceInPlace = true,
+                    playbackPositionMs = lastPlaybackPositionMs,
+                    playWhenReady = true,
+                    qualityCandidates = remainingCandidates
+                ) ?: break
+                val actualQualityId = attempt.dashSession?.routePlan?.qualityId
+                    ?: attempt.selectionSnapshot.selectedQualityId
+                if (actualQualityId == null || actualQualityId == lockedQualityId) {
+                    AppLog.i(
+                        TAG,
+                        "fallback:quality_stepdown_skip candidate=${remainingCandidates.firstOrNull()} " +
+                            "falls back to locked=$lockedQualityId"
+                    )
+                    remainingCandidates = remainingCandidates.drop(1)
+                    continue
+                }
+                preparedPlayback = attempt
+                break
+            }
             if (preparedPlayback != null) {
                 context.applyPreparedPlayback(
                     preparedPlayback = preparedPlayback,
@@ -400,10 +434,17 @@ internal class PlaybackFallbackController(
         playInfo: PlayInfoModel,
         availableQualities: List<VideoQuality>
     ): Int {
+        // 无 DV 解码器时把 126 视为不可选（与 buildQualityList 的设备能力过滤对齐），
+        // 否则 UI 已隐藏杜比视界档、实际却仍按流内最高档播 126，列表与实际不一致。
+        val dolbyVisionBlocked = requestedQualityId == VideoQuality.QUALITY_DOLBY_VISION.id &&
+            !VideoCodecSupport.isDolbyVisionSupported()
         val streamQualityIds = playInfo.dash?.video
             .orEmpty()
             .map { it.id }
             .distinct()
+            .let { ids ->
+                if (dolbyVisionBlocked) ids.filterNot { it == VideoQuality.QUALITY_DOLBY_VISION.id } else ids
+            }
         if (streamQualityIds.isNotEmpty()) {
             if (requestedQualityId in streamQualityIds) {
                 return requestedQualityId

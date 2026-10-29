@@ -431,7 +431,7 @@ class VideoPlayerFragment : Fragment() {
             startupTrace = null
             viewModel.setLoading(false)
             viewModel.handlePlaybackError(error, player?.currentPosition ?: 0L)
-            AppLog.e(TAG, "player error: ${error.message}", error)
+            AppLog.e(TAG, "player error: ${error.message} code=${error.errorCode}", error)
             playerView.pauseDanmaku()
             syncPlaybackEnvironment()
         }

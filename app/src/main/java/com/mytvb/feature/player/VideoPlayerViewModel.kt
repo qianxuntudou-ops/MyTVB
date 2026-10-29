@@ -1390,6 +1390,19 @@ class VideoPlayerViewModel(
         playWhenReady: Boolean
     ) {
         AppLog.i(TAG, "selectAudioQuality: id=${quality.id} name=${quality.name} bandwidth=${quality.bandwidth} codecId=${quality.codecId}")
+        // 无声预检：本机无 AC-3 解码器时切杜比全景声只会静默无声（media3 跳轨不报错），
+        // 提前拦截并保持当前有声轨，避免用户误以为播放故障。
+        if (quality.id == AudioQuality.AUDIO_DOLBY.id && !VideoCodecSupport.isDolbyAtmosTrackPlayable()) {
+            AppLog.w(TAG, "dolby atmos audio blocked: no ac3/eac3 decoder on device, keep current track")
+            AppToast.show(
+                appContext,
+                appContext.getString(
+                    R.string.player_audio_track_silent_hint,
+                    quality.displayName(appContext)
+                )
+            )
+            return
+        }
         requestedAudioId = quality.id
         _selectedAudioQuality.value = quality
         savePlayerSnapshot()
@@ -2963,7 +2976,9 @@ class VideoPlayerViewModel(
         }
 
         if (resetFallbackAttempts) {
-            fallbackController.reset()
+            // 同视频重建只复位尝试计数，降档去重记忆留给切视频入口的 reset() 全清，
+            // 否则降档重建自己会抹掉「已试过降档」的记录，错误风暴永不收敛（issue#101 海信现场）。
+            fallbackController.resetAttemptState()
         }
         fallbackController.rememberCurrentFallbackAttempt(countAsFallback = countCurrentAttemptAsFallback)
 

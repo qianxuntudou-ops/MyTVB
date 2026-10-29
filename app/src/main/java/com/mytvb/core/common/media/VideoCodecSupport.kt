@@ -476,6 +476,25 @@ object VideoCodecSupport {
     }
 
     /**
+     * 杜比全景声音轨（B 站 id=30250，AC-3 5.1）本机能否真正出声。
+     *
+     * 多数手机不带 Dolby Digital 解码授权（MediaCodecList 无 audio/ac-3、audio/eac3
+     * 解码器），media3 对解不了的音频轨不报错、直接跳轨，表现为「视频正常但无声」
+     * （华为真机实测：切杜比全景声后 audio decoder init 一次都不出现）。音轨选择前
+     * 用它预检：UI 主动选择时拦截提示，初始偏好/重建选轨时回落到可用 AAC 档。
+     */
+    fun isDolbyAtmosTrackPlayable(): Boolean {
+        cachedDolbyAtmosPlayable?.let { return it }
+        val result = hasDecoder("audio/ac-3") || hasDecoder("audio/eac3")
+        AppLog.i(TAG, "dolby atmos decoder probe: playable=$result")
+        cachedDolbyAtmosPlayable = result
+        return result
+    }
+
+    @Volatile
+    private var cachedDolbyAtmosPlayable: Boolean? = null
+
+    /**
      * media3 级杜比视界解码器查询，与 [hasDecoder] 的 MediaCodecList 原生查询并联：
      * media3 额外认厂商私有别名（如 OMX.MS.HEVCDV 的 video/hevcdv、RealTek 的
      * video/dv_hevc），部分电视只以别名暴露 DV 解码器。

@@ -297,14 +297,43 @@ object AppLog {
 
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         if (!isEnabled) return
-        logToBuffer(LogEntry.LEVEL_ERROR, tag, message)
+        logToBuffer(LogEntry.LEVEL_ERROR, tag, appendThrowableChain(message, throwable))
         if (BuildConfig.DEBUG) runCatching { Log.e(tag, message, throwable) }
     }
 
     fun w(tag: String, message: String, throwable: Throwable? = null) {
         if (!isEnabled) return
-        logToBuffer(LogEntry.LEVEL_WARN, tag, message)
+        logToBuffer(LogEntry.LEVEL_WARN, tag, appendThrowableChain(message, throwable))
         if (BuildConfig.DEBUG) runCatching { Log.w(tag, message, throwable) }
+    }
+
+    /**
+     * 落盘消息附加异常链摘要（类名+消息，最多 3 层）。
+     *
+     * logcat 分支始终带完整堆栈，但内存缓冲（导出快照）此前只存 message，
+     * "Unexpected runtime error" 这类外层文案会把真实根因（如 vendor 解码器抛的
+     * RuntimeException）完全遮住；快照无系统 logcat 可看，必须在这里带上。
+     */
+    private fun appendThrowableChain(message: String, throwable: Throwable?): String {
+        if (throwable == null) {
+            return message
+        }
+        val chain = buildString {
+            var current: Throwable? = throwable
+            var depth = 0
+            while (current != null && depth < 3) {
+                if (depth > 0) {
+                    append(" <- ")
+                }
+                append(current.javaClass.simpleName)
+                current.message?.takeIf { it.isNotBlank() }?.let {
+                    append(": ").append(it.take(160))
+                }
+                current = current.cause
+                depth++
+            }
+        }
+        return "$message [$chain]"
     }
 
     fun v(tag: String, message: String) {
