@@ -35,6 +35,9 @@ class CctvVodWebViewHost(
         /** true 表示该脚本与播放无关，返回空实现让页面解析继续。 */
         fun shouldSkipScript(url: String): Boolean
 
+        /** true 表示该请求与播放无关（如第三方广告投放），返回空响应不让它出网。 */
+        fun shouldBlockRequest(url: String): Boolean
+
         /** 老内核兜底：返回注入补丁后的主文档 HTML；null 表示不接管。 */
         fun mainDocumentHtml(url: String, cookie: String?): ByteArray?
     }
@@ -212,6 +215,11 @@ class CctvVodWebViewHost(
                         "application/javascript", "utf-8", ByteArrayInputStream(ByteArray(0))
                     )
                 }
+                if (listener.shouldBlockRequest(url)) {
+                    return android.webkit.WebResourceResponse(
+                        "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
+                    )
+                }
                 return super.shouldInterceptRequest(view, request)
             }
 
@@ -308,6 +316,11 @@ class CctvVodWebViewHost(
                 if (listener.shouldSkipScript(url)) {
                     return com.tencent.smtt.export.external.interfaces.WebResourceResponse(
                         "application/javascript", "utf-8", ByteArrayInputStream(ByteArray(0))
+                    )
+                }
+                if (listener.shouldBlockRequest(url)) {
+                    return com.tencent.smtt.export.external.interfaces.WebResourceResponse(
+                        "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
                     )
                 }
                 return super.shouldInterceptRequest(view, request)

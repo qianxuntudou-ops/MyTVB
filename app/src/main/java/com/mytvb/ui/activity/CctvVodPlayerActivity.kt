@@ -183,6 +183,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         episodeTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty()
         binding.textTitle.text = episodeTitle
         pendingResumeMs = CctvVodProgressStore.load(this, albumId, currentEpisodeIndex)
+        AppLog.i(TAG, "resumePlan album=$albumId idx=$currentEpisodeIndex pending=$pendingResumeMs")
         binding.playerRoot.requestFocus()
         setupButtons()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -323,6 +324,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         SKIP_SCRIPT_KEYWORDS.any { url.contains(it) }
 
     /**
+     * 广告投放请求（issue#105）：galaxy.bjcathay.com 是央视网广告系统（galaxy），点播页
+     * 的暂停/片尾/角标/横幅广告位都按排期向它拉投放（实测 URL 带频道/专辑/视频定向参数），
+     * 拉到什么页面就往播放器里叠什么（电视剧频道预告横幅、商业角标等）。拦成空响应即可：
+     * 广告拉不到＝不投放，官方脚本对空投放本就有容错（广告位空置是常态）。
+     */
+    private fun isAdRequest(url: String): Boolean = url.contains("galaxy.bjcathay.com")
+
+    /**
      * 老内核兜底：自己请求主文档，在 `<head>` 后插入 postMessage 补丁再交给 WebView。
      * 必须透传 Cookie（页面风控标识）与 Set-Cookie（HMF_CI 等），否则播放器取流会失败。
      */
@@ -373,6 +382,12 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     lastPageStartedUrl = url.orEmpty()
                     // 幂等补丁：能赶在页面脚本前执行就赚到，赶不上还有主文档注入兜底
                     webHost.evaluateJavascript(POST_MESSAGE_PATCH_SCRIPT)
+                    // 官方连播是页面自己整文档跳转到下一集 URL（issue#105），片尾还有
+                    // 本集自重载：这两条路径都不经过 switchEpisode，若不在此盖层，
+                    // 新文档从加载到播放器出画期间网页原文（含广告位）直接暴露给用户。
+                    // 与进页/手动切集统一为「文档开始加载即盖层，起播(ready>=2)自动收」；
+                    // showLoading 幂等，手动切集已盖过时重复调用无副作用。
+                    showLoading(true)
                 }
 
                 override fun onPageFinished(url: String?) {
@@ -424,6 +439,12 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     val skip = isUnrelatedScript(url)
                     if (skip) AppLog.i(TAG, "skipScript ${url.takeLast(48)}")
                     return skip
+                }
+
+                override fun shouldBlockRequest(url: String): Boolean {
+                    val block = isAdRequest(url)
+                    if (block) AppLog.i(TAG, "blockAd ${url.take(96)}")
+                    return block
                 }
 
                 override fun mainDocumentHtml(url: String, cookie: String?): ByteArray? {
@@ -1355,6 +1376,26 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                   window.__mybiliVodStyled = true;
                 }
 
+                // 广告组件隐藏（issue#105）：官方播放器自带横幅(banner-ad-overlay，带关闭
+                // 按钮)/暂停(pause-ad-overlay)/倒计时/角标提示等 DOM 广告层，按排期投放时
+                // 直接叠在画面上。用 style 规则而非逐元素 style：投放类元素（角标）可能
+                // 晚于本脚本创建，常驻规则对后建元素依然生效。与 galaxy 请求拦截互为双保险。
+                if (!window.__mybiliAdCss) {
+                  window.__mybiliAdCss = true;
+                  try {
+                    var adStyle = document.createElement('style');
+                    adStyle.id = 'mybili-ad-block';
+                    adStyle.textContent = '#_video_player .banner-ad-overlay,' +
+                      ' #_video_player .pause-ad-overlay,' +
+                      ' #_video_player .ad-countdown-time,' +
+                      ' #_video_player .ads-label-text,' +
+                      ' #_video_player .ad-label,' +
+                      ' #_video_player .ad-vip-skip-hint { display: none !important; }';
+                    (document.head || document.documentElement).appendChild(adStyle);
+                    console.log('mybili ad css applied');
+                  } catch (e) {}
+                }
+
                 var videos = Array.prototype.slice.call(document.getElementsByTagName('video'));
                 videos.forEach(function(video) {
                   // 每个 video 只初始化一次（autoplay/事件监听），避免反复改属性触发重排
@@ -1394,7 +1435,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     } catch (e) {}
                   }, 1000);
                 }
-                return 'ok videoCount=' + videos.length;
+                return 'ok videoCount=' + videos.length + ' adCss=' + !!window.__mybiliAdCss;
               } catch (error) {
                 console.log('cctv vod inject error ' + error);
                 return 'error ' + error;
