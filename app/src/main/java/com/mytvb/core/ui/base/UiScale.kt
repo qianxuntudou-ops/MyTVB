@@ -1,5 +1,6 @@
 package com.mytvb.core.ui.base
 
+import android.content.Context
 import android.content.res.Resources
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.settings.AppSettingsDataStore
@@ -118,7 +119,8 @@ object UiScale {
         metrics.scaledDensity = target * fontScale
         // before->target：before≠target 即"本次真的改了密度"；同一弹窗生命周期内出现多组
         // 不同 target（如 2.0 后又 1.0）就是"两阶段密度"（弹窗先大后小的根因线索）
-        AppLog.i(
+        // D 级：华为/荣耀默认拦三方 I/W/E 级日志，密度是"页面自己变小"类问题的命门，必须 D 级必出
+        AppLog.d(
             TAG,
             "apply[$reason] screen=${screenW}x${screenH} " +
                 "density $before->$target design=${designScale(screenW, screenH)} " +
@@ -143,7 +145,8 @@ object UiScale {
         @Suppress("DEPRECATION")
         val scaledCurrent = metrics.scaledDensity
         if (metrics.density != target || scaledCurrent != scaledTarget) {
-            AppLog.w(
+            // D 级：W 级在华为/荣耀可能被拦，守卫报警是密度污染的第一现场，必须必出
+            AppLog.d(
                 TAG,
                 "density reset by system: density ${metrics.density}->$target " +
                     "scaledDensity $scaledCurrent->$scaledTarget " +
@@ -151,5 +154,22 @@ object UiScale {
             )
             apply(resources, "guard")
         }
+    }
+
+    /**
+     * 密度探针（D 级：华为/荣耀对三方 I/W 级默认拦截，D 级必出）：打印 context 与
+     * application 两路 Resources 的 metrics 快照。用于定位"页面自己变小"——判读法：
+     * ctx 的屏幕尺寸若变成竖屏向（1312x2848 这类），design 会跟着算小，即"污染自洽"
+     * （守卫按污染后的 w/h 算 target，静默不报警），新 inflate 的页面按小 density 渲染。
+     */
+    fun probe(where: String, context: Context) {
+        val ctx = context.resources.displayMetrics
+        val app = context.applicationContext.resources.displayMetrics
+        AppLog.d(
+            TAG,
+            "probe[$where] ctx=${ctx.widthPixels}x${ctx.heightPixels}@${ctx.density} " +
+                "design=${designScale(ctx.widthPixels, ctx.heightPixels)} " +
+                "app=${app.widthPixels}x${app.heightPixels}@${app.density} percent=$cachedPercent"
+        )
     }
 }

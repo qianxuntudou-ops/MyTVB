@@ -64,6 +64,8 @@ abstract class BaseFragment<VB : ViewBinding> : Fragment() {
         if (rootView == null) {
             val className = this::class.java.simpleName
             val t0 = SystemClock.elapsedRealtime()
+            // inflate 前快照：新页"自己变小"须证明 inflate 时 density 已被污染
+            UiScale.probe("fragCreate:$className", inflater.context)
             val view = if (useLightBaseContainer() && !isTopBarVisible()) {
                 createLightBaseView(inflater.context)
             } else {

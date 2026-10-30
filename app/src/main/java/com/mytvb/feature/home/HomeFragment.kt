@@ -19,6 +19,7 @@ import com.mytvb.ui.activity.MainActivity
 import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
 import com.mytvb.core.ui.base.OnBackPressedHandler
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusNearestTabTo
 import com.mytvb.core.ui.tab.focusSelectedTab
@@ -101,6 +102,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         }.also { binding.tabLayout.addOnTabSelectedListener(it) }
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
+                context?.let { UiScale.probe("pageSelected:$position", it) }
                 notifyTabSelected(position)
             }
         }.also { callback ->

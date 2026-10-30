@@ -11,6 +11,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.mytvb.MyBLBLApplication
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.settings.AppSettingsDataStore
 import androidx.viewbinding.ViewBinding
 import org.koin.android.ext.android.inject
@@ -89,8 +90,18 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        // scale 探针：decor/根布局若停在过渡动画中间态（scale<1）即"整页变小"的 view 层根因；
+        // 失焦窗口也打——Activity/窗口过渡动画正是在失焦-复焦之间跑的
+        val decor = window.decorView
+        val root = if (this::binding.isInitialized) binding.root else null
+        AppLog.d(
+            "UiScale",
+            "probe[scale] focus=$hasFocus decor=${decor.width}x${decor.height}@${decor.scaleX}/${decor.scaleY}" +
+                (root?.let { " root=${it.width}x${it.height}@${it.scaleX}/${it.scaleY}" } ?: "")
+        )
         if (hasFocus) {
             // 窗口重新获得焦点（含系统栏显隐、从播放页返回）后再补一次，缩短密度错误窗口
+            UiScale.probe("winFocus", this)
             UiScale.apply(resources, "focus")
             if (!initialFullscreenModeDeferred) {
                 applyFullscreenMode()

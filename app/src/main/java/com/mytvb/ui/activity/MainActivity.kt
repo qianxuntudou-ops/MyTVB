@@ -31,6 +31,7 @@ import com.mytvb.repository.UserRepository
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.OnBackPressedHandler
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.model.user.UserDetailInfoModel
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.category.CategoryFragment
@@ -507,6 +508,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     override fun onTabSelected(index: Int) {
         AppLog.d("FocusTrace", "onTabSelected index=$index focusedBefore=${currentFocus?.javaClass?.simpleName}#${currentFocus?.id}")
+        UiScale.probe("mainTab:$index", this)
         // CCTV 直播 tab：直接进 Marmot 播放器，不加载频道列表 Fragment（对标参考 StartActivity→LiveActivity）
         if (index == CCTV_TAB_INDEX) {
             pendingFocusRestoreAfterExternalReturn = true
