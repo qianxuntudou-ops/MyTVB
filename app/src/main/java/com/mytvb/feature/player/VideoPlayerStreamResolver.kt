@@ -287,6 +287,14 @@ internal class VideoPlayerStreamResolver(
             hardwareSupportedCodecs = hardwareSupportedCodecs
         )
         val resolvedCodec = codecs.firstOrNull()
+        // 诊断锚点：设置默认编码"不起作用"类问题的判定入口——三值同看：
+        // 入参 preferredCodec（意图）、codecs（排序结果）、resolvedCodec（实际生效）。
+        // preferredCodec=HEVC 而 resolvedCodec=AV1 即排序层翻转（对照 hardwareSupportedCodecs）。
+        AppLog.i(
+            TAG,
+            "resolveSelections: preferredCodec=$preferredCodec quality=$resolvedQualityId " +
+                "hw=$hardwareSupportedCodecs codecs=$codecs resolved=$resolvedCodec"
+        )
         return SelectionSnapshot(
             qualities = qualities,
             selectedQualityId = resolvedQualityId,

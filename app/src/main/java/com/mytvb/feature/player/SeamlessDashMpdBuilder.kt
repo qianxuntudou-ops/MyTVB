@@ -50,6 +50,20 @@ internal object SeamlessDashMpdBuilder {
         require(videos.isNotEmpty()) { "Seamless DASH needs at least one video representation" }
         val audio = requireNotNull(catalog.audioRepresentation) { "Seamless DASH audio track is missing" }
 
+        // 诊断锚点：MPD 落地前的 representation 明细（qn/codec/codecs/分辨率）。
+        // codecs 字符串直接决定 media3 的 mime 推导与解码器路由（如 dvhe 四段式 vs 两段式
+        // 的支持判定差异），排查"选错轨/不点亮 HDR/DV"类问题必须能看到原始值。
+        AppLog.i(
+            TAG,
+            "seamless mpd representations: " + videos.joinToString(", ") { option ->
+                "qn=${option.qn}/${option.codec}(" +
+                    "${option.representation.width}x${option.representation.height} " +
+                    "${option.representation.bandwidth / 1000000}Mbps " +
+                    "fps=${option.representation.frameRate.ifBlank { "-" }} " +
+                    "codecs=${option.representation.codecs.ifBlank { "-" }})"
+            } + " audio=${audio.id}(codecs=${audio.codecs.ifBlank { "-" }})"
+        )
+
         val durationAttr = formatMpdDuration(catalog.durationMs)
         val minBufferAttr = formatMpdDuration(catalog.minBufferTimeMs)
         return buildString {
@@ -120,13 +134,31 @@ internal object SeamlessDashMpdBuilder {
         if (option.qn != VideoQuality.QUALITY_DOLBY_VISION.id) return option.representation
         if (!VideoCodecSupport.isDolbyVisionSupported()) return option.representation
         val original = option.representation.codecs
-        if (original.startsWith("dvhe") || original.startsWith("dvh1")) return option.representation
-        AppLog.i(
-            TAG,
-            "dolby vision mpd codecs rewrite: qn=${option.qn} " +
-                "\"$original\" -> \"${VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS}\""
-        )
-        return option.representation.copy(codecs = VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS)
+        // 已是两段式目标形态（dvhe.05，解析不出 profile 走假定支持）无需改写。
+        if (original == VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS) return option.representation
+        if (!original.startsWith("dvhe") && !original.startsWith("dvh1")) {
+            // hvc1 伪装形态（B 站多数 126 档：HEVC 容器不带 DV 标记）→ 改写点亮 DV 管线。
+            AppLog.i(
+                TAG,
+                "dolby vision mpd codecs rewrite: qn=${option.qn} " +
+                    "\"$original\" -> \"${VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS}\""
+            )
+            return option.representation.copy(codecs = VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS)
+        }
+        // dvhe/dvh1 前缀的完整四段式（如 dvhe.dtr.10，B 站部分新视频直接带真 DV 标记）：
+        // media3 能解析出 profile，查 MediaCodecList 里注册 video/dolby-vision 的 dvav 系
+        // 组件 caps 无对应 profileLevels → FORMAT_UNSUPPORTED → 126 轨被选轨器过滤、
+        // 锁定失效（issue#101《奥德赛》预告片实测）。统一降为两段式 dvhe.05 走假定支持路径
+        // （B 站 126 档内容为 DV Profile 5，dvhe.05 语义一致）。
+        if (original.split('.').size > 2) {
+            AppLog.i(
+                TAG,
+                "dolby vision mpd codecs rewrite (four-part dvhe): qn=${option.qn} " +
+                    "\"$original\" -> \"${VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS}\""
+            )
+            return option.representation.copy(codecs = VideoCodecSupport.DOLBY_VISION_REWRITE_CODECS)
+        }
+        return option.representation
     }
 
     private fun StringBuilder.appendRepresentation(

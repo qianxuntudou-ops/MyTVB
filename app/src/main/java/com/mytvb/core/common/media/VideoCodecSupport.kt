@@ -231,6 +231,17 @@ object VideoCodecSupport {
     @OptIn(UnstableApi::class)
     fun videoCodecSelector(): MediaCodecSelector =
         MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+            // FLAC 恒走 FFmpeg 软解（issue#101）：系统 c2.android.flac.decoder 的 input buffer
+            // 上限 32KB，解不了 Hi-Res 无损的 34KB+ 大帧，feedInputBuffer 走「跳样本+flush」
+            // 容错 → 音频逐帧丢弃 + sink 断言违例，听感一卡一卡。这里在解码器查找层直接返回
+            // 空列表：系统 MediaCodecAudioRenderer 对 audio/flac 判 FORMAT_UNSUPPORTED_TYPE
+            // （真 NO，exceedRendererCapabilitiesIfNecessary 参数救不活），渲染器选择阶段就让位
+            // 给 FFmpeg 扩展（EXTENSION_RENDERER_MODE_ON 排在系统之后），大帧由 FFmpeg 根治。
+            // 此前用「包装系统渲染器覆写 supportsFormat」的方案实测拦不住（华为真机 FLAC 仍
+            // init 系统 flac.decoder），解码器查找层是 renderer 支持度判定的唯一数据源，无死角。
+            if (mimeType.equals(MimeTypes.AUDIO_FLAC, ignoreCase = true)) {
+                return@MediaCodecSelector emptyList()
+            }
             val selector = if (mimeType.lowercase().startsWith("video/") && isSoftwareDecoderPreferred()) {
                 MediaCodecSelector.PREFER_SOFTWARE
             } else {

@@ -2122,7 +2122,29 @@ class VideoPlayerViewModel(
             val playerHasSameSource = PlayerInstancePool.isAttachedSource(
                 replayBvid, initialIdentity.cid
             )
-            if (cachedPlayback != null && playerHasSameSource) {
+            // 编码偏好校验：zero-overhead 快照带着上次播放的实际编码（可能是档位回落的值），
+            // 若本次请求的编码偏好（设置默认/用户切换）重算后会得到不同编码（且该档确实有
+            // 偏好编码），说明快照已不符合当前意图——放弃复用走重建链让 resolveSelections
+            // 重新解析（设置页改了默认编码后重进同一视频必须生效，issue#101 实测缓存快照
+            // 把 HEVC 钉死、设置切 AV1 无效）。重算只是纯排序（buildCodecList），代价可忽略；
+            // 偏好编码在该档不可用时排序结果与缓存一致，照常复用不受回落场景影响。
+            val codecStillMatchesRequest = cachedPlayback?.let { cached ->
+                streamResolver.buildCodecList(
+                    playInfo = cached.playInfo,
+                    qualityId = cached.selectionSnapshot.selectedQualityId,
+                    preferredCodec = requestedCodec ?: selectedCodec,
+                    hardwareSupportedCodecs = hardwareSupportedVideoCodecs
+                ).firstOrNull()?.also { resolved ->
+                    if (resolved != cached.selectionSnapshot.selectedCodec) {
+                        AppLog.w(
+                            TAG,
+                            "zero_overhead_reuse_codec_mismatch: cached=${cached.selectionSnapshot.selectedCodec} " +
+                                "requested=${requestedCodec ?: selectedCodec} resolves=$resolved — rebuild source"
+                        )
+                    }
+                } == cached.selectionSnapshot.selectedCodec
+            } ?: true
+            if (cachedPlayback != null && playerHasSameSource && codecStillMatchesRequest) {
                 // 诊断：对照"请求身份"与"VM 缓存命中内容"，防止跨视频串台。
                 val cachedUri = catchingRequest {
                     cachedPlayback.mediaSource.mediaItem.localConfiguration?.uri?.toString()
