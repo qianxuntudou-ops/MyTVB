@@ -132,7 +132,7 @@ object UpdateFlowDialog {
         notesScroll.scrollDebugTag = "otaNotes"
         notesScroll.addView(ScaledTextView(context).apply {
             val notes = if (releaseInfo.releaseNotes.isNotBlank()) {
-                context.getString(R.string.update_release_notes_format, releaseInfo.releaseNotes)
+                context.getString(R.string.update_release_notes_format, formatReleaseNotes(releaseInfo.releaseNotes))
             } else ""
             text = context.getString(
                 R.string.update_confirm_message_format,
@@ -231,6 +231,28 @@ object UpdateFlowDialog {
                     "outerH=${outerScroll?.height} outerChildH=${root.height} outerScrollable=${((outerScroll?.height ?: 0) < root.height)}"
             )
         }
+    }
+
+    /**
+     * 把更新日志格式化为「1. xxx。」带编号、带句号的展示形态。
+     *
+     * 数据源两种形态都可能出现：version.json 的裸文本行（\n 分隔）与
+     * GitHub Release 正文的 "- " markdown 行（api.github.com 兜底链路），
+     * 均无编号无句号；此处剥掉行首已有的列表符/编号统一重新编号，结尾
+     * 无终止标点的补句号。编号后必须跟空格才视为编号（避免误剥
+     * 「1.5倍速」这类数字开头正文）。
+     */
+    private fun formatReleaseNotes(raw: String): String {
+        return raw.lines()
+            .map { line ->
+                line.trim().replace(Regex("^(?:[-*•]\\s+|\\d{1,2}[.、)]\\s+)"), "")
+            }
+            .filter { it.isNotBlank() }
+            .mapIndexed { index, body ->
+                val punctuated = if (body.last() in "。！？.!?") body else "$body。"
+                "${index + 1}. $punctuated"
+            }
+            .joinToString("\n")
     }
 
     /** 宿主 Activity 已销毁等极端场景 show 抛 BadToken，吞掉并返回 false 由调用方复位守卫 */
