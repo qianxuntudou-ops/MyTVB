@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/marmot_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -7,12 +8,23 @@
     android:clickable="true"
     android:focusable="true">
 
-    <!-- WebView 容器：直播页面在此渲染 -->
+    <!-- WebView 容器：直播页面在此渲染（WebView 播放路径） -->
     <FrameLayout
         android:id="@+id/webview_wrapper"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/black" />
+
+    <!-- 原生直播播放器（issue#106 阶段二：vdn 直拉 H5e 解密流，不走 WebView）。
+         默认隐藏，原生路径启用时顶替 WebView；遮罩在其之上，掀盖逻辑复用。 -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/native_player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        app:use_controller="false"
+        app:surface_type="surface_view"
+        android:visibility="gone" />
 
     <!-- 常显时钟：「时间常驻显示」开启时右上角常驻（顶栏呼出时避让，样式与顶栏时钟一致） -->
     <TextClock

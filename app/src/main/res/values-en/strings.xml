@@ -155,6 +155,7 @@
     <string name="live_entry">Live entry</string>
     <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="cctv_live">CCTV Live</string>
+    <string name="cctv_native_live">CCTV Live native streaming</string>
     <string name="cast_receive">Phone casting</string>
     <string name="cast_device_name">Cast device name</string>
     <string name="cast_device_name_hint">Shown in the bilibili app as 我的小电视 plus your suffix</string>

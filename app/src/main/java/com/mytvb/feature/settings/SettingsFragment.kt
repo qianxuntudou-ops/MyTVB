@@ -105,6 +105,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
+        // CCTV直播原生直拉开关（issue#106 阶段二）：vdn 直调+H5e 原生解密+ExoPlayer，
+        // 关闭后回退 WebView 自构 HTML 老路径。默认开。
+        private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
         private const val KEY_CAST_RECEIVE = "cast_receive"
         private const val KEY_CAST_DEVICE_NAME = "cast_device_name"
         private const val KEY_MINOR_PROTECTION = "minor_protection"
@@ -287,6 +290,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
                 stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "开"),
                 stored(KEY_CCTV_LIVE_ENTRY, R.string.cctv_live, "关"),
+                stored(KEY_CCTV_NATIVE_LIVE, R.string.cctv_native_live, "开"),
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
                 // 因此无需在 applyStored 段恢复
@@ -722,6 +726,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyCctvLiveEntryVisibility()
             }
+            KEY_CCTV_NATIVE_LIVE -> toggle(key)
             KEY_CCTV_VOD_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyCctvVodEntryVisibility()
@@ -1326,6 +1331,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_LIVE_ENTRY)
         applyStored(KEY_EDGE_TAB_SWITCH)
         applyStored(KEY_CCTV_LIVE_ENTRY)
+        applyStored(KEY_CCTV_NATIVE_LIVE)
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)

@@ -70,6 +70,10 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         private const val STALL_WATCH_INTERVAL_MS = 2_000L
         private const val STALL_RECOVER_THRESHOLD_MS = 8_000L
         private const val STALL_MAX_AUTO_RECOVERY = 3
+        /** DataStore key：「CCTV直播原生直拉」开关（存"开/关"，默认开）。 */
+        private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
+        /** 原生直拉起播超时：无首帧先重试一次，再超时回退 WebView。 */
+        private const val NATIVE_STARTUP_TIMEOUT_MS = 12_000L
 
         /** 启动入口。 */
         fun start(context: Context) {
@@ -354,28 +358,27 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         if (vod.url != stallWatchChannelUrl) {
             stallWatchChannelUrl = vod.url
             stallRecoveryCount = 0
+            nativeErrorCount = 0
         }
-        // CCTV 直播频道（tv.cctv.com/live/）：用 createLivePlayer 干净 HTML 播放（画质可切，对标 v1.5.8）；
+        // CCTV 直播频道（tv.cctv.com/live/）：优先原生直拉流（vdn 解析 + H5e 原生解密 +
+        // ExoPlayer 播放，issue#106 阶段二——WebView 内 JS 解密跟不上是盒子卡顿/先声后画的根因）；
+        // 原生关闭或失败时回退 WebView 自构 HTML（createLivePlayer，画质可切，对标 v1.5.8）；
         // 其它频道：维持原 Marmot 方式（加载完整页面 + tv.user.js 劫持）。
         val channelId = extractCctvChannelId(vod.url)
-        if (channelId != null) {
-            val baseUrl = "https://tv.cctv.com/live/$channelId/m/" +
-                "#${com.mytvb.feature.marmot.web.MarmotSystemWebViewClient.MYBILI_CCTV_NATIVE_MARKER}"
-            val html = buildCctvPlayerHtml(channelId, cctvQualityProvider.current)
-            AppLog.i(TAG, "playCurrent: CCTV 原生播放 channelId=$channelId quality=${cctvQualityProvider.current.label}")
-            // 自构 HTML 同样要走遮罩：页面本身虽无网页布局，但官方 liveplayer.js
-            // 初始化期间会显示自家 UI（大播放钮 + 红色 loading 圈），起播失败/慢时
-            // 还会露出官方错误组件——与 Marmot 分支同款盖层，轮询到 <video> 时间轴
-            // 真正推进再掀开（切画质重建页面时也顺带盖住换流空窗）
-            showVideoCover {
-                webEngine?.loadDataWithBaseURL(baseUrl, html)
-            }
+        if (channelId != null && nativeLiveEnabled) {
+            AppLog.i(TAG, "playCurrent: CCTV 原生直拉 channelId=$channelId quality=${cctvQualityProvider.current.label}")
+            startNativeLive(channelId, cctvQualityProvider.current)
         } else {
-            AppLog.i(TAG, "playCurrent: Marmot 模式 url=${vod.url}")
-            // 非 CCTV 整页劫持：先显示全黑遮罩，并确保遮罩真正绘制上屏后再加载官网网页，
-            // 避免 WebView 首帧快于遮罩布局导致官网网页闪现
-            showVideoCover {
-                webEngine?.loadUrl(vod.url)
+            if (channelId != null) {
+                playCctvViaWebView(channelId)
+            } else {
+                AppLog.i(TAG, "playCurrent: Marmot 模式 url=${vod.url}")
+                // 非 CCTV 整页劫持：先显示全黑遮罩，并确保遮罩真正绘制上屏后再加载官网网页，
+                // 避免 WebView 首帧快于遮罩布局导致官网网页闪现
+                stopNativeLivePlayer()
+                showVideoCover {
+                    webEngine?.loadUrl(vod.url)
+                }
             }
         }
         showLiveName(vod.name)
@@ -384,6 +387,220 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         // 记录上次观看频道（IO 写入，不阻塞）
         appSettings.putStringAsync(KEY_LAST_CHANNEL_URL, vod.url)
     }
+
+    // ==================== CCTV 原生直拉流（issue#106 阶段二） ====================
+
+    /** 原生直播 ExoPlayer 实例（独立于 B 站点播池）。 */
+    private var nativePlayer: androidx.media3.exoplayer.ExoPlayer? = null
+
+    /** 原生起播协程（vdn 解析 + 播放器组装）。 */
+    private var nativeLiveJob: kotlinx.coroutines.Job? = null
+
+    /** 原生路径起播超时（无首帧回退 WebView）。 */
+    private val nativeStartupTimeoutRunnable = Runnable { onNativeStartupTimeout() }
+
+    /** 原生路径 BUFFERING 停滞监测（对标 WebView 路径的 stallWatchRunnable）。 */
+    private val nativeStallRunnable = object : Runnable {
+        override fun run() {
+            val player = nativePlayer ?: return
+            if (player.playWhenReady && player.playbackState == androidx.media3.common.Player.STATE_BUFFERING) {
+                if (nativeBufferingSinceMs == 0L) {
+                    nativeBufferingSinceMs = android.os.SystemClock.elapsedRealtime()
+                } else if (android.os.SystemClock.elapsedRealtime() - nativeBufferingSinceMs >= STALL_RECOVER_THRESHOLD_MS) {
+                    nativeBufferingSinceMs = 0L
+                    recoverNativeStall()
+                    return
+                }
+            } else {
+                nativeBufferingSinceMs = 0L
+            }
+            mainHandler.postDelayed(this, STALL_WATCH_INTERVAL_MS)
+        }
+    }
+    private var nativeBufferingSinceMs = 0L
+
+    /** 原生连续错误计数（1 次重试、2 次回退 WebView；切台/手动刷新清零）。 */
+    private var nativeErrorCount = 0
+
+    /** 本次会话内原生是否已被熔断（vdn 失败/连续错误后不再尝试，直至重进页面）。 */
+    private var nativeLiveBrokenForSession = false
+
+    /** 「CCTV直播原生直拉」开关（默认开；关闭后恒走 WebView 自构 HTML 老路径）。 */
+    private val nativeLiveEnabled: Boolean by lazy {
+        val stored = appSettings.getCachedString(KEY_CCTV_NATIVE_LIVE, null)
+        // 存储值"开/关"口径，与设置页 toggle 一致；未设置=默认开
+        stored == null || stored == "开"
+    }
+
+    /** WebView 回退路径：自构 HTML + createLivePlayer（原 playCurrent CCTV 分支逻辑）。 */
+    private fun playCctvViaWebView(channelId: String) {
+        stopNativeLivePlayer()
+        val baseUrl = "https://tv.cctv.com/live/$channelId/m/" +
+            "#${com.mytvb.feature.marmot.web.MarmotSystemWebViewClient.MYBILI_CCTV_NATIVE_MARKER}"
+        val html = buildCctvPlayerHtml(channelId, cctvQualityProvider.current)
+        AppLog.i(TAG, "playCctvViaWebView: channelId=$channelId quality=${cctvQualityProvider.current.label}")
+        // 自构 HTML 同样要走遮罩：官方 liveplayer.js 初始化期间会显示自家 UI（大播放钮 +
+        // 红色 loading 圈），起播失败/慢时还会露出官方错误组件——轮询到 <video> 时间轴
+        // 真正推进再掀开（切画质重建页面时也顺带盖住换流空窗）
+        showVideoCover {
+            webEngine?.loadDataWithBaseURL(baseUrl, html)
+        }
+    }
+
+    /** 原生直拉失败回退：熔断本会话原生路径并走 WebView。 */
+    private fun fallbackToWebView(channelId: String, reason: String) {
+        AppLog.w(TAG, "原生直拉回退 WebView：$reason")
+        nativeLiveBrokenForSession = true
+        playCctvViaWebView(channelId)
+    }
+
+    /**
+     * 原生直拉主流程：遮罩 → vdn 解析（b= 窗口锁档）→ ExoPlayer + H5e 解密 DataSource。
+     * 首帧回调掀盖；12s 无首帧或连续播放错误回退 WebView。
+     */
+    private fun startNativeLive(channelId: String, quality: com.mytvb.feature.cctv.CctvLiveQuality) {
+        stopNativeLivePlayer()
+        if (nativeLiveBrokenForSession) {
+            playCctvViaWebView(channelId)
+            return
+        }
+        // 原生视图顶替 WebView（遮罩之下切换，用户无感）
+        binding.webviewWrapper.visibility = View.GONE
+        binding.nativePlayerView.visibility = View.VISIBLE
+        showVideoCover(pollWeb = false) {
+            nativeLiveJob = CoroutineScope(Dispatchers.Main).launch {
+                val stream = try {
+                    com.mytvb.feature.cctv.h5e.CctvVdnResolver.resolveLive(channelId, quality.bRange)
+                } catch (e: Exception) {
+                    if (isFinishing || isDestroyed) return@launch
+                    AppLog.e(TAG, "vdn 解析失败 channel=$channelId: ${e.message}")
+                    fallbackToWebView(channelId, "vdn ${e.message}")
+                    return@launch
+                }
+                if (isFinishing || isDestroyed) return@launch
+                val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(mapOf("Referer" to stream.referer))
+                    .setAllowCrossProtocolRedirects(true)
+                    .setConnectTimeoutMs(8_000)
+                    .setReadTimeoutMs(8_000)
+                val dsFactory = com.mytvb.feature.cctv.h5e.CctvH5eDataSource.Factory(httpFactory)
+                val player = androidx.media3.exoplayer.ExoPlayer.Builder(this@MarmotLiveActivity)
+                    .setMediaSourceFactory(
+                        androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory)
+                    )
+                    .build()
+                nativePlayer = player
+                binding.nativePlayerView.player = player
+                player.addListener(nativePlayerListener)
+                val mediaItem = androidx.media3.common.MediaItem.Builder()
+                    .setUri(stream.hlsUrl)
+                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .build()
+                player.setMediaItem(mediaItem)
+                player.playWhenReady = true
+                player.prepare()
+                mainHandler.postDelayed(nativeStartupTimeoutRunnable, NATIVE_STARTUP_TIMEOUT_MS)
+                AppLog.i(TAG, "原生直拉已起播请求 url=${stream.hlsUrl.take(80)}")
+            }
+        }
+    }
+
+    /** 原生播放事件：首帧掀盖 / 错误重试与回退。 */
+    private val nativePlayerListener = object : androidx.media3.common.Player.Listener {
+        override fun onRenderedFirstFrame() {
+            mainHandler.removeCallbacks(nativeStartupTimeoutRunnable)
+            if (binding.videoCover.visibility == View.VISIBLE) {
+                AppLog.i(TAG, "原生直拉首帧，掀盖")
+                hideVideoCover()
+            }
+            if (nativeBufferingSinceMs != 0L) nativeBufferingSinceMs = 0L
+        }
+
+        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            AppLog.e(TAG, "原生直拉播放错误 count=$nativeErrorCount: ${error.errorCodeName}")
+            nativeErrorCount++
+            val channelId = extractCctvChannelId(currentVod?.url.orEmpty()) ?: return
+            if (nativeErrorCount <= 1) {
+                startNativeLive(channelId, cctvQualityProvider.current)
+            } else {
+                fallbackToWebView(channelId, "连续播放错误 ${error.errorCodeName}")
+            }
+        }
+    }
+
+    private fun onNativeStartupTimeout() {
+        val channelId = extractCctvChannelId(currentVod?.url.orEmpty())
+        if (channelId == null) {
+            // 非 CCTV 频道走不到原生路径，防御性掀盖
+            if (binding.videoCover.visibility == View.VISIBLE) hideVideoCover()
+            return
+        }
+        // 12s 无首帧：一次重试机会，再超时回退 WebView（老盒子解码慢时 WebView 路径反而能出）
+        nativeErrorCount++
+        if (nativeErrorCount <= 1) {
+            AppLog.w(TAG, "原生直拉起播超时（无首帧），重试一次")
+            startNativeLive(channelId, cctvQualityProvider.current)
+        } else {
+            fallbackToWebView(channelId, "起播超时无首帧")
+        }
+    }
+
+    /** 原生路径卡顿自动恢复：复用 WebView 路径的恢复计数与降档策略。 */
+    private fun recoverNativeStall() {
+        val name = currentVod?.name ?: "?"
+        stallRecoveryCount++
+        if (stallRecoveryCount > STALL_MAX_AUTO_RECOVERY) {
+            AppLog.w(TAG, "nativeStall: 卡顿超自动重载上限 name=$name，停止监测等手动处理")
+            stopNativeStallWatch()
+            AppToast.show(this@MarmotLiveActivity, R.string.marmot_stall_give_up)
+            return
+        }
+        AppLog.w(TAG, "nativeStall: 缓冲停滞 ${STALL_RECOVER_THRESHOLD_MS}ms 自动恢复 name=$name count=$stallRecoveryCount")
+        AppToast.show(this@MarmotLiveActivity, R.string.marmot_stall_auto_recover)
+        if (stallRecoveryCount >= 2 && cctvQualityProvider.dropForRecovery()) {
+            AppLog.i(TAG, "nativeStall: 自动降档至 ${cctvQualityProvider.current.label} 后重载")
+        }
+        val channelId = extractCctvChannelId(currentVod?.url.orEmpty()) ?: return
+        startNativeLive(channelId, cctvQualityProvider.current)
+    }
+
+    private fun startNativeStallWatch() {
+        stopNativeStallWatch()
+        nativeBufferingSinceMs = 0L
+        mainHandler.postDelayed(nativeStallRunnable, STALL_WATCH_INTERVAL_MS)
+    }
+
+    private fun stopNativeStallWatch() {
+        mainHandler.removeCallbacks(nativeStallRunnable)
+        nativeBufferingSinceMs = 0L
+    }
+
+    /** 停止并释放原生播放器（切台到 WebView/其它频道、退出页面时）。 */
+    private fun stopNativeLivePlayer() {
+        nativeLiveJob?.cancel()
+        nativeLiveJob = null
+        mainHandler.removeCallbacks(nativeStartupTimeoutRunnable)
+        stopNativeStallWatch()
+        com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.cancelPendingDecrypts()
+        nativePlayer?.run {
+            removeListener(nativePlayerListener)
+            release()
+        }
+        nativePlayer = null
+        binding.nativePlayerView.player = null
+        // 还原视图形态：WebView 重新承担播放（WebView/卫视整页路径需要）
+        if (binding.webviewWrapper.visibility != View.VISIBLE) {
+            binding.webviewWrapper.visibility = View.VISIBLE
+        }
+        if (binding.nativePlayerView.visibility != View.GONE) {
+            binding.nativePlayerView.visibility = View.GONE
+        }
+    }
+
+    /** 当前是否处于原生直拉形态（决定掀盖后用哪套停滞监测、切台时的清理路径）。 */
+    private fun isNativeLiveActive(): Boolean =
+        nativePlayer != null && binding.nativePlayerView.visibility == View.VISIBLE
+
 
     /**
      * 构造 CCTV 直播播放 HTML（对标 v1.5.8 `CctvPlayerActivity.buildPlayerHtml`）。
@@ -502,10 +719,11 @@ $scriptTags
      * 遮罩显示期间同时显示居中的加载进度转圈（[binding.progressBar]），给用户明确的加载提示。
      * 视频就绪（[hideVideoCover] 由轮询检测到播放触发）或超时后自动移除。
      */
-    private fun showVideoCover(afterShown: (() -> Unit)? = null) {
+    private fun showVideoCover(pollWeb: Boolean = true, afterShown: (() -> Unit)? = null) {
         mainHandler.removeCallbacks(hideVideoCoverRunnable)
         // 盖回遮罩（切台/刷新/自动重载）即停停滞监测，避免与新一轮起播轮询并发误判
         stopStallWatch()
+        stopNativeStallWatch()
         if (binding.videoCover.visibility != View.VISIBLE) {
             binding.videoCover.visibility = View.VISIBLE
         }
@@ -518,8 +736,9 @@ $scriptTags
         binding.videoCover.post {
             if (binding.videoCover.visibility == View.VISIBLE) {
                 afterShown?.invoke()
-                // 遮罩期间持续轮询，按 <video> 是否创建/播放判定"正在加载网页/正在加载视频/就绪移除"
-                startVideoCoverPolling()
+                // 遮罩期间持续轮询，按 <video> 是否创建/播放判定"正在加载网页/正在加载视频/就绪移除"；
+                // 原生直拉路径（pollWeb=false）无网页可探，掀盖由 ExoPlayer 首帧回调主导
+                if (pollWeb) startVideoCoverPolling()
             }
         }
     }
@@ -534,8 +753,9 @@ $scriptTags
         // 遮罩移除时隐藏加载进度与状态文字
         binding.progressBar.visibility = View.GONE
         binding.videoCoverText.visibility = View.GONE
-        // 掀盖后进入播放停滞监测（60s 兜底掀盖也启动：画面虽未确认但交由监测兜底恢复）
-        startStallWatch()
+        // 掀盖后进入播放停滞监测（60s 兜底掀盖也启动：画面虽未确认但交由监测兜底恢复）；
+        // 原生直拉走 ExoPlayer BUFFERING 监测，WebView 路径走 JS 时间轴轮询
+        if (isNativeLiveActive()) startNativeStallWatch() else startStallWatch()
     }
 
     /** 更新遮罩层上的加载状态文字（仅遮罩显示期间生效）。 */
@@ -1146,17 +1366,22 @@ $scriptTags
     override fun onPause() {
         super.onPause()
         webEngine?.onPause()
+        // 原生直拉：后台暂停拉流（直播无续播语义，回来重连）
+        nativePlayer?.playWhenReady = false
     }
 
     override fun onResume() {
         super.onResume()
         webEngine?.onResume()
+        nativePlayer?.playWhenReady = true
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(switchChannelRunnable)
         mainHandler.removeCallbacks(teenModeTicker)
         mainHandler.removeCallbacks(hideControllerRunnable)
+        stopNativeLivePlayer()
+        com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.releaseThreadContext()
         webEngine?.let { engine ->
             engine.removeJavascriptInterface(jsBridge.bridgeName)
             engine.loadUrl("about:blank")

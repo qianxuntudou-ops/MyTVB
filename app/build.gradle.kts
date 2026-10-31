@@ -87,6 +87,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    externalNativeBuild {
+        // CCTV H5e 直播流原生解密（issue#106 阶段二），来源说明见 cpp/cctv_h5e/CMakeLists.txt
+        cmake {
+            path = file("src/main/cpp/cctv_h5e/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    // 本机已装 NDK 版本（AGP 默认偏好 27.x 未安装且远程拉取受限）
+    ndkVersion = "25.1.8937393"
+
     buildTypes {
         debug {
             ndk {
