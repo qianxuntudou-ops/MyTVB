@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.OptIn
 import java.nio.ByteBuffer
 import androidx.media3.common.C
 import androidx.media3.common.Format

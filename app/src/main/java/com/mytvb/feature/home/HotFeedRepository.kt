@@ -1,6 +1,7 @@
 package com.mytvb.feature.home
 
 import android.os.SystemClock
+import com.mytvb.core.common.coroutine.catchingRequest
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.log.HomeVideoCardDebugLogger
 import com.mytvb.model.video.VideoModel
@@ -46,7 +47,10 @@ class HotFeedRepository {
     @Volatile
     private var appHotNextIdx = 0L
 
-    suspend fun loadNetworkPage(page: Int, pageSize: Int): Result<NetworkPage> = runCatching {
+    // catchingRequest 而非 runCatching：翻页循环含多个挂起点（gRPC/HTTP），切 tab 等场景
+    // 协程取消时 runCatching 会把 CancellationException 吞成 Result.failure，
+    // 上层 errorMessage 弹出「Continuation was cancelled」类莫名 Toast；取消必须重抛。
+    suspend fun loadNetworkPage(page: Int, pageSize: Int): Result<NetworkPage> = catchingRequest {
         val useApp = FeedSourceSetting.isAppSource(FeedSourceSetting.KEY_HOT_FEED_SOURCE)
         val rawItems: List<VideoModel>
         var hasMore: Boolean

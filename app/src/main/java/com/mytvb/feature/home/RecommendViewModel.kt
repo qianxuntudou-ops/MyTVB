@@ -3,6 +3,7 @@ package com.mytvb.feature.home
 import android.content.Context
 import android.os.SystemClock
 import com.mytvb.R
+import com.mytvb.core.common.coroutine.catchingRequest
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.model.video.VideoModel
 import kotlinx.coroutines.CoroutineStart
@@ -86,7 +87,12 @@ class RecommendViewModel(
 
     private suspend fun fetchSharedFirstPage(): Result<FetchedPage> {
         val sharedStart = SystemClock.elapsedRealtime()
-        return runCatching {
+        // catchingRequest 而非 runCatching：loadSharedFirstPage 的 requireCurrent 会抛
+        // StaleSessionException（CancellationException 子类）。扫码登录推进会话代际瞬间，
+        // 游客态在途首屏请求作废属取消语义，必须重抛让 loadPage 协程静默终止；
+        // runCatching 会把它吞成 Result.failure → errorMessage=英文原文 → 首页弹
+        // "Request belongs to an obsolete session" Toast（后台 Fragment 全局可见）。
+        return catchingRequest {
             repository.loadSharedFirstPage(pageSize = FIRST_PAGE_SIZE, reason = "viewModelInitial")
         }.map { firstPage ->
             AppLog.i(
