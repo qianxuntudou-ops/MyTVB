@@ -33,10 +33,9 @@
 /* This must match the video element id used by the current CCTV live player.
  * It is part of the H5E key state, not merely a diagnostic label. */
 #define PLAYER_TAG "h5player_player"
-/* VOD (getHttpVideoInfo h5e streams) runs the same wasm entries with the page
- * player's media tag (node-verified: the cjs wasm does mutate slices with it).
- * The dispatch keeps g_player_argument (no "##dts##seeked" suffix buffer) —
- * see the gating block in decrypt_nal. */
+/* VOD (getHttpVideoInfo hls_h5e streams) uses the page player's media tag plus
+ * a "##<dts>##<seeked>" suffix for slice dispatches (fixed values verified by
+ * cctv-h5e-decrypt and on MuMu). */
 #define VOD_PLAYER_TAG "player_container_player"
 #define PAGE_HOST "https://tv.cctv.com"
 #define LOCATION_HREF "blob:https://tv.cctv.com/5bca710b-9f02-41f0-a9f1-102bbc65192a"
@@ -117,7 +116,6 @@ static __thread u32 g_player_argument;
  * (cctv-h5e-decrypt's GUID flow), 0 = live tag flow. */
 static __thread int g_vod_mode;
 static __thread u32 g_vod_tag_argument;
-static __thread int g_first_nal_of_segment;
 
 static int decrypt_was_cancelled(void) {
   u32 generation = __sync_add_and_fetch(&g_cancel_generation, 0);
@@ -586,6 +584,18 @@ static int begin_session(void) {
   if (g_player_argument == 0) {
     return 0;
   }
+  if (g_vod_mode) {
+    /* Slice NAL dispatches pass the suffixed media tag (cctv-h5e-decrypt's
+     * "useSpecialmediaTagID" form); InitPlayer/UpdatePlayer keep the plain tag
+     * bound to g_player_argument. */
+    g_vod_tag_argument = allocate_tag_argument(
+        VOD_PLAYER_TAG "##1000000##0");
+    if (g_vod_tag_argument == 0) {
+      w2c_cctv__h5e_Ca(&g_module, g_player_argument);
+      g_player_argument = 0;
+      return 0;
+    }
+  }
   g_wasm_stage = "init-player";
   w2c_cctv__h5e_aa(&g_module, g_player_argument);
   g_wasm_stage = "init-player-fetch";
@@ -612,6 +622,12 @@ static void end_session(void) {
     g_wasm_stage = "uninit-player";
     w2c_cctv__h5e_ba(&g_module, g_player_argument);
     g_wasm_stage = "idle";
+    if (g_vod_tag_argument != 0) {
+      g_wasm_stage = "player-free";
+      w2c_cctv__h5e_Ca(&g_module, g_vod_tag_argument);
+      g_wasm_stage = "idle";
+      g_vod_tag_argument = 0;
+    }
     g_wasm_stage = "player-free";
     w2c_cctv__h5e_Ca(&g_module, g_player_argument);
     g_wasm_stage = "idle";
@@ -622,11 +638,21 @@ static void end_session(void) {
 
 static int decrypt_nal(const uint8_t* nal, size_t nal_length,
     uint8_t** result, size_t* result_length) {
-  static decrypt_function functions[9] = {
+  /* Live dispatch: jsdecLive{7-i} for each digit in the vmp tag (ka..da), then
+   * Live8 (la) for the output. VOD dispatch: the sibling jsdecVOD{7-i} entry
+   * points (ta..ma) with VOD8 (ua) for the output — same wasm, two entry
+   * families (worker.js export map: da..la=jsdecLive0..8, ma..ua=jsdecVOD0..8). */
+  static decrypt_function live_functions[9] = {
     w2c_cctv__h5e_ka, w2c_cctv__h5e_ja, w2c_cctv__h5e_ia,
     w2c_cctv__h5e_ha, w2c_cctv__h5e_ga, w2c_cctv__h5e_fa,
     w2c_cctv__h5e_ea, w2c_cctv__h5e_da, w2c_cctv__h5e_la
   };
+  static decrypt_function vod_functions[9] = {
+    w2c_cctv__h5e_ta, w2c_cctv__h5e_sa, w2c_cctv__h5e_ra,
+    w2c_cctv__h5e_qa, w2c_cctv__h5e_pa, w2c_cctv__h5e_oa,
+    w2c_cctv__h5e_na, w2c_cctv__h5e_ma, w2c_cctv__h5e_ua
+  };
+  decrypt_function* functions = g_vod_mode ? vod_functions : live_functions;
   static const char host[] = PAGE_HOST;
   size_t host_length = strlen(host);
   char tag[16];
@@ -649,18 +675,19 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   snprintf(tag, sizeof(tag), "%08x", w2c_cctv__h5e_ca(&g_module, g_player_argument));
   snprintf(g_current_update_tag, sizeof(g_current_update_tag), "%s", tag);
   g_wasm_stage = "idle";
-  if (g_first_nal_of_segment) {
-    g_first_nal_of_segment = 0;
-    LOGI("VODDBG firstNal type=%d tag=%s vod=%d should=%d",
-        type, tag, g_vod_mode, g_should_decrypt);
-  }
   if (g_vod_mode) {
-    /* VOD experiment log only: this live-site wasm (unlike the VOD-site wasm
-     * in cctv-h5e-decrypt) appears to need the full NAL sequence fed through
-     * the dispatch, so no gating is applied here; type-25 payload[0] is just
-     * recorded. */
+    /* Full cctv-h5e-decrypt alignment: only type-25 (plain tag) and gated
+     * slice NALs (suffixed tag) run the dispatch; every other NAL keeps its
+     * bytes. UpdatePlayer above already advanced state. */
     if (type == 25) {
       g_should_decrypt = (nal_length > 1 && nal[1] == 1) ? 1 : 0;
+    } else if (type == 1 || type == 5) {
+      if (!g_should_decrypt || g_vod_tag_argument == 0) {
+        return 0;
+      }
+      tag_argument = g_vod_tag_argument;
+    } else {
+      return 0;
     }
   }
   g_wasm_stage = "nal-malloc";
@@ -701,14 +728,6 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   }
   memcpy(*result, data, output_length);
   *result_length = output_length;
-  /* VOD debug: log only when the wasm actually rewrote a slice (silent while
-   * the live-site wasm passes VOD ciphertext through unchanged). */
-  if (g_vod_mode && (type == 1 || type == 5)
-      && !(output_length == nal_length && memcmp(data, nal, output_length) == 0)) {
-    LOGI("VODDBG nal REWRITTEN type=%d len=%u out=%u tag=%s",
-        type, (unsigned int) nal_length, (unsigned int) output_length,
-        g_current_update_tag);
-  }
   g_wasm_stage = "nal-free";
   w2c_cctv__h5e_Ca(&g_module, data_address);
   g_wasm_stage = "idle";
@@ -952,14 +971,20 @@ static int decrypt_transport_stream(uint8_t* output, const uint8_t* input, size_
     memcpy(output, input, length);
   }
   gettimeofday(&g_worker_now, NULL);
-  g_worker_clock_frozen = 1;
+  /* VOD keeps the clock live: the VOD-site wasm (same export family, node-run
+   * cctv-h5e-decrypt with a flowing Date.now rewrites slices) appears to
+   * validate key freshness strictly, while the live path tolerates the frozen
+   * per-segment timestamp within its 5-segment key window. */
+  g_worker_clock_frozen = !g_vod_mode;
   /* Current cdrmld live fragments are independently decryptable and omit the
    * old type-25 cross-fragment control NAL. The browser wrapper refreshes its
    * outer H5E state between fragments; this standalone wasm port does not, and
    * its UpdatePlayer state starts producing corrupt slices after a few files.
    * Reset only the native module here. This keeps ijkplayer, MediaCodec, the
-   * proxy connection and the video Surface alive across the boundary. */
-  if (g_session_started) {
+   * proxy connection and the video Surface alive across the boundary.
+   * VOD keeps the session across segments instead (cctv-h5e-decrypt runs one
+   * session over the whole file; MuMu-verified with the jsdecVOD entries). */
+  if (g_session_started && !g_vod_mode) {
     g_session_started = 0;
     g_should_decrypt = 0;
     g_ready = reset_module_state();
@@ -969,7 +994,6 @@ static int decrypt_transport_stream(uint8_t* output, const uint8_t* input, size_
     g_worker_clock_frozen = 0;
     return 0;
   }
-  g_first_nal_of_segment = 1;
   for (packet_offset = 0; packet_offset + TS_PACKET_SIZE <= length; packet_offset += TS_PACKET_SIZE) {
     const uint8_t* packet = input + packet_offset;
     size_t payload_offset = 4;

@@ -19,7 +19,6 @@ import java.io.IOException
  * + NAL25 门控，未加密段透传），供 CctvVodPlayerActivity 原生播放复用。
  */
 class CctvH5eDataSource(
-    private val context: android.content.Context?,
     private val upstream: DataSource,
     private val vodMode: Boolean = false
 ) : DataSource {
@@ -76,7 +75,6 @@ class CctvH5eDataSource(
             }
             val cost = android.os.SystemClock.elapsedRealtime() - started
             AppLog.i(TAG, "H5e 分片解密 ok size=${decrypted.size} costMs=$cost vod=$vodMode")
-            if (vodMode) dumpVodSegmentForDebug(dataSpec.uri.toString(), bytes)
             bytes = decrypted
         }
         decryptedBuffer = bytes
@@ -113,29 +111,12 @@ class CctvH5eDataSource(
         return true
     }
 
-    /** 调试：VOD 解密结果落盘（仅前几段，filesDir/h5e_dump_n.ts），排查绿屏用，验证后移除。 */
-    private fun dumpVodSegmentForDebug(url: String, bytes: ByteArray) {
-        val ctx = context ?: return
-        try {
-            val seg = url.substringAfterLast('/').substringBefore('?')
-            if (!seg.endsWith(".ts")) return
-            val n = seg.removeSuffix(".ts").toIntOrNull() ?: return
-            if (n !in 0..3) return
-            val out = java.io.File(ctx.filesDir, "h5e_dump_$n.ts")
-            if (!out.exists()) out.writeBytes(bytes)
-            AppLog.i(TAG, "h5e dump -> ${out.name} size=${bytes.size}")
-        } catch (t: Throwable) {
-            AppLog.w(TAG, "h5e dump failed: ${t.message}")
-        }
-    }
-
     /** HLS 解密链 DataSource 工厂：包装上游 HTTP 工厂（带 Referer 等 header 由上游配置）。 */
     class Factory(
         private val upstreamFactory: DataSource.Factory,
-        private val vodMode: Boolean = false,
-        private val debugContext: android.content.Context? = null
+        private val vodMode: Boolean = false
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource =
-            CctvH5eDataSource(debugContext, upstreamFactory.createDataSource(), vodMode)
+            CctvH5eDataSource(upstreamFactory.createDataSource(), vodMode)
     }
 }

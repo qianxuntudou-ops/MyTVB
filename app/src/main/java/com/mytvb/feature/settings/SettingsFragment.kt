@@ -109,9 +109,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
         // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
-        // CCTV影视极速模式开关（显示名「影视极速模式」）：getHttpVideoInfo h5e 流直连+H5e 原生解密。
-        // 当前默认关：直播站 wasm 解不动 VOD 密文（VOD 版 wasm 移植后改回默认开），
-        // 开着也只是绿屏后 12s 超时回退 WebView，基建（DataSource/播放器/开关）已就绪。
+        // CCTV影视极速模式开关（显示名「影视极速模式」）：getHttpVideoInfo h5e 流直连+
+        // H5e 原生解密（同 wasm 的 jsdecVOD 入口系列），关闭后回退官方页 WebView。默认开。
         private const val KEY_CCTV_NATIVE_VOD = "cctv_native_vod"
         private const val KEY_CAST_RECEIVE = "cast_receive"
         private const val KEY_CAST_DEVICE_NAME = "cast_device_name"
@@ -416,7 +415,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             )),
             SettingGroup(R.string.setting_group_tv_vod, listOf(
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
-                stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "关")
+                stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "开")
             ))
         )
 

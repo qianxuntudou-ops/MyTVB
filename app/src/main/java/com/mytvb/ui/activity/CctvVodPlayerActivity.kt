@@ -230,7 +230,6 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         alwaysOnClockEnabled = PlayerSettingsStore.load(this).showAlwaysOnClock
         binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
         // 「影视极速模式」：开=ExoPlayer 直连 h5e 流（H5e 原生解密），失败回退 WebView。
-        // 默认关：直播站 wasm 对 VOD 密文原样透传（绿屏），VOD 版 wasm 移植后改默认开。
         nativeVodEnabled = appSettings.getCachedString(KEY_CCTV_NATIVE_VOD) == "开"
         setupButtons()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -970,7 +969,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             .setConnectTimeoutMs(8_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(true)
-        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true, debugContext = this)
+        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true)
         return ExoPlayer.Builder(this)
             .setMediaSourceFactory(
                 androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
