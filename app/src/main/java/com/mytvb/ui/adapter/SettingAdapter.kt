@@ -135,9 +135,9 @@ class SettingAdapter(
                         bindFocusState(true, row.slot)
                     }
                     if (oldFocused != RecyclerView.NO_POSITION && oldFocused != position) {
-                        notifyItemChanged(oldFocused, PAYLOAD_FOCUS)
+                        notifyFocusChanged(oldFocused)
                     }
-                    notifyItemChanged(position, PAYLOAD_FOCUS)
+                    notifyFocusChanged(position)
                     return@setOnFocusChangeListener
                 }
                 if (focusedPosition == position) {
@@ -145,9 +145,23 @@ class SettingAdapter(
                     if (row is SettingRow.Item) {
                         bindFocusState(false, row.slot)
                     }
-                    notifyItemChanged(position, PAYLOAD_FOCUS)
+                    notifyFocusChanged(position)
                 }
             }
+        }
+
+        /**
+         * 布局/滚动计算中禁止 notifyItemChanged（RecyclerView assertNotInLayoutOrScroll 直接抛
+         * IllegalStateException 闪退）：失焦可能被布局过程中的 scrap 回收 clearFocus 链条间接触发
+         * （dispatchLayoutStep3 → removeAndRecycleScrapInt → removeDetachedView → clearFocus），
+         * 此时上面的 bindFocusState 已同步把样式改到 view 上，notify 只是冗余的重绑保险，跳过即可。
+         */
+        private fun notifyFocusChanged(position: Int) {
+            val recyclerView = itemView.parent as? RecyclerView ?: return
+            if (recyclerView.isComputingLayout) {
+                return
+            }
+            notifyItemChanged(position, PAYLOAD_FOCUS)
         }
 
         fun bind(row: SettingRow.Item) {
