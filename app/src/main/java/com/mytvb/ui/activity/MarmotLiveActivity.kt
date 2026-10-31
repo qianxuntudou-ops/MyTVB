@@ -297,22 +297,34 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 return@launch
             }
             provinces.clear()
-            // 频道白名单（issue#106）：①CCTV 频道（url 含 tv.cctv.com/live/，createLivePlayer
-            // 干净 HTML 播放）；②「卫视」组的央视频网页频道（yangshipin.cn/tv/home?pid=xxx，
-            // 走 Marmot 整页加载）。「央视源2」组同为 yangshipin 但与央视组频道重复，不放开；
-            // 各省地方台站点未实测，仍不放开。PR #53 的全量放开维持不采纳。
+            // 频道白名单（issue#106，二轮补全）：①CCTV 频道（url 含 tv.cctv.com/live/，
+            // createLivePlayer/原生直拉）；②「卫视」组的央视频网页频道（yangshipin.cn
+            // 整页加载）；③「央视频超清」组（原央视源2）中与央视组不重复的频道——
+            // CCTV4K/8K/16-4K、CGTN 六语种、风云/第一/怀旧剧场（用户要求频道补全，
+            // 超清档播不播得动由设备自己消化）。与央视组重复的 CCTV1-17 不放（避免
+            // 列表重复）；各省地方台站点未实测仍不放开。PR #53 全量放开维持不采纳。
             val allLives = MarmotLiveData.getLives()
+            // 央视组的 pid 集合（判重复用：央视频超清组里同 pid = 同频道）
+            val cctvGroupPids = allLives
+                .firstOrNull { it.name == "央视" }?.vods.orEmpty()
+                .mapNotNull { Regex("pid=(\\d+)").find(it.url)?.groupValues?.get(1) }
+                .toSet()
             var cctvIndex = 0
             for (live in allLives) {
-                val isWeiShiGroup = live.name == "卫视"
                 // 筛选白名单频道，重建 Vod 的导航索引
-                val cctvVods = live.vods.filter {
-                    extractCctvChannelId(it.url) != null ||
-                        (isWeiShiGroup && it.url.contains("yangshipin.cn"))
+                val cctvVods = when (live.name) {
+                    "卫视" -> live.vods.filter { it.url.contains("yangshipin.cn") }
+                    "央视频超清", "央视源2" -> live.vods.filter { vod ->
+                        val pid = Regex("pid=(\\d+)").find(vod.url)?.groupValues?.get(1)
+                        pid != null && pid !in cctvGroupPids
+                    }
+                    else -> live.vods.filter { extractCctvChannelId(it.url) != null }
                 }
                 if (cctvVods.isEmpty()) continue
-                // 构造只含白名单频道的分组副本（重新编 tagIndex/detailIndex）
-                val filteredLive = Live(tag = live.tag, name = live.name, index = cctvIndex,
+                // 构造只含白名单频道的分组副本（重新编 tagIndex/detailIndex）；
+                // 「央视源2」是旧数据名，显示统一为「央视频超清」
+                val displayName = if (live.name == "央视源2") "央视频超清" else live.name
+                val filteredLive = Live(tag = live.tag, name = displayName, index = cctvIndex,
                     vods = cctvVods.toMutableList())
                 cctvVods.forEachIndexed { j, vod ->
                     vod.tagIndex = cctvIndex
@@ -484,17 +496,41 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                     .setConnectTimeoutMs(8_000)
                     .setReadTimeoutMs(8_000)
                 val dsFactory = com.mytvb.feature.cctv.h5e.CctvH5eDataSource.Factory(httpFactory)
+                // 直播缓冲调优（实测标定）：CCTV 媒体清单滑窗仅 3 分片=12s（服务端每 4s
+                // 淘汰最老分片），targetOffset 不能超过窗口——15s 无处可退会致播放点钉死
+                // 淘汰线，周期性微 BUFFERING（0.2~1s 一次=用户感知卡顿）。
+                // targetOffset 8s：播放点距淘汰线恒留 4s（一分片下载+解密耗时）；
+                // 起播/二次缓冲门槛 4s（窗口小，攒更多只会拖慢起播误触 12s 超时）。
+                val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        /* minBufferMs = */ 10_000,
+                        /* maxBufferMs = */ 15_000,
+                        /* bufferForPlaybackMs = */ 4_000,
+                        /* bufferForPlaybackAfterRebufferMs = */ 4_000
+                    )
+                    .build()
                 val player = androidx.media3.exoplayer.ExoPlayer.Builder(this@MarmotLiveActivity)
                     .setMediaSourceFactory(
                         androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory)
                     )
+                    .setLoadControl(loadControl)
                     .build()
                 nativePlayer = player
                 binding.nativePlayerView.player = player
                 player.addListener(nativePlayerListener)
+                player.addAnalyticsListener(nativeAnalyticsListener)
                 val mediaItem = androidx.media3.common.MediaItem.Builder()
                     .setUri(stream.hlsUrl)
                     .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    // 直播边沿退让（实测窗口 12s）：targetOffset 8s 在窗口内且距淘汰线恒留
+                    // 一分片余量（4s）；6~10s 区间内 media3 自动微速维持目标偏移
+                    .setLiveConfiguration(
+                        androidx.media3.common.MediaItem.LiveConfiguration.Builder()
+                            .setTargetOffsetMs(8_000)
+                            .setMinOffsetMs(6_000)
+                            .setMaxOffsetMs(10_000)
+                            .build()
+                    )
                     .build()
                 player.setMediaItem(mediaItem)
                 player.playWhenReady = true
@@ -505,8 +541,42 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         }
     }
 
+    /** 原生播放诊断：丢帧/解码器（卡顿归因=网络 BUFFERING vs 解码渲染丢帧）。 */
+    private val nativeAnalyticsListener = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+        override fun onDroppedVideoFrames(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            droppedFrames: Int,
+            elapsedMs: Long
+        ) {
+            if (droppedFrames > 0) {
+                AppLog.w(TAG, "nativePlayer 丢帧 dropped=$droppedFrames elapsed=${elapsedMs}ms")
+            }
+        }
+
+        override fun onVideoDecoderInitialized(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long
+        ) {
+            AppLog.i(TAG, "nativePlayer 解码器=$decoderName")
+        }
+    }
+
     /** 原生播放事件：首帧掀盖 / 错误重试与回退。 */
     private val nativePlayerListener = object : androidx.media3.common.Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            // 状态流转可观测（2=BUFFERING/3=READY）：BUFFERING→READY 往返一次即一次播放卡顿
+            val name = when (playbackState) {
+                androidx.media3.common.Player.STATE_IDLE -> "IDLE"
+                androidx.media3.common.Player.STATE_BUFFERING -> "BUFFERING"
+                androidx.media3.common.Player.STATE_READY -> "READY"
+                androidx.media3.common.Player.STATE_ENDED -> "ENDED"
+                else -> "$playbackState"
+            }
+            AppLog.i(TAG, "nativePlayer state=$name")
+        }
+
         override fun onRenderedFirstFrame() {
             mainHandler.removeCallbacks(nativeStartupTimeoutRunnable)
             if (binding.videoCover.visibility == View.VISIBLE) {

@@ -1,1 +1,3444 @@
-{"data":[{"tag":"cctv","name":"央视","vods":[{"name":"CCTV-13 新闻","url":"https://tv.cctv.com/live/cctv13/"},{"name":"CCTV-1 综合","url":"https://tv.cctv.com/live/cctv1/"},{"name":"CCTV-2 财经","url":"https://tv.cctv.com/live/cctv2/"},{"name":"CCTV-3 综艺","url":"https://tv.cctv.com/live/cctv3/"},{"name":"CCTV-4 中文国际","url":"https://tv.cctv.com/live/cctv4"},{"name":"CCTV-5 体育","url":"https://tv.cctv.com/live/cctv5/"},{"name":"CCTV-5+ 体育赛事","url":"https://tv.cctv.com/live/cctv5plus/"},{"name":"CCTV-6 电影","url":"https://tv.cctv.com/live/cctv6/"},{"name":"CCTV-7 国防军事","url":"https://tv.cctv.com/live/cctv7/"},{"name":"CCTV-8 电视剧","url":"https://tv.cctv.com/live/cctv8/"},{"name":"CCTV-9 纪录","url":"https://tv.cctv.com/live/cctvjilu/"},{"name":"CCTV-10 科教","url":"https://tv.cctv.com/live/cctv10/"},{"name":"CCTV-11 戏曲","url":"https://tv.cctv.com/live/cctv11/"},{"name":"CCTV-12 社会与法","url":"https://tv.cctv.com/live/cctv12/"},{"name":"CCTV-15 音乐","url":"https://tv.cctv.com/live/cctv15/"},{"name":"CCTV-16 奥林匹克","url":"https://tv.cctv.com/live/cctv16/"},{"name":"CCTV-17 农业农村","url":"https://tv.cctv.com/live/cctv17/"},{"name":"1905电影","url":"https://m.1905.com/m/xl/live/"},{"name":"1905国际电影","url":"https://www.1905.com/1905tv/live/"}]},{"tag":"cctv2","name":"央视源2","vods":[{"name":"CCTV13 新闻","url":"https://www.yangshipin.cn/tv/home?pid=600001811"},{"name":"CCTV1 综合","url":"https://www.yangshipin.cn/tv/home?pid=600001859"},{"name":"CCTV2 财经","url":"https://www.yangshipin.cn/tv/home?pid=600001800"},{"name":"CCTV3 综艺","url":"https://www.yangshipin.cn/tv/home?pid=600001801"},{"name":"CCTV4 中文国际","url":"https://www.yangshipin.cn/tv/home?pid=600001814"},{"name":"CCTV5 体育","url":"https://www.yangshipin.cn/tv/home?pid=600001818"},{"name":"CCTV5+ 体育赛事","url":"https://www.yangshipin.cn/tv/home?pid=600001817"},{"name":"CCTV6 电影","url":"https://www.yangshipin.cn/tv/home?pid=600108442"},{"name":"CCTV7 国防军事","url":"https://www.yangshipin.cn/tv/home?pid=600004092"},{"name":"CCTV8 电视剧","url":"https://www.yangshipin.cn/tv/home?pid=600001803"},{"name":"CCTV9 纪录","url":"https://www.yangshipin.cn/tv/home?pid=600004078"},{"name":"CCTV10 科教","url":"https://www.yangshipin.cn/tv/home?pid=600001805"},{"name":"CCTV11 戏曲","url":"https://www.yangshipin.cn/tv/home?pid=600001806"},{"name":"CCTV12 社会与法","url":"https://www.yangshipin.cn/tv/home?pid=600001807"},{"name":"CCTV14 少儿","url":"https://www.yangshipin.cn/tv/home?pid=600001809"},{"name":"CCTV15 音乐","url":"https://www.yangshipin.cn/tv/home?pid=600001815"},{"name":"CCTV16 奥林匹克","url":"https://www.yangshipin.cn/tv/home?pid=600098637"},{"name":"CCTV17 农业农村","url":"https://www.yangshipin.cn/tv/home?pid=600001810"},{"name":"CCTV4K","url":"https://www.yangshipin.cn/tv/home?pid=600002264"},{"name":"CCTV8K","url":"https://www.yangshipin.cn/tv/home?pid=600156816"},{"name":"CGTN","url":"https://www.yangshipin.cn/tv/home?pid=600014550"},{"name":"CGTN外语纪录频道","url":"https://www.yangshipin.cn/tv/home?pid=600084781"},{"name":"CCTV 风云剧场","url":"https://www.yangshipin.cn/tv/home?pid=600099658"},{"name":"CCTV 第一剧场","url":"https://www.yangshipin.cn/tv/home?pid=600099655"},{"name":"CCTV 怀旧剧场","url":"https://www.yangshipin.cn/tv/home?pid=600099620"}]},{"tag":"ws","name":"卫视","vods":[{"name":"湖南卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002475"},{"name":"江苏卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002521"},{"name":"上海东方卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002483"},{"name":"浙江卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002520"},{"name":"北京卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002309"},{"name":"湖北卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002508"},{"name":"广东卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002485"},{"name":"广西卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002509"},{"name":"黑龙江卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002498"},{"name":"海南卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002506"},{"name":"重庆卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002531"},{"name":"深圳卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002481"},{"name":"四川卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002516"},{"name":"河南卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002525"},{"name":"福建东南卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002484"},{"name":"贵州卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002490"},{"name":"江西卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002503"},{"name":"辽宁卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002505"},{"name":"安徽卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002532"},{"name":"河北卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002493"},{"name":"山东卫视","url":"https://www.yangshipin.cn/tv/home?pid=600002513"},{"name":"天津卫视","url":"https://www.yangshipin.cn/tv/home?pid=600152137"},{"name":"吉林卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190405"},{"name":"陕西卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190400"},{"name":"甘肃卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190408"},{"name":"宁夏卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190737"},{"name":"内蒙古卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190401"},{"name":"云南卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190402"},{"name":"山西卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190407"},{"name":"青海卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190406"},{"name":"西藏卫视","url":"https://www.yangshipin.cn/tv/home?pid=600190403"},{"name":"新疆卫视","url":"https://www.yangshipin.cn/tv/home?pid=600152138"}]},{"tag":"shaoer","name":"少儿","vods":[{"name":"CCTV-14 少儿","url":"https://tv.cctv.com/live/cctvchild/"},{"name":"浙江少儿","url":"https://www.cztv.com/liveTV/108"},{"name":"山东少儿","url":"https://v.iqilu.com/live/sepd/"},{"name":"优漫卡通","url":"https://live.jstv.com/?tag=优漫卡通"},{"name":"南京少儿","url":"https://www.nbs.cn/live/?id=110095"},{"name":"海南少儿","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=7"},{"name":"广东少儿","url":"https://www.gdtv.cn/tvChannelDetail/54"},{"name":"嘉佳卡通","url":"https://www.gdtv.cn/tvChannelDetail/66"},{"name":"哈哈炫动","url":"https://live.kankanews.com/huikan?id=9"},{"name":"北京少儿","url":"https://www.btime.com/btv/btvsy_index?tag=8"},{"name":"江西少儿","url":"https://www.jxntv.cn/live/?tag=5#/jxtv6"},{"name":"内蒙少儿","url":"https://www.nmtv.cn/liveTv?tag=少儿频道"},{"name":"深圳少儿","url":"https://www.sztv.com.cn/dianshi.shtml?id=7881"},{"name":"金鹰卡通","url":"https://www.mgtv.com/live/?tag=金鹰卡通"}]},{"tag":"jiaoyu","name":"教育","vods":[{"name":"中国教育1 综合","url":"https://www.yangshipin.cn/tv/home?pid=600171827"},{"name":"中国教育1","url":"https://tv.gxtv.cn/channel/channelivePlay_ffa6b6e1b32b4a16a73eb3ef66f8bfc7.html"},{"name":"中国教育2 空中课堂","url":"https://tv.gxtv.cn/channel/channelivePlay_80d0ffb42c114eaf9663708629ff0a3e.html"},{"name":"中国教育4 职业教育","url":"https://tv.gxtv.cn/channel/channelivePlay_67eace939278435bb4bca90800fb4225.html"},{"name":"山东教育","url":"https://www.sdetv.com.cn/edu/pc/live/index.html"},{"name":"上海教育","url":"https://www.setv.sh.cn/#/tvshow"},{"name":"武汉教育","url":"https://ronghehao-h5.whjyapp.com/#/pages/live/tv"},{"name":"昆明教育","url":"https://kmjy.kmetv.com/application/tenma01ds_tvradio/view/web/#/"},{"name":"郑州教育","url":"live.html?url=https://livezzutv.chinamcache.com/live/zb02.m3u8"},{"name":"平顶山教育","url":"live.html?url=http://219.150.204.175:81/hls/live1.m3u8"}]},{"tag":"gdtv","name":"广东","vods":[{"name":"广东卫视","url":"https://www.gdtv.cn/tvChannelDetail/43"},{"name":"广东4K超高清","url":"https://www.gdtv.cn/tvChannelDetail/16"},{"name":"广东经典电视剧","url":"https://www.gdtv.cn/tvChannelDetail/100"},{"name":"广东珠江","url":"https://www.gdtv.cn/tvChannelDetail/44"},{"name":"广东新闻","url":"https://www.gdtv.cn/tvChannelDetail/45"},{"name":"广东民生","url":"https://www.gdtv.cn/tvChannelDetail/48"},{"name":"广东体育","url":"https://www.gdtv.cn/tvChannelDetail/47"},{"name":"大湾区卫视","url":"https://www.gdtv.cn/tvChannelDetail/51"},{"name":"大湾区卫视（海外版）","url":"https://www.gdtv.cn/tvChannelDetail/46"},{"name":"广东影视","url":"https://www.gdtv.cn/tvChannelDetail/53"},{"name":"广东南方购物","url":"https://www.gdtv.cn/tvChannelDetail/42"},{"name":"广东现代教育","url":"https://www.gdtv.cn/tvChannelDetail/111"},{"name":"广东岭南戏曲","url":"https://www.gdtv.cn/tvChannelDetail/15"},{"name":"广东移动","url":"https://www.gdtv.cn/tvChannelDetail/74"},{"name":"广东纪录片","url":"https://www.gdtv.cn/tvChannelDetail/94"},{"name":"广州综合","url":"https://app.gztv.com/plusshare/?a=1#/tvDetail?code=3001"},{"name":"广州新闻","url":"https://app.gztv.com/plusshare/?a=2#/tvDetail?code=3002"},{"name":"广州南国都市","url":"https://app.gztv.com/plusshare/?a=3#/tvDetail?code=3003"},{"name":"广州法制","url":"https://app.gztv.com/plusshare/?a=4#/tvDetail?code=3004"},{"name":"东莞新闻综合","url":"https://dgrtv.sun0769.com/index.php/online2/4?utaot=1"},{"name":"东莞生活资讯","url":"https://dgrtv.sun0769.com/index.php/online2/5?utaot=1"},{"name":"河源综合","url":"https://tmpstream.hyrtv.cn/xwzh/sd/live.m3u8"},{"name":"河源公共","url":"https://tmpstream.hyrtv.cn/hygg/sd/live.m3u8"},{"name":"清远新闻综合","url":"https://www.qyrb.cn/tv/rM834x3d5a.html"},{"name":"韶关新闻综合","url":"https://www.sgmsw.cn/v/tv?spm=0.0.0.0.HGiuAr&id=SB05RIYZOU8JR418AUQOF62CAJQ08D0E"},{"name":"揭阳公共","url":"https://ap.jyrtv.tv/application/tvradio/h5/detail.html?type=tv&id=11"},{"name":"揭阳生活","url":"https://ap.jyrtv.tv/application/tvradio/h5/detail.html?type=tv&id=12"}]},{"tag":"sdtv","name":"山东","vods":[{"name":"齐鲁卫视","url":"https://v.iqilu.com/live/qlpd/"},{"name":"山东新闻","url":"https://v.iqilu.com/live/ggpd/"},{"name":"山东体育休闲","url":"https://v.iqilu.com/live/typd/"},{"name":"山东卫视","url":"https://v.iqilu.com/live/sdtv/index.html"},{"name":"山东生活","url":"https://v.iqilu.com/live/shpd/"},{"name":"山东综艺","url":"https://v.iqilu.com/live/zypd/"},{"name":"山东农科","url":"https://v.iqilu.com/live/nkpd/"},{"name":"山东文旅","url":"https://v.iqilu.com/live/yspd/"},{"name":"山东教育","url":"https://www.sdetv.com.cn/edu/pc/live/index.html"},{"name":"青岛新闻综合","url":"http://www.qtv.com.cn/live/tv/index.shtml"},{"name":"青岛经济生活","url":"http://www.qtv.com.cn/live/tv/tv_qtv2.shtml"},{"name":"青岛影视","url":"http://www.qtv.com.cn/live/tv/tv_qtv3.shtml"},{"name":"青岛文化娱乐","url":"http://www.qtv.com.cn/live/tv/tv_qtv4.shtml"},{"name":"青岛体育休闲","url":"http://www.qtv.com.cn/live/tv/tv_qtv5.shtml"},{"name":"青岛教育","url":"http://www.qtv.com.cn/live/tv/tv_qtv6.shtml"},{"name":"威海新闻综合","url":"http://lv.weihai.tv/live_13705e35636b2136b590e5a015bb801c.html"},{"name":"威海都市生活","url":"http://lv.weihai.tv/live_8bfc704cbba598e76540f5d4f61a0e03.html"},{"name":"威海海洋","url":"http://lv.weihai.tv/live_6dffaf124b89957024f9f31de302d183.html"},{"name":"泰安综合","url":"http://www.1545ts.com/zhibo/taian/zhibotatv1.html"},{"name":"泰安经济生活","url":"http://www.1545ts.com/zhibo/taian/zhibotatv2.html"},{"name":"临沂综合","url":"http://www.ilinyi.net/cms/tv/1020403"},{"name":"临沂公共","url":"http://www.ilinyi.net/cms/tv/1020769"},{"name":"临沂经济","url":"http://www.ilinyi.net/cms/tv/36417907"},{"name":"枣庄新闻综合","url":"http://www.lncm.cn/zhibo/show-1.html"},{"name":"枣庄经济生活","url":"http://www.lncm.cn/zhibo/show-3.html"},{"name":"枣庄公共","url":"http://www.lncm.cn/zhibo/show-4.html"},{"name":"聊城综合","url":"https://www.lcxw.cn/kands/?tag=0"},{"name":"聊城民生","url":"https://www.lcxw.cn/kands/?tag=1"},{"name":"潍坊新闻综合","url":"http://www.wfcmw.cn/wfrtv_pdLive.html?tv=1"},{"name":"潍坊经济生活","url":"http://www.wfcmw.cn/wfrtv_pdLive.html?tv=2"},{"name":"潍坊影视综艺","url":"http://www.wfcmw.cn/wfrtv_pdLive.html?tv=3"},{"name":"潍坊科教文旅","url":"http://www.wfcmw.cn/wfrtv_pdLive.html?tv=4"},{"name":"即墨生活服务","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jimorongmei.com/share/dHZsLTIyMS0z.html"},{"name":"长清新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jncqrm.cn/share/dHZsLTE3MS0y.html"},{"name":"长清生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jncqrm.cn/share/dHZsLTE3MS0yMA.html"},{"name":"济铁电视台","url":"live_com.html?script=js/tv/iapp/live.js&url=https://jnjapp.jntlj.com/share/dHZsLTMwMy0x.html"},{"name":"济阳综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jiyangrongmei.cn/share/dHZsLTg1LTE.html"},{"name":"济阳影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jiyangrongmei.cn/share/dHZsLTg1LTI.html"},{"name":"平阴乡村振兴","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI1Ny0z.html"},{"name":"商河综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.shxrmtzx.com/share/dHZsLTk3LTE.html"},{"name":"商河影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.shxrmtzx.com/share/dHZsLTk3LTI.html"},{"name":"章丘综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE5NS0x.html"},{"name":"章丘公共","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE5NS0y.html"},{"name":"东营区新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhidongyingapp.com/share/dHZsLTE2My01.html"},{"name":"东营区科教影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhidongyingapp.com/share/dHZsLTE2My03.html"},{"name":"广饶综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.grxrmtzx.com/share/dHZsLTIzNy0x.html"},{"name":"广饶科教文艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.grxrmtzx.com/share/dHZsLTIzNy01.html"},{"name":"利津综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lijinnews.com/share/dHZsLTE1My0x.html"},{"name":"利津文化生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lijinnews.com/share/dHZsLTE1My0z.html"},{"name":"城阳综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hichengyang.cn/share/dHZsLTQwMy01.html"},{"name":"黄岛综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qwmedia.cn/share/dHZsLTIyNy0x.html"},{"name":"黄岛生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qwmedia.cn/share/dHZsLTIyNy0z.html"},{"name":"即墨综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jimorongmei.com/share/dHZsLTIyMS0y.html"},{"name":"胶州综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshangjiaozhou.cn/share/dHZsLTMwNS0x.html"},{"name":"胶州生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshangjiaozhou.cn/share/dHZsLTMwNS0z.html"},{"name":"李沧TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.licangmedia.cn/share/dHZsLTE3My0x.html"},{"name":"崂山TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laoshanrongmei.cn/share/dHZsLTI5NS0x.html"},{"name":"莱西综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laixirongmei.cn/share/dHZsLTI1My0x.html"},{"name":"莱西生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laixirongmei.cn/share/dHZsLTI1My0z.html"},{"name":"平度新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aipingduapp.com/share/dHZsLTQ1LTQ.html"},{"name":"平度生活服务","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aipingduapp.com/share/dHZsLTQ1LTU.html"},{"name":"潍坊新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS0x.html"},{"name":"潍坊生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS01.html"},{"name":"潍坊影视综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS03.html"},{"name":"潍坊科教文旅","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS05.html"},{"name":"潍坊高新区","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wegood.wang/share/dHZsLTQyMS0xNA.html"},{"name":"安丘综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aianqiu.cn/share/dHZsLTEzNy0z.html"},{"name":"安丘民生","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aianqiu.cn/share/dHZsLTEzNy00.html"},{"name":"滨海新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfbhrmt.cn/share/dHZsLTE5OS0x.html"},{"name":"昌乐综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.clxrmtzx.cn/share/dHZsLTEtMw.html"},{"name":"昌邑综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changyirongmei.com/share/dHZsLTQ3LTE.html"},{"name":"昌邑经济生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changyirongmei.com/share/dHZsLTQ3LTI.html"},{"name":"坊子新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fzqrmtzx.cn/share/dHZsLTI4NS0x.html"},{"name":"高密综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaominews.com/share/dHZsLTcxLTI0.html"},{"name":"高密党建农科","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaominews.com/share/dHZsLTcxLTM4.html"},{"name":"寒亭新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.httv.cn/share/dHZsLTEzMy0x.html"},{"name":"奎文电视台","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfkwrm.com/share/dHZsLTEyNy0xNw.html"},{"name":"临朐新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshanglinqu.cn/share/dHZsLTIwNS0zOQ.html"},{"name":"青州综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qingzhounews.cn/share/dHZsLTEyNS0y.html"},{"name":"青州文化旅游","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qingzhounews.cn/share/dHZsLTEyNS0z.html"},{"name":"潍城TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wcrmawckhd.cn/share/dHZsLTE1LTM.html"},{"name":"诸城新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.52zhucheng.cn/share/dHZsLTExNS0yMw.html"},{"name":"寿光综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sgrmt.com/share/dHZsLTI3OS0x.html"},{"name":"寿光蔬菜","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sgrmt.com/share/dHZsLTI3OS0z.html"},{"name":"长岛TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changdaohao.cn/share/dHZsLTE3NS0x.html"},{"name":"福山综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fuzaifushan.cn/share/dHZsLTE4OS00.html"},{"name":"海阳综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hyzc.cn/share/dHZsLTI1NS0x.html"},{"name":"龙口综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTU3LTE.html"},{"name":"莱山综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI0NS00.html"},{"name":"莱山影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI0NS02.html"},{"name":"莱阳综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laiyangrongmei.cn/share/dHZsLTI0MS00.html"},{"name":"莱阳民生综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laiyangrongmei.cn/share/dHZsLTI0MS03.html"},{"name":"莱州综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laizhourongmei.cn/share/dHZsLTIzOS0x.html"},{"name":"牟平综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mprmt.com/share/dHZsLTI4MS0x.html"},{"name":"蓬莱综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xianjingpenglai.cn/share/dHZsLTEwOS0y.html"},{"name":"栖霞综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aiqixiaapp.com/share/dHZsLTE2NS0xMg.html"},{"name":"栖霞苹果","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aiqixiaapp.com/share/dHZsLTE2NS0xNA.html"},{"name":"招远综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhaoyuanrongmei.com.cn/share/dHZsLTU1LTI.html"},{"name":"招远综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhaoyuanrongmei.com.cn/share/dHZsLTU1LTQ.html"},{"name":"博山新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.boshanhao.cn/share/dHZsLTE3LTg.html"},{"name":"博山图文","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.boshanhao.cn/share/dHZsLTE3LTk.html"},{"name":"高青综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gqxrmt.cn/share/dHZsLTYxLTE.html"},{"name":"高青影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gqxrmt.cn/share/dHZsLTYxLTI.html"},{"name":"桓台综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.htxw.cn/share/dHZsLTIzLTE1.html"},{"name":"桓台影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.htxw.cn/share/dHZsLTIzLTE2.html"},{"name":"临淄新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.linzirongmei.cn/share/dHZsLTE1MS02.html"},{"name":"临淄生活服务","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.linzirongmei.cn/share/dHZsLTE1MS03.html"},{"name":"沂源综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yyrmapp.com/share/dHZsLTIwMy02.html"},{"name":"沂源生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yyrmapp.com/share/dHZsLTIwMy03.html"},{"name":"淄川新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zichuanrongmei.cn/share/dHZsLTc1LTE.html"},{"name":"张店1","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aizhangdian.com/share/dHZsLTEwMS0x.html"},{"name":"张店2","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aizhangdian.com/share/dHZsLTEwMS02.html"},{"name":"周村新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.izhoucun.cn/share/dHZsLTI1OS0x.html"},{"name":"周村生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.izhoucun.cn/share/dHZsLTI1OS0z.html"},{"name":"山亭综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.stqrmtzx.com/share/dHZsLTI0My0x.html"},{"name":"枣庄市中综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zzszrm.com/share/dHZsLTIzMy0x.html"},{"name":"滕州综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tzrmt.com/share/dHZsLTEwMy0y.html"},{"name":"薛城新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aixuechengapp.com/share/dHZsLTM3LTg.html"},{"name":"峄城综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yilan-app.com/share/dHZsLTIwOS0x.html"},{"name":"滨城TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.binchengrongmei.com/share/dHZsLTI0OS0zNQ.html"},{"name":"惠民综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aihuimin.cn/share/dHZsLTIxMS0y.html"},{"name":"惠民影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aihuimin.cn/share/dHZsLTIxMS0z.html"},{"name":"无棣综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE2OS0x.html"},{"name":"无棣综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE2OS0yMQ.html"},{"name":"阳信新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yangxinrongmei.cn/share/dHZsLTIxNy0x.html"},{"name":"沾化综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhanhuarongmei.cn/share/dHZsLTI3Ny0x.html"},{"name":"沾化综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhanhuarongmei.cn/share/dHZsLTI3Ny05.html"},{"name":"德州经济生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0y.html"},{"name":"德州图文","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS05.html"},{"name":"陵城综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lxgdw.com/share/dHZsLTIxNS02.html"},{"name":"陵城综合2","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0zNg.html"},{"name":"乐陵新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laolingrongmei.cn/share/dHZsLTI2Ny0x.html"},{"name":"乐陵城市生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laolingrongmei.cn/share/dHZsLTI2Ny01.html"},{"name":"临邑1","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyxrmtzx.com/share/dHZsLTQ5LTM.html"},{"name":"宁津综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.njxrmtzx.cn/share/dHZsLTE5My0x.html"},{"name":"平原综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxwapp.com/share/dHZsLTE5LTI.html"},{"name":"庆云综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS02NQ.html"},{"name":"武城综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wuchengrmtzx.cn/share/dHZsLTMzLTQ.html"},{"name":"武城综艺影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS01OA.html"},{"name":"夏津综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0yMQ.html"},{"name":"夏津公共","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0yMw.html"},{"name":"禹城综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS00OA.html"},{"name":"禹城综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS01MA.html"},{"name":"成武综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cwcmc.cn/share/dHZsLTEzMS0x.html"},{"name":"成武综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cwcmc.cn/share/dHZsLTEzMS0y.html"},{"name":"曹县综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.caoxianrongmei.cn/share/dHZsLTg3LTI.html"},{"name":"东明新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dongmingrongmei.cn/share/dHZsLTExMS0y.html"},{"name":"定陶新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aidingtao.cn/share/dHZsLTI3LTc.html"},{"name":"巨野新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.juyerongmei.cn/share/dHZsLTEzOS0x.html"},{"name":"牡丹区新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hzmdrm.cn/share/dHZsLTIxOS02.html"},{"name":"牡丹区综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hzmdrm.cn/share/dHZsLTIxOS0xNw.html"},{"name":"单县综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdmlsz.com/share/dHZsLTE1NS0y.html"},{"name":"郓城新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ycrmtzx.com.cn/share/dHZsLTEzNS0z.html"},{"name":"郓城综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ycrmtzx.com.cn/share/dHZsLTEzNS0y.html"},{"name":"金乡综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrm.net/share/dHZsLTEyOS0y.html"},{"name":"金乡生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrm.net/share/dHZsLTEyOS00.html"},{"name":"梁山综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lsrmapp.com/share/dHZsLTg5LTE.html"},{"name":"曲阜新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jinriqufu.com/share/dHZsLTEzLTE.html"},{"name":"任城新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcrmt.cn/share/dHZsLTczLTg.html"},{"name":"任城影视娱乐","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcrmt.cn/share/dHZsLTczLTk.html"},{"name":"泗水新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sishuitv.com/share/dHZsLTExNy01.html"},{"name":"泗水文化生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sishuitv.com/share/dHZsLTExNy02.html"},{"name":"汶上综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wstvs.com/share/dHZsLTMwMS0x.html"},{"name":"鱼台新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ytxrmtzx.com/share/dHZsLTYzLTU.html"},{"name":"鱼台生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ytxrmtzx.com/share/dHZsLTYzLTE1.html"},{"name":"兖州新闻","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTIzMS0x.html"},{"name":"兖州生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTIzMS0z.html"},{"name":"茌平综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cprmtvs.com/share/dHZsLTMxLTY.html"},{"name":"茌平生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cprmtvs.com/share/dHZsLTMxLTg.html"},{"name":"东昌综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dcfrm.cn/share/dHZsLTI2NS0x.html"},{"name":"东阿综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.decmc.cn/share/dHZsLTk1LTIy.html"},{"name":"东阿综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.decmc.cn/share/dHZsLTk1LTI5.html"},{"name":"高唐综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaotangrongmei.com/share/dHZsLTQzLTE.html"},{"name":"高唐综艺","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaotangrongmei.com/share/dHZsLTQzLTU.html"},{"name":"冠县综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.guanxianrongmei.com/share/dHZsLTc5LTE.html"},{"name":"临清综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lqrmtzx.cn/share/dHZsLTY1LTI.html"},{"name":"临清经济信息","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lqrmtzx.cn/share/dHZsLTY1LTU.html"},{"name":"费县综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.feixianshoufa.cn/share/dHZsLTQxLTExOQ.html"},{"name":"费县生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.feixianshoufa.cn/share/dHZsLTQxLTExNw.html"},{"name":"河东综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyhedong.com/share/dHZsLTE5MS0x.html"},{"name":"河东影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyhedong.com/share/dHZsLTE5MS0y.html"},{"name":"莒南综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.junanrongmei.cn/share/dHZsLTEwNS00.html"},{"name":"莒南影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.junanrongmei.cn/share/dHZsLTEwNS01.html"},{"name":"兰陵综合频道","url":"live_com.html?script=js/tv/iapp2/live.js&orgId=113&id=131"},{"name":"兰陵公共频道","url":"live_com.html?script=js/tv/iapp2/live.js&orgId=113&id=133"},{"name":"兰山综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lylsrm.cn/share/dHZsLTIwMS0x.html"},{"name":"临沭综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdlsrm.com/share/dHZsLTE2Ny0z.html"},{"name":"临沭生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdlsrm.com/share/dHZsLTE2Ny00.html"},{"name":"罗庄综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.luozhuangshoufa.cn/share/dHZsLTE0Ny0x.html"},{"name":"罗庄影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.luozhuangshoufa.cn/share/dHZsLTE0Ny0xNw.html"},{"name":"蒙阴综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mengyinshoufa.com/share/dHZsLTE2MS0xMw.html"},{"name":"蒙阴2套","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mengyinshoufa.com/share/dHZsLTE2MS0xNQ.html"},{"name":"平邑综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxrmt.com.cn/share/dHZsLTM0NS00.html"},{"name":"平邑生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxrmt.com.cn/share/dHZsLTM0NS0xNA.html"},{"name":"郯城综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tanchengtv.com/share/dHZsLTgzLTE.html"},{"name":"郯城2套","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tanchengtv.com/share/dHZsLTgzLTI.html"},{"name":"沂南综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.12345yinanshoufa.cn/share/dHZsLTE3Ny02.html"},{"name":"沂南红色影视","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.12345yinanshoufa.cn/share/dHZsLTE3Ny03.html"},{"name":"沂水综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE0NS0x.html"},{"name":"沂水生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE0NS0y.html"},{"name":"莒县综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrmtzx.cn/share/dHZsLTE1OS0yMw.html"},{"name":"莒县2套","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrmtzx.cn/share/dHZsLTE1OS0yNw.html"},{"name":"五莲综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wltvlive.cn/share/dHZsLTI5OS0xMA.html"},{"name":"五莲文化旅游","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wltvlive.cn/share/dHZsLTI5OS0xMg.html"},{"name":"东平综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dpsjt.cn/share/dHZsLTE4Ny05.html"},{"name":"东平民生","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dpsjt.cn/share/dHZsLTE4Ny0xMQ.html"},{"name":"岱岳TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.daiyuerongmei.cn/share/dHZsLTI5My0x.html"},{"name":"肥城生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fcrmt.cn/share/dHZsLTUxLTY.html"},{"name":"宁阳综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.nyxrmtzx.cn/share/dHZsLTEyMy0x.html"},{"name":"宁阳2套","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.nyxrmtzx.cn/share/dHZsLTEyMy03.html"},{"name":"泰山TV","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tsqrmtzx.cn/share/dHZsLTI2My0x.html"},{"name":"新泰综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xintairongmei.cn/share/dHZsLTU5LTI.html"},{"name":"新泰乡村","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xintairongmei.cn/share/dHZsLTU5LTM.html"},{"name":"威海新闻综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0x.html"},{"name":"威海都市生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0z.html"},{"name":"威海海洋","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0xMg.html"},{"name":"威海环翠综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.whhccm.cn/share/dHZsLTIxMy01.html"},{"name":"荣成综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcsrmtzx.cn/share/dHZsLTc3LTEw.html"},{"name":"荣成生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcsrmtzx.cn/share/dHZsLTc3LTEx.html"},{"name":"乳山综合","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rushanrongmei.cn/share/dHZsLTE0My04.html"},{"name":"乳山生活","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rushanrongmei.cn/share/dHZsLTE0My05.html"},{"name":"文登TV1","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wendengsf.com/share/dHZsLTkxLTc.html"},{"name":"文登TV2","url":"live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wendengsf.com/share/dHZsLTkxLTg.html"}]},{"tag":"sxtv","name":"山西","vods":[{"name":"山西卫视","url":"https://apphhplushttps.sxrtv.com//television/live_wap_650.html"},{"name":"黄河","url":"https://apphhplushttps.sxrtv.com//television/live_wap_651.html"},{"name":"山西经济与科技","url":"https://apphhplushttps.sxrtv.com//television/live_wap_653.html"},{"name":"山西影视","url":"https://apphhplushttps.sxrtv.com//television/live_wap_654.html"},{"name":"山西社会与法治","url":"https://apphhplushttps.sxrtv.com//television/live_wap_655.html"},{"name":"山西文体生活","url":"https://apphhplushttps.sxrtv.com//television/live_wap_656.html"},{"name":"太原新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811850.html"},{"name":"大同新闻综合","url":"http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=16"},{"name":"大同公共","url":"http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=8"},{"name":"大同生活","url":"http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=9"},{"name":"朔州新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811845.html"},{"name":"山西影视","url":"https://apphhplushttps.sxrtv.com//television/live_wap_654.html"},{"name":"忻州综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811842.html"},{"name":"阳泉新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811848.html"},{"name":"阳泉科教","url":"http://share.yqrtv.com/?_hgOutLink=live/livedetail&channel_id=11"},{"name":"吕梁新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811840.html"},{"name":"吕梁影视生活","url":"https://web.guangdianyun.tv/tv/2653?uin=2268"},{"name":"晋中综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811844.html"},{"name":"晋中公共","url":"https://app.jztvnews.cn//television/live_wap_12442.html"},{"name":"长治新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811847.html"},{"name":"晋城新闻综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811846.html"},{"name":"临汾综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811841.html"},{"name":"运城综合","url":"https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811843.html"}]},{"tag":"cztv","name":"浙江","vods":[{"name":"浙江卫视","url":"https://www.cztv.com/liveTV/101"},{"name":"浙江钱江都市","url":"https://www.cztv.com/liveTV/102"},{"name":"浙江经济生活","url":"https://www.cztv.com/liveTV/103"},{"name":"浙江教科影视","url":"https://www.cztv.com/liveTV/104"},{"name":"浙江民生休闲","url":"https://www.cztv.com/liveTV/106"},{"name":"浙江新闻","url":"https://www.cztv.com/liveTV/107"},{"name":"浙江国际","url":"https://www.cztv.com/liveTV/110"},{"name":"浙江好易购","url":"https://www.cztv.com/liveTV/111"},{"name":"浙江之江纪录","url":"https://www.cztv.com/liveTV/112"},{"name":"杭州综合","url":"https://tv.hoolo.tv/hzzh/"},{"name":"杭州西湖明珠","url":"https://tv.hoolo.tv/xhmz/"},{"name":"杭州生活","url":"https://tv.hoolo.tv/hzsh/"},{"name":"杭州影视","url":"https://tv.hoolo.tv/utv/"},{"name":"杭州青少体育","url":"https://tv.hoolo.tv/hzse/"},{"name":"杭州文化","url":"https://tv.hoolo.tv/whpd/"},{"name":"宁波新闻综合","url":"https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV1/index.shtml"},{"name":"宁波新闻综合","url":"https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV2/index.shtml"},{"name":"宁波都市文体","url":"https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV3/index.shtml"},{"name":"宁波影视剧","url":"https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV4/index.shtml"}]},{"tag":"ahtv","name":"安徽","vods":[{"name":"安徽卫视","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=0"},{"name":"安徽经济生活","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=1"},{"name":"安徽综艺·体育","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=2"},{"name":"安徽国际","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=6"},{"name":"安徽综艺","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=2"},{"name":"安徽影视","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=3"},{"name":"安徽公共","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=4"},{"name":"安徽农业·科教","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=5"},{"name":"安徽移动电视","url":"https://www.ahtv.cn/folder9000/folder20193?channelIndex=7"},{"name":"阜阳新闻综合","url":"https://web.guangdianyun.tv/tv/2851?uin=2577"},{"name":"阜阳教育","url":"https://web.guangdianyun.tv/tv/2852?uin=2577"},{"name":"阜阳生活","url":"https://web.guangdianyun.tv/tv/2853?uin=2577"},{"name":"阜阳都市文艺","url":"https://web.guangdianyun.tv/tv/2854?uin=2577"},{"name":"芜湖新闻综合","url":"https://www.wuhubtv.com/folder1194/"},{"name":"芜湖生活","url":"https://www.wuhubtv.com/folder1194/?ujs=JCQoJy5uYXZMaXN0IGFbdGl0bGU9IueUn+a0u+mikemBkyJdJykuY2xpY2soKQ=="},{"name":"亳州综合","url":"https://www.ahbztv.com/televisi0n.html"},{"name":"亳州农村","url":"https://www.ahbztv.com/televisi0n.html?ujs=JCQoJyNjaGFubmVsIC5zd2lwZXItc2xpZGUnKS5maWx0ZXIoZnVuY3Rpb24oKSB7cmV0dXJuICQkKHRoaXMpLnRleHQoKS50cmltKCkgPT09ICflhpzmnZHpopHpgZMnO30pLmNsaWNrKCk="},{"name":"淮北新闻综合","url":"live.html?url=https://vms-x.hbnews.net/video/xwzh/index.m3u8"},{"name":"淮北经济生活","url":"live.html?url=https://vms-x.hbnews.net/video/JJSH/index.m3u8"},{"name":"宿州新闻综合","url":"live.html?url=https://live.ahsz.tv/video/s10001-szzh/index.m3u8"},{"name":"宿州科教生活","url":"live.html?url=https://live.ahsz.tv/video/s10001-kxjy/index.m3u8"}]},{"tag":"jstv","name":"江苏","vods":[{"name":"江苏卫视","url":"https://live.jstv.com/?tag=江苏卫视"},{"name":"江苏卫视4K超高清","url":"https://live.jstv.com/?tag=江苏卫视4K超高清"},{"name":"江苏综艺","url":"https://live.jstv.com/?tag=江苏综艺"},{"name":"江苏新闻","url":"https://live.jstv.com/?tag=江苏新闻"},{"name":"江苏城市","url":"https://live.jstv.com/?tag=江苏城市"},{"name":"江苏影视","url":"https://live.jstv.com/?tag=江苏影视"},{"name":"江苏教育","url":"https://live.jstv.com/?tag=江苏教育"},{"name":"江苏体育·休闲","url":"https://live.jstv.com/?tag=体育休闲"},{"name":"江苏国际","url":"https://live.jstv.com/?tag=江苏国际"},{"name":"苏州新闻综合","url":"live.html?url=https://live-auth.51kandianshi.com/szgd/csztv1.m3u8"},{"name":"苏州社会经济","url":"live.html?url=https://live-auth.51kandianshi.com/szgd/csztv2.m3u8"},{"name":"苏州电影娱乐","url":"live.html?url=https://live-auth.51kandianshi.com/szgd/csztv4.m3u8"},{"name":"苏州生活资讯","url":"live.html?url=https://live-auth.51kandianshi.com/szgd/csztv5.m3u8"},{"name":"苏州4K","url":"live.html?url=https://live-auth.51kandianshi.com/szgd/csztv4k_4k.m3u8"},{"name":"南京新闻综合","url":"https://www.nbs.cn/live/?id=109152"},{"name":"南京十八·生活","url":"https://www.nbs.cn/live/?id=110094"},{"name":"南京教科","url":"https://www.nbs.cn/live/?id=109153"},{"name":"南京文旅纪录","url":"https://www.nbs.cn/live/?id=110093"},{"name":"南通新闻综合","url":"https://www.ntjoy.com/ntw/broadcastTvs.html?menuCode=ntw005"}]},{"tag":"fujian","name":"福建","vods":[{"name":"福建综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248990102917120&company_id=468&utaot=1"},{"name":"东南卫视","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248966136664064&company_id=468&utaot=1"},{"name":"福建乡村振兴公共","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248940467523584&company_id=468&utaot=1"},{"name":"福建新闻","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248914378952704&company_id=468&utaot=1"},{"name":"福建电视剧","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248891478052864&company_id=468&utaot=1"},{"name":"福建旅游","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248752898248704&company_id=468&utaot=1"},{"name":"福建经济","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248614498799616&company_id=468&utaot=1"},{"name":"福建文体","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248584991870976&company_id=468&utaot=1"},{"name":"福建少儿","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248553475870720&company_id=468&utaot=1"},{"name":"海峡卫视","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248523855695872&company_id=468&utaot=1"},{"name":"厦门卫视","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727571808803282944&company_id=468&utaot=1"},{"name":"福州新闻综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=731087090473676800&company_id=468&utaot=1"},{"name":"福州生活","url":"live.html?url=https://live.zohi.tv/video/s10001-fztv-3/index.m3u8"},{"name":"福建文体","url":"live.html?url=https://live.zohi.tv/video/s10001-fztv-4/index.m3u8"},{"name":"福建少儿","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248553475870720&company_id=468&utaot=1"},{"name":"泉州新闻综合","url":"https://www.qztv.cn/index/Medias/index/media_id/wq95wqbDnMKyd8KiwqzChnt0w5nChcKowoHCoQ/stream_name/news.html"},{"name":"泉州闽南语","url":"https://www.qztv.cn/index/Medias/index/media_id/wq95wqbDnMKyd8KiwqzChnt0w5nChcKofcKh/stream_name/mny.html"},{"name":"漳州新闻综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727214415649083392&company_id=468&utaot=1"},{"name":"龙岩综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727212352215093248&company_id=468&utaot=1"},{"name":"三明综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727216678547394560&company_id=468&utaot=1"},{"name":"南平综合","url":"https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727216450918322176&company_id=468&utaot=1"},{"name":"莆田新闻综合","url":"https://www.ptbtv.com/4?_hgOutLink=live/livedetail&channel_id=4"},{"name":"莆田文旅生活","url":"https://www.ptbtv.com/5?_hgOutLink=live/livedetail&channel_id=5"},{"name":"仙游综合","url":"https://www.ptbtv.com/6?_hgOutLink=live/livedetail&channel_id=6"},{"name":"宁德新闻综合","url":"http://share.nddst.com/?_hgOutLink=live/livedetail&channel_id=41"},{"name":"宁德文化旅游","url":"http://share.nddst.com/?_hgOutLink=live/livedetail&channel_id=42"},{"name":"平潭新闻综合","url":"https://web.guangdianyun.tv/tv/907?uin=1118&utaot=1&ujs=X3R2RnVuYy5jaGVjayhmdW5jdGlvbiAoKXtyZXR1cm4gJCQoIiNmb2xsb3ctc2tpbiIpLmxlbmd0aD4wfSxmdW5jdGlvbiAoKXskJCgiI2ZvbGxvdy1za2luIikucmVtb3ZlKCk7fSk7"}]},{"tag":"beijing","name":"北京","vods":[{"name":"北京卫视","url":"https://www.btime.com/btv/btvsy_index?tag=0"},{"name":"北京文艺","url":"https://www.btime.com/btv/btvsy_index?tag=1"},{"name":"北京纪实科教","url":"https://www.btime.com/btv/btvsy_index?tag=2"},{"name":"北京影视","url":"https://www.btime.com/btv/btvsy_index?tag=3"},{"name":"北京财经","url":"https://www.btime.com/btv/btvsy_index?tag=4"},{"name":"北京体育","url":"https://www.btime.com/btv/btvsy_index?tag=5"},{"name":"北京生活","url":"https://www.btime.com/btv/btvsy_index?tag=6"},{"name":"北京新闻","url":"https://www.btime.com/btv/btvsy_index?tag=7"}]},{"tag":"shanghai","name":"上海","vods":[{"name":"上海东方卫视","url":"https://live.kankanews.com/huikan?id=1"},{"name":"上海新闻综合","url":"https://live.kankanews.com/huikan?id=2"},{"name":"上海魔都眼","url":"https://live.kankanews.com/huikan?id=11"},{"name":"上海第一财经","url":"https://live.kankanews.com/huikan?id=5"},{"name":"上海新纪实","url":"https://live.kankanews.com/huikan?id=12"},{"name":"上海都市","url":"https://live.kankanews.com/huikan?id=4"},{"name":"上海五星体育","url":"https://live.kankanews.com/huikan?id=10"}]},{"tag":"shenzhen","name":"深圳","vods":[{"name":"深圳卫视","url":"https://www.sztv.com.cn/dianshi.shtml?id=7867&u-link=1"},{"name":"深圳卫视4K","url":"https://www.sztv.com.cn/dianshi.shtml?id=24725&u-link=1"},{"name":"深圳都市","url":"https://www.sztv.com.cn/dianshi.shtml?id=7868&u-link=1"},{"name":"深圳电视剧","url":"https://www.sztv.com.cn/dianshi.shtml?id=7880&u-link=1"},{"name":"深圳财经","url":"https://www.sztv.com.cn/dianshi.shtml?id=7871&u-link=1"},{"name":"深圳移动电视","url":"https://www.sztv.com.cn/dianshi.shtml?id=7869&u-link=1"},{"name":"深圳国际","url":"https://www.sztv.com.cn/dianshi.shtml?id=7944&u-link=1"}]},{"tag":"sctv","name":"四川","vods":[{"name":"四川卫视","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=1"},{"name":"四川新闻","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=2"},{"name":"四川经济","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=3"},{"name":"四川文化旅游","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=4"},{"name":"四川影视文艺","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=5"},{"name":"四川妇女儿童","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=6"},{"name":"四川乡村","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=8"},{"name":"四川康巴卫视","url":"live_com.html?script=js/tv/sctv/sctv.js&tag=9"},{"name":"重庆新闻综合","url":"https://www.cbg.cn/web/list/4918/1.html?5DEFC70C1A4AOD5173881C62BD4ACAD0"},{"name":"南江综合","url":"https://web.guangdianyun.tv/tv/?id=1670&uin=1822"},{"name":"泸县综合","url":"https://web.guangdianyun.tv/tv/?id=1645&uin=2392"},{"name":"绵竹综合","url":"https://web.guangdianyun.tv/tv/?id=1933&uin=3277"},{"name":"射洪综合","url":"https://web.guangdianyun.tv/tv/?id=391&uin=1743"},{"name":"成都新闻综合","url":"https://www.cditv.cn/show/4845-563.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都经济资讯","url":"https://www.cditv.cn/show/4845-562.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都都市生活","url":"https://www.cditv.cn/show/4845-561.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都影视文艺","url":"https://www.cditv.cn/show/4845-560.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都公共","url":"https://www.cditv.cn/show/4845-559.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都少儿","url":"https://www.cditv.cn/show/4845-558.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"成都蓉城先锋","url":"https://www.cditv.cn/show/4845-592.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="},{"name":"内江综合","url":"http://www.scnj.tv/plus/live/live.php?id=15948060915449&flag=1"},{"name":"达州新闻综合","url":"live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel104234/playlist.m3u8"},{"name":"达州文化生活","url":"live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel104727/playlist.m3u8"},{"name":"达州通川","url":"live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel105011/playlist.m3u8"},{"name":"泸州新闻综合","url":"https://www.luzhoubs.com/lztv1/index.html"},{"name":"泸州科教生活","url":"https://www.luzhoubs.com/lztv3/index.html"},{"name":"攀枝花新闻综合","url":"https://h5.pzhkai.com/front-cloudlive-manage-h5/index.html?id=536937329516896257&company_id=1051"},{"name":"遂宁综合","url":"https://www.snxw.com/suinMini/site/6642bf8360b26293fe689f04/6642d21860b26293fe689f4c"},{"name":"遂宁文化生活","url":"live.html?url=https://szyplaytv.snxw.com/live/gggy/playlist.m3u8"},{"name":"广元综合","url":"live.html?url=https://m3u8.channel.dzsm.com/nmip-media/channellive/channel100999/playlist.m3u8"},{"name":"广元文化生活","url":"live.html?url=https://m3u8.channel.dzsm.com/nmip-media/channellive/channel101257/playlist.m3u8"},{"name":"资阳新闻综合","url":"http://www.zyrb.com.cn/#/bD074b747F?pkey="},{"name":"甘孜综合","url":"https://www.ganzitv.com/cms/tv"},{"name":"凉山新闻综合","url":"live.html?url=https://tvlive.i0834.cn/nmip-media/channellive/channel114103/playlist.m3u8"},{"name":"凉山彝语综合","url":"live.html?url=https://tvlive.i0834.cn/nmip-media/channellive/channel115044/playlist.m3u8"},{"name":"雅安新闻综合","url":"https://www.beiww.com/shiting"},{"name":"绵阳新闻综合","url":"https://myntv.cn/html/zb/mytv1.asp"},{"name":"绵阳科教生活","url":"https://myntv.cn/html/zb/mytv2.asp"}]},{"tag":"hbtv","name":"河北","vods":[{"name":"河北卫视","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10524916.shtml"},{"name":"河北经济生活","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516507.shtml?share=true"},{"name":"河北三农","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516508.shtml?share=true"},{"name":"河北都市","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516509.shtml?share=true"},{"name":"河北影视剧","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516510.shtml?share=true"},{"name":"河北少儿科教","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516511.shtml?share=true"},{"name":"河北文旅·公共","url":"https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516512.shtml?share=true"},{"name":"沧州新闻综合","url":"https://www.czgd.tv/Article/des?infoid=32768&modelid=3"},{"name":"沧州公共","url":"https://www.czgd.tv/Article/des?infoid=32769&modelid=3"},{"name":"沧州影视","url":"https://www.czgd.tv/Article/des?infoid=32770&modelid=3"},{"name":"衡水综合","url":"https://app.hsrtv.cn/web/teletv/tv_content_1.html"},{"name":"衡水公共","url":"https://app.hsrtv.cn/web/teletv/tv_content_4.html"},{"name":"邢台公共","url":"https://www.xttv.com.cn/index/channel/index/id/62.html"},{"name":"邢台城市生活","url":"https://www.xttv.com.cn/index/channel/index/id/64html"},{"name":"石家庄新闻综合","url":"https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=4"},{"name":"石家庄城市服务","url":"https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=5"},{"name":"石家庄文化娱乐","url":"https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=6"}]},{"tag":"hntv","name":"河南","vods":[{"name":"河南卫视","url":"https://static.hntv.tv/kds/#/"},{"name":"河南新闻","url":"https://static.hntv.tv/total/television/?id=149&u-link=1"},{"name":"河南都市","url":"https://www.hndyjyfw.gov.cn/livePlay.html?u=14"},{"name":"河南民生","url":"https://www.hndyjyfw.gov.cn/livePlay.html?u=15"},{"name":"河南梨园","url":"https://www.hndyjyfw.gov.cn/livePlay.html?u=16"},{"name":"河南法治","url":"https://static.hntv.tv/total/television/?id=147&u-link=1"},{"name":"河南公共","url":"https://static.hntv.tv/total/television/?id=151&u-link=1"},{"name":"河南乡村","url":"https://static.hntv.tv/total/television/?id=152&u-link=1"},{"name":"河南电视剧","url":"https://static.hntv.tv/total/television/?id=148&u-link=1"},{"name":"河南文物宝库","url":"https://static.hntv.tv/total/television/?id=155&u-link=1"},{"name":"河南武术世界","url":"https://static.hntv.tv/total/television/?id=156&u-link=1"},{"name":"河南曲艺","url":"https://static.hntv.tv/total/television/?id=157&u-link=1"},{"name":"河南移动戏曲","url":"https://static.hntv.tv/total/television/?id=163&u-link=1"},{"name":"河南象视界","url":"https://static.hntv.tv/total/television/?id=183&u-link=1"},{"name":"河南国学","url":"https://static.hntv.tv/total/television/?id=194&u-link=1"},{"name":"郑州综合","url":"https://static.hntv.tv/total/television/?id=197&u-link=1"},{"name":"开封综合","url":"https://static.hntv.tv/total/television/?id=198&u-link=1"},{"name":"洛阳综合","url":"https://static.hntv.tv/total/television/?id=204&u-link=1"},{"name":"平顶山综合","url":"https://static.hntv.tv/total/television/?id=205&u-link=1"},{"name":"安阳综合","url":"https://static.hntv.tv/total/television/?id=206&u-link=1"},{"name":"鹤壁综合","url":"https://static.hntv.tv/total/television/?id=207&u-link=1"},{"name":"新乡综合","url":"https://static.hntv.tv/total/television/?id=208&u-link=1"},{"name":"焦作综合","url":"https://static.hntv.tv/total/television/?id=209&u-link=1"},{"name":"濮阳综合","url":"https://static.hntv.tv/total/television/?id=219&u-link=1"},{"name":"许昌综合","url":"https://static.hntv.tv/total/television/?id=220&u-link=1"},{"name":"漯河综合","url":"https://static.hntv.tv/total/television/?id=221&u-link=1"},{"name":"三门峡综合","url":"https://static.hntv.tv/total/television/?id=222&u-link=1"},{"name":"南阳综合","url":"https://static.hntv.tv/total/television/?id=223&u-link=1"},{"name":"商丘综合","url":"https://static.hntv.tv/total/television/?id=224&u-link=1"},{"name":"信阳综合","url":"https://static.hntv.tv/total/television/?id=225&u-link=1"},{"name":"周口综合","url":"https://static.hntv.tv/total/television/?id=225&u-link=1"},{"name":"驻马店综合","url":"https://static.hntv.tv/total/television/?id=227&u-link=1"},{"name":"济源综合","url":"https://static.hntv.tv/total/television/?id=228&u-link=1"},{"name":"信阳新闻综合","url":"https://www.xytv.cn/h5/pages/tv/detail?id=137"},{"name":"信阳文旅","url":"https://www.xytv.cn/h5/pages/tv/detail?id=138"},{"name":"开封新闻综合","url":"https://app.kftv.net.cn/tv?id=4576506160452924712&bundleID=8694949894473483736&type=1&tvType=1#"},{"name":"开封文化旅游","url":"https://app.kftv.net.cn/tv?id=1373356224162401385&bundleID=8694949894473483736&type=1&tvType=1#"},{"name":"安阳新闻综合","url":"https://share.aynews.net.cn/share/page/tvLive/?tvid=1&tvType=1&webTenId=1&origin=1"},{"name":"安阳文旅","url":"https://share.aynews.net.cn/share/page/tvLive/?tvid=3&tvType=1&webTenId=1&origin=1"},{"name":"焦作综合","url":"https://jiaozuo.dxhmt.cn/api/page/goLivePage?liveId=a15a6b9e3e1f435584f903641e85a975&personId=cbe111e3ca12486bb64ba9fc4ffe1c7b"},{"name":"焦作公共","url":"https://jiaozuo.dxhmt.cn/api/page/goLivePage?liveId=6a8a51398cf44ad28bb7808afdc94f4d&personId=cbe111e3ca12486bb64ba9fc4ffe1c7b"}]},{"tag":"gxtv","name":"广西","vods":[{"name":"广西旅游","url":"https://tv.gxtv.cn/channel/channelivePlay_f3335975f9fe11e88bcfe41f13b60c62.html"},{"name":"广西都市","url":"https://tv.gxtv.cn/channel/channelivePlay_fdbaf085f9fe11e88bcfe41f13b60c62.html"},{"name":"广西影视","url":"https://tv.gxtv.cn/channel/channelivePlay_5e923d82058e11e9ba67e41f13b60c62.html"},{"name":"广西新闻","url":"https://tv.gxtv.cn/channel/channelivePlay_9dfd8600075811e9ba67e41f13b60c62.html"},{"name":"广西国际","url":"https://tv.gxtv.cn/channel/channelivePlay_bfa17b64157f11e999f0e41f13b60c62.html"},{"name":"广西移动电视","url":"https://tv.gxtv.cn/channel/channelivePlay_78dbfd44e6b74ab687204d2d8113cbf5.html"},{"name":"南宁新闻综合","url":"https://www.nntv.cn/live/nntv_xw/"},{"name":"南宁文旅生活","url":"https://www.nntv.cn/live/nntv_ds/"},{"name":"南宁影视娱乐","url":"https://www.nntv.cn/live/nntv_ys/"},{"name":"南宁公共","url":"https://www.nntv.cn/live/nntv_gg/"},{"name":"桂林新闻综合","url":"https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=33&appscheme=gdmm-zaiguilin"},{"name":"桂林科教旅游","url":"https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=35&appscheme=gdmm-zaiguilin"},{"name":"桂林公共","url":"https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=34&appscheme=gdmm-zaiguilin"},{"name":"北海新闻综合","url":"https://res.gxbhxww.cn/html/rft/live.html?channelId=389d764cf13244de97a30bc44161d235&type=1&siteId=c510269b15014be4aaf5aa6d2b92c629&shareAppId=c510269b15014be4aaf5aa6d2b92c629"},{"name":"北海经济科教","url":"https://res.gxbhxww.cn/html/rft/live.html?channelId=51733cd2fd0548d288c3015ec3d0535b&type=1&siteId=c510269b15014be4aaf5aa6d2b92c629&shareAppId=c510269b15014be4aaf5aa6d2b92c629"},{"name":"玉林新闻综合","url":"https://web.guangdianyun.tv/tv/3289?uin=4042"},{"name":"玉林公共","url":"https://web.guangdianyun.tv/tv/3290?uin=4042"}]},{"tag":"jltv","name":"吉林","vods":[{"name":"吉林卫视","url":"https://www.jlntv.cn/tv?tag=0"},{"name":"吉林都市","url":"https://www.jlntv.cn/tv?tag=1"},{"name":"吉林生活","url":"https://www.jlntv.cn/tv?tag=2"},{"name":"吉林影视","url":"https://www.jlntv.cn/tv?tag=3"},{"name":"吉林乡村","url":"https://www.jlntv.cn/tv?tag=4"},{"name":"吉林综艺·文化","url":"https://www.jlntv.cn/tv?tag=5"},{"name":"长春综合","url":"https://chinactv.com/live/1442880654565093377.html"},{"name":"长春文旅体育","url":"https://chinactv.com/live/1442880767035355137.html"},{"name":"长春市民生活","url":"https://chinactv.com/live/1442880854423678977.html"},{"name":"延边卫视","url":"https://www.yb983.com/cys/index.html"},{"name":"吉林市新闻综合","url":"http://new.jlwlq.com/wap/live/tv_xwzh.html"},{"name":"四平新闻综合","url":"http://evfh-www.plus.jlntv.cn/siping/folder134/folder158"},{"name":"延边朝语综合","url":"https://www.iyb983.cn/live/index.html"}]},{"tag":"hlj","name":"黑龙江","vods":[{"name":"黑龙江卫视","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljws_own.m3u8"},{"name":"黑龙江文体","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljwy_hd.m3u8"},{"name":"黑龙江影视","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljys_hd.m3u8"},{"name":"黑龙江新闻法治","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljxw_hd.m3u8"},{"name":"黑龙江都市","url":"live.html?url=https://idclive.hljtv.com:4430/live/dushi_hd.m3u8"},{"name":"黑龙江农业·科技","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljgg_hd.m3u8"},{"name":"黑龙江少儿","url":"live.html?url=https://idclive.hljtv.com:4430/live/hljse_hd.m3u8"},{"name":"哈尔滨新闻综合","url":"https://www.hrbtv.net/folder79/folder81/"},{"name":"哈尔滨生活","url":"https://www.hrbtv.net/folder79/folder85/"},{"name":"哈尔滨影视","url":"https://www.hrbtv.net/folder79/folder87/"},{"name":"齐齐哈尔新闻综合","url":"https://www.qqhrnews.cn/p/qiqihaerxinwen.html"},{"name":"齐齐哈尔经济·法治","url":"https://www.qqhrnews.cn/p/jingjifazhipindao.html"},{"name":"绥化新闻综合","url":"live.html?url=https://liveplaysr.dbw.cn/lsdream/amzPoBP/1000/live.m3u8"}]},{"tag":"hbtv","name":"湖北","vods":[{"name":"湖北卫视","url":"https://news.hbtv.com.cn/app/tv/431"},{"name":"湖北经视","url":"https://news.hbtv.com.cn/app/tv/432"},{"name":"湖北综合","url":"https://news.hbtv.com.cn/app/tv/433"},{"name":"湖北影视","url":"https://news.hbtv.com.cn/app/tv/435"},{"name":"湖北生活","url":"https://news.hbtv.com.cn/app/tv/436"},{"name":"湖北教育","url":"https://news.hbtv.com.cn/app/tv/437"},{"name":"湖北垄上","url":"https://news.hbtv.com.cn/app/tv/438"},{"name":"十堰新闻综合","url":"https://www.syiptv.com/tv?station_id=1"},{"name":"十堰经济旅游","url":"https://www.syiptv.com/tv?station_id=3"},{"name":"孝感新闻综合","url":"https://share.xgrb.cn/live_details?newsid=25009136_xgrb"},{"name":"孝感生活","url":"https://share.xgrb.cn/live_detail?newsid=25009684_xgrb"},{"name":"荆州新闻综合","url":"http://m-jingzhou.cjyun.org/dszb"},{"name":"咸宁综合","url":"https://app.cjyun.org.cn/video/videojs/index?site_id=10140&id=91&page=canvas&live_type=1&ujs=X3R2RnVuYy5mdWxsc2NyZWVuVygidmlkZW8iKQ=="},{"name":"咸宁经济生活","url":"https://app.cjyun.org.cn/video/videojs/index?site_id=10140&id=91&page=canvas&live_type=1&ujs=JCQoJy52aWRlby1saXN0IC5saScpLmZpbHRlcihmdW5jdGlvbigpIHtyZXR1cm4gJCh0aGlzKS50ZXh0KCkudHJpbSgpID09PSAn57uP5rWO55Sf5rS7Jzt9KS5jbGljaygpO190dkZ1bmMuZnVsbHNjcmVlblcoInZpZGVvIik="},{"name":"宜昌三峡综合","url":"live.html?url=https://liveplay.ycrmt.cn/sxgd/zhpd.m3u8"},{"name":"宜昌三峡旅游生活","url":"live.html?url=https://liveplay.ycrmt.cn/sxgd/lysh.m3u8"},{"name":"荆门新闻综合","url":"http://cjy.jptnews.cn/p/353048.html"},{"name":"荆门科教文旅","url":"http://cjy.jptnews.cn/p/353049.html"},{"name":"襄阳综合","url":"https://xiangyang.cjyun.org/app/streamradio/142?u-link=1"},{"name":"襄阳经济生活","url":"https://xiangyang.cjyun.org/app/streamradio/138?u-link=1"},{"name":"襄阳公共","url":"https://xiangyang.cjyun.org/app/streamradio/130?u-link=1"},{"name":"随州综合","url":"http://m-suizhou.cjyun.org/dsgb?20220318"},{"name":"随州农村","url":"http://m-suizhou.cjyun.org/dsgb?20220318&ujs=JCQoJyN2aWRlb193cmFwIGxpJykuZmlsdGVyKGZ1bmN0aW9uKCkge3JldHVybiAkJCh0aGlzKS50ZXh0KCkudHJpbSgpID09PSAn6ZqP5bee5Yac5p2RJzt9KS5jbGljaygpOw=="},{"name":"恩施文旅","url":"https://web.guangdianyun.tv/tv/1811?uin=3179"}]},{"tag":"hntv","name":"湖南","vods":[{"name":"湖南经视","url":"https://www.mgtv.com/live/?tag=湖南经视"},{"name":"湖南娱乐","url":"https://www.mgtv.com/live/?tag=湖南娱乐"},{"name":"湖南电影","url":"https://www.mgtv.com/live/?tag=湖南电影"},{"name":"湖南都市","url":"https://www.mgtv.com/live/?tag=湖南都市"},{"name":"湖南电视剧","url":"https://www.mgtv.com/live/?tag=湖南电视剧"},{"name":"金鹰纪实","url":"https://www.mgtv.com/live/?tag=金鹰纪实"},{"name":"湖南爱晚","url":"https://www.mgtv.com/live/?tag=湖南爱晚"},{"name":"国际频道","url":"https://www.mgtv.com/live/?tag=国际频道"},{"name":"先锋乒羽","url":"https://www.mgtv.com/live/?tag=先锋乒羽"},{"name":"茶频道","url":"https://www.mgtv.com/live/?tag=茶频道"},{"name":"快乐垂钓","url":"https://www.mgtv.com/live/?tag=快乐垂钓"},{"name":"长沙新闻综合","url":"https://www.mgtv.com/live/?tag=长沙新闻综合"},{"name":"长沙政法","url":"https://www.mgtv.com/live/?tag=长沙政法"},{"name":"湘西新闻综合","url":"https://web.guangdianyun.tv/tv/2581?uin=3815&aid=17hnxxz&pt=2&fxbs=1"},{"name":"湘西文化旅游","url":"https://web.guangdianyun.tv/tv/2582?uin=3815&aid=17hnxxz&pt=2&fxbs=1"},{"name":"长沙新闻综合","url":"https://web.guangdianyun.tv/tv/346?uin=1648&userSource=weixin"},{"name":"长沙文旅","url":"https://web.guangdianyun.tv/tv/3830?uin=1648&userSource=weixin"},{"name":"长沙移动电视","url":"https://web.guangdianyun.tv/tv/356?uin=1648&userSource=weixin"},{"name":"邵阳新闻综合","url":"http://www.sytv.net.cn/folder2188/folder2190"},{"name":"岳阳新闻综合","url":"https://web.guangdianyun.tv/tv/1699?uin=2193"},{"name":"岳阳文旅都市","url":"https://web.guangdianyun.tv/tv/1701?uin=2193"},{"name":"娄底综合","url":"http://www.ldntv.cn/folder51/folder154/folder171"},{"name":"郴州综合","url":"https://www.ngcz.tv/folder83/folder86"}]},{"tag":"jxntv","name":"江西","vods":[{"name":"江西卫视","url":"https://www.jxntv.cn/live/?tag=1#/jxtv1"},{"name":"江西都市","url":"https://www.jxntv.cn/live/?tag=1#/jxtv2"},{"name":"江西经济生活","url":"https://www.jxntv.cn/live/?tag=2#/jxtv3"},{"name":"江西影视","url":"https://www.jxntv.cn/live/?tag=3#/jxtv4"},{"name":"江西农业","url":"https://www.jxntv.cn/live/?tag=4#/jxtv5"},{"name":"江西新闻","url":"https://www.jxntv.cn/live/?tag=6#/jxtv7"},{"name":"江西移动","url":"https://www.jxntv.cn/live/?tag=7#/jxtv8"},{"name":"江西陶瓷","url":"https://www.jxntv.cn/live/?tag=8#/jxtv9"},{"name":"宜春新闻综合","url":"https://h5-yc.newsyc.com/front-cloudlive-manage-h5/index.html?id=610897459610271744&company_id=397#/"},{"name":"宜春法治·民生","url":"https://h5-yc.newsyc.com/front-cloudlive-manage-h5/index.html?id=636127231831396352&company_id=397#/"}]},{"tag":"xjtvs","name":"新疆","vods":[{"name":"新疆1套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=1"},{"name":"新疆2套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=3"},{"name":"新疆3套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=4"},{"name":"新疆4套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=16"},{"name":"新疆5套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=17"},{"name":"新疆7套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=21"},{"name":"新疆8套","url":"https://www.xjtvs.com.cn/column/tv/434?channelId=23"},{"name":"新建兵团卫视","url":"https://www.btzx.com.cn/2024new/new_zhibo/index.shtml"},{"name":"八师石河子新闻综合","url":"http://www.shznews.com/TV.html"},{"name":"克拉玛依汉语综合","url":"live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy1.m3u8"},{"name":"克拉玛依维语综合","url":"live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy2.m3u8"},{"name":"克拉玛依文化影视","url":"live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy3.m3u8"},{"name":"哈密汉语综合","url":"live.html?url=https://tvpull.hmgbtv.com/hmtv/channel9cd66b3d5d258b2b/playlist.m3u8"},{"name":"哈密维语综合","url":"live.html?url=https://tvpull.hmgbtv.com/hmtv/channel108259412c6a6711/playlist.m3u8"},{"name":"哈密影视文艺","url":"live.html?url=https://tvpull.hmgbtv.com/hmtv/channelfb0e5c505477aa44/playlist.m3u8"}]},{"tag":"gansu","name":"甘肃","vods":[{"name":"甘肃卫视","url":"live.html?url=https://hls.gstv.com.cn/skt649/nd6ycc.m3u8"},{"name":"甘肃文化影视","url":"live.html?url=https://hls.gstv.com.cn/skt649/z6znm4.m3u8"},{"name":"甘肃公共应急","url":"live.html?url=https://hls.gstv.com.cn/skt649/j8x8ga.m3u8"},{"name":"甘肃少儿频道","url":"live.html?url=https://hls.gstv.com.cn/skt649/ys1xzs.m3u8"},{"name":"甘肃科教频道","url":"live.html?url=https://hls.gstv.com.cn/skt649/e2a4gl.m3u8"},{"name":"甘肃移动电视","url":"live.html?url=https://hls.gstv.com.cn/skt649/w07at3.m3u8"},{"name":"兰州新闻综合","url":"https://lanzhoubcnew.zainanjing365.com/share/live/detailTv?resourceId=12&appscheme=gdmm-ailanzhou"},{"name":"兰州文旅","url":"https://lanzhoubcnew.zainanjing365.com/share/live/detailTv?resourceId=14&appscheme=gdmm-ailanzhou"},{"name":"陇南综合","url":"live.html?url=https://play.kankanlive.com/live/1709171819929902.m3u8"},{"name":"陇南公共","url":"live.html?url=https://play.kankanlive.com/live/1709171893138901.m3u8"},{"name":"白银综合","url":"live.html?url=https://play.kankanlive.com/live/1720408089419110.m3u8"},{"name":"白银文化教育","url":"live.html?url=https://play.kankanlive.com/live/1720408280309109.m3u8"},{"name":"定西综合","url":"live.html?url=http://play.kankanlive.com/live/1745232061100288.m3u8"},{"name":"定西文旅生活","url":"live.html?url=http://play.kankanlive.com/live/1745232082475287.m3u8"},{"name":"平凉新闻综合","url":"live.html?url=https://play.kankanlive.com/live/1694661314645984.m3u8"}]},{"tag":"ningxia","name":"宁夏","vods":[{"name":"宁夏卫视","url":"live.html?url=https://hls.ningxiahuangheyun.com/live/nxws1M.m3u8"},{"name":"宁夏公共","url":"live.html?url=https://hls.ningxiahuangheyun.com/live/nxgg1M.m3u8"},{"name":"宁夏经济","url":"live.html?url=https://hls.ningxiahuangheyun.com/live/nxjj1M.m3u8"},{"name":"宁夏文旅","url":"live.html?url=https://hls.ningxiahuangheyun.com/live/nxwl1M.m3u8"},{"name":"宁夏少儿","url":"live.html?url=https://hls.ningxiahuangheyun.com/live/nxse1M.m3u8"},{"name":"银川公共","url":"https://www.qukanvideo.com/cloud/h5/1731639141671136?utaot=1"},{"name":"银川生活","url":"https://www.qukanvideo.com/cloud/h5/1731638744888001?utaot=1"},{"name":"银川文体","url":"https://www.qukanvideo.com/cloud/h5/1728443786945132?utaot=1"},{"name":"石嘴山综合","url":"https://jrszs.szsnews.com/application/tenma01zx_eqlil/view/h5/index.html#/pages/artical/detail?id=336405&infoType=1&timestamp=1757849532239"},{"name":"石嘴山公共","url":"https://jrszs.szsnews.com/application/tenma01zx_eqlil/view/h5/index.html#/pages/artical/detail?id=336406&infoType=1&timestamp=1757849613110"}]},{"tag":"nmtv","name":"内蒙古","vods":[{"name":"内蒙古卫视","url":"https://www.nmtv.cn/liveTv?tag=内蒙古卫视"},{"name":"内蒙古新闻综合","url":"https://www.nmtv.cn/liveTv?tag=新闻综合"},{"name":"内蒙古经济生活","url":"https://www.nmtv.cn/liveTv?tag=经济生活"},{"name":"内蒙古文体娱乐","url":"https://www.nmtv.cn/liveTv?tag=文体娱乐"},{"name":"内蒙古农牧","url":"https://www.nmtv.cn/liveTv?tag=农牧频道"},{"name":"内蒙古蒙语卫视","url":"https://www.nmtv.cn/liveTv?tag=内蒙古蒙古语卫视"},{"name":"内蒙古蒙语文化","url":"https://www.nmtv.cn/liveTv?tag=内蒙古蒙古语文化"},{"name":"呼和浩特新闻综合","url":"https://www.nmtv.cn/liveTv?tag=呼和浩特"},{"name":"包头新闻综合","url":"https://www.nmtv.cn/liveTv?tag=包头"},{"name":"乌海新闻综合","url":"https://www.nmtv.cn/liveTv?tag=乌海"},{"name":"赤峰新闻综合","url":"https://www.nmtv.cn/liveTv?tag=赤峰"},{"name":"呼伦贝尔新闻综合","url":"https://www.nmtv.cn/liveTv?tag=呼伦贝尔"},{"name":"兴安盟新闻综合","url":"https://www.nmtv.cn/liveTv?tag=兴安盟"},{"name":"通辽新闻综合","url":"https://www.nmtv.cn/liveTv?tag=通辽"},{"name":"锡林郭勒新闻综合","url":"https://www.nmtv.cn/liveTv?tag=锡林郭勒"},{"name":"阿拉善新闻综合","url":"https://www.nmtv.cn/liveTv?tag=阿拉善"},{"name":"鄂尔多斯新闻综合","url":"https://www.nmtv.cn/liveTv?tag=鄂尔多斯"},{"name":"巴彦淖尔新闻综合","url":"https://www.nmtv.cn/liveTv?tag=巴彦淖尔"},{"name":"乌兰察布新闻综合","url":"https://www.nmtv.cn/liveTv?tag=乌兰察布"},{"name":"乌海都市生活","url":"https://app.wuhainews.org.cn/folder17/share/live/?channel_id=9"},{"name":"赤峰经济服务","url":"http://h5.cfrmw.cn/front-cloudlive-manage-h5/index.html?id=722728110696456192&company_id=1073#/"},{"name":"赤峰影视娱乐","url":"http://h5.cfrmw.cn/front-cloudlive-manage-h5/index.html?id=722728404075438080&company_id=1073#/"},{"name":"乌兰察布经济生活","url":"https://res.wrbtv.cn/html/rft/live.html?channelId=f5c8509c3b7b4c76b691d1863be29d27&type=1&siteId=82dcdad6b80b4f2d8a13067e5fce2e7a&shareAppId=82dcdad6b80b4f2d8a13067e5fce2e7a"}]},{"tag":"nmtv","name":"西藏","vods":[{"name":"拉萨藏语综合","url":"live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel104335/playlist.m3u8"},{"name":"拉萨综合","url":"live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel101894/playlist.m3u8"},{"name":"拉萨文化旅游","url":"live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel103157/playlist.m3u8"},{"name":"日喀则汉语","url":"live.html?url=https://console.rkzrm.cn:20323/4.m3u8"},{"name":"日喀则藏语","url":"live.html?url=https://console.rkzrm.cn:20323/8.m3u8"}]},{"tag":"hainan","name":"海南","vods":[{"name":"海南卫视","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=13"},{"name":"三沙卫视","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=5"},{"name":"海南自贸","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=1"},{"name":"海南新闻","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=3"},{"name":"海南公共","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=4"},{"name":"海南文旅","url":"https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=6"},{"name":"海口综合","url":"https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719921&publishType=2"},{"name":"海口生活娱乐","url":"https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719192&publishType=2"},{"name":"海口城乡经济","url":"https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719922&publishType=2"},{"name":"儋州综合","url":"https://web.guangdianyun.tv/tv/1330?uin=1669"}]},{"tag":"guizhou","name":"贵州","vods":[{"name":"贵州卫视","url":"https://www.gzstv.com/tv/ch01?utao=1"},{"name":"贵州公共","url":"https://www.gzstv.com/tv/ch02?utao=1"},{"name":"贵州影视文艺","url":"https://www.gzstv.com/tv/ch03?utao=1"},{"name":"贵州大众生活","url":"https://www.gzstv.com/tv/ch04?utao=1"},{"name":"贵州生态·乡村","url":"https://www.gzstv.com/tv/ch05?utao=1"},{"name":"贵州科教健康","url":"https://www.gzstv.com/tv/ch06?utao=1"},{"name":"贵州移动电视","url":"https://www.gzstv.com/tv/ch13?utao=1"},{"name":"黔南新闻综合","url":"http://m.qntv.net/cms-tv"},{"name":"安顺新闻综合","url":"https://www.gzastv.cn/live/live.shtml"}]},{"tag":"qignhai","name":"青海","vods":[{"name":"青海卫视","url":"https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786181204964564992&company_id=1075&utaot=1"},{"name":"青海经视","url":"https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786227316454875136&company_id=1075&utaot=1"},{"name":"青海都市","url":"https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786227009616371712&company_id=1075&utaot=1"},{"name":"西宁新闻综合","url":"https://xiningbcnew.zainanjing365.com/share/live/detailTv?resourceId=5&appscheme=gdmm-zhangshangxining"},{"name":"西宁生活服务","url":"https://xiningbcnew.zainanjing365.com/share/live/detailTv?resourceId=6&appscheme=gdmm-zhangshangxining"}]},{"tag":"yunnan","name":"云南","vods":[{"name":"云南卫视","url":"https://www.yntv.cn/mobile/live.html"},{"name":"云南都市","url":"https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5kdXNoaSIpLmNsaWNrKCk="},{"name":"云南娱乐","url":"https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW55dWxlIikuY2xpY2soKQ=="},{"name":"云南康旅","url":"https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5nb25nZ29uZyIpLmNsaWNrKCk="},{"name":"云南少儿","url":"https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5zaGFvZXIiKS5jbGljaygp"},{"name":"澜湄国际","url":"https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5ndW9qaSIpLmNsaWNrKCk="},{"name":"丽江新闻综合","url":"https://www.lijiang.cn/live/"},{"name":"普洱新闻综合","url":"https://www.puerw.cn/col1992.html"},{"name":"临沧新闻综合","url":"https://mtydazzle.yntv.cn/pages/liveDetails/detail.html/?companyId=lincang&_id=5f51fa40e4b04f16d0288832&isTest=no"},{"name":"临沧科教","url":"https://mtydazzle.yntv.cn/pages/liveDetails/detail.html/?companyId=lincang&_id=5f51f80ee4b04f16d0288801&isTest=no"},{"name":"西双版纳新闻综合","url":"live.html?url=https://channellive.xsbnw.cn/default/nmip-media/channellive/channel112526/playlist.m3u8"},{"name":"西双版纳文化旅游","url":"live.html?url=https://channellive.xsbnw.cn/default/nmip-media/channellive/channel112694/playlist.m3u8"},{"name":"红河新闻综合","url":"https://www.hh.cn/ynhhzMini/site/tv"}]},{"tag":"shanxi","name":"陕西","vods":[{"name":"陕西卫视","url":"http://live.snrtv.com/star"},{"name":"农林卫视","url":"http://live.snrtv.com/nl"},{"name":"陕西新闻资讯","url":"http://live.snrtv.com/1"},{"name":"陕西都市青春","url":"http://live.snrtv.com/2"},{"name":"陕西银龄","url":"http://live.snrtv.com/3"},{"name":"陕西秦腔","url":"http://live.snrtv.com/5"},{"name":"陕西体育休闲","url":"http://live.snrtv.com/7"},{"name":"陕西移动电视","url":"http://www.sxtvs.com/sxtvs_ydpd/index.html"},{"name":"西安新闻综合","url":"https://v.xiancity.cn/folder8/folder39/folder29/m/"},{"name":"西安都市","url":"https://v.xiancity.cn/folder8/folder39/folder30/m/"},{"name":"西安商务资讯","url":"https://v.xiancity.cn/folder8/folder39/folder31/m/"},{"name":"西安戏剧影视","url":"https://v.xiancity.cn/folder8/folder39/folder32/m/"},{"name":"西安丝路","url":"https://v.xiancity.cn/folder8/folder39/folder33/m/"},{"name":"铜川综合","url":"https://www.tcsrm.cn/tvradio/tczhpd.html"},{"name":"铜川公共","url":"https://www.tcsrm.cn/tvradio/tcggpd.html"},{"name":"榆林综合","url":"live.html?url=https://49c1f938208318cdf8288bc36b62472a.livehwc4.com/hplayer1.juyun.tv/camera/186023110.m3u8"},{"name":"榆林文化旅游","url":"live.html?url=https://49c1f938208318cdf8288bc36b62472a.livehwc4.com/hplayer1.juyun.tv/camera/186022194.m3u8"},{"name":"商洛综合","url":"live.html?url=https://player4.juyun.tv/camera/171844138.m3u8"},{"name":"延安综合","url":"live.html?url=https://srs.yanews.cn/video/YATV-1/index.m3u8"},{"name":"延安公共","url":"live.html?url=https://srs.yanews.cn/video/YATV-2/index.m3u8"},{"name":"咸阳综合","url":"https://www.sxxynews.com.cn/tvradio/xyzhpd.html"},{"name":"咸阳公共","url":"https://www.sxxynews.com.cn/tvradio/xyggpd.html"}]}]}
+{
+  "data": [
+    {
+      "tag": "cctv",
+      "name": "央视",
+      "vods": [
+        {
+          "name": "CCTV-13 新闻",
+          "url": "https://tv.cctv.com/live/cctv13/"
+        },
+        {
+          "name": "CCTV-1 综合",
+          "url": "https://tv.cctv.com/live/cctv1/"
+        },
+        {
+          "name": "CCTV-2 财经",
+          "url": "https://tv.cctv.com/live/cctv2/"
+        },
+        {
+          "name": "CCTV-3 综艺",
+          "url": "https://tv.cctv.com/live/cctv3/"
+        },
+        {
+          "name": "CCTV-4 中文国际",
+          "url": "https://tv.cctv.com/live/cctv4"
+        },
+        {
+          "name": "CCTV-5 体育",
+          "url": "https://tv.cctv.com/live/cctv5/"
+        },
+        {
+          "name": "CCTV-5+ 体育赛事",
+          "url": "https://tv.cctv.com/live/cctv5plus/"
+        },
+        {
+          "name": "CCTV-6 电影",
+          "url": "https://tv.cctv.com/live/cctv6/"
+        },
+        {
+          "name": "CCTV-7 国防军事",
+          "url": "https://tv.cctv.com/live/cctv7/"
+        },
+        {
+          "name": "CCTV-8 电视剧",
+          "url": "https://tv.cctv.com/live/cctv8/"
+        },
+        {
+          "name": "CCTV-9 纪录",
+          "url": "https://tv.cctv.com/live/cctvjilu/"
+        },
+        {
+          "name": "CCTV-10 科教",
+          "url": "https://tv.cctv.com/live/cctv10/"
+        },
+        {
+          "name": "CCTV-11 戏曲",
+          "url": "https://tv.cctv.com/live/cctv11/"
+        },
+        {
+          "name": "CCTV-12 社会与法",
+          "url": "https://tv.cctv.com/live/cctv12/"
+        },
+        {
+          "name": "CCTV-15 音乐",
+          "url": "https://tv.cctv.com/live/cctv15/"
+        },
+        {
+          "name": "CCTV-16 奥林匹克",
+          "url": "https://tv.cctv.com/live/cctv16/"
+        },
+        {
+          "name": "CCTV-17 农业农村",
+          "url": "https://tv.cctv.com/live/cctv17/"
+        },
+        {
+          "name": "1905电影",
+          "url": "https://m.1905.com/m/xl/live/"
+        },
+        {
+          "name": "1905国际电影",
+          "url": "https://www.1905.com/1905tv/live/"
+        }
+      ]
+    },
+    {
+      "tag": "cctv2",
+      "name": "央视频超清",
+      "vods": [
+        {
+          "name": "CCTV8K",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600156816"
+        },
+        {
+          "name": "CCTV4K",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002264"
+        },
+        {
+          "name": "CCTV16 4K",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600099502"
+        },
+        {
+          "name": "CCTV13 新闻",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001811"
+        },
+        {
+          "name": "CCTV1 综合",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001859"
+        },
+        {
+          "name": "CCTV2 财经",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001800"
+        },
+        {
+          "name": "CCTV3 综艺",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001801"
+        },
+        {
+          "name": "CCTV4 中文国际",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001814"
+        },
+        {
+          "name": "CCTV5 体育",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001818"
+        },
+        {
+          "name": "CCTV5+ 体育赛事",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001817"
+        },
+        {
+          "name": "CCTV6 电影",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600108442"
+        },
+        {
+          "name": "CCTV7 国防军事",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600004092"
+        },
+        {
+          "name": "CCTV8 电视剧",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001803"
+        },
+        {
+          "name": "CCTV9 纪录",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600004078"
+        },
+        {
+          "name": "CCTV10 科教",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001805"
+        },
+        {
+          "name": "CCTV11 戏曲",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001806"
+        },
+        {
+          "name": "CCTV12 社会与法",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001807"
+        },
+        {
+          "name": "CCTV14 少儿",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001809"
+        },
+        {
+          "name": "CCTV15 音乐",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001815"
+        },
+        {
+          "name": "CCTV16 奥林匹克",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600098637"
+        },
+        {
+          "name": "CCTV17 农业农村",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600001810"
+        },
+        {
+          "name": "CGTN",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600014550"
+        },
+        {
+          "name": "CGTN外语纪录频道",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600084781"
+        },
+        {
+          "name": "CCTV 风云剧场",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600099658"
+        },
+        {
+          "name": "CCTV 第一剧场",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600099655"
+        },
+        {
+          "name": "CCTV 怀旧剧场",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600099620"
+        },
+        {
+          "name": "CGTN法语频道",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600084704"
+        },
+        {
+          "name": "CGTN俄语频道",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600084758"
+        },
+        {
+          "name": "CGTN阿拉伯语频道",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600084782"
+        },
+        {
+          "name": "CGTN西班牙语频道",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600084744"
+        }
+      ]
+    },
+    {
+      "tag": "ws",
+      "name": "卫视",
+      "vods": [
+        {
+          "name": "湖南卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002475"
+        },
+        {
+          "name": "江苏卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002521"
+        },
+        {
+          "name": "上海东方卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002483"
+        },
+        {
+          "name": "浙江卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002520"
+        },
+        {
+          "name": "北京卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002309"
+        },
+        {
+          "name": "湖北卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002508"
+        },
+        {
+          "name": "广东卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002485"
+        },
+        {
+          "name": "广西卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002509"
+        },
+        {
+          "name": "黑龙江卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002498"
+        },
+        {
+          "name": "海南卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002506"
+        },
+        {
+          "name": "重庆卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002531"
+        },
+        {
+          "name": "深圳卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002481"
+        },
+        {
+          "name": "四川卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002516"
+        },
+        {
+          "name": "河南卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002525"
+        },
+        {
+          "name": "福建东南卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002484"
+        },
+        {
+          "name": "贵州卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002490"
+        },
+        {
+          "name": "江西卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002503"
+        },
+        {
+          "name": "辽宁卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002505"
+        },
+        {
+          "name": "安徽卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002532"
+        },
+        {
+          "name": "河北卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002493"
+        },
+        {
+          "name": "山东卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600002513"
+        },
+        {
+          "name": "天津卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600152137"
+        },
+        {
+          "name": "吉林卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190405"
+        },
+        {
+          "name": "陕西卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190400"
+        },
+        {
+          "name": "甘肃卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190408"
+        },
+        {
+          "name": "宁夏卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190737"
+        },
+        {
+          "name": "内蒙古卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190401"
+        },
+        {
+          "name": "云南卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190402"
+        },
+        {
+          "name": "山西卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190407"
+        },
+        {
+          "name": "青海卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190406"
+        },
+        {
+          "name": "西藏卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600190403"
+        },
+        {
+          "name": "新疆卫视",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600152138"
+        }
+      ]
+    },
+    {
+      "tag": "shaoer",
+      "name": "少儿",
+      "vods": [
+        {
+          "name": "CCTV-14 少儿",
+          "url": "https://tv.cctv.com/live/cctvchild/"
+        },
+        {
+          "name": "浙江少儿",
+          "url": "https://www.cztv.com/liveTV/108"
+        },
+        {
+          "name": "山东少儿",
+          "url": "https://v.iqilu.com/live/sepd/"
+        },
+        {
+          "name": "优漫卡通",
+          "url": "https://live.jstv.com/?tag=优漫卡通"
+        },
+        {
+          "name": "南京少儿",
+          "url": "https://www.nbs.cn/live/?id=110095"
+        },
+        {
+          "name": "海南少儿",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=7"
+        },
+        {
+          "name": "广东少儿",
+          "url": "https://www.gdtv.cn/tvChannelDetail/54"
+        },
+        {
+          "name": "嘉佳卡通",
+          "url": "https://www.gdtv.cn/tvChannelDetail/66"
+        },
+        {
+          "name": "哈哈炫动",
+          "url": "https://live.kankanews.com/huikan?id=9"
+        },
+        {
+          "name": "北京少儿",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=8"
+        },
+        {
+          "name": "江西少儿",
+          "url": "https://www.jxntv.cn/live/?tag=5#/jxtv6"
+        },
+        {
+          "name": "内蒙少儿",
+          "url": "https://www.nmtv.cn/liveTv?tag=少儿频道"
+        },
+        {
+          "name": "深圳少儿",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7881"
+        },
+        {
+          "name": "金鹰卡通",
+          "url": "https://www.mgtv.com/live/?tag=金鹰卡通"
+        }
+      ]
+    },
+    {
+      "tag": "jiaoyu",
+      "name": "教育",
+      "vods": [
+        {
+          "name": "中国教育1 综合",
+          "url": "https://www.yangshipin.cn/tv/home?pid=600171827"
+        },
+        {
+          "name": "中国教育1",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_ffa6b6e1b32b4a16a73eb3ef66f8bfc7.html"
+        },
+        {
+          "name": "中国教育2 空中课堂",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_80d0ffb42c114eaf9663708629ff0a3e.html"
+        },
+        {
+          "name": "中国教育4 职业教育",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_67eace939278435bb4bca90800fb4225.html"
+        },
+        {
+          "name": "山东教育",
+          "url": "https://www.sdetv.com.cn/edu/pc/live/index.html"
+        },
+        {
+          "name": "上海教育",
+          "url": "https://www.setv.sh.cn/#/tvshow"
+        },
+        {
+          "name": "武汉教育",
+          "url": "https://ronghehao-h5.whjyapp.com/#/pages/live/tv"
+        },
+        {
+          "name": "昆明教育",
+          "url": "https://kmjy.kmetv.com/application/tenma01ds_tvradio/view/web/#/"
+        },
+        {
+          "name": "郑州教育",
+          "url": "live.html?url=https://livezzutv.chinamcache.com/live/zb02.m3u8"
+        },
+        {
+          "name": "平顶山教育",
+          "url": "live.html?url=http://219.150.204.175:81/hls/live1.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "gdtv",
+      "name": "广东",
+      "vods": [
+        {
+          "name": "广东卫视",
+          "url": "https://www.gdtv.cn/tvChannelDetail/43"
+        },
+        {
+          "name": "广东4K超高清",
+          "url": "https://www.gdtv.cn/tvChannelDetail/16"
+        },
+        {
+          "name": "广东经典电视剧",
+          "url": "https://www.gdtv.cn/tvChannelDetail/100"
+        },
+        {
+          "name": "广东珠江",
+          "url": "https://www.gdtv.cn/tvChannelDetail/44"
+        },
+        {
+          "name": "广东新闻",
+          "url": "https://www.gdtv.cn/tvChannelDetail/45"
+        },
+        {
+          "name": "广东民生",
+          "url": "https://www.gdtv.cn/tvChannelDetail/48"
+        },
+        {
+          "name": "广东体育",
+          "url": "https://www.gdtv.cn/tvChannelDetail/47"
+        },
+        {
+          "name": "大湾区卫视",
+          "url": "https://www.gdtv.cn/tvChannelDetail/51"
+        },
+        {
+          "name": "大湾区卫视（海外版）",
+          "url": "https://www.gdtv.cn/tvChannelDetail/46"
+        },
+        {
+          "name": "广东影视",
+          "url": "https://www.gdtv.cn/tvChannelDetail/53"
+        },
+        {
+          "name": "广东南方购物",
+          "url": "https://www.gdtv.cn/tvChannelDetail/42"
+        },
+        {
+          "name": "广东现代教育",
+          "url": "https://www.gdtv.cn/tvChannelDetail/111"
+        },
+        {
+          "name": "广东岭南戏曲",
+          "url": "https://www.gdtv.cn/tvChannelDetail/15"
+        },
+        {
+          "name": "广东移动",
+          "url": "https://www.gdtv.cn/tvChannelDetail/74"
+        },
+        {
+          "name": "广东纪录片",
+          "url": "https://www.gdtv.cn/tvChannelDetail/94"
+        },
+        {
+          "name": "广州综合",
+          "url": "https://app.gztv.com/plusshare/?a=1#/tvDetail?code=3001"
+        },
+        {
+          "name": "广州新闻",
+          "url": "https://app.gztv.com/plusshare/?a=2#/tvDetail?code=3002"
+        },
+        {
+          "name": "广州南国都市",
+          "url": "https://app.gztv.com/plusshare/?a=3#/tvDetail?code=3003"
+        },
+        {
+          "name": "广州法制",
+          "url": "https://app.gztv.com/plusshare/?a=4#/tvDetail?code=3004"
+        },
+        {
+          "name": "东莞新闻综合",
+          "url": "https://dgrtv.sun0769.com/index.php/online2/4?utaot=1"
+        },
+        {
+          "name": "东莞生活资讯",
+          "url": "https://dgrtv.sun0769.com/index.php/online2/5?utaot=1"
+        },
+        {
+          "name": "河源综合",
+          "url": "https://tmpstream.hyrtv.cn/xwzh/sd/live.m3u8"
+        },
+        {
+          "name": "河源公共",
+          "url": "https://tmpstream.hyrtv.cn/hygg/sd/live.m3u8"
+        },
+        {
+          "name": "清远新闻综合",
+          "url": "https://www.qyrb.cn/tv/rM834x3d5a.html"
+        },
+        {
+          "name": "韶关新闻综合",
+          "url": "https://www.sgmsw.cn/v/tv?spm=0.0.0.0.HGiuAr&id=SB05RIYZOU8JR418AUQOF62CAJQ08D0E"
+        },
+        {
+          "name": "揭阳公共",
+          "url": "https://ap.jyrtv.tv/application/tvradio/h5/detail.html?type=tv&id=11"
+        },
+        {
+          "name": "揭阳生活",
+          "url": "https://ap.jyrtv.tv/application/tvradio/h5/detail.html?type=tv&id=12"
+        }
+      ]
+    },
+    {
+      "tag": "sdtv",
+      "name": "山东",
+      "vods": [
+        {
+          "name": "齐鲁卫视",
+          "url": "https://v.iqilu.com/live/qlpd/"
+        },
+        {
+          "name": "山东新闻",
+          "url": "https://v.iqilu.com/live/ggpd/"
+        },
+        {
+          "name": "山东体育休闲",
+          "url": "https://v.iqilu.com/live/typd/"
+        },
+        {
+          "name": "山东卫视",
+          "url": "https://v.iqilu.com/live/sdtv/index.html"
+        },
+        {
+          "name": "山东生活",
+          "url": "https://v.iqilu.com/live/shpd/"
+        },
+        {
+          "name": "山东综艺",
+          "url": "https://v.iqilu.com/live/zypd/"
+        },
+        {
+          "name": "山东农科",
+          "url": "https://v.iqilu.com/live/nkpd/"
+        },
+        {
+          "name": "山东文旅",
+          "url": "https://v.iqilu.com/live/yspd/"
+        },
+        {
+          "name": "山东教育",
+          "url": "https://www.sdetv.com.cn/edu/pc/live/index.html"
+        },
+        {
+          "name": "青岛新闻综合",
+          "url": "http://www.qtv.com.cn/live/tv/index.shtml"
+        },
+        {
+          "name": "青岛经济生活",
+          "url": "http://www.qtv.com.cn/live/tv/tv_qtv2.shtml"
+        },
+        {
+          "name": "青岛影视",
+          "url": "http://www.qtv.com.cn/live/tv/tv_qtv3.shtml"
+        },
+        {
+          "name": "青岛文化娱乐",
+          "url": "http://www.qtv.com.cn/live/tv/tv_qtv4.shtml"
+        },
+        {
+          "name": "青岛体育休闲",
+          "url": "http://www.qtv.com.cn/live/tv/tv_qtv5.shtml"
+        },
+        {
+          "name": "青岛教育",
+          "url": "http://www.qtv.com.cn/live/tv/tv_qtv6.shtml"
+        },
+        {
+          "name": "威海新闻综合",
+          "url": "http://lv.weihai.tv/live_13705e35636b2136b590e5a015bb801c.html"
+        },
+        {
+          "name": "威海都市生活",
+          "url": "http://lv.weihai.tv/live_8bfc704cbba598e76540f5d4f61a0e03.html"
+        },
+        {
+          "name": "威海海洋",
+          "url": "http://lv.weihai.tv/live_6dffaf124b89957024f9f31de302d183.html"
+        },
+        {
+          "name": "泰安综合",
+          "url": "http://www.1545ts.com/zhibo/taian/zhibotatv1.html"
+        },
+        {
+          "name": "泰安经济生活",
+          "url": "http://www.1545ts.com/zhibo/taian/zhibotatv2.html"
+        },
+        {
+          "name": "临沂综合",
+          "url": "http://www.ilinyi.net/cms/tv/1020403"
+        },
+        {
+          "name": "临沂公共",
+          "url": "http://www.ilinyi.net/cms/tv/1020769"
+        },
+        {
+          "name": "临沂经济",
+          "url": "http://www.ilinyi.net/cms/tv/36417907"
+        },
+        {
+          "name": "枣庄新闻综合",
+          "url": "http://www.lncm.cn/zhibo/show-1.html"
+        },
+        {
+          "name": "枣庄经济生活",
+          "url": "http://www.lncm.cn/zhibo/show-3.html"
+        },
+        {
+          "name": "枣庄公共",
+          "url": "http://www.lncm.cn/zhibo/show-4.html"
+        },
+        {
+          "name": "聊城综合",
+          "url": "https://www.lcxw.cn/kands/?tag=0"
+        },
+        {
+          "name": "聊城民生",
+          "url": "https://www.lcxw.cn/kands/?tag=1"
+        },
+        {
+          "name": "潍坊新闻综合",
+          "url": "http://www.wfcmw.cn/wfrtv_pdLive.html?tv=1"
+        },
+        {
+          "name": "潍坊经济生活",
+          "url": "http://www.wfcmw.cn/wfrtv_pdLive.html?tv=2"
+        },
+        {
+          "name": "潍坊影视综艺",
+          "url": "http://www.wfcmw.cn/wfrtv_pdLive.html?tv=3"
+        },
+        {
+          "name": "潍坊科教文旅",
+          "url": "http://www.wfcmw.cn/wfrtv_pdLive.html?tv=4"
+        },
+        {
+          "name": "即墨生活服务",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jimorongmei.com/share/dHZsLTIyMS0z.html"
+        },
+        {
+          "name": "长清新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jncqrm.cn/share/dHZsLTE3MS0y.html"
+        },
+        {
+          "name": "长清生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jncqrm.cn/share/dHZsLTE3MS0yMA.html"
+        },
+        {
+          "name": "济铁电视台",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://jnjapp.jntlj.com/share/dHZsLTMwMy0x.html"
+        },
+        {
+          "name": "济阳综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jiyangrongmei.cn/share/dHZsLTg1LTE.html"
+        },
+        {
+          "name": "济阳影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jiyangrongmei.cn/share/dHZsLTg1LTI.html"
+        },
+        {
+          "name": "平阴乡村振兴",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI1Ny0z.html"
+        },
+        {
+          "name": "商河综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.shxrmtzx.com/share/dHZsLTk3LTE.html"
+        },
+        {
+          "name": "商河影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.shxrmtzx.com/share/dHZsLTk3LTI.html"
+        },
+        {
+          "name": "章丘综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE5NS0x.html"
+        },
+        {
+          "name": "章丘公共",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE5NS0y.html"
+        },
+        {
+          "name": "东营区新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhidongyingapp.com/share/dHZsLTE2My01.html"
+        },
+        {
+          "name": "东营区科教影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhidongyingapp.com/share/dHZsLTE2My03.html"
+        },
+        {
+          "name": "广饶综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.grxrmtzx.com/share/dHZsLTIzNy0x.html"
+        },
+        {
+          "name": "广饶科教文艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.grxrmtzx.com/share/dHZsLTIzNy01.html"
+        },
+        {
+          "name": "利津综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lijinnews.com/share/dHZsLTE1My0x.html"
+        },
+        {
+          "name": "利津文化生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lijinnews.com/share/dHZsLTE1My0z.html"
+        },
+        {
+          "name": "城阳综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hichengyang.cn/share/dHZsLTQwMy01.html"
+        },
+        {
+          "name": "黄岛综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qwmedia.cn/share/dHZsLTIyNy0x.html"
+        },
+        {
+          "name": "黄岛生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qwmedia.cn/share/dHZsLTIyNy0z.html"
+        },
+        {
+          "name": "即墨综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jimorongmei.com/share/dHZsLTIyMS0y.html"
+        },
+        {
+          "name": "胶州综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshangjiaozhou.cn/share/dHZsLTMwNS0x.html"
+        },
+        {
+          "name": "胶州生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshangjiaozhou.cn/share/dHZsLTMwNS0z.html"
+        },
+        {
+          "name": "李沧TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.licangmedia.cn/share/dHZsLTE3My0x.html"
+        },
+        {
+          "name": "崂山TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laoshanrongmei.cn/share/dHZsLTI5NS0x.html"
+        },
+        {
+          "name": "莱西综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laixirongmei.cn/share/dHZsLTI1My0x.html"
+        },
+        {
+          "name": "莱西生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laixirongmei.cn/share/dHZsLTI1My0z.html"
+        },
+        {
+          "name": "平度新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aipingduapp.com/share/dHZsLTQ1LTQ.html"
+        },
+        {
+          "name": "平度生活服务",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aipingduapp.com/share/dHZsLTQ1LTU.html"
+        },
+        {
+          "name": "潍坊新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS0x.html"
+        },
+        {
+          "name": "潍坊生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS01.html"
+        },
+        {
+          "name": "潍坊影视综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS03.html"
+        },
+        {
+          "name": "潍坊科教文旅",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfcmw.cn/share/dHZsLTYzNS05.html"
+        },
+        {
+          "name": "潍坊高新区",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wegood.wang/share/dHZsLTQyMS0xNA.html"
+        },
+        {
+          "name": "安丘综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aianqiu.cn/share/dHZsLTEzNy0z.html"
+        },
+        {
+          "name": "安丘民生",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aianqiu.cn/share/dHZsLTEzNy00.html"
+        },
+        {
+          "name": "滨海新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfbhrmt.cn/share/dHZsLTE5OS0x.html"
+        },
+        {
+          "name": "昌乐综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.clxrmtzx.cn/share/dHZsLTEtMw.html"
+        },
+        {
+          "name": "昌邑综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changyirongmei.com/share/dHZsLTQ3LTE.html"
+        },
+        {
+          "name": "昌邑经济生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changyirongmei.com/share/dHZsLTQ3LTI.html"
+        },
+        {
+          "name": "坊子新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fzqrmtzx.cn/share/dHZsLTI4NS0x.html"
+        },
+        {
+          "name": "高密综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaominews.com/share/dHZsLTcxLTI0.html"
+        },
+        {
+          "name": "高密党建农科",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaominews.com/share/dHZsLTcxLTM4.html"
+        },
+        {
+          "name": "寒亭新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.httv.cn/share/dHZsLTEzMy0x.html"
+        },
+        {
+          "name": "奎文电视台",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wfkwrm.com/share/dHZsLTEyNy0xNw.html"
+        },
+        {
+          "name": "临朐新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yunshanglinqu.cn/share/dHZsLTIwNS0zOQ.html"
+        },
+        {
+          "name": "青州综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qingzhounews.cn/share/dHZsLTEyNS0y.html"
+        },
+        {
+          "name": "青州文化旅游",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.qingzhounews.cn/share/dHZsLTEyNS0z.html"
+        },
+        {
+          "name": "潍城TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wcrmawckhd.cn/share/dHZsLTE1LTM.html"
+        },
+        {
+          "name": "诸城新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.52zhucheng.cn/share/dHZsLTExNS0yMw.html"
+        },
+        {
+          "name": "寿光综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sgrmt.com/share/dHZsLTI3OS0x.html"
+        },
+        {
+          "name": "寿光蔬菜",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sgrmt.com/share/dHZsLTI3OS0z.html"
+        },
+        {
+          "name": "长岛TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.changdaohao.cn/share/dHZsLTE3NS0x.html"
+        },
+        {
+          "name": "福山综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fuzaifushan.cn/share/dHZsLTE4OS00.html"
+        },
+        {
+          "name": "海阳综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hyzc.cn/share/dHZsLTI1NS0x.html"
+        },
+        {
+          "name": "龙口综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTU3LTE.html"
+        },
+        {
+          "name": "莱山综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI0NS00.html"
+        },
+        {
+          "name": "莱山影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTI0NS02.html"
+        },
+        {
+          "name": "莱阳综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laiyangrongmei.cn/share/dHZsLTI0MS00.html"
+        },
+        {
+          "name": "莱阳民生综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laiyangrongmei.cn/share/dHZsLTI0MS03.html"
+        },
+        {
+          "name": "莱州综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laizhourongmei.cn/share/dHZsLTIzOS0x.html"
+        },
+        {
+          "name": "牟平综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mprmt.com/share/dHZsLTI4MS0x.html"
+        },
+        {
+          "name": "蓬莱综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xianjingpenglai.cn/share/dHZsLTEwOS0y.html"
+        },
+        {
+          "name": "栖霞综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aiqixiaapp.com/share/dHZsLTE2NS0xMg.html"
+        },
+        {
+          "name": "栖霞苹果",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aiqixiaapp.com/share/dHZsLTE2NS0xNA.html"
+        },
+        {
+          "name": "招远综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhaoyuanrongmei.com.cn/share/dHZsLTU1LTI.html"
+        },
+        {
+          "name": "招远综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhaoyuanrongmei.com.cn/share/dHZsLTU1LTQ.html"
+        },
+        {
+          "name": "博山新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.boshanhao.cn/share/dHZsLTE3LTg.html"
+        },
+        {
+          "name": "博山图文",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.boshanhao.cn/share/dHZsLTE3LTk.html"
+        },
+        {
+          "name": "高青综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gqxrmt.cn/share/dHZsLTYxLTE.html"
+        },
+        {
+          "name": "高青影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gqxrmt.cn/share/dHZsLTYxLTI.html"
+        },
+        {
+          "name": "桓台综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.htxw.cn/share/dHZsLTIzLTE1.html"
+        },
+        {
+          "name": "桓台影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.htxw.cn/share/dHZsLTIzLTE2.html"
+        },
+        {
+          "name": "临淄新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.linzirongmei.cn/share/dHZsLTE1MS02.html"
+        },
+        {
+          "name": "临淄生活服务",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.linzirongmei.cn/share/dHZsLTE1MS03.html"
+        },
+        {
+          "name": "沂源综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yyrmapp.com/share/dHZsLTIwMy02.html"
+        },
+        {
+          "name": "沂源生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yyrmapp.com/share/dHZsLTIwMy03.html"
+        },
+        {
+          "name": "淄川新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zichuanrongmei.cn/share/dHZsLTc1LTE.html"
+        },
+        {
+          "name": "张店1",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aizhangdian.com/share/dHZsLTEwMS0x.html"
+        },
+        {
+          "name": "张店2",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aizhangdian.com/share/dHZsLTEwMS02.html"
+        },
+        {
+          "name": "周村新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.izhoucun.cn/share/dHZsLTI1OS0x.html"
+        },
+        {
+          "name": "周村生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.izhoucun.cn/share/dHZsLTI1OS0z.html"
+        },
+        {
+          "name": "山亭综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.stqrmtzx.com/share/dHZsLTI0My0x.html"
+        },
+        {
+          "name": "枣庄市中综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zzszrm.com/share/dHZsLTIzMy0x.html"
+        },
+        {
+          "name": "滕州综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tzrmt.com/share/dHZsLTEwMy0y.html"
+        },
+        {
+          "name": "薛城新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aixuechengapp.com/share/dHZsLTM3LTg.html"
+        },
+        {
+          "name": "峄城综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yilan-app.com/share/dHZsLTIwOS0x.html"
+        },
+        {
+          "name": "滨城TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.binchengrongmei.com/share/dHZsLTI0OS0zNQ.html"
+        },
+        {
+          "name": "惠民综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aihuimin.cn/share/dHZsLTIxMS0y.html"
+        },
+        {
+          "name": "惠民影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aihuimin.cn/share/dHZsLTIxMS0z.html"
+        },
+        {
+          "name": "无棣综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE2OS0x.html"
+        },
+        {
+          "name": "无棣综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE2OS0yMQ.html"
+        },
+        {
+          "name": "阳信新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.yangxinrongmei.cn/share/dHZsLTIxNy0x.html"
+        },
+        {
+          "name": "沾化综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhanhuarongmei.cn/share/dHZsLTI3Ny0x.html"
+        },
+        {
+          "name": "沾化综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.zhanhuarongmei.cn/share/dHZsLTI3Ny05.html"
+        },
+        {
+          "name": "德州经济生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0y.html"
+        },
+        {
+          "name": "德州图文",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS05.html"
+        },
+        {
+          "name": "陵城综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lxgdw.com/share/dHZsLTIxNS02.html"
+        },
+        {
+          "name": "陵城综合2",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0zNg.html"
+        },
+        {
+          "name": "乐陵新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laolingrongmei.cn/share/dHZsLTI2Ny0x.html"
+        },
+        {
+          "name": "乐陵城市生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.laolingrongmei.cn/share/dHZsLTI2Ny01.html"
+        },
+        {
+          "name": "临邑1",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyxrmtzx.com/share/dHZsLTQ5LTM.html"
+        },
+        {
+          "name": "宁津综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.njxrmtzx.cn/share/dHZsLTE5My0x.html"
+        },
+        {
+          "name": "平原综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxwapp.com/share/dHZsLTE5LTI.html"
+        },
+        {
+          "name": "庆云综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS02NQ.html"
+        },
+        {
+          "name": "武城综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wuchengrmtzx.cn/share/dHZsLTMzLTQ.html"
+        },
+        {
+          "name": "武城综艺影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS01OA.html"
+        },
+        {
+          "name": "夏津综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0yMQ.html"
+        },
+        {
+          "name": "夏津公共",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS0yMw.html"
+        },
+        {
+          "name": "禹城综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS00OA.html"
+        },
+        {
+          "name": "禹城综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dztv.tv/share/dHZsLTE3OS01MA.html"
+        },
+        {
+          "name": "成武综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cwcmc.cn/share/dHZsLTEzMS0x.html"
+        },
+        {
+          "name": "成武综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cwcmc.cn/share/dHZsLTEzMS0y.html"
+        },
+        {
+          "name": "曹县综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.caoxianrongmei.cn/share/dHZsLTg3LTI.html"
+        },
+        {
+          "name": "东明新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dongmingrongmei.cn/share/dHZsLTExMS0y.html"
+        },
+        {
+          "name": "定陶新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.aidingtao.cn/share/dHZsLTI3LTc.html"
+        },
+        {
+          "name": "巨野新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.juyerongmei.cn/share/dHZsLTEzOS0x.html"
+        },
+        {
+          "name": "牡丹区新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hzmdrm.cn/share/dHZsLTIxOS02.html"
+        },
+        {
+          "name": "牡丹区综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.hzmdrm.cn/share/dHZsLTIxOS0xNw.html"
+        },
+        {
+          "name": "单县综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdmlsz.com/share/dHZsLTE1NS0y.html"
+        },
+        {
+          "name": "郓城新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ycrmtzx.com.cn/share/dHZsLTEzNS0z.html"
+        },
+        {
+          "name": "郓城综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ycrmtzx.com.cn/share/dHZsLTEzNS0y.html"
+        },
+        {
+          "name": "金乡综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrm.net/share/dHZsLTEyOS0y.html"
+        },
+        {
+          "name": "金乡生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrm.net/share/dHZsLTEyOS00.html"
+        },
+        {
+          "name": "梁山综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lsrmapp.com/share/dHZsLTg5LTE.html"
+        },
+        {
+          "name": "曲阜新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jinriqufu.com/share/dHZsLTEzLTE.html"
+        },
+        {
+          "name": "任城新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcrmt.cn/share/dHZsLTczLTg.html"
+        },
+        {
+          "name": "任城影视娱乐",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcrmt.cn/share/dHZsLTczLTk.html"
+        },
+        {
+          "name": "泗水新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sishuitv.com/share/dHZsLTExNy01.html"
+        },
+        {
+          "name": "泗水文化生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sishuitv.com/share/dHZsLTExNy02.html"
+        },
+        {
+          "name": "汶上综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wstvs.com/share/dHZsLTMwMS0x.html"
+        },
+        {
+          "name": "鱼台新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ytxrmtzx.com/share/dHZsLTYzLTU.html"
+        },
+        {
+          "name": "鱼台生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.ytxrmtzx.com/share/dHZsLTYzLTE1.html"
+        },
+        {
+          "name": "兖州新闻",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTIzMS0x.html"
+        },
+        {
+          "name": "兖州生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTIzMS0z.html"
+        },
+        {
+          "name": "茌平综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cprmtvs.com/share/dHZsLTMxLTY.html"
+        },
+        {
+          "name": "茌平生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.cprmtvs.com/share/dHZsLTMxLTg.html"
+        },
+        {
+          "name": "东昌综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dcfrm.cn/share/dHZsLTI2NS0x.html"
+        },
+        {
+          "name": "东阿综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.decmc.cn/share/dHZsLTk1LTIy.html"
+        },
+        {
+          "name": "东阿综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.decmc.cn/share/dHZsLTk1LTI5.html"
+        },
+        {
+          "name": "高唐综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaotangrongmei.com/share/dHZsLTQzLTE.html"
+        },
+        {
+          "name": "高唐综艺",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.gaotangrongmei.com/share/dHZsLTQzLTU.html"
+        },
+        {
+          "name": "冠县综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.guanxianrongmei.com/share/dHZsLTc5LTE.html"
+        },
+        {
+          "name": "临清综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lqrmtzx.cn/share/dHZsLTY1LTI.html"
+        },
+        {
+          "name": "临清经济信息",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lqrmtzx.cn/share/dHZsLTY1LTU.html"
+        },
+        {
+          "name": "费县综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.feixianshoufa.cn/share/dHZsLTQxLTExOQ.html"
+        },
+        {
+          "name": "费县生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.feixianshoufa.cn/share/dHZsLTQxLTExNw.html"
+        },
+        {
+          "name": "河东综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyhedong.com/share/dHZsLTE5MS0x.html"
+        },
+        {
+          "name": "河东影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lyhedong.com/share/dHZsLTE5MS0y.html"
+        },
+        {
+          "name": "莒南综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.junanrongmei.cn/share/dHZsLTEwNS00.html"
+        },
+        {
+          "name": "莒南影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.junanrongmei.cn/share/dHZsLTEwNS01.html"
+        },
+        {
+          "name": "兰陵综合频道",
+          "url": "live_com.html?script=js/tv/iapp2/live.js&orgId=113&id=131"
+        },
+        {
+          "name": "兰陵公共频道",
+          "url": "live_com.html?script=js/tv/iapp2/live.js&orgId=113&id=133"
+        },
+        {
+          "name": "兰山综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.lylsrm.cn/share/dHZsLTIwMS0x.html"
+        },
+        {
+          "name": "临沭综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdlsrm.com/share/dHZsLTE2Ny0z.html"
+        },
+        {
+          "name": "临沭生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.sdlsrm.com/share/dHZsLTE2Ny00.html"
+        },
+        {
+          "name": "罗庄综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.luozhuangshoufa.cn/share/dHZsLTE0Ny0x.html"
+        },
+        {
+          "name": "罗庄影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.luozhuangshoufa.cn/share/dHZsLTE0Ny0xNw.html"
+        },
+        {
+          "name": "蒙阴综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mengyinshoufa.com/share/dHZsLTE2MS0xMw.html"
+        },
+        {
+          "name": "蒙阴2套",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.mengyinshoufa.com/share/dHZsLTE2MS0xNQ.html"
+        },
+        {
+          "name": "平邑综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxrmt.com.cn/share/dHZsLTM0NS00.html"
+        },
+        {
+          "name": "平邑生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.pyxrmt.com.cn/share/dHZsLTM0NS0xNA.html"
+        },
+        {
+          "name": "郯城综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tanchengtv.com/share/dHZsLTgzLTE.html"
+        },
+        {
+          "name": "郯城2套",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tanchengtv.com/share/dHZsLTgzLTI.html"
+        },
+        {
+          "name": "沂南综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.12345yinanshoufa.cn/share/dHZsLTE3Ny02.html"
+        },
+        {
+          "name": "沂南红色影视",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.12345yinanshoufa.cn/share/dHZsLTE3Ny03.html"
+        },
+        {
+          "name": "沂水综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE0NS0x.html"
+        },
+        {
+          "name": "沂水生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://app.litenews.cn/share/dHZsLTE0NS0y.html"
+        },
+        {
+          "name": "莒县综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrmtzx.cn/share/dHZsLTE1OS0yMw.html"
+        },
+        {
+          "name": "莒县2套",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.jxrmtzx.cn/share/dHZsLTE1OS0yNw.html"
+        },
+        {
+          "name": "五莲综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wltvlive.cn/share/dHZsLTI5OS0xMA.html"
+        },
+        {
+          "name": "五莲文化旅游",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wltvlive.cn/share/dHZsLTI5OS0xMg.html"
+        },
+        {
+          "name": "东平综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dpsjt.cn/share/dHZsLTE4Ny05.html"
+        },
+        {
+          "name": "东平民生",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.dpsjt.cn/share/dHZsLTE4Ny0xMQ.html"
+        },
+        {
+          "name": "岱岳TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.daiyuerongmei.cn/share/dHZsLTI5My0x.html"
+        },
+        {
+          "name": "肥城生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.fcrmt.cn/share/dHZsLTUxLTY.html"
+        },
+        {
+          "name": "宁阳综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.nyxrmtzx.cn/share/dHZsLTEyMy0x.html"
+        },
+        {
+          "name": "宁阳2套",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.nyxrmtzx.cn/share/dHZsLTEyMy03.html"
+        },
+        {
+          "name": "泰山TV",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.tsqrmtzx.cn/share/dHZsLTI2My0x.html"
+        },
+        {
+          "name": "新泰综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xintairongmei.cn/share/dHZsLTU5LTI.html"
+        },
+        {
+          "name": "新泰乡村",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.xintairongmei.cn/share/dHZsLTU5LTM.html"
+        },
+        {
+          "name": "威海新闻综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0x.html"
+        },
+        {
+          "name": "威海都市生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0z.html"
+        },
+        {
+          "name": "威海海洋",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.weihai.tv/share/dHZsLTE1Ny0xMg.html"
+        },
+        {
+          "name": "威海环翠综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.whhccm.cn/share/dHZsLTIxMy01.html"
+        },
+        {
+          "name": "荣成综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcsrmtzx.cn/share/dHZsLTc3LTEw.html"
+        },
+        {
+          "name": "荣成生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rcsrmtzx.cn/share/dHZsLTc3LTEx.html"
+        },
+        {
+          "name": "乳山综合",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rushanrongmei.cn/share/dHZsLTE0My04.html"
+        },
+        {
+          "name": "乳山生活",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.rushanrongmei.cn/share/dHZsLTE0My05.html"
+        },
+        {
+          "name": "文登TV1",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wendengsf.com/share/dHZsLTkxLTc.html"
+        },
+        {
+          "name": "文登TV2",
+          "url": "live_com.html?script=js/tv/iapp/live.js&url=https://iapp.wendengsf.com/share/dHZsLTkxLTg.html"
+        }
+      ]
+    },
+    {
+      "tag": "sxtv",
+      "name": "山西",
+      "vods": [
+        {
+          "name": "山西卫视",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_650.html"
+        },
+        {
+          "name": "黄河",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_651.html"
+        },
+        {
+          "name": "山西经济与科技",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_653.html"
+        },
+        {
+          "name": "山西影视",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_654.html"
+        },
+        {
+          "name": "山西社会与法治",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_655.html"
+        },
+        {
+          "name": "山西文体生活",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_656.html"
+        },
+        {
+          "name": "太原新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811850.html"
+        },
+        {
+          "name": "大同新闻综合",
+          "url": "http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=16"
+        },
+        {
+          "name": "大同公共",
+          "url": "http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=8"
+        },
+        {
+          "name": "大同生活",
+          "url": "http://share.dtradio.com.cn/?_hgOutLink=live/livedetail&channel_id=9"
+        },
+        {
+          "name": "朔州新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811845.html"
+        },
+        {
+          "name": "山西影视",
+          "url": "https://apphhplushttps.sxrtv.com//television/live_wap_654.html"
+        },
+        {
+          "name": "忻州综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811842.html"
+        },
+        {
+          "name": "阳泉新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811848.html"
+        },
+        {
+          "name": "阳泉科教",
+          "url": "http://share.yqrtv.com/?_hgOutLink=live/livedetail&channel_id=11"
+        },
+        {
+          "name": "吕梁新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811840.html"
+        },
+        {
+          "name": "吕梁影视生活",
+          "url": "https://web.guangdianyun.tv/tv/2653?uin=2268"
+        },
+        {
+          "name": "晋中综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811844.html"
+        },
+        {
+          "name": "晋中公共",
+          "url": "https://app.jztvnews.cn//television/live_wap_12442.html"
+        },
+        {
+          "name": "长治新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811847.html"
+        },
+        {
+          "name": "晋城新闻综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811846.html"
+        },
+        {
+          "name": "临汾综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811841.html"
+        },
+        {
+          "name": "运城综合",
+          "url": "https://apphhplushttps.sxrtv.com//a/b/a/live_wap_811843.html"
+        }
+      ]
+    },
+    {
+      "tag": "cztv",
+      "name": "浙江",
+      "vods": [
+        {
+          "name": "浙江卫视",
+          "url": "https://www.cztv.com/liveTV/101"
+        },
+        {
+          "name": "浙江钱江都市",
+          "url": "https://www.cztv.com/liveTV/102"
+        },
+        {
+          "name": "浙江经济生活",
+          "url": "https://www.cztv.com/liveTV/103"
+        },
+        {
+          "name": "浙江教科影视",
+          "url": "https://www.cztv.com/liveTV/104"
+        },
+        {
+          "name": "浙江民生休闲",
+          "url": "https://www.cztv.com/liveTV/106"
+        },
+        {
+          "name": "浙江新闻",
+          "url": "https://www.cztv.com/liveTV/107"
+        },
+        {
+          "name": "浙江国际",
+          "url": "https://www.cztv.com/liveTV/110"
+        },
+        {
+          "name": "浙江好易购",
+          "url": "https://www.cztv.com/liveTV/111"
+        },
+        {
+          "name": "浙江之江纪录",
+          "url": "https://www.cztv.com/liveTV/112"
+        },
+        {
+          "name": "杭州综合",
+          "url": "https://tv.hoolo.tv/hzzh/"
+        },
+        {
+          "name": "杭州西湖明珠",
+          "url": "https://tv.hoolo.tv/xhmz/"
+        },
+        {
+          "name": "杭州生活",
+          "url": "https://tv.hoolo.tv/hzsh/"
+        },
+        {
+          "name": "杭州影视",
+          "url": "https://tv.hoolo.tv/utv/"
+        },
+        {
+          "name": "杭州青少体育",
+          "url": "https://tv.hoolo.tv/hzse/"
+        },
+        {
+          "name": "杭州文化",
+          "url": "https://tv.hoolo.tv/whpd/"
+        },
+        {
+          "name": "宁波新闻综合",
+          "url": "https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV1/index.shtml"
+        },
+        {
+          "name": "宁波新闻综合",
+          "url": "https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV2/index.shtml"
+        },
+        {
+          "name": "宁波都市文体",
+          "url": "https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV3/index.shtml"
+        },
+        {
+          "name": "宁波影视剧",
+          "url": "https://www.ncmc.nbtv.cn/gbds/folder8458/NBTV4/index.shtml"
+        }
+      ]
+    },
+    {
+      "tag": "ahtv",
+      "name": "安徽",
+      "vods": [
+        {
+          "name": "安徽卫视",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=0"
+        },
+        {
+          "name": "安徽经济生活",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=1"
+        },
+        {
+          "name": "安徽综艺·体育",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=2"
+        },
+        {
+          "name": "安徽国际",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=6"
+        },
+        {
+          "name": "安徽综艺",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=2"
+        },
+        {
+          "name": "安徽影视",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=3"
+        },
+        {
+          "name": "安徽公共",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=4"
+        },
+        {
+          "name": "安徽农业·科教",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=5"
+        },
+        {
+          "name": "安徽移动电视",
+          "url": "https://www.ahtv.cn/folder9000/folder20193?channelIndex=7"
+        },
+        {
+          "name": "阜阳新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/2851?uin=2577"
+        },
+        {
+          "name": "阜阳教育",
+          "url": "https://web.guangdianyun.tv/tv/2852?uin=2577"
+        },
+        {
+          "name": "阜阳生活",
+          "url": "https://web.guangdianyun.tv/tv/2853?uin=2577"
+        },
+        {
+          "name": "阜阳都市文艺",
+          "url": "https://web.guangdianyun.tv/tv/2854?uin=2577"
+        },
+        {
+          "name": "芜湖新闻综合",
+          "url": "https://www.wuhubtv.com/folder1194/"
+        },
+        {
+          "name": "芜湖生活",
+          "url": "https://www.wuhubtv.com/folder1194/?ujs=JCQoJy5uYXZMaXN0IGFbdGl0bGU9IueUn+a0u+mikemBkyJdJykuY2xpY2soKQ=="
+        },
+        {
+          "name": "亳州综合",
+          "url": "https://www.ahbztv.com/televisi0n.html"
+        },
+        {
+          "name": "亳州农村",
+          "url": "https://www.ahbztv.com/televisi0n.html?ujs=JCQoJyNjaGFubmVsIC5zd2lwZXItc2xpZGUnKS5maWx0ZXIoZnVuY3Rpb24oKSB7cmV0dXJuICQkKHRoaXMpLnRleHQoKS50cmltKCkgPT09ICflhpzmnZHpopHpgZMnO30pLmNsaWNrKCk="
+        },
+        {
+          "name": "淮北新闻综合",
+          "url": "live.html?url=https://vms-x.hbnews.net/video/xwzh/index.m3u8"
+        },
+        {
+          "name": "淮北经济生活",
+          "url": "live.html?url=https://vms-x.hbnews.net/video/JJSH/index.m3u8"
+        },
+        {
+          "name": "宿州新闻综合",
+          "url": "live.html?url=https://live.ahsz.tv/video/s10001-szzh/index.m3u8"
+        },
+        {
+          "name": "宿州科教生活",
+          "url": "live.html?url=https://live.ahsz.tv/video/s10001-kxjy/index.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "jstv",
+      "name": "江苏",
+      "vods": [
+        {
+          "name": "江苏卫视",
+          "url": "https://live.jstv.com/?tag=江苏卫视"
+        },
+        {
+          "name": "江苏卫视4K超高清",
+          "url": "https://live.jstv.com/?tag=江苏卫视4K超高清"
+        },
+        {
+          "name": "江苏综艺",
+          "url": "https://live.jstv.com/?tag=江苏综艺"
+        },
+        {
+          "name": "江苏新闻",
+          "url": "https://live.jstv.com/?tag=江苏新闻"
+        },
+        {
+          "name": "江苏城市",
+          "url": "https://live.jstv.com/?tag=江苏城市"
+        },
+        {
+          "name": "江苏影视",
+          "url": "https://live.jstv.com/?tag=江苏影视"
+        },
+        {
+          "name": "江苏教育",
+          "url": "https://live.jstv.com/?tag=江苏教育"
+        },
+        {
+          "name": "江苏体育·休闲",
+          "url": "https://live.jstv.com/?tag=体育休闲"
+        },
+        {
+          "name": "江苏国际",
+          "url": "https://live.jstv.com/?tag=江苏国际"
+        },
+        {
+          "name": "苏州新闻综合",
+          "url": "live.html?url=https://live-auth.51kandianshi.com/szgd/csztv1.m3u8"
+        },
+        {
+          "name": "苏州社会经济",
+          "url": "live.html?url=https://live-auth.51kandianshi.com/szgd/csztv2.m3u8"
+        },
+        {
+          "name": "苏州电影娱乐",
+          "url": "live.html?url=https://live-auth.51kandianshi.com/szgd/csztv4.m3u8"
+        },
+        {
+          "name": "苏州生活资讯",
+          "url": "live.html?url=https://live-auth.51kandianshi.com/szgd/csztv5.m3u8"
+        },
+        {
+          "name": "苏州4K",
+          "url": "live.html?url=https://live-auth.51kandianshi.com/szgd/csztv4k_4k.m3u8"
+        },
+        {
+          "name": "南京新闻综合",
+          "url": "https://www.nbs.cn/live/?id=109152"
+        },
+        {
+          "name": "南京十八·生活",
+          "url": "https://www.nbs.cn/live/?id=110094"
+        },
+        {
+          "name": "南京教科",
+          "url": "https://www.nbs.cn/live/?id=109153"
+        },
+        {
+          "name": "南京文旅纪录",
+          "url": "https://www.nbs.cn/live/?id=110093"
+        },
+        {
+          "name": "南通新闻综合",
+          "url": "https://www.ntjoy.com/ntw/broadcastTvs.html?menuCode=ntw005"
+        }
+      ]
+    },
+    {
+      "tag": "fujian",
+      "name": "福建",
+      "vods": [
+        {
+          "name": "福建综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248990102917120&company_id=468&utaot=1"
+        },
+        {
+          "name": "东南卫视",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248966136664064&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建乡村振兴公共",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248940467523584&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建新闻",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248914378952704&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建电视剧",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248891478052864&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建旅游",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248752898248704&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建经济",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248614498799616&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建文体",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248584991870976&company_id=468&utaot=1"
+        },
+        {
+          "name": "福建少儿",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248553475870720&company_id=468&utaot=1"
+        },
+        {
+          "name": "海峡卫视",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248523855695872&company_id=468&utaot=1"
+        },
+        {
+          "name": "厦门卫视",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727571808803282944&company_id=468&utaot=1"
+        },
+        {
+          "name": "福州新闻综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=731087090473676800&company_id=468&utaot=1"
+        },
+        {
+          "name": "福州生活",
+          "url": "live.html?url=https://live.zohi.tv/video/s10001-fztv-3/index.m3u8"
+        },
+        {
+          "name": "福建文体",
+          "url": "live.html?url=https://live.zohi.tv/video/s10001-fztv-4/index.m3u8"
+        },
+        {
+          "name": "福建少儿",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=665248553475870720&company_id=468&utaot=1"
+        },
+        {
+          "name": "泉州新闻综合",
+          "url": "https://www.qztv.cn/index/Medias/index/media_id/wq95wqbDnMKyd8KiwqzChnt0w5nChcKowoHCoQ/stream_name/news.html"
+        },
+        {
+          "name": "泉州闽南语",
+          "url": "https://www.qztv.cn/index/Medias/index/media_id/wq95wqbDnMKyd8KiwqzChnt0w5nChcKofcKh/stream_name/mny.html"
+        },
+        {
+          "name": "漳州新闻综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727214415649083392&company_id=468&utaot=1"
+        },
+        {
+          "name": "龙岩综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727212352215093248&company_id=468&utaot=1"
+        },
+        {
+          "name": "三明综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727216678547394560&company_id=468&utaot=1"
+        },
+        {
+          "name": "南平综合",
+          "url": "https://www.fjtv.net/front-cloudlive-manage-h5/index.html?id=727216450918322176&company_id=468&utaot=1"
+        },
+        {
+          "name": "莆田新闻综合",
+          "url": "https://www.ptbtv.com/4?_hgOutLink=live/livedetail&channel_id=4"
+        },
+        {
+          "name": "莆田文旅生活",
+          "url": "https://www.ptbtv.com/5?_hgOutLink=live/livedetail&channel_id=5"
+        },
+        {
+          "name": "仙游综合",
+          "url": "https://www.ptbtv.com/6?_hgOutLink=live/livedetail&channel_id=6"
+        },
+        {
+          "name": "宁德新闻综合",
+          "url": "http://share.nddst.com/?_hgOutLink=live/livedetail&channel_id=41"
+        },
+        {
+          "name": "宁德文化旅游",
+          "url": "http://share.nddst.com/?_hgOutLink=live/livedetail&channel_id=42"
+        },
+        {
+          "name": "平潭新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/907?uin=1118&utaot=1&ujs=X3R2RnVuYy5jaGVjayhmdW5jdGlvbiAoKXtyZXR1cm4gJCQoIiNmb2xsb3ctc2tpbiIpLmxlbmd0aD4wfSxmdW5jdGlvbiAoKXskJCgiI2ZvbGxvdy1za2luIikucmVtb3ZlKCk7fSk7"
+        }
+      ]
+    },
+    {
+      "tag": "beijing",
+      "name": "北京",
+      "vods": [
+        {
+          "name": "北京卫视",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=0"
+        },
+        {
+          "name": "北京文艺",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=1"
+        },
+        {
+          "name": "北京纪实科教",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=2"
+        },
+        {
+          "name": "北京影视",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=3"
+        },
+        {
+          "name": "北京财经",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=4"
+        },
+        {
+          "name": "北京体育",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=5"
+        },
+        {
+          "name": "北京生活",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=6"
+        },
+        {
+          "name": "北京新闻",
+          "url": "https://www.btime.com/btv/btvsy_index?tag=7"
+        }
+      ]
+    },
+    {
+      "tag": "shanghai",
+      "name": "上海",
+      "vods": [
+        {
+          "name": "上海东方卫视",
+          "url": "https://live.kankanews.com/huikan?id=1"
+        },
+        {
+          "name": "上海新闻综合",
+          "url": "https://live.kankanews.com/huikan?id=2"
+        },
+        {
+          "name": "上海魔都眼",
+          "url": "https://live.kankanews.com/huikan?id=11"
+        },
+        {
+          "name": "上海第一财经",
+          "url": "https://live.kankanews.com/huikan?id=5"
+        },
+        {
+          "name": "上海新纪实",
+          "url": "https://live.kankanews.com/huikan?id=12"
+        },
+        {
+          "name": "上海都市",
+          "url": "https://live.kankanews.com/huikan?id=4"
+        },
+        {
+          "name": "上海五星体育",
+          "url": "https://live.kankanews.com/huikan?id=10"
+        }
+      ]
+    },
+    {
+      "tag": "shenzhen",
+      "name": "深圳",
+      "vods": [
+        {
+          "name": "深圳卫视",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7867&u-link=1"
+        },
+        {
+          "name": "深圳卫视4K",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=24725&u-link=1"
+        },
+        {
+          "name": "深圳都市",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7868&u-link=1"
+        },
+        {
+          "name": "深圳电视剧",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7880&u-link=1"
+        },
+        {
+          "name": "深圳财经",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7871&u-link=1"
+        },
+        {
+          "name": "深圳移动电视",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7869&u-link=1"
+        },
+        {
+          "name": "深圳国际",
+          "url": "https://www.sztv.com.cn/dianshi.shtml?id=7944&u-link=1"
+        }
+      ]
+    },
+    {
+      "tag": "sctv",
+      "name": "四川",
+      "vods": [
+        {
+          "name": "四川卫视",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=1"
+        },
+        {
+          "name": "四川新闻",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=2"
+        },
+        {
+          "name": "四川经济",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=3"
+        },
+        {
+          "name": "四川文化旅游",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=4"
+        },
+        {
+          "name": "四川影视文艺",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=5"
+        },
+        {
+          "name": "四川妇女儿童",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=6"
+        },
+        {
+          "name": "四川乡村",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=8"
+        },
+        {
+          "name": "四川康巴卫视",
+          "url": "live_com.html?script=js/tv/sctv/sctv.js&tag=9"
+        },
+        {
+          "name": "重庆新闻综合",
+          "url": "https://www.cbg.cn/web/list/4918/1.html?5DEFC70C1A4AOD5173881C62BD4ACAD0"
+        },
+        {
+          "name": "南江综合",
+          "url": "https://web.guangdianyun.tv/tv/?id=1670&uin=1822"
+        },
+        {
+          "name": "泸县综合",
+          "url": "https://web.guangdianyun.tv/tv/?id=1645&uin=2392"
+        },
+        {
+          "name": "绵竹综合",
+          "url": "https://web.guangdianyun.tv/tv/?id=1933&uin=3277"
+        },
+        {
+          "name": "射洪综合",
+          "url": "https://web.guangdianyun.tv/tv/?id=391&uin=1743"
+        },
+        {
+          "name": "成都新闻综合",
+          "url": "https://www.cditv.cn/show/4845-563.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都经济资讯",
+          "url": "https://www.cditv.cn/show/4845-562.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都都市生活",
+          "url": "https://www.cditv.cn/show/4845-561.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都影视文艺",
+          "url": "https://www.cditv.cn/show/4845-560.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都公共",
+          "url": "https://www.cditv.cn/show/4845-559.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都少儿",
+          "url": "https://www.cditv.cn/show/4845-558.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "成都蓉城先锋",
+          "url": "https://www.cditv.cn/show/4845-592.html?utaot=1&ujs=JCQoIi5oZWFkZXIiKS5yZW1vdmUoKQ=="
+        },
+        {
+          "name": "内江综合",
+          "url": "http://www.scnj.tv/plus/live/live.php?id=15948060915449&flag=1"
+        },
+        {
+          "name": "达州新闻综合",
+          "url": "live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel104234/playlist.m3u8"
+        },
+        {
+          "name": "达州文化生活",
+          "url": "live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel104727/playlist.m3u8"
+        },
+        {
+          "name": "达州通川",
+          "url": "live.html?url=https://m3u8channel.dzrm.cn/nmip-media/channellive/channel105011/playlist.m3u8"
+        },
+        {
+          "name": "泸州新闻综合",
+          "url": "https://www.luzhoubs.com/lztv1/index.html"
+        },
+        {
+          "name": "泸州科教生活",
+          "url": "https://www.luzhoubs.com/lztv3/index.html"
+        },
+        {
+          "name": "攀枝花新闻综合",
+          "url": "https://h5.pzhkai.com/front-cloudlive-manage-h5/index.html?id=536937329516896257&company_id=1051"
+        },
+        {
+          "name": "遂宁综合",
+          "url": "https://www.snxw.com/suinMini/site/6642bf8360b26293fe689f04/6642d21860b26293fe689f4c"
+        },
+        {
+          "name": "遂宁文化生活",
+          "url": "live.html?url=https://szyplaytv.snxw.com/live/gggy/playlist.m3u8"
+        },
+        {
+          "name": "广元综合",
+          "url": "live.html?url=https://m3u8.channel.dzsm.com/nmip-media/channellive/channel100999/playlist.m3u8"
+        },
+        {
+          "name": "广元文化生活",
+          "url": "live.html?url=https://m3u8.channel.dzsm.com/nmip-media/channellive/channel101257/playlist.m3u8"
+        },
+        {
+          "name": "资阳新闻综合",
+          "url": "http://www.zyrb.com.cn/#/bD074b747F?pkey="
+        },
+        {
+          "name": "甘孜综合",
+          "url": "https://www.ganzitv.com/cms/tv"
+        },
+        {
+          "name": "凉山新闻综合",
+          "url": "live.html?url=https://tvlive.i0834.cn/nmip-media/channellive/channel114103/playlist.m3u8"
+        },
+        {
+          "name": "凉山彝语综合",
+          "url": "live.html?url=https://tvlive.i0834.cn/nmip-media/channellive/channel115044/playlist.m3u8"
+        },
+        {
+          "name": "雅安新闻综合",
+          "url": "https://www.beiww.com/shiting"
+        },
+        {
+          "name": "绵阳新闻综合",
+          "url": "https://myntv.cn/html/zb/mytv1.asp"
+        },
+        {
+          "name": "绵阳科教生活",
+          "url": "https://myntv.cn/html/zb/mytv2.asp"
+        }
+      ]
+    },
+    {
+      "tag": "hbtv",
+      "name": "河北",
+      "vods": [
+        {
+          "name": "河北卫视",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10524916.shtml"
+        },
+        {
+          "name": "河北经济生活",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516507.shtml?share=true"
+        },
+        {
+          "name": "河北三农",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516508.shtml?share=true"
+        },
+        {
+          "name": "河北都市",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516509.shtml?share=true"
+        },
+        {
+          "name": "河北影视剧",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516510.shtml?share=true"
+        },
+        {
+          "name": "河北少儿科教",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516511.shtml?share=true"
+        },
+        {
+          "name": "河北文旅·公共",
+          "url": "https://web.cmc.hebtv.com/cms/rmt0336_html/19/19js/st/xdszb/10516512.shtml?share=true"
+        },
+        {
+          "name": "沧州新闻综合",
+          "url": "https://www.czgd.tv/Article/des?infoid=32768&modelid=3"
+        },
+        {
+          "name": "沧州公共",
+          "url": "https://www.czgd.tv/Article/des?infoid=32769&modelid=3"
+        },
+        {
+          "name": "沧州影视",
+          "url": "https://www.czgd.tv/Article/des?infoid=32770&modelid=3"
+        },
+        {
+          "name": "衡水综合",
+          "url": "https://app.hsrtv.cn/web/teletv/tv_content_1.html"
+        },
+        {
+          "name": "衡水公共",
+          "url": "https://app.hsrtv.cn/web/teletv/tv_content_4.html"
+        },
+        {
+          "name": "邢台公共",
+          "url": "https://www.xttv.com.cn/index/channel/index/id/62.html"
+        },
+        {
+          "name": "邢台城市生活",
+          "url": "https://www.xttv.com.cn/index/channel/index/id/64html"
+        },
+        {
+          "name": "石家庄新闻综合",
+          "url": "https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=4"
+        },
+        {
+          "name": "石家庄城市服务",
+          "url": "https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=5"
+        },
+        {
+          "name": "石家庄文化娱乐",
+          "url": "https://plusshare.sjzntv.cn/?_hgOutLink=live/livedetail&channel_id=6"
+        }
+      ]
+    },
+    {
+      "tag": "hntv",
+      "name": "河南",
+      "vods": [
+        {
+          "name": "河南卫视",
+          "url": "https://static.hntv.tv/kds/#/"
+        },
+        {
+          "name": "河南新闻",
+          "url": "https://static.hntv.tv/total/television/?id=149&u-link=1"
+        },
+        {
+          "name": "河南都市",
+          "url": "https://www.hndyjyfw.gov.cn/livePlay.html?u=14"
+        },
+        {
+          "name": "河南民生",
+          "url": "https://www.hndyjyfw.gov.cn/livePlay.html?u=15"
+        },
+        {
+          "name": "河南梨园",
+          "url": "https://www.hndyjyfw.gov.cn/livePlay.html?u=16"
+        },
+        {
+          "name": "河南法治",
+          "url": "https://static.hntv.tv/total/television/?id=147&u-link=1"
+        },
+        {
+          "name": "河南公共",
+          "url": "https://static.hntv.tv/total/television/?id=151&u-link=1"
+        },
+        {
+          "name": "河南乡村",
+          "url": "https://static.hntv.tv/total/television/?id=152&u-link=1"
+        },
+        {
+          "name": "河南电视剧",
+          "url": "https://static.hntv.tv/total/television/?id=148&u-link=1"
+        },
+        {
+          "name": "河南文物宝库",
+          "url": "https://static.hntv.tv/total/television/?id=155&u-link=1"
+        },
+        {
+          "name": "河南武术世界",
+          "url": "https://static.hntv.tv/total/television/?id=156&u-link=1"
+        },
+        {
+          "name": "河南曲艺",
+          "url": "https://static.hntv.tv/total/television/?id=157&u-link=1"
+        },
+        {
+          "name": "河南移动戏曲",
+          "url": "https://static.hntv.tv/total/television/?id=163&u-link=1"
+        },
+        {
+          "name": "河南象视界",
+          "url": "https://static.hntv.tv/total/television/?id=183&u-link=1"
+        },
+        {
+          "name": "河南国学",
+          "url": "https://static.hntv.tv/total/television/?id=194&u-link=1"
+        },
+        {
+          "name": "郑州综合",
+          "url": "https://static.hntv.tv/total/television/?id=197&u-link=1"
+        },
+        {
+          "name": "开封综合",
+          "url": "https://static.hntv.tv/total/television/?id=198&u-link=1"
+        },
+        {
+          "name": "洛阳综合",
+          "url": "https://static.hntv.tv/total/television/?id=204&u-link=1"
+        },
+        {
+          "name": "平顶山综合",
+          "url": "https://static.hntv.tv/total/television/?id=205&u-link=1"
+        },
+        {
+          "name": "安阳综合",
+          "url": "https://static.hntv.tv/total/television/?id=206&u-link=1"
+        },
+        {
+          "name": "鹤壁综合",
+          "url": "https://static.hntv.tv/total/television/?id=207&u-link=1"
+        },
+        {
+          "name": "新乡综合",
+          "url": "https://static.hntv.tv/total/television/?id=208&u-link=1"
+        },
+        {
+          "name": "焦作综合",
+          "url": "https://static.hntv.tv/total/television/?id=209&u-link=1"
+        },
+        {
+          "name": "濮阳综合",
+          "url": "https://static.hntv.tv/total/television/?id=219&u-link=1"
+        },
+        {
+          "name": "许昌综合",
+          "url": "https://static.hntv.tv/total/television/?id=220&u-link=1"
+        },
+        {
+          "name": "漯河综合",
+          "url": "https://static.hntv.tv/total/television/?id=221&u-link=1"
+        },
+        {
+          "name": "三门峡综合",
+          "url": "https://static.hntv.tv/total/television/?id=222&u-link=1"
+        },
+        {
+          "name": "南阳综合",
+          "url": "https://static.hntv.tv/total/television/?id=223&u-link=1"
+        },
+        {
+          "name": "商丘综合",
+          "url": "https://static.hntv.tv/total/television/?id=224&u-link=1"
+        },
+        {
+          "name": "信阳综合",
+          "url": "https://static.hntv.tv/total/television/?id=225&u-link=1"
+        },
+        {
+          "name": "周口综合",
+          "url": "https://static.hntv.tv/total/television/?id=225&u-link=1"
+        },
+        {
+          "name": "驻马店综合",
+          "url": "https://static.hntv.tv/total/television/?id=227&u-link=1"
+        },
+        {
+          "name": "济源综合",
+          "url": "https://static.hntv.tv/total/television/?id=228&u-link=1"
+        },
+        {
+          "name": "信阳新闻综合",
+          "url": "https://www.xytv.cn/h5/pages/tv/detail?id=137"
+        },
+        {
+          "name": "信阳文旅",
+          "url": "https://www.xytv.cn/h5/pages/tv/detail?id=138"
+        },
+        {
+          "name": "开封新闻综合",
+          "url": "https://app.kftv.net.cn/tv?id=4576506160452924712&bundleID=8694949894473483736&type=1&tvType=1#"
+        },
+        {
+          "name": "开封文化旅游",
+          "url": "https://app.kftv.net.cn/tv?id=1373356224162401385&bundleID=8694949894473483736&type=1&tvType=1#"
+        },
+        {
+          "name": "安阳新闻综合",
+          "url": "https://share.aynews.net.cn/share/page/tvLive/?tvid=1&tvType=1&webTenId=1&origin=1"
+        },
+        {
+          "name": "安阳文旅",
+          "url": "https://share.aynews.net.cn/share/page/tvLive/?tvid=3&tvType=1&webTenId=1&origin=1"
+        },
+        {
+          "name": "焦作综合",
+          "url": "https://jiaozuo.dxhmt.cn/api/page/goLivePage?liveId=a15a6b9e3e1f435584f903641e85a975&personId=cbe111e3ca12486bb64ba9fc4ffe1c7b"
+        },
+        {
+          "name": "焦作公共",
+          "url": "https://jiaozuo.dxhmt.cn/api/page/goLivePage?liveId=6a8a51398cf44ad28bb7808afdc94f4d&personId=cbe111e3ca12486bb64ba9fc4ffe1c7b"
+        }
+      ]
+    },
+    {
+      "tag": "gxtv",
+      "name": "广西",
+      "vods": [
+        {
+          "name": "广西旅游",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_f3335975f9fe11e88bcfe41f13b60c62.html"
+        },
+        {
+          "name": "广西都市",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_fdbaf085f9fe11e88bcfe41f13b60c62.html"
+        },
+        {
+          "name": "广西影视",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_5e923d82058e11e9ba67e41f13b60c62.html"
+        },
+        {
+          "name": "广西新闻",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_9dfd8600075811e9ba67e41f13b60c62.html"
+        },
+        {
+          "name": "广西国际",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_bfa17b64157f11e999f0e41f13b60c62.html"
+        },
+        {
+          "name": "广西移动电视",
+          "url": "https://tv.gxtv.cn/channel/channelivePlay_78dbfd44e6b74ab687204d2d8113cbf5.html"
+        },
+        {
+          "name": "南宁新闻综合",
+          "url": "https://www.nntv.cn/live/nntv_xw/"
+        },
+        {
+          "name": "南宁文旅生活",
+          "url": "https://www.nntv.cn/live/nntv_ds/"
+        },
+        {
+          "name": "南宁影视娱乐",
+          "url": "https://www.nntv.cn/live/nntv_ys/"
+        },
+        {
+          "name": "南宁公共",
+          "url": "https://www.nntv.cn/live/nntv_gg/"
+        },
+        {
+          "name": "桂林新闻综合",
+          "url": "https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=33&appscheme=gdmm-zaiguilin"
+        },
+        {
+          "name": "桂林科教旅游",
+          "url": "https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=35&appscheme=gdmm-zaiguilin"
+        },
+        {
+          "name": "桂林公共",
+          "url": "https://guilinbcnew.zainanjing365.com/share/live/detailTv?resourceId=34&appscheme=gdmm-zaiguilin"
+        },
+        {
+          "name": "北海新闻综合",
+          "url": "https://res.gxbhxww.cn/html/rft/live.html?channelId=389d764cf13244de97a30bc44161d235&type=1&siteId=c510269b15014be4aaf5aa6d2b92c629&shareAppId=c510269b15014be4aaf5aa6d2b92c629"
+        },
+        {
+          "name": "北海经济科教",
+          "url": "https://res.gxbhxww.cn/html/rft/live.html?channelId=51733cd2fd0548d288c3015ec3d0535b&type=1&siteId=c510269b15014be4aaf5aa6d2b92c629&shareAppId=c510269b15014be4aaf5aa6d2b92c629"
+        },
+        {
+          "name": "玉林新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/3289?uin=4042"
+        },
+        {
+          "name": "玉林公共",
+          "url": "https://web.guangdianyun.tv/tv/3290?uin=4042"
+        }
+      ]
+    },
+    {
+      "tag": "jltv",
+      "name": "吉林",
+      "vods": [
+        {
+          "name": "吉林卫视",
+          "url": "https://www.jlntv.cn/tv?tag=0"
+        },
+        {
+          "name": "吉林都市",
+          "url": "https://www.jlntv.cn/tv?tag=1"
+        },
+        {
+          "name": "吉林生活",
+          "url": "https://www.jlntv.cn/tv?tag=2"
+        },
+        {
+          "name": "吉林影视",
+          "url": "https://www.jlntv.cn/tv?tag=3"
+        },
+        {
+          "name": "吉林乡村",
+          "url": "https://www.jlntv.cn/tv?tag=4"
+        },
+        {
+          "name": "吉林综艺·文化",
+          "url": "https://www.jlntv.cn/tv?tag=5"
+        },
+        {
+          "name": "长春综合",
+          "url": "https://chinactv.com/live/1442880654565093377.html"
+        },
+        {
+          "name": "长春文旅体育",
+          "url": "https://chinactv.com/live/1442880767035355137.html"
+        },
+        {
+          "name": "长春市民生活",
+          "url": "https://chinactv.com/live/1442880854423678977.html"
+        },
+        {
+          "name": "延边卫视",
+          "url": "https://www.yb983.com/cys/index.html"
+        },
+        {
+          "name": "吉林市新闻综合",
+          "url": "http://new.jlwlq.com/wap/live/tv_xwzh.html"
+        },
+        {
+          "name": "四平新闻综合",
+          "url": "http://evfh-www.plus.jlntv.cn/siping/folder134/folder158"
+        },
+        {
+          "name": "延边朝语综合",
+          "url": "https://www.iyb983.cn/live/index.html"
+        }
+      ]
+    },
+    {
+      "tag": "hlj",
+      "name": "黑龙江",
+      "vods": [
+        {
+          "name": "黑龙江卫视",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljws_own.m3u8"
+        },
+        {
+          "name": "黑龙江文体",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljwy_hd.m3u8"
+        },
+        {
+          "name": "黑龙江影视",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljys_hd.m3u8"
+        },
+        {
+          "name": "黑龙江新闻法治",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljxw_hd.m3u8"
+        },
+        {
+          "name": "黑龙江都市",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/dushi_hd.m3u8"
+        },
+        {
+          "name": "黑龙江农业·科技",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljgg_hd.m3u8"
+        },
+        {
+          "name": "黑龙江少儿",
+          "url": "live.html?url=https://idclive.hljtv.com:4430/live/hljse_hd.m3u8"
+        },
+        {
+          "name": "哈尔滨新闻综合",
+          "url": "https://www.hrbtv.net/folder79/folder81/"
+        },
+        {
+          "name": "哈尔滨生活",
+          "url": "https://www.hrbtv.net/folder79/folder85/"
+        },
+        {
+          "name": "哈尔滨影视",
+          "url": "https://www.hrbtv.net/folder79/folder87/"
+        },
+        {
+          "name": "齐齐哈尔新闻综合",
+          "url": "https://www.qqhrnews.cn/p/qiqihaerxinwen.html"
+        },
+        {
+          "name": "齐齐哈尔经济·法治",
+          "url": "https://www.qqhrnews.cn/p/jingjifazhipindao.html"
+        },
+        {
+          "name": "绥化新闻综合",
+          "url": "live.html?url=https://liveplaysr.dbw.cn/lsdream/amzPoBP/1000/live.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "hbtv",
+      "name": "湖北",
+      "vods": [
+        {
+          "name": "湖北卫视",
+          "url": "https://news.hbtv.com.cn/app/tv/431"
+        },
+        {
+          "name": "湖北经视",
+          "url": "https://news.hbtv.com.cn/app/tv/432"
+        },
+        {
+          "name": "湖北综合",
+          "url": "https://news.hbtv.com.cn/app/tv/433"
+        },
+        {
+          "name": "湖北影视",
+          "url": "https://news.hbtv.com.cn/app/tv/435"
+        },
+        {
+          "name": "湖北生活",
+          "url": "https://news.hbtv.com.cn/app/tv/436"
+        },
+        {
+          "name": "湖北教育",
+          "url": "https://news.hbtv.com.cn/app/tv/437"
+        },
+        {
+          "name": "湖北垄上",
+          "url": "https://news.hbtv.com.cn/app/tv/438"
+        },
+        {
+          "name": "十堰新闻综合",
+          "url": "https://www.syiptv.com/tv?station_id=1"
+        },
+        {
+          "name": "十堰经济旅游",
+          "url": "https://www.syiptv.com/tv?station_id=3"
+        },
+        {
+          "name": "孝感新闻综合",
+          "url": "https://share.xgrb.cn/live_details?newsid=25009136_xgrb"
+        },
+        {
+          "name": "孝感生活",
+          "url": "https://share.xgrb.cn/live_detail?newsid=25009684_xgrb"
+        },
+        {
+          "name": "荆州新闻综合",
+          "url": "http://m-jingzhou.cjyun.org/dszb"
+        },
+        {
+          "name": "咸宁综合",
+          "url": "https://app.cjyun.org.cn/video/videojs/index?site_id=10140&id=91&page=canvas&live_type=1&ujs=X3R2RnVuYy5mdWxsc2NyZWVuVygidmlkZW8iKQ=="
+        },
+        {
+          "name": "咸宁经济生活",
+          "url": "https://app.cjyun.org.cn/video/videojs/index?site_id=10140&id=91&page=canvas&live_type=1&ujs=JCQoJy52aWRlby1saXN0IC5saScpLmZpbHRlcihmdW5jdGlvbigpIHtyZXR1cm4gJCh0aGlzKS50ZXh0KCkudHJpbSgpID09PSAn57uP5rWO55Sf5rS7Jzt9KS5jbGljaygpO190dkZ1bmMuZnVsbHNjcmVlblcoInZpZGVvIik="
+        },
+        {
+          "name": "宜昌三峡综合",
+          "url": "live.html?url=https://liveplay.ycrmt.cn/sxgd/zhpd.m3u8"
+        },
+        {
+          "name": "宜昌三峡旅游生活",
+          "url": "live.html?url=https://liveplay.ycrmt.cn/sxgd/lysh.m3u8"
+        },
+        {
+          "name": "荆门新闻综合",
+          "url": "http://cjy.jptnews.cn/p/353048.html"
+        },
+        {
+          "name": "荆门科教文旅",
+          "url": "http://cjy.jptnews.cn/p/353049.html"
+        },
+        {
+          "name": "襄阳综合",
+          "url": "https://xiangyang.cjyun.org/app/streamradio/142?u-link=1"
+        },
+        {
+          "name": "襄阳经济生活",
+          "url": "https://xiangyang.cjyun.org/app/streamradio/138?u-link=1"
+        },
+        {
+          "name": "襄阳公共",
+          "url": "https://xiangyang.cjyun.org/app/streamradio/130?u-link=1"
+        },
+        {
+          "name": "随州综合",
+          "url": "http://m-suizhou.cjyun.org/dsgb?20220318"
+        },
+        {
+          "name": "随州农村",
+          "url": "http://m-suizhou.cjyun.org/dsgb?20220318&ujs=JCQoJyN2aWRlb193cmFwIGxpJykuZmlsdGVyKGZ1bmN0aW9uKCkge3JldHVybiAkJCh0aGlzKS50ZXh0KCkudHJpbSgpID09PSAn6ZqP5bee5Yac5p2RJzt9KS5jbGljaygpOw=="
+        },
+        {
+          "name": "恩施文旅",
+          "url": "https://web.guangdianyun.tv/tv/1811?uin=3179"
+        }
+      ]
+    },
+    {
+      "tag": "hntv",
+      "name": "湖南",
+      "vods": [
+        {
+          "name": "湖南经视",
+          "url": "https://www.mgtv.com/live/?tag=湖南经视"
+        },
+        {
+          "name": "湖南娱乐",
+          "url": "https://www.mgtv.com/live/?tag=湖南娱乐"
+        },
+        {
+          "name": "湖南电影",
+          "url": "https://www.mgtv.com/live/?tag=湖南电影"
+        },
+        {
+          "name": "湖南都市",
+          "url": "https://www.mgtv.com/live/?tag=湖南都市"
+        },
+        {
+          "name": "湖南电视剧",
+          "url": "https://www.mgtv.com/live/?tag=湖南电视剧"
+        },
+        {
+          "name": "金鹰纪实",
+          "url": "https://www.mgtv.com/live/?tag=金鹰纪实"
+        },
+        {
+          "name": "湖南爱晚",
+          "url": "https://www.mgtv.com/live/?tag=湖南爱晚"
+        },
+        {
+          "name": "国际频道",
+          "url": "https://www.mgtv.com/live/?tag=国际频道"
+        },
+        {
+          "name": "先锋乒羽",
+          "url": "https://www.mgtv.com/live/?tag=先锋乒羽"
+        },
+        {
+          "name": "茶频道",
+          "url": "https://www.mgtv.com/live/?tag=茶频道"
+        },
+        {
+          "name": "快乐垂钓",
+          "url": "https://www.mgtv.com/live/?tag=快乐垂钓"
+        },
+        {
+          "name": "长沙新闻综合",
+          "url": "https://www.mgtv.com/live/?tag=长沙新闻综合"
+        },
+        {
+          "name": "长沙政法",
+          "url": "https://www.mgtv.com/live/?tag=长沙政法"
+        },
+        {
+          "name": "湘西新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/2581?uin=3815&aid=17hnxxz&pt=2&fxbs=1"
+        },
+        {
+          "name": "湘西文化旅游",
+          "url": "https://web.guangdianyun.tv/tv/2582?uin=3815&aid=17hnxxz&pt=2&fxbs=1"
+        },
+        {
+          "name": "长沙新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/346?uin=1648&userSource=weixin"
+        },
+        {
+          "name": "长沙文旅",
+          "url": "https://web.guangdianyun.tv/tv/3830?uin=1648&userSource=weixin"
+        },
+        {
+          "name": "长沙移动电视",
+          "url": "https://web.guangdianyun.tv/tv/356?uin=1648&userSource=weixin"
+        },
+        {
+          "name": "邵阳新闻综合",
+          "url": "http://www.sytv.net.cn/folder2188/folder2190"
+        },
+        {
+          "name": "岳阳新闻综合",
+          "url": "https://web.guangdianyun.tv/tv/1699?uin=2193"
+        },
+        {
+          "name": "岳阳文旅都市",
+          "url": "https://web.guangdianyun.tv/tv/1701?uin=2193"
+        },
+        {
+          "name": "娄底综合",
+          "url": "http://www.ldntv.cn/folder51/folder154/folder171"
+        },
+        {
+          "name": "郴州综合",
+          "url": "https://www.ngcz.tv/folder83/folder86"
+        }
+      ]
+    },
+    {
+      "tag": "jxntv",
+      "name": "江西",
+      "vods": [
+        {
+          "name": "江西卫视",
+          "url": "https://www.jxntv.cn/live/?tag=1#/jxtv1"
+        },
+        {
+          "name": "江西都市",
+          "url": "https://www.jxntv.cn/live/?tag=1#/jxtv2"
+        },
+        {
+          "name": "江西经济生活",
+          "url": "https://www.jxntv.cn/live/?tag=2#/jxtv3"
+        },
+        {
+          "name": "江西影视",
+          "url": "https://www.jxntv.cn/live/?tag=3#/jxtv4"
+        },
+        {
+          "name": "江西农业",
+          "url": "https://www.jxntv.cn/live/?tag=4#/jxtv5"
+        },
+        {
+          "name": "江西新闻",
+          "url": "https://www.jxntv.cn/live/?tag=6#/jxtv7"
+        },
+        {
+          "name": "江西移动",
+          "url": "https://www.jxntv.cn/live/?tag=7#/jxtv8"
+        },
+        {
+          "name": "江西陶瓷",
+          "url": "https://www.jxntv.cn/live/?tag=8#/jxtv9"
+        },
+        {
+          "name": "宜春新闻综合",
+          "url": "https://h5-yc.newsyc.com/front-cloudlive-manage-h5/index.html?id=610897459610271744&company_id=397#/"
+        },
+        {
+          "name": "宜春法治·民生",
+          "url": "https://h5-yc.newsyc.com/front-cloudlive-manage-h5/index.html?id=636127231831396352&company_id=397#/"
+        }
+      ]
+    },
+    {
+      "tag": "xjtvs",
+      "name": "新疆",
+      "vods": [
+        {
+          "name": "新疆1套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=1"
+        },
+        {
+          "name": "新疆2套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=3"
+        },
+        {
+          "name": "新疆3套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=4"
+        },
+        {
+          "name": "新疆4套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=16"
+        },
+        {
+          "name": "新疆5套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=17"
+        },
+        {
+          "name": "新疆7套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=21"
+        },
+        {
+          "name": "新疆8套",
+          "url": "https://www.xjtvs.com.cn/column/tv/434?channelId=23"
+        },
+        {
+          "name": "新建兵团卫视",
+          "url": "https://www.btzx.com.cn/2024new/new_zhibo/index.shtml"
+        },
+        {
+          "name": "八师石河子新闻综合",
+          "url": "http://www.shznews.com/TV.html"
+        },
+        {
+          "name": "克拉玛依汉语综合",
+          "url": "live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy1.m3u8"
+        },
+        {
+          "name": "克拉玛依维语综合",
+          "url": "live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy2.m3u8"
+        },
+        {
+          "name": "克拉玛依文化影视",
+          "url": "live.html?url=https://klmysjtzb.rcsxzx.com/hls/klmy3.m3u8"
+        },
+        {
+          "name": "哈密汉语综合",
+          "url": "live.html?url=https://tvpull.hmgbtv.com/hmtv/channel9cd66b3d5d258b2b/playlist.m3u8"
+        },
+        {
+          "name": "哈密维语综合",
+          "url": "live.html?url=https://tvpull.hmgbtv.com/hmtv/channel108259412c6a6711/playlist.m3u8"
+        },
+        {
+          "name": "哈密影视文艺",
+          "url": "live.html?url=https://tvpull.hmgbtv.com/hmtv/channelfb0e5c505477aa44/playlist.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "gansu",
+      "name": "甘肃",
+      "vods": [
+        {
+          "name": "甘肃卫视",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/nd6ycc.m3u8"
+        },
+        {
+          "name": "甘肃文化影视",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/z6znm4.m3u8"
+        },
+        {
+          "name": "甘肃公共应急",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/j8x8ga.m3u8"
+        },
+        {
+          "name": "甘肃少儿频道",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/ys1xzs.m3u8"
+        },
+        {
+          "name": "甘肃科教频道",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/e2a4gl.m3u8"
+        },
+        {
+          "name": "甘肃移动电视",
+          "url": "live.html?url=https://hls.gstv.com.cn/skt649/w07at3.m3u8"
+        },
+        {
+          "name": "兰州新闻综合",
+          "url": "https://lanzhoubcnew.zainanjing365.com/share/live/detailTv?resourceId=12&appscheme=gdmm-ailanzhou"
+        },
+        {
+          "name": "兰州文旅",
+          "url": "https://lanzhoubcnew.zainanjing365.com/share/live/detailTv?resourceId=14&appscheme=gdmm-ailanzhou"
+        },
+        {
+          "name": "陇南综合",
+          "url": "live.html?url=https://play.kankanlive.com/live/1709171819929902.m3u8"
+        },
+        {
+          "name": "陇南公共",
+          "url": "live.html?url=https://play.kankanlive.com/live/1709171893138901.m3u8"
+        },
+        {
+          "name": "白银综合",
+          "url": "live.html?url=https://play.kankanlive.com/live/1720408089419110.m3u8"
+        },
+        {
+          "name": "白银文化教育",
+          "url": "live.html?url=https://play.kankanlive.com/live/1720408280309109.m3u8"
+        },
+        {
+          "name": "定西综合",
+          "url": "live.html?url=http://play.kankanlive.com/live/1745232061100288.m3u8"
+        },
+        {
+          "name": "定西文旅生活",
+          "url": "live.html?url=http://play.kankanlive.com/live/1745232082475287.m3u8"
+        },
+        {
+          "name": "平凉新闻综合",
+          "url": "live.html?url=https://play.kankanlive.com/live/1694661314645984.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "ningxia",
+      "name": "宁夏",
+      "vods": [
+        {
+          "name": "宁夏卫视",
+          "url": "live.html?url=https://hls.ningxiahuangheyun.com/live/nxws1M.m3u8"
+        },
+        {
+          "name": "宁夏公共",
+          "url": "live.html?url=https://hls.ningxiahuangheyun.com/live/nxgg1M.m3u8"
+        },
+        {
+          "name": "宁夏经济",
+          "url": "live.html?url=https://hls.ningxiahuangheyun.com/live/nxjj1M.m3u8"
+        },
+        {
+          "name": "宁夏文旅",
+          "url": "live.html?url=https://hls.ningxiahuangheyun.com/live/nxwl1M.m3u8"
+        },
+        {
+          "name": "宁夏少儿",
+          "url": "live.html?url=https://hls.ningxiahuangheyun.com/live/nxse1M.m3u8"
+        },
+        {
+          "name": "银川公共",
+          "url": "https://www.qukanvideo.com/cloud/h5/1731639141671136?utaot=1"
+        },
+        {
+          "name": "银川生活",
+          "url": "https://www.qukanvideo.com/cloud/h5/1731638744888001?utaot=1"
+        },
+        {
+          "name": "银川文体",
+          "url": "https://www.qukanvideo.com/cloud/h5/1728443786945132?utaot=1"
+        },
+        {
+          "name": "石嘴山综合",
+          "url": "https://jrszs.szsnews.com/application/tenma01zx_eqlil/view/h5/index.html#/pages/artical/detail?id=336405&infoType=1&timestamp=1757849532239"
+        },
+        {
+          "name": "石嘴山公共",
+          "url": "https://jrszs.szsnews.com/application/tenma01zx_eqlil/view/h5/index.html#/pages/artical/detail?id=336406&infoType=1&timestamp=1757849613110"
+        }
+      ]
+    },
+    {
+      "tag": "nmtv",
+      "name": "内蒙古",
+      "vods": [
+        {
+          "name": "内蒙古卫视",
+          "url": "https://www.nmtv.cn/liveTv?tag=内蒙古卫视"
+        },
+        {
+          "name": "内蒙古新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=新闻综合"
+        },
+        {
+          "name": "内蒙古经济生活",
+          "url": "https://www.nmtv.cn/liveTv?tag=经济生活"
+        },
+        {
+          "name": "内蒙古文体娱乐",
+          "url": "https://www.nmtv.cn/liveTv?tag=文体娱乐"
+        },
+        {
+          "name": "内蒙古农牧",
+          "url": "https://www.nmtv.cn/liveTv?tag=农牧频道"
+        },
+        {
+          "name": "内蒙古蒙语卫视",
+          "url": "https://www.nmtv.cn/liveTv?tag=内蒙古蒙古语卫视"
+        },
+        {
+          "name": "内蒙古蒙语文化",
+          "url": "https://www.nmtv.cn/liveTv?tag=内蒙古蒙古语文化"
+        },
+        {
+          "name": "呼和浩特新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=呼和浩特"
+        },
+        {
+          "name": "包头新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=包头"
+        },
+        {
+          "name": "乌海新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=乌海"
+        },
+        {
+          "name": "赤峰新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=赤峰"
+        },
+        {
+          "name": "呼伦贝尔新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=呼伦贝尔"
+        },
+        {
+          "name": "兴安盟新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=兴安盟"
+        },
+        {
+          "name": "通辽新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=通辽"
+        },
+        {
+          "name": "锡林郭勒新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=锡林郭勒"
+        },
+        {
+          "name": "阿拉善新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=阿拉善"
+        },
+        {
+          "name": "鄂尔多斯新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=鄂尔多斯"
+        },
+        {
+          "name": "巴彦淖尔新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=巴彦淖尔"
+        },
+        {
+          "name": "乌兰察布新闻综合",
+          "url": "https://www.nmtv.cn/liveTv?tag=乌兰察布"
+        },
+        {
+          "name": "乌海都市生活",
+          "url": "https://app.wuhainews.org.cn/folder17/share/live/?channel_id=9"
+        },
+        {
+          "name": "赤峰经济服务",
+          "url": "http://h5.cfrmw.cn/front-cloudlive-manage-h5/index.html?id=722728110696456192&company_id=1073#/"
+        },
+        {
+          "name": "赤峰影视娱乐",
+          "url": "http://h5.cfrmw.cn/front-cloudlive-manage-h5/index.html?id=722728404075438080&company_id=1073#/"
+        },
+        {
+          "name": "乌兰察布经济生活",
+          "url": "https://res.wrbtv.cn/html/rft/live.html?channelId=f5c8509c3b7b4c76b691d1863be29d27&type=1&siteId=82dcdad6b80b4f2d8a13067e5fce2e7a&shareAppId=82dcdad6b80b4f2d8a13067e5fce2e7a"
+        }
+      ]
+    },
+    {
+      "tag": "nmtv",
+      "name": "西藏",
+      "vods": [
+        {
+          "name": "拉萨藏语综合",
+          "url": "live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel104335/playlist.m3u8"
+        },
+        {
+          "name": "拉萨综合",
+          "url": "live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel101894/playlist.m3u8"
+        },
+        {
+          "name": "拉萨文化旅游",
+          "url": "live.html?url=https://tvfile.lasatv.cn/nmip-media/channellive/channel103157/playlist.m3u8"
+        },
+        {
+          "name": "日喀则汉语",
+          "url": "live.html?url=https://console.rkzrm.cn:20323/4.m3u8"
+        },
+        {
+          "name": "日喀则藏语",
+          "url": "live.html?url=https://console.rkzrm.cn:20323/8.m3u8"
+        }
+      ]
+    },
+    {
+      "tag": "hainan",
+      "name": "海南",
+      "vods": [
+        {
+          "name": "海南卫视",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=13"
+        },
+        {
+          "name": "三沙卫视",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=5"
+        },
+        {
+          "name": "海南自贸",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=1"
+        },
+        {
+          "name": "海南新闻",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=3"
+        },
+        {
+          "name": "海南公共",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=4"
+        },
+        {
+          "name": "海南文旅",
+          "url": "https://service-app.hnntv.cn/AppEngine/appinfo/STHaiNan/share.html?userId=1&appId=STHaiNan&userId=1&channelId=6"
+        },
+        {
+          "name": "海口综合",
+          "url": "https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719921&publishType=2"
+        },
+        {
+          "name": "海口生活娱乐",
+          "url": "https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719192&publishType=2"
+        },
+        {
+          "name": "海口城乡经济",
+          "url": "https://hkbtv.cn/h5/#/pagesVideo/tvDetail?articleType=1&id=6414658595168719922&publishType=2"
+        },
+        {
+          "name": "儋州综合",
+          "url": "https://web.guangdianyun.tv/tv/1330?uin=1669"
+        }
+      ]
+    },
+    {
+      "tag": "guizhou",
+      "name": "贵州",
+      "vods": [
+        {
+          "name": "贵州卫视",
+          "url": "https://www.gzstv.com/tv/ch01?utao=1"
+        },
+        {
+          "name": "贵州公共",
+          "url": "https://www.gzstv.com/tv/ch02?utao=1"
+        },
+        {
+          "name": "贵州影视文艺",
+          "url": "https://www.gzstv.com/tv/ch03?utao=1"
+        },
+        {
+          "name": "贵州大众生活",
+          "url": "https://www.gzstv.com/tv/ch04?utao=1"
+        },
+        {
+          "name": "贵州生态·乡村",
+          "url": "https://www.gzstv.com/tv/ch05?utao=1"
+        },
+        {
+          "name": "贵州科教健康",
+          "url": "https://www.gzstv.com/tv/ch06?utao=1"
+        },
+        {
+          "name": "贵州移动电视",
+          "url": "https://www.gzstv.com/tv/ch13?utao=1"
+        },
+        {
+          "name": "黔南新闻综合",
+          "url": "http://m.qntv.net/cms-tv"
+        },
+        {
+          "name": "安顺新闻综合",
+          "url": "https://www.gzastv.cn/live/live.shtml"
+        }
+      ]
+    },
+    {
+      "tag": "qignhai",
+      "name": "青海",
+      "vods": [
+        {
+          "name": "青海卫视",
+          "url": "https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786181204964564992&company_id=1075&utaot=1"
+        },
+        {
+          "name": "青海经视",
+          "url": "https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786227316454875136&company_id=1075&utaot=1"
+        },
+        {
+          "name": "青海都市",
+          "url": "https://h5.qhbtv.com.cn/front-cloudlive-manage-h5/index.html?id=786227009616371712&company_id=1075&utaot=1"
+        },
+        {
+          "name": "西宁新闻综合",
+          "url": "https://xiningbcnew.zainanjing365.com/share/live/detailTv?resourceId=5&appscheme=gdmm-zhangshangxining"
+        },
+        {
+          "name": "西宁生活服务",
+          "url": "https://xiningbcnew.zainanjing365.com/share/live/detailTv?resourceId=6&appscheme=gdmm-zhangshangxining"
+        }
+      ]
+    },
+    {
+      "tag": "yunnan",
+      "name": "云南",
+      "vods": [
+        {
+          "name": "云南卫视",
+          "url": "https://www.yntv.cn/mobile/live.html"
+        },
+        {
+          "name": "云南都市",
+          "url": "https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5kdXNoaSIpLmNsaWNrKCk="
+        },
+        {
+          "name": "云南娱乐",
+          "url": "https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW55dWxlIikuY2xpY2soKQ=="
+        },
+        {
+          "name": "云南康旅",
+          "url": "https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5nb25nZ29uZyIpLmNsaWNrKCk="
+        },
+        {
+          "name": "云南少儿",
+          "url": "https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5zaGFvZXIiKS5jbGljaygp"
+        },
+        {
+          "name": "澜湄国际",
+          "url": "https://www.yntv.cn/mobile/live.html?ujs=JCQoIiN5dW5uYW5ndW9qaSIpLmNsaWNrKCk="
+        },
+        {
+          "name": "丽江新闻综合",
+          "url": "https://www.lijiang.cn/live/"
+        },
+        {
+          "name": "普洱新闻综合",
+          "url": "https://www.puerw.cn/col1992.html"
+        },
+        {
+          "name": "临沧新闻综合",
+          "url": "https://mtydazzle.yntv.cn/pages/liveDetails/detail.html/?companyId=lincang&_id=5f51fa40e4b04f16d0288832&isTest=no"
+        },
+        {
+          "name": "临沧科教",
+          "url": "https://mtydazzle.yntv.cn/pages/liveDetails/detail.html/?companyId=lincang&_id=5f51f80ee4b04f16d0288801&isTest=no"
+        },
+        {
+          "name": "西双版纳新闻综合",
+          "url": "live.html?url=https://channellive.xsbnw.cn/default/nmip-media/channellive/channel112526/playlist.m3u8"
+        },
+        {
+          "name": "西双版纳文化旅游",
+          "url": "live.html?url=https://channellive.xsbnw.cn/default/nmip-media/channellive/channel112694/playlist.m3u8"
+        },
+        {
+          "name": "红河新闻综合",
+          "url": "https://www.hh.cn/ynhhzMini/site/tv"
+        }
+      ]
+    },
+    {
+      "tag": "shanxi",
+      "name": "陕西",
+      "vods": [
+        {
+          "name": "陕西卫视",
+          "url": "http://live.snrtv.com/star"
+        },
+        {
+          "name": "农林卫视",
+          "url": "http://live.snrtv.com/nl"
+        },
+        {
+          "name": "陕西新闻资讯",
+          "url": "http://live.snrtv.com/1"
+        },
+        {
+          "name": "陕西都市青春",
+          "url": "http://live.snrtv.com/2"
+        },
+        {
+          "name": "陕西银龄",
+          "url": "http://live.snrtv.com/3"
+        },
+        {
+          "name": "陕西秦腔",
+          "url": "http://live.snrtv.com/5"
+        },
+        {
+          "name": "陕西体育休闲",
+          "url": "http://live.snrtv.com/7"
+        },
+        {
+          "name": "陕西移动电视",
+          "url": "http://www.sxtvs.com/sxtvs_ydpd/index.html"
+        },
+        {
+          "name": "西安新闻综合",
+          "url": "https://v.xiancity.cn/folder8/folder39/folder29/m/"
+        },
+        {
+          "name": "西安都市",
+          "url": "https://v.xiancity.cn/folder8/folder39/folder30/m/"
+        },
+        {
+          "name": "西安商务资讯",
+          "url": "https://v.xiancity.cn/folder8/folder39/folder31/m/"
+        },
+        {
+          "name": "西安戏剧影视",
+          "url": "https://v.xiancity.cn/folder8/folder39/folder32/m/"
+        },
+        {
+          "name": "西安丝路",
+          "url": "https://v.xiancity.cn/folder8/folder39/folder33/m/"
+        },
+        {
+          "name": "铜川综合",
+          "url": "https://www.tcsrm.cn/tvradio/tczhpd.html"
+        },
+        {
+          "name": "铜川公共",
+          "url": "https://www.tcsrm.cn/tvradio/tcggpd.html"
+        },
+        {
+          "name": "榆林综合",
+          "url": "live.html?url=https://49c1f938208318cdf8288bc36b62472a.livehwc4.com/hplayer1.juyun.tv/camera/186023110.m3u8"
+        },
+        {
+          "name": "榆林文化旅游",
+          "url": "live.html?url=https://49c1f938208318cdf8288bc36b62472a.livehwc4.com/hplayer1.juyun.tv/camera/186022194.m3u8"
+        },
+        {
+          "name": "商洛综合",
+          "url": "live.html?url=https://player4.juyun.tv/camera/171844138.m3u8"
+        },
+        {
+          "name": "延安综合",
+          "url": "live.html?url=https://srs.yanews.cn/video/YATV-1/index.m3u8"
+        },
+        {
+          "name": "延安公共",
+          "url": "live.html?url=https://srs.yanews.cn/video/YATV-2/index.m3u8"
+        },
+        {
+          "name": "咸阳综合",
+          "url": "https://www.sxxynews.com.cn/tvradio/xyzhpd.html"
+        },
+        {
+          "name": "咸阳公共",
+          "url": "https://www.sxxynews.com.cn/tvradio/xyggpd.html"
+        }
+      ]
+    }
+  ]
+}
