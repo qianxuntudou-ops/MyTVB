@@ -723,7 +723,10 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 (index > 0 && url != selectedQualityUrl)
             ) {
                 setNativeQuality(url)
-                AppLog.i(TAG, "nativeQuality -> ${options[index]}")
+                // 持久化画质偏好：下次播任意影视沿用（"auto"/档位数字；档位不在时回落最高档）
+                val saved = url?.let { vodQualityKey(it) } ?: VOD_QUALITY_AUTO
+                appSettings.putStringAsync(KEY_CCTV_VOD_QUALITY, saved)
+                AppLog.i(TAG, "nativeQuality -> ${options[index]} saved=$saved")
             }
             updateQualityButton(options[index])
         }
@@ -907,7 +910,10 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 return@launch
             }
             currentPlayInfo = playInfo
-            prepareNativePlayer(playInfo.h5eUrl, episode)
+            // 初始画质：记忆的手选档（跨集/跨会话）；无记忆或不匹配时最高档——「默认最高画质播放」
+            val initial = resolveInitialVodQuality(playInfo)
+            selectedQualityUrl = initial
+            prepareNativePlayer(initial ?: playInfo.h5eUrl, episode)
         }
     }
 
@@ -959,6 +965,26 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         player.play()
         binding.nativePlayerView.player = player
     }
+
+    /**
+     * 初始画质 URL：记忆的手选档（存储值 "auto"=master 自适应；数字=媒体清单文件名档位
+     * 如 450/850/1200/2000）；无记忆或档位不在当前剧集（老剧只有低档）时取最高档
+     * （bandwidth 最大）——首次播放默认最高画质。
+     */
+    private fun resolveInitialVodQuality(playInfo: CctvPlayInfo): String? {
+        val qualities = playInfo.qualities
+        if (qualities.isEmpty()) return null
+        val saved = appSettings.getCachedString(KEY_CCTV_VOD_QUALITY)
+        if (saved == VOD_QUALITY_AUTO) return null
+        if (saved != null) {
+            qualities.firstOrNull { vodQualityKey(it.url) == saved }?.let { return it.url }
+        }
+        return qualities.maxByOrNull { it.bandwidth }?.url
+    }
+
+    /** 档位标识：媒体清单 URL 文件名数字（450/850/1200/2000），跨剧集稳定。 */
+    private fun vodQualityKey(url: String): String? =
+        url.substringAfterLast('/').substringBefore(".m3u8").takeIf { it.toIntOrNull() != null }
 
     /** 解密 DataSource 链：HTTP（Referer tv.cctv.com）→ H5e vod 解密 → ExoPlayer。 */
     @OptIn(UnstableApi::class)
@@ -1459,6 +1485,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         const val EXTRA_PAGE_URL = "cctv_vod_page_url"
         /** 「影视极速模式」存储键（设置页 tvGroups·CCTV影视组同 key）。 */
         private const val KEY_CCTV_NATIVE_VOD = "cctv_native_vod"
+        /** 影视画质偏好存储键（"auto"=master 自适应；数字=档位目录 450/850/1200/2000）。 */
+        private const val KEY_CCTV_VOD_QUALITY = "cctv_vod_quality"
+        private const val VOD_QUALITY_AUTO = "auto"
         const val EXTRA_TITLE = "cctv_vod_title"
         const val EXTRA_GUID = "cctv_vod_episode_guid"
         const val EXTRA_ALBUM_ID = "cctv_vod_album_id"

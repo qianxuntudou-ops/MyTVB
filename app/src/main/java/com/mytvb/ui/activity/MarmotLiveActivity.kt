@@ -72,6 +72,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         private const val STALL_MAX_AUTO_RECOVERY = 3
         /** DataStore key：「CCTV直播原生直拉」开关（存"开/关"，默认开）。 */
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
+        // CCTV 直播用户手选画质（label 如 "1080P"，跨会话/跨频道；自动降档不回写）
+        private const val KEY_CCTV_LIVE_QUALITY = "cctv_live_quality"
         /** 原生直拉起播超时：无首帧先重试一次，再超时回退 WebView。 */
         private const val NATIVE_STARTUP_TIMEOUT_MS = 12_000L
 
@@ -281,6 +283,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     }
 
     override fun initData() {
+        // 恢复上次用户手选的 CCTV 直播画质（无记录时 Provider 默认最高档 1080P）
+        cctvQualityProvider.restore(appSettings.getCachedString(KEY_CCTV_LIVE_QUALITY))
         // 协程：加载频道 + 播放首个频道；云端更新在首播发起后转后台执行
         CoroutineScope(Dispatchers.Main).launch {
             // 云端更新 tv-web 不在首播路径上串行等待：频道表有 assets 内置种子兜底，
@@ -1090,6 +1094,10 @@ $scriptTags
         ) { index ->
             val item = items.getOrNull(index) ?: return@show
             val switched = provider.switchTo(item) { AppLog.i(TAG, "画质切换：${item.name}") }
+            if (switched && provider === cctvQualityProvider && item.name != null) {
+                // CCTV 档位持久化：下次进直播（任意频道）沿用用户手选档
+                appSettings.putStringAsync(KEY_CCTV_LIVE_QUALITY, item.name!!)
+            }
             if (!switched) {
                 AppLog.w(TAG, "画质切换：${item.name} 无效或与当前相同")
             }

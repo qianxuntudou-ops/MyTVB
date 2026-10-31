@@ -23,6 +23,16 @@ class CctvQualityProvider(
     var current: CctvLiveQuality = CctvLiveQuality.P1080
         private set
 
+    /**
+     * 恢复上次用户手选的画质（AppSettingsDataStore 持久化，跨会话/跨频道生效）。
+     * label 不在档位表内（如老版本存储值）时保持默认最高档。
+     * 注意与 [dropForRecovery] 区分：自动降档不回写存储，只有用户手选才落盘。
+     */
+    fun restore(label: String?) {
+        val saved = CctvLiveQuality.entries.firstOrNull { it.label == label } ?: return
+        current = saved
+    }
+
     override fun availableQualities(): List<HzItem> =
         CctvLiveQuality.entries.map {
             HzItem(name = it.label, level = it.level, isCurrent = it == current)
