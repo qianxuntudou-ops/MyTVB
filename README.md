@@ -63,6 +63,8 @@
 - [bilibili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) - B 站 API 收集整理
 - [BBLL](https://github.com/xiaye13579/BBLL) - 绝大部分页面和操作逻辑参考自 BBLL 🥰
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) / [BiliPai](https://github.com/jay3-yy/BiliPai) / [Blbl](https://github.com/cat3399/blbl) - 部分关键功能参考
+- [NativeWasmTv](https://github.com/buhanzhe/NativeWasmTv) / [TvWasm/cjs](https://github.com/TvWasm/cjs) - CCTV 直播原生直拉架构与 H5e 流解密封装参考
+- [cctv-h5e-decrypt](https://github.com/xiaoxi-ij478/cctv-h5e-decrypt)（MIT）- CCTV H5e 解密 wasm 转译产物来源
 - 其它开源第三方 B 站客户端
 
 ## ⚠️ 免责声明
