@@ -28,6 +28,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.TextClock
 import android.widget.TextView
 import android.view.ViewStub
 import android.view.animation.DecelerateInterpolator
@@ -232,6 +233,7 @@ class MyPlayerView @JvmOverloads constructor(
             }
             updateContentDescription()
             updateResumeHintPosition(animate = true)
+            refreshAlwaysOnClock()
             controllerVisibilityListener?.onVisibilityChanged(visibility)
         }
     }
@@ -395,6 +397,11 @@ class MyPlayerView @JvmOverloads constructor(
     // 非 1 倍速时也常驻显示。懒创建，与宿主同生命周期。
     private var speedBadgeView: TextView? = null
     private var persistentRateIndicatorEnabled = false
+
+    // 右上角常显时钟："时间常驻显示"开关打开时，控制栏隐藏期间常驻显示时间；
+    // 控制栏呼出时避让（控制栏顶栏自带时钟，视觉同位无缝切换）。懒创建。
+    private var alwaysOnClockView: TextClock? = null
+    private var alwaysOnClockEnabled = false
 
     // --- Timebar-focused seek state（blbl 模型：40ms 恒定 tick + 步长按片长自适应，长按走完全片时长恒定）---
     private var timebarSeekActive = false
@@ -1497,6 +1504,43 @@ class MyPlayerView @JvmOverloads constructor(
     fun showPlaybackRateIndicator(show: Boolean) {
         persistentRateIndicatorEnabled = show
         refreshSpeedBadge()
+    }
+
+    /** "时间常驻显示"设置入口：控制栏隐藏期间右上角常驻时钟。 */
+    fun showAlwaysOnClock(show: Boolean) {
+        alwaysOnClockEnabled = show
+        refreshAlwaysOnClock()
+    }
+
+    /** 常显时钟显隐统一入口：开关开且控制栏不可见时显示，控制栏呼出时避让。 */
+    private fun refreshAlwaysOnClock() {
+        val shouldShow = alwaysOnClockEnabled && controller?.visibility != View.VISIBLE
+        if (shouldShow) {
+            (alwaysOnClockView ?: createAlwaysOnClock().also { alwaysOnClockView = it }).visibility = VISIBLE
+        } else {
+            alwaysOnClockView?.visibility = GONE
+        }
+    }
+
+    /** 样式对齐控制栏顶栏时钟（text_clock：px50 粗体白字黑影），位置同右上角，格式走系统默认。 */
+    private fun createAlwaysOnClock(): TextClock {
+        val clock = TextClock(context).apply {
+            textSize = resources.getDimension(R.dimen.px50)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setShadowLayer(7f, 0f, 0f, Color.BLACK)
+            visibility = GONE
+        }
+        addView(
+            clock,
+            LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dp(10)
+                marginEnd = dp(25)
+            }
+        )
+        restoreOverlayZOrder()
+        return clock
     }
 
     private fun createSpeedBadge(): TextView {
@@ -2820,6 +2864,7 @@ class MyPlayerView @JvmOverloads constructor(
         pauseIndicatorView?.bringToFront()
         douyinPreviewLayer?.bringToFront()
         controllerLayer?.bringToFront()
+        alwaysOnClockView?.bringToFront()
         resumeHintView?.bringToFront()
         seekOverlayView?.bringToFront()
         settingView?.bringToFront()
@@ -2831,6 +2876,8 @@ class MyPlayerView @JvmOverloads constructor(
             pauseIndicatorView?.translationZ = 3f
             douyinPreviewLayer?.translationZ = 4f
             controllerLayer?.translationZ = 5f
+            // 常显时钟：控制栏层之上（控制栏可见时本就避让）、提示条/seek 层之下
+            alwaysOnClockView?.translationZ = 5.5f
             resumeHintView?.translationZ = 6f
             seekOverlayView?.translationZ = 7f
             settingView?.translationZ = 8f

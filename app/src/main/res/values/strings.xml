@@ -267,6 +267,8 @@
     <string name="cctv_channel_select">频道选择</string>
     <string name="channel">频道</string>
     <string name="marmot_player_hint">上下键切换频道 · 确定键/点击屏幕呼出控制栏 · 菜单键选择频道</string>
+    <string name="marmot_stall_auto_recover">直播卡顿，自动刷新中…</string>
+    <string name="marmot_stall_give_up">直播多次卡顿，请手动刷新或切换频道</string>
     <string name="cctv_quality">画质</string>
     <string name="minor_protection">青少年保护</string>
     <string name="teen_mode">青少年模式</string>
@@ -459,6 +461,7 @@
     <string name="show_next_previous">显示上一个/下一个视频按钮</string>
     <string name="show_play_speed_button">显示倍速调节按键</string>
     <string name="show_playback_rate">常驻显示当前倍速</string>
+    <string name="show_always_on_clock">时间常驻显示</string>
     <string name="music_zone_normal_speed">音乐区视频默认1倍速</string>
     <string name="show_subtitle_default">默认字幕</string>
     <string name="side_sheet_accessibility_pane_title">Side Sheet</string>

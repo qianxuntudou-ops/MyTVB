@@ -238,6 +238,8 @@ class LivePlayerFragment : Fragment() {
             }
         binding.playerView.setPlayer(player)
         binding.playerView.setControllerAutoShow(true)
+        // 「时间常驻显示」：B 站直播宿主（与 PlayerActivity/VideoPlayerFragment 同款开关）
+        binding.playerView.showAlwaysOnClock(PlayerSettingsStore.load(requireContext()).showAlwaysOnClock)
         binding.playerView.showHideFfRe(false)
         binding.playerView.showHideNextPrevious(false)
         binding.playerView.showHideEpisodeButton(false)

@@ -60,7 +60,9 @@ data class PlayerSettings(
     // 取代旧的系统音效方案（DynamicsProcessing/LoudnessEnhancer——部分 TV 设备驱动有 bug 会失真）。默认中档。
     val audioBalance: AudioBalanceLevel = AudioBalanceLevel.MEDIUM,
     // 无缝切清晰度：满足条件时用多清晰度 DASH MPD 源替代单档源，切档不重建播放器。默认开启。
-    val seamlessQualitySwitch: Boolean = true
+    val seamlessQualitySwitch: Boolean = true,
+    // 时间常驻显示：开启后播放画面右上角常驻显示时间（控制栏呼出时避让，控制栏本身带时钟）。默认关。
+    val showAlwaysOnClock: Boolean = false
 )
 
 private object VideoQualityDefaults {
@@ -111,6 +113,7 @@ object PlayerSettingsStore {
     private const val KEY_AUDIO_NORMALIZE_LEGACY = "audio_normalize"
     private const val KEY_AUDIO_BALANCE = "audio_balance"
     private const val KEY_SEAMLESS_QUALITY_SWITCH = "seamless_quality_switch"
+    const val KEY_SHOW_ALWAYS_ON_CLOCK = "show_always_on_clock"
 
     fun load(context: Context): PlayerSettings {
         fun readSetting(key: String): String? = appSettings.getCachedString(key)
@@ -168,6 +171,8 @@ object PlayerSettingsStore {
             append(readSetting(KEY_SHOW_LIVE_SUPER_CHAT).orEmpty())
             append("|")
             append(readSetting(KEY_SHOW_CHAPTER_BAR).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_ALWAYS_ON_CLOCK).orEmpty())
         }
         if (snapshot == lastSettingsSnapshot) {
             return cachedSettings!!
@@ -284,6 +289,10 @@ object PlayerSettingsStore {
             seamlessQualitySwitch = parseToggle(
                 readSetting(KEY_SEAMLESS_QUALITY_SWITCH),
                 defaultValue = true
+            ),
+            showAlwaysOnClock = parseToggle(
+                readSetting(KEY_SHOW_ALWAYS_ON_CLOCK),
+                defaultValue = false
             )
         )
         cachedSettings = settings

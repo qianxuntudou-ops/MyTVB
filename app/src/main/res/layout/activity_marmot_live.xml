@@ -14,6 +14,21 @@
         android:layout_height="match_parent"
         android:background="@color/black" />
 
+    <!-- 常显时钟：「时间常驻显示」开启时右上角常驻（顶栏呼出时避让，样式与顶栏时钟一致） -->
+    <TextClock
+        android:id="@+id/always_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:layout_marginTop="@dimen/px30"
+        android:layout_marginEnd="@dimen/px50"
+        android:shadowColor="@color/black"
+        android:shadowRadius="7"
+        android:textColor="@color/white"
+        android:textSize="@dimen/px50"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- 全黑遮罩：非 CCTV 整页劫持加载期间盖住官网网页，视频就绪后移除，避免网页 UI 闪现 -->
     <View
         android:id="@+id/video_cover"

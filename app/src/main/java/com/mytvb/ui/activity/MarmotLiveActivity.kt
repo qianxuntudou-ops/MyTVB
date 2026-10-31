@@ -30,6 +30,7 @@ import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.ChoiceDialog
 import com.mytvb.databinding.ActivityMarmotLiveBinding
 import com.mytvb.feature.cctv.CctvLiveQuality
+import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.cctv.CctvLiveQualityHook
 import com.mytvb.feature.marmot.MarmotCloudUpdate
 import com.mytvb.feature.marmot.MarmotJsBridge
@@ -65,6 +66,10 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         private const val KEY_LAST_CHANNEL_URL = "marmot_last_channel_url"
         /** 播放UI无操作自动隐藏延时（对齐普通视频播放器控制栏 5s）。 */
         private const val CONTROLLER_HIDE_DELAY_MS = 5_000L
+        /** 掀盖后播放停滞监测：轮询间隔 / 判定卡顿阈值 / 单频道自动重载上限。 */
+        private const val STALL_WATCH_INTERVAL_MS = 2_000L
+        private const val STALL_RECOVER_THRESHOLD_MS = 8_000L
+        private const val STALL_MAX_AUTO_RECOVERY = 3
 
         /** 启动入口。 */
         fun start(context: Context) {
@@ -129,6 +134,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     private val exitInterval = 2000L
     /** 播放UI（顶部栏+底部控制栏）是否显示。 */
     private var isControllerShowing = false
+    /** 「时间常驻显示」开关：开时右上角常驻时钟（顶栏呼出时避让）。 */
+    private var alwaysOnClockEnabled = false
     /** 播放UI按钮的 OK 已在 DOWN 消费，对应 UP 直接吞掉（防误触 performClick）。 */
     private var consumeNextOkUp = false
     /** 播放UI无操作 5s 自动收起（焦点在按钮上时不计时）。 */
@@ -200,6 +207,10 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         setupChannelMenu()
         setupMenuDismiss()
         setupPlayerController()
+        // 「时间常驻显示」：开关开时右上角常驻时钟（顶栏呼出时避让，样式与顶栏时钟一致）。
+        // 起播遮罩期间被遮罩自然盖住，掀盖后露出，无需挂掀盖回调。
+        alwaysOnClockEnabled = PlayerSettingsStore.load(this).showAlwaysOnClock
+        binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
     }
 
     /** 创建并配置 WebView（对标参考 `BaseActivity.initWebView`）。
@@ -282,18 +293,21 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 return@launch
             }
             provinces.clear()
-            // 方案 C（CCTV 优先）：只保留能用 createLivePlayer 播放的 CCTV 频道
-            // （url 含 tv.cctv.com/live/）。省台/央视频等暂不显示（后续逐站点维护再加）。
-            // PR #53 曾在此「放开全部频道」，属贡献者自述的逐站点实测状态，暂不采纳，
-            // 待实测收敛为白名单后再放开；下方 playCurrent 的 Marmot 整页劫持分支与
-            // 全黑遮罩机制保留，为后续放开做预留。
+            // 频道白名单（issue#106）：①CCTV 频道（url 含 tv.cctv.com/live/，createLivePlayer
+            // 干净 HTML 播放）；②「卫视」组的央视频网页频道（yangshipin.cn/tv/home?pid=xxx，
+            // 走 Marmot 整页加载）。「央视源2」组同为 yangshipin 但与央视组频道重复，不放开；
+            // 各省地方台站点未实测，仍不放开。PR #53 的全量放开维持不采纳。
             val allLives = MarmotLiveData.getLives()
             var cctvIndex = 0
             for (live in allLives) {
-                // 筛选该分组下 url 是 tv.cctv.com/live/ 的频道，重建 Vod 的导航索引
-                val cctvVods = live.vods.filter { extractCctvChannelId(it.url) != null }
+                val isWeiShiGroup = live.name == "卫视"
+                // 筛选白名单频道，重建 Vod 的导航索引
+                val cctvVods = live.vods.filter {
+                    extractCctvChannelId(it.url) != null ||
+                        (isWeiShiGroup && it.url.contains("yangshipin.cn"))
+                }
                 if (cctvVods.isEmpty()) continue
-                // 构造只含 CCTV 频道的分组副本（重新编 tagIndex/detailIndex）
+                // 构造只含白名单频道的分组副本（重新编 tagIndex/detailIndex）
                 val filteredLive = Live(tag = live.tag, name = live.name, index = cctvIndex,
                     vods = cctvVods.toMutableList())
                 cctvVods.forEachIndexed { j, vod ->
@@ -304,20 +318,16 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 provinces.add(filteredLive)
                 cctvIndex++
             }
-            AppLog.i(TAG, "initData: CCTV 频道过滤后 ${provinces.size} 个分组，" +
+            AppLog.i(TAG, "initData: 频道白名单过滤后 ${provinces.size} 个分组，" +
                 "${provinces.sumOf { it.vods.size }} 个频道")
             if (provinces.isEmpty()) {
                 AppToast.show(this@MarmotLiveActivity, R.string.activity_no_cctv_channels)
                 return@launch
             }
-            // 3. 恢复上次观看频道：优先按保存的 URL 反查（必须是 CCTV 频道），否则回退首个 CCTV 频道
+            // 3. 恢复上次观看频道：优先按保存的 URL 反查（白名单频道），否则回退首个频道
             val lastUrl = appSettings.getCachedString(KEY_LAST_CHANNEL_URL, null)
-            currentVod = if (!lastUrl.isNullOrEmpty() && extractCctvChannelId(lastUrl) != null) {
-                provinces.flatMap { it.vods }.firstOrNull { it.url == lastUrl }
-                    ?: provinces.first().vods.first()
-            } else {
-                provinces.first().vods.first()
-            }
+            currentVod = provinces.flatMap { it.vods }.firstOrNull { it.url == lastUrl }
+                ?: provinces.first().vods.first()
             if (currentVod == null) {
                 AppToast.show(this@MarmotLiveActivity, R.string.activity_no_channels)
                 return@launch
@@ -340,6 +350,11 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     private fun playCurrent() {
         val vod = currentVod ?: return
         mainHandler.removeCallbacks(switchChannelRunnable)
+        // 换频道（含首次进入）：停滞自动重载计数清零；同频道刷新/自动重载不清（防循环）
+        if (vod.url != stallWatchChannelUrl) {
+            stallWatchChannelUrl = vod.url
+            stallRecoveryCount = 0
+        }
         // CCTV 直播频道（tv.cctv.com/live/）：用 createLivePlayer 干净 HTML 播放（画质可切，对标 v1.5.8）；
         // 其它频道：维持原 Marmot 方式（加载完整页面 + tv.user.js 劫持）。
         val channelId = extractCctvChannelId(vod.url)
@@ -489,6 +504,8 @@ $scriptTags
      */
     private fun showVideoCover(afterShown: (() -> Unit)? = null) {
         mainHandler.removeCallbacks(hideVideoCoverRunnable)
+        // 盖回遮罩（切台/刷新/自动重载）即停停滞监测，避免与新一轮起播轮询并发误判
+        stopStallWatch()
         if (binding.videoCover.visibility != View.VISIBLE) {
             binding.videoCover.visibility = View.VISIBLE
         }
@@ -517,6 +534,8 @@ $scriptTags
         // 遮罩移除时隐藏加载进度与状态文字
         binding.progressBar.visibility = View.GONE
         binding.videoCoverText.visibility = View.GONE
+        // 掀盖后进入播放停滞监测（60s 兜底掀盖也启动：画面虽未确认但交由监测兜底恢复）
+        startStallWatch()
     }
 
     /** 更新遮罩层上的加载状态文字（仅遮罩显示期间生效）。 */
@@ -529,6 +548,94 @@ $scriptTags
     }
 
     private val hideVideoCoverRunnable = Runnable { hideVideoCover() }
+
+    // ==================== 掀盖后播放停滞监测（自动重载） ====================
+
+    /** 停滞监测是否在跑（掀盖后启动，盖回/切台时停止）。 */
+    private var stallWatchRunning = false
+    /** 连续停滞累计时长（currentTime 不增长且非暂停）。 */
+    private var stallAccumulatedMs = 0L
+    /** 上次轮询到的 currentTime（增长即恢复正常，清零累计）。 */
+    private var stallLastTime = 0.0
+    /** 当前频道内已自动重载次数（换频道清零，超限放弃自动恢复只提示）。 */
+    private var stallRecoveryCount = 0
+    /** 停滞监测锁定的频道 URL（用于换台时重置恢复计数）。 */
+    private var stallWatchChannelUrl = ""
+
+    /**
+     * 掀盖后启动停滞监测：低频轮询 `<video>`，时间轴连续 [STALL_RECOVER_THRESHOLD_MS]
+     * 不增长（且非网页层暂停）视为卡死，自动重载当前频道（走完整遮罩流程）。
+     * 背景：issue#106 外贸盒子直播中途卡顿，此前掀盖后无任何监测，用户只能手动刷新。
+     */
+    private fun startStallWatch() {
+        stopStallWatch()
+        stallWatchRunning = true
+        stallAccumulatedMs = 0L
+        stallLastTime = 0.0
+        mainHandler.postDelayed(stallWatchRunnable, STALL_WATCH_INTERVAL_MS)
+    }
+
+    private fun stopStallWatch() {
+        stallWatchRunning = false
+        mainHandler.removeCallbacks(stallWatchRunnable)
+    }
+
+    private val stallWatchRunnable: Runnable = object : Runnable {
+        override fun run() {
+            if (!stallWatchRunning) return
+            webEngine?.evaluateJavascriptWithResult(
+                // 返回 "currentTime|paused"：-1=无 video（页面异常/重建中）
+                "(function(){try{var v=document.querySelector('video');" +
+                    "if(!v){return '-1';}" +
+                    "return (v.currentTime||0)+'|'+(v.paused?1:0);}catch(e){return '-1';}})();"
+            ) { result ->
+                if (!stallWatchRunning) return@evaluateJavascriptWithResult
+                val parts = result?.trim()?.removeSurrounding("\"")?.split("|")
+                val time = parts?.getOrNull(0)?.toDoubleOrNull()
+                val paused = parts?.getOrNull(1) == "1"
+                when {
+                    // 无 video（异常态）：按停滞累计
+                    time == null || time < 0 -> accumulateStall()
+                    // 网页层被暂停（用户行为）：不算卡顿
+                    paused -> resetStall()
+                    // 时间轴在增长：播放正常
+                    time > stallLastTime -> resetStall()
+                    else -> accumulateStall()
+                }
+                stallLastTime = if (time != null && time >= 0) time else stallLastTime
+                if (stallWatchRunning) {
+                    mainHandler.postDelayed(stallWatchRunnable, STALL_WATCH_INTERVAL_MS)
+                }
+            }
+        }
+    }
+
+    private fun resetStall() {
+        stallAccumulatedMs = 0L
+    }
+
+    private fun accumulateStall() {
+        stallAccumulatedMs += STALL_WATCH_INTERVAL_MS
+        if (stallAccumulatedMs < STALL_RECOVER_THRESHOLD_MS) return
+        stallAccumulatedMs = 0L
+        stallRecoveryCount++
+        val name = currentVod?.name ?: "?"
+        if (stallRecoveryCount > STALL_MAX_AUTO_RECOVERY) {
+            AppLog.w(TAG, "stallWatch: 卡顿超自动重载上限 name=$name，停止监测等手动处理")
+            stopStallWatch()
+            AppToast.show(this@MarmotLiveActivity, R.string.marmot_stall_give_up)
+            return
+        }
+        AppLog.w(TAG, "stallWatch: 直播停滞 ${STALL_RECOVER_THRESHOLD_MS}ms 自动重载 name=$name count=$stallRecoveryCount")
+        AppToast.show(this@MarmotLiveActivity, R.string.marmot_stall_auto_recover)
+        // 第二次起自动降一档再重载（issue#106 盒子 H5e 解密吃力：降码率提高存活率；
+        // 正常用户零感知——不卡不降，全局默认档不变）
+        if (stallRecoveryCount >= 2 && cctvQualityProvider.dropForRecovery()) {
+            AppLog.i(TAG, "stallWatch: 自动降档至 ${cctvQualityProvider.current.label} 后重载")
+        }
+        // playCurrent 会盖回遮罩（停监测），掀盖成功后重新启动监测
+        playCurrent()
+    }
 
     /** 轮询检测页面 `<video>` 是否真正开始播放（持续播放），一旦确认即移除遮罩（每 500ms 一次）。 */
     private fun startVideoCoverPolling() {
@@ -550,12 +657,15 @@ $scriptTags
             if (binding.videoCover.visibility == View.GONE) return
             webEngine?.evaluateJavascriptWithResult(
                 // 返回 <video> 的 currentTime：-1=无 video；0=有 video 未播（含尚未
-                // 拿到画面数据：readyState<2 或无 videoWidth——个别源时间轴会假推进
-                // 一下再卡住，只看 currentTime 会过早掀盖露出官方播放器 UI）；
+                // 拿到画面数据：readyState<2 或无 videoWidth 或 totalVideoFrames=0——
+                // 时间轴会假推进但首帧从未解码上屏，只看 currentTime 会过早掀盖，
+                // issue#106「先出声音过段时间才出画面」即此类；totalVideoFrames>0
+                // 表示至少一帧视频真解出来，掀盖必见画面）；
                 // >0=时间轴（判断是否增长）
                 "(function(){try{var v=document.querySelector('video');" +
                     "if(!v){return '-1';}" +
-                    "if(v.readyState<2||(v.videoWidth||0)===0){return '0';}" +
+                    "var q=v.getVideoPlaybackQuality?v.getVideoPlaybackQuality():null;" +
+                    "if(v.readyState<2||(v.videoWidth||0)===0||!q||!(q.totalVideoFrames>0)){return '0';}" +
                     "return (v.currentTime||0)+'';" +
                     "}catch(e){return '-1';}})();"
             ) { result ->
@@ -774,6 +884,7 @@ $scriptTags
         isControllerShowing = true
         updateControllerTitle()
         binding.topBar.visibility = View.VISIBLE
+        binding.alwaysClock.visibility = View.GONE
         binding.controller.visibility = View.VISIBLE
         mainHandler.removeCallbacks(hideControllerRunnable)
         mainHandler.postDelayed(hideControllerRunnable, CONTROLLER_HIDE_DELAY_MS)
@@ -787,6 +898,7 @@ $scriptTags
         isControllerShowing = false
         mainHandler.removeCallbacks(hideControllerRunnable)
         binding.topBar.visibility = View.GONE
+        binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
         binding.controller.visibility = View.GONE
         // 收起播放UI即打断退出连击：避免「关UI」那一下被算作双击退出的第一下
         exitTime = 0L

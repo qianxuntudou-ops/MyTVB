@@ -167,6 +167,8 @@
     <string name="cctv_channel_select">頻道選擇</string>
     <string name="channel">頻道</string>
     <string name="marmot_player_hint">上下鍵切換頻道 · 確定鍵/點擊屏幕呼出控制列 · 選單鍵選擇頻道</string>
+    <string name="marmot_stall_auto_recover">直播卡頓，自動重新整理中…</string>
+    <string name="marmot_stall_give_up">直播多次卡頓，請手動重新整理或切換頻道</string>
     <string name="cctv_quality">畫質</string>
     <string name="minor_protection">青少年保護</string>
     <string name="teen_mode">青少年模式</string>
@@ -289,6 +291,7 @@
     <string name="show_next_previous">顯示上一個/下一個影片按鈕</string>
     <string name="show_play_speed_button">顯示倍速調節按鍵</string>
     <string name="show_playback_rate">常駐顯示當前倍速</string>
+    <string name="show_always_on_clock">時間常駐顯示</string>
     <string name="music_zone_normal_speed">音樂區影片預設1倍速</string>
     <string name="show_subtitle_default">預設字幕</string>
     <string name="sign_out">登出</string>

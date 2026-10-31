@@ -16,7 +16,7 @@
     <color name="bright_foreground_material_dark">@android:color/white</color>
     <color name="bright_foreground_material_light">@android:color/black</color>
     <color name="buttonBackgroundBlue">#05278d</color>
-    <color name="buttonBackgroundClassic">#aaf5608a</color>
+    <color name="buttonBackgroundClassic">#aaFB7299</color>
     <color name="buttonBackgroundPink">#fadcea</color>
     <color name="buttonBackgroundPurple">#3e2e47</color>
     <color name="buttonBackgroundRed">#66001a</color>
@@ -84,7 +84,7 @@
     <color name="fourthBackgroundColorRed">#5f0018</color>
     <color name="gray_600">#757575</color>
     <color name="grey">#cccccc</color>
-    <color name="highlightClassic">#88f5608a</color>
+    <color name="highlightClassic">#88FB7299</color>
     <color name="highlighted_text_material_dark">#6680cbc4</color>
     <color name="highlighted_text_material_light">#66009688</color>
     <color name="material_deep_teal_200">#80cbc4</color>
@@ -137,7 +137,7 @@
     <color name="systemBackgroundColorPurple">#4d3a59</color>
     <color name="systemBackgroundColorRed">#800020</color>
     <color name="tab_highlightBlue">#7f97d2</color>
-    <color name="tab_highlightClassic">#f5608a</color>
+    <color name="tab_highlightClassic">#FB7299</color>
     <color name="tab_highlightPink">#fce9f2</color>
     <color name="tab_highlightPurple">#73647c</color>
     <color name="tab_highlightRed">#a04058</color>

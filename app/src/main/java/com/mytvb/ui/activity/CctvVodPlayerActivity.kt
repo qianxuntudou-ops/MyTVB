@@ -26,6 +26,7 @@ import com.mytvb.databinding.ActivityCctvVodPlayerBinding
 import com.mytvb.feature.cctv.vod.CctvEpisode
 import com.mytvb.feature.cctv.vod.CctvVodApi
 import com.mytvb.feature.cctv.vod.CctvVodProgressStore
+import com.mytvb.feature.player.settings.PlayerSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -124,6 +125,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
     private val hideControllerRunnable = Runnable { hideController() }
 
+    /** 「时间常驻显示」开关：开时右上角常驻时钟（顶栏呼出时避让）。 */
+    private var alwaysOnClockEnabled = false
+
     /**
      * 加载超时兜底：老设备上页面播放器可能初始化失败（video 元素在但永远 ready=0），
      * 不给提示的话用户只能看转圈。拿到元数据（duration>0）即视为起播成功。
@@ -185,6 +189,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         pendingResumeMs = CctvVodProgressStore.load(this, albumId, currentEpisodeIndex)
         AppLog.i(TAG, "resumePlan album=$albumId idx=$currentEpisodeIndex pending=$pendingResumeMs")
         binding.playerRoot.requestFocus()
+        // 「时间常驻显示」：开关开时右上角常驻时钟（顶栏呼出时避让，顶栏本身带时钟）
+        alwaysOnClockEnabled = PlayerSettingsStore.load(this).showAlwaysOnClock
+        binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
         setupButtons()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBackKey()
@@ -553,6 +560,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private fun showController() {
         binding.controller.visibility = View.VISIBLE
         binding.topBar.visibility = View.VISIBLE
+        binding.alwaysClock.visibility = View.GONE
         binding.buttonBack.visibility = View.VISIBLE
         scheduleControllerHide()
     }
@@ -561,6 +569,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         handler.removeCallbacks(hideControllerRunnable)
         binding.controller.visibility = View.GONE
         binding.topBar.visibility = View.GONE
+        binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
         binding.buttonBack.visibility = View.GONE
         if (!binding.playerRoot.isFocused) {
             focusView(binding.playerRoot, "hideController")
@@ -1380,6 +1389,11 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 // 按钮)/暂停(pause-ad-overlay)/倒计时/角标提示等 DOM 广告层，按排期投放时
                 // 直接叠在画面上。用 style 规则而非逐元素 style：投放类元素（角标）可能
                 // 晚于本脚本创建，常驻规则对后建元素依然生效。与 galaxy 请求拦截互为双保险。
+                // 控制条隐藏同样改为常驻规则（issue#106）：原先是逐元素内联 visibility，
+                // 暂停/换集时 video.js 重建控制条 DOM 后内联样式丢失、官方控制条重现并与
+                // App 控制条叠加。常驻规则对后建元素自动命中；visibility 而非 display 仍为
+                // 画质菜单项保留 JS click 命中能力。原生 media-controls 全套一并隐藏，
+                // 防官方脚本给 video 加 controls 属性时系统控制条混入。
                 if (!window.__mybiliAdCss) {
                   window.__mybiliAdCss = true;
                   try {
@@ -1390,7 +1404,17 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                       ' #_video_player .ad-countdown-time,' +
                       ' #_video_player .ads-label-text,' +
                       ' #_video_player .ad-label,' +
-                      ' #_video_player .ad-vip-skip-hint { display: none !important; }';
+                      ' #_video_player .ad-vip-skip-hint { display: none !important; }' +
+                      ' #_video_player .vjs-control-bar,' +
+                      ' #_video_player .vjs-big-play-button,' +
+                      ' #_video_player .vjs-play-control-mini,' +
+                      ' #_video_player .vjs-picture-in-picture-control' +
+                      ' { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }' +
+                      ' video::-webkit-media-controls,' +
+                      ' video::-webkit-media-controls-enclosure,' +
+                      ' video::-webkit-media-controls-panel,' +
+                      ' video::-webkit-media-controls-start-playback-button' +
+                      ' { display: none !important; -webkit-appearance: none !important; }';
                     (document.head || document.documentElement).appendChild(adStyle);
                     console.log('mybili ad css applied');
                   } catch (e) {}

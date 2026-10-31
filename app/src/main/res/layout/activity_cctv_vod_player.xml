@@ -65,6 +65,21 @@
         android:visibility="gone"
         app:srcCompat="@drawable/ic_pause_new" />
 
+    <!-- 常显时钟：「时间常驻显示」开启时右上角常驻（顶栏呼出时避让，样式与顶栏时钟一致） -->
+    <TextClock
+        android:id="@+id/always_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:layout_marginTop="@dimen/px18"
+        android:layout_marginEnd="@dimen/px50"
+        android:shadowColor="@color/black"
+        android:shadowRadius="7"
+        android:textColor="@color/white"
+        android:textSize="@dimen/px50"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- 顶部渐变 + 左上返回：与普通播放器一致（其他页面内容变化也不遮挡返回按钮） -->
     <FrameLayout
         android:id="@+id/top_bar"
@@ -90,6 +105,20 @@
             android:focusable="true"
             android:padding="@dimen/px18"
             app:srcCompat="@drawable/ic_back" />
+
+        <!-- 顶栏时钟：与普通播放器顶栏同款（普通播放器控制栏自带，此处补齐） -->
+        <TextClock
+            android:id="@+id/text_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|top"
+            android:layout_marginTop="@dimen/px8"
+            android:layout_marginEnd="@dimen/px20"
+            android:shadowColor="@color/black"
+            android:shadowRadius="7"
+            android:textColor="@color/white"
+            android:textSize="@dimen/px50"
+            android:textStyle="bold" />
     </FrameLayout>
 
     <!-- 我们自己的控制条：官方播放器只认鼠标/触摸，遥控器操作不了，

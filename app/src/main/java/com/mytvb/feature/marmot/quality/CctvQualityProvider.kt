@@ -31,6 +31,21 @@ class CctvQualityProvider(
     override fun currentQualityIndex(items: List<HzItem>): Int =
         items.indexOfFirst { it.name == current.label }.coerceAtLeast(0)
 
+    /**
+     * 播放停滞自动恢复用：降一档（不触发 [onSwitch]，由调用方自行重建播放页）。
+     * 注意 1080 与 720 是同一条流（CDN 无 1080 变体，两窗口都顶格命中 1800k），
+     * 因此从 1080/720 直接降到 540 才是真实降码率；已在 360 则无可降，返回 false。
+     */
+    fun dropForRecovery(): Boolean {
+        val next = when (current) {
+            CctvLiveQuality.P1080, CctvLiveQuality.P720 -> CctvLiveQuality.P540
+            CctvLiveQuality.P540 -> CctvLiveQuality.P360
+            CctvLiveQuality.P360 -> null
+        } ?: return false
+        current = next
+        return true
+    }
+
     override fun switchTo(item: HzItem, onSwitched: () -> Unit): Boolean {
         val next = CctvLiveQuality.entries.firstOrNull { it.label == item.name } ?: return false
         if (next == current) return false

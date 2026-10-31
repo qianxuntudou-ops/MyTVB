@@ -2298,6 +2298,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             PlayerScreenLogic.isMusicZone(latestVideoInfo?.view)
         playerView.setPlaySpeed(if (musicZoneNormalSpeed) 1f else settings.defaultPlaybackSpeed)
         playerView.showPlaybackRateIndicator(settings.showPlaybackRate)
+        playerView.showAlwaysOnClock(settings.showAlwaysOnClock)
         playerView.setSeekSecond(settings.fastSeekSeconds)
         playerView.setSimpleKeyPressEnabled(settings.simpleKeyPress)
         playerView.setPersistentBottomProgressEnabled(settings.showBottomProgressBar)
