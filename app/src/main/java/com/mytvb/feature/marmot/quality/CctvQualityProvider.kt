@@ -42,16 +42,11 @@ class CctvQualityProvider(
         items.indexOfFirst { it.name == current.label }.coerceAtLeast(0)
 
     /**
-     * 播放停滞自动恢复用：降一档（不触发 [onSwitch]，由调用方自行重建播放页）。
-     * 注意 1080 与 720 是同一条流（CDN 无 1080 变体，两窗口都顶格命中 1800k），
-     * 因此从 1080/720 直接降到 540 才是真实降码率；已在 360 则无可降，返回 false。
+     * 播放停滞自动恢复用：逐档真降码率（不触发 [onSwitch]，由调用方自行重建播放页）。
+     * 3200k(1080P)/1800k(720P)/1350k(540P)/900k(480P) 各为独立变体；已在 360 则无可降。
      */
     fun dropForRecovery(): Boolean {
-        val next = when (current) {
-            CctvLiveQuality.P1080, CctvLiveQuality.P720 -> CctvLiveQuality.P540
-            CctvLiveQuality.P540 -> CctvLiveQuality.P360
-            CctvLiveQuality.P360 -> null
-        } ?: return false
+        val next = current.nextLower() ?: return false
         current = next
         return true
     }

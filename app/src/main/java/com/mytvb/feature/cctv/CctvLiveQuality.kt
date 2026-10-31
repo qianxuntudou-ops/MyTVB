@@ -9,8 +9,10 @@ package com.mytvb.feature.cctv
  * （BANDWIDTH 落窗才保留；窗口为空时顶格返回最高档，不会失败）。因此切画质 = 改写 master
  * 请求的 `b=` 窗口，让清单只含目标档变体，MSE 播放器自然锁档。
  *
- * 各档窗口经 cctv1/cctv13 实测标定（CDN 变体固定为 1800k/1350k/900k/600k 四档，
- * 对应 720/576/480/360；当前 CCTV 直播最高 720p，无 1080 变体的频道选 1080 会顶格拿 720）。
+ * 各档窗口经 cctv1/cctv13 实测标定（CDN 变体为 3200k(1080p,_pd)/1800k(720p)/1350k(576p)/
+ * 900k(480p)/600k(360p)；vdn 下发的默认窗口 200-2100 不含 3200k 变体——1080P 档须把窗口
+ * 放宽到 2100-8000 才能锁到真 1080p。无 1080 变体的频道选 1080 会顶格拿 720）。
+ * 全部变体均为 H.264（pd/td 分片 SPS type7 实测）——vdn 源无 HEVC/AV1 可选。
  */
 enum class CctvLiveQuality(
     val label: String,
@@ -19,7 +21,7 @@ enum class CctvLiveQuality(
     /** [com.mytvb.feature.marmot.domain.HzItem.level] 显示排序用数值。 */
     val level: Int
 ) {
-    P1080("1080P", "1800-3000", 1080),
+    P1080("1080P", "2100-8000", 1080),
     P720("720P", "1400-2100", 720),
     P540("540P", "1200-1400", 540),
     P360("360P", "200-600", 360);
