@@ -97,13 +97,34 @@ object MarmotCloudUpdate {
     }
 
     /** 读本地 update.json 的 res.version。无则 0。 */
+    /**
+     * 读本地 update.json 的 res.version：**filesDir 与 assets 内置版本取大者**。
+     *
+     * 只认 filesDir 的话，新装/升级设备的 filesDir 版本为 0，第三方云端任何版本
+     * （如 vonchange v62）都会下载覆盖，把 assets 里随版本发布的频道表更新冲掉
+     * （issue#106 补全频道被顶掉的根因）。纳入 assets 内置版本后：云端版本必须
+     * 高于我们发版内置版本才允许热更——第三方旧表永不降级覆盖我们的资源。
+     * 补充频道另有代码化兜底（[CctvExtraChannels]，云端覆盖后合并仍在）。
+     */
     private fun readLocalVersion(context: Context): Int {
-        val localJson = runCatching {
-            File(context.filesDir, "$TV_WEB_DIR/$UPDATE_JSON_NAME").readText()
-        }.getOrDefault("")
-        if (localJson.isBlank()) return 0
+        val filesVersion = readVersionFromJson(
+            runCatching {
+                File(context.filesDir, "$TV_WEB_DIR/$UPDATE_JSON_NAME").readText()
+            }.getOrDefault("")
+        )
+        val assetsVersion = readVersionFromJson(
+            runCatching {
+                context.assets.open("$TV_WEB_DIR/$UPDATE_JSON_NAME")
+                    .use { it.readBytes().decodeToString() }
+            }.getOrDefault("")
+        )
+        return maxOf(filesVersion, assetsVersion)
+    }
+
+    private fun readVersionFromJson(json: String): Int {
+        if (json.isBlank()) return 0
         return try {
-            gson.fromJson(localJson, CloudConfig::class.java)?.res?.version ?: 0
+            gson.fromJson(json, CloudConfig::class.java)?.res?.version ?: 0
         } catch (t: Throwable) { 0 }
     }
 

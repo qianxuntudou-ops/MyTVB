@@ -67,10 +67,13 @@ object MarmotLiveData {
             Log.e(TAG, "频道表加载失败（filesDir + assets 均不可用）")
             return false
         }
+        // 合并代码化补充频道（兜底：tv2.json 可能被第三方云端热更新覆盖，
+        // 央视频超清组 4K/8K/CGTN/剧场以代码表为准，按 URL 去重幂等）
+        val mergedList = mergeExtraChannels(list)
         return try {
             indexVodMap.clear(); tagMaxMap.clear(); urlKeyMap.clear(); lives.clear()
             var i = 0
-            for (life in list) {
+            for (life in mergedList) {
                 var j = 0
                 for (vod in life.vods) {
                     vod.tagIndex = i
@@ -160,6 +163,33 @@ object MarmotLiveData {
 
     /** 全部分组（含 vods）。加载前调用返回空列表。 */
     fun getLives(): List<Live> = lives
+
+    /**
+     * 合并 [CctvExtraChannels] 补充频道到「央视频超清」组（组不存在则新建追加到表尾，
+     * 排在少儿组之后；存在则按 URL 去重后并入）。幂等：tv2.json 已含这些频道时不重复加。
+     */
+    private fun mergeExtraChannels(list: List<Live>): MutableList<Live> {
+        if (CctvExtraChannels.EXTRA_CHANNELS.isEmpty()) return toMutableList(list)
+        val existingUrls = list.flatMap { it.vods }.map { it.url }.toHashSet()
+        val toAdd = CctvExtraChannels.EXTRA_CHANNELS.filter { it.url !in existingUrls }
+        if (toAdd.isEmpty()) return toMutableList(list)
+        val out: MutableList<Live> = toMutableList(list)
+        val group = out.firstOrNull { it.name == CctvExtraChannels.GROUP_NAME || it.name == "央视源2" }
+        if (group != null) {
+            // 组名不改（Live.name 为 val）：旧数据名「央视源2」由 MarmotLiveActivity 显示层统一为「央视频超清」
+            group.vods.addAll(toAdd)
+        } else {
+            out.add(
+                Live(tag = "ysp", name = CctvExtraChannels.GROUP_NAME, index = out.size,
+                    vods = toAdd.toMutableList())
+            )
+        }
+        AppLog.i(TAG, "mergeExtraChannels: 合并补充频道 ${toAdd.size} 条（代码化兜底）")
+        return out
+    }
+
+    private fun toMutableList(list: List<Live>): MutableList<Live> =
+        (list as? MutableList<Live>) ?: ArrayList(list)
 
     /** 按 key 取频道。 */
     fun getByKey(key: String): Vod? = indexVodMap[key]
