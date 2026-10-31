@@ -378,6 +378,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         }
         // CCTV 直播频道（tv.cctv.com/live/）：优先原生直拉流（vdn 解析 + H5e 原生解密 +
         // ExoPlayer 播放，issue#106 阶段二——WebView 内 JS 解密跟不上是盒子卡顿/先声后画的根因）；
+        // 央视频频道（yangshipin.cn/tv/home?pid=，超清/卫视组）：CMG 三步签名链 + 有状态
+        // wasm 解密原生直拉（同开关「直播极速模式」，失败回退整页 WebView 劫持）；
         // 原生关闭或失败时回退 WebView 自构 HTML（createLivePlayer，画质可切，对标 v1.5.8）；
         // 其它频道：维持原 Marmot 方式（加载完整页面 + tv.user.js 劫持）。
         val channelId = extractCctvChannelId(vod.url)
@@ -385,7 +387,12 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
             AppLog.i(TAG, "playCurrent: CCTV 原生直拉 channelId=$channelId quality=${cctvQualityProvider.current.label}")
             startNativeLive(channelId, cctvQualityProvider.current)
         } else {
-            if (channelId != null) {
+            val cmgPid = com.mytvb.feature.cctv.cmg.CmgChannelCatalog.pidFromUrl(vod.url)
+            val cmgCnlid = cmgPid?.let { com.mytvb.feature.cctv.cmg.CmgChannelCatalog.cnlidOf(it) }
+            if (cmgPid != null && cmgCnlid != null && nativeLiveEnabled) {
+                AppLog.i(TAG, "playCurrent: 央视频原生直拉 pid=$cmgPid cnlid=$cmgCnlid name=${vod.name}")
+                startCmgNativeLive(cmgPid, cmgCnlid)
+            } else if (channelId != null) {
                 playCctvViaWebView(channelId)
             } else {
                 AppLog.i(TAG, "playCurrent: Marmot 模式 url=${vod.url}")
@@ -545,6 +552,116 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         }
     }
 
+    /**
+     * 央视频（yangshipin）原生直拉主流程：遮罩 → 三步签名链（auth→open/token→
+     * get_live_info，纯 HTTP + wasm JNI）→ 配置 CMG 解密会话（自造 tag + 服务器校准
+     * 时钟）→ ExoPlayer + [com.mytvb.feature.cctv.cmg.CmgDataSource]。
+     * 首帧掀盖；超时/连续错误回退整页 WebView（同 CCTV 原生的重试与熔断节奏）。
+     */
+    private fun startCmgNativeLive(pid: String, cnlid: String) {
+        stopNativeLivePlayer()
+        if (nativeLiveBrokenForSession) {
+            fallbackCurrentToWebView("央视频原生已被熔断")
+            return
+        }
+        binding.webviewWrapper.visibility = View.GONE
+        binding.nativePlayerView.visibility = View.VISIBLE
+        showVideoCover(pollWeb = false) {
+            nativeLiveJob = CoroutineScope(Dispatchers.Main).launch {
+                val stream = try {
+                    com.mytvb.feature.cctv.cmg.CmgLiveStreamResolver.resolveLive(
+                        this@MarmotLiveActivity, pid, cnlid
+                    )
+                } catch (e: Exception) {
+                    if (isFinishing || isDestroyed) return@launch
+                    AppLog.e(TAG, "CMG 解析失败 pid=$pid: ${e.message}")
+                    fallbackCurrentToWebView("CMG ${e.message}")
+                    return@launch
+                }
+                if (isFinishing || isDestroyed) return@launch
+                // 配置 CMG 解密会话（自造 tag + 服务器时钟偏移 + 播放页 href）
+                runCatching {
+                    com.mytvb.feature.cctv.cmg.CmgNativeBridge.configureSession(
+                        stream.playerTag, stream.clockOffsetMs,
+                        "https://www.yangshipin.cn/tv/home?pid=$pid"
+                    )
+                }.onFailure {
+                    AppLog.e(TAG, "CMG configureSession 异常", it)
+                }
+                val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(
+                        mapOf(
+                            "Referer" to com.mytvb.feature.cctv.cmg.CmgLiveStreamResolver.REFERER,
+                            "Origin" to "https://www.yangshipin.cn",
+                            "User-Agent" to com.mytvb.feature.cctv.cmg.CmgLiveStreamResolver.DESKTOP_USER_AGENT
+                        )
+                    )
+                    .setAllowCrossProtocolRedirects(true)
+                    .setConnectTimeoutMs(8_000)
+                    .setReadTimeoutMs(8_000)
+                val dsFactory = com.mytvb.feature.cctv.cmg.CmgDataSource.Factory(httpFactory)
+                val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(10_000, 15_000, 4_000, 4_000)
+                    .build()
+                val player = androidx.media3.exoplayer.ExoPlayer.Builder(this@MarmotLiveActivity)
+                    .setMediaSourceFactory(
+                        androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dsFactory)
+                    )
+                    .setLoadControl(loadControl)
+                    .build()
+                nativePlayer = player
+                binding.nativePlayerView.player = player
+                player.addListener(nativePlayerListener)
+                player.addAnalyticsListener(nativeAnalyticsListener)
+                val mediaItem = androidx.media3.common.MediaItem.Builder()
+                    .setUri(stream.hlsUrl)
+                    .setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+                    .build()
+                player.setMediaItem(mediaItem)
+                player.playWhenReady = true
+                player.prepare()
+                mainHandler.postDelayed(nativeStartupTimeoutRunnable, NATIVE_STARTUP_TIMEOUT_MS)
+                AppLog.i(TAG, "央视频原生直拉已起播请求 url=${stream.hlsUrl.take(90)} tag=${stream.playerTag}")
+            }
+        }
+    }
+
+    /**
+     * 原生直拉回退（按当前频道形态）：CCTV 走自构 HTML，央视频/其它走整页 WebView。
+     * 熔断本会话原生路径。
+     */
+    private fun fallbackCurrentToWebView(reason: String) {
+        AppLog.w(TAG, "原生直拉回退 WebView：$reason")
+        nativeLiveBrokenForSession = true
+        val url = currentVod?.url.orEmpty()
+        val channelId = extractCctvChannelId(url)
+        if (channelId != null) {
+            playCctvViaWebView(channelId)
+        } else {
+            stopNativeLivePlayer()
+            showVideoCover {
+                webEngine?.loadUrl(url)
+            }
+        }
+    }
+
+    /** 依当前频道 URL 重启原生播放（错误重试/起播超时/停滞恢复共用入口）。 */
+    private fun restartNativeForCurrentChannel(): Boolean {
+        val url = currentVod?.url.orEmpty()
+        val channelId = extractCctvChannelId(url)
+        if (channelId != null) {
+            startNativeLive(channelId, cctvQualityProvider.current)
+            return true
+        }
+        val pid = com.mytvb.feature.cctv.cmg.CmgChannelCatalog.pidFromUrl(url)
+        val cnlid = pid?.let { com.mytvb.feature.cctv.cmg.CmgChannelCatalog.cnlidOf(it) }
+        if (pid != null && cnlid != null) {
+            startCmgNativeLive(pid, cnlid)
+            return true
+        }
+        return false
+    }
+
     /** 原生播放诊断：丢帧/解码器（卡顿归因=网络 BUFFERING vs 解码渲染丢帧）。 */
     private val nativeAnalyticsListener = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
         override fun onDroppedVideoFrames(
@@ -593,29 +710,26 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
             AppLog.e(TAG, "原生直拉播放错误 count=$nativeErrorCount: ${error.errorCodeName}")
             nativeErrorCount++
-            val channelId = extractCctvChannelId(currentVod?.url.orEmpty()) ?: return
             if (nativeErrorCount <= 1) {
-                startNativeLive(channelId, cctvQualityProvider.current)
+                if (!restartNativeForCurrentChannel()) {
+                    fallbackCurrentToWebView("连续播放错误 ${error.errorCodeName}")
+                }
             } else {
-                fallbackToWebView(channelId, "连续播放错误 ${error.errorCodeName}")
+                fallbackCurrentToWebView("连续播放错误 ${error.errorCodeName}")
             }
         }
     }
 
     private fun onNativeStartupTimeout() {
-        val channelId = extractCctvChannelId(currentVod?.url.orEmpty())
-        if (channelId == null) {
-            // 非 CCTV 频道走不到原生路径，防御性掀盖
-            if (binding.videoCover.visibility == View.VISIBLE) hideVideoCover()
-            return
-        }
         // 12s 无首帧：一次重试机会，再超时回退 WebView（老盒子解码慢时 WebView 路径反而能出）
         nativeErrorCount++
         if (nativeErrorCount <= 1) {
             AppLog.w(TAG, "原生直拉起播超时（无首帧），重试一次")
-            startNativeLive(channelId, cctvQualityProvider.current)
+            if (!restartNativeForCurrentChannel()) {
+                if (binding.videoCover.visibility == View.VISIBLE) hideVideoCover()
+            }
         } else {
-            fallbackToWebView(channelId, "起播超时无首帧")
+            fallbackCurrentToWebView("起播超时无首帧")
         }
     }
 
@@ -631,11 +745,12 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         }
         AppLog.w(TAG, "nativeStall: 缓冲停滞 ${STALL_RECOVER_THRESHOLD_MS}ms 自动恢复 name=$name count=$stallRecoveryCount")
         AppToast.show(this@MarmotLiveActivity, R.string.marmot_stall_auto_recover)
-        if (stallRecoveryCount >= 2 && cctvQualityProvider.dropForRecovery()) {
+        // 降档仅对 vdn 央视组有意义（CMG 央视频组 fhd 单档）
+        if (stallRecoveryCount >= 2 && extractCctvChannelId(currentVod?.url.orEmpty()) != null
+            && cctvQualityProvider.dropForRecovery()) {
             AppLog.i(TAG, "nativeStall: 自动降档至 ${cctvQualityProvider.current.label} 后重载")
         }
-        val channelId = extractCctvChannelId(currentVod?.url.orEmpty()) ?: return
-        startNativeLive(channelId, cctvQualityProvider.current)
+        restartNativeForCurrentChannel()
     }
 
     private fun startNativeStallWatch() {
@@ -656,6 +771,9 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         mainHandler.removeCallbacks(nativeStartupTimeoutRunnable)
         stopNativeStallWatch()
         com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.cancelPendingDecrypts()
+        // CMG 会话整体复位（含 forced tag/时钟与 wasm 堆），防旧频道状态泄入下一次解密
+        runCatching { com.mytvb.feature.cctv.cmg.CmgNativeBridge.resetSession() }
+            .onFailure { AppLog.w(TAG, "CMG resetSession 异常: ${it.message}") }
         nativePlayer?.run {
             removeListener(nativePlayerListener)
             release()
