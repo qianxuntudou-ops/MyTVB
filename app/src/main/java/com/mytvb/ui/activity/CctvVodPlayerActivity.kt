@@ -23,10 +23,14 @@ import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.ChoiceDialog
 import com.mytvb.core.ui.system.ViewUtils
 import com.mytvb.databinding.ActivityCctvVodPlayerBinding
+import com.mytvb.feature.cctv.h5e.CctvH5eDataSource
+import com.mytvb.feature.cctv.h5e.CctvH5eDecryptor
 import com.mytvb.feature.cctv.vod.CctvEpisode
+import com.mytvb.feature.cctv.vod.CctvPlayInfo
 import com.mytvb.feature.cctv.vod.CctvVodApi
 import com.mytvb.feature.cctv.vod.CctvVodProgressStore
 import com.mytvb.feature.player.settings.PlayerSettingsStore
+import com.mytvb.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -34,6 +38,13 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import org.koin.android.ext.android.inject
 import java.util.Locale
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
 
 /**
  * 央视点播播放页：**WebView 载入央视自己的详情页负责解码播放，交互层由我们自己实现**。
@@ -110,6 +121,24 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private var currentQualityIndex = 0
     private var customView: View? = null
 
+    // ---------------------------------------------------------------- 原生播放（影视极速模式）
+
+    /** 「影视极速模式」设置开关（默认开）：ExoPlayer 直连 h5e 流 + H5e 原生解密。 */
+    private var nativeVodEnabled = false
+    /** 当前会话是否正在原生播放（true 时控制条/进度/画质全部走 ExoPlayer 分支）。 */
+    private var nativeMode = false
+    /** 原生播放失败回退 WebView 后锁定（本次停留不再反复试原生，防死循环）。 */
+    private var webFallbackLocked = false
+    private var nativePlayer: ExoPlayer? = null
+    /** 当前集的取流结果（画质菜单档位来源）。 */
+    private var currentPlayInfo: CctvPlayInfo? = null
+    /** 用户手动选定的分档地址（null=自动，播 h5e master 让 ExoPlayer 自适应）。 */
+    private var selectedQualityUrl: String? = null
+    /** 原生起播失败重试计数（一次重试后仍失败才回退 WebView）。 */
+    private var nativeRetryCount = 0
+    /** 原生起播协程（切集/销毁时取消，防止旧集迟到结果覆盖新集）。 */
+    private var nativeLoadJob: Job? = null
+
     private val progressTicker = object : Runnable {
         override fun run() {
             updateProgress()
@@ -135,6 +164,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private val loadTimeoutRunnable = Runnable {
         if (!playbackStarted && !isFinishing && !isDestroyed) {
             AppLog.w(TAG, "loadTimeout after ${LOAD_TIMEOUT_MS}ms")
+            // 原生起播超时：回退 WebView 播同一集（pageUrl 仍在）
+            if (nativeMode && !webFallbackLocked) {
+                fallbackToWebView(
+                    CctvEpisode(currentEpisodeIndex, episodeTitle, "", "", pageUrl),
+                    "loadTimeout"
+                )
+                return@Runnable
+            }
             showError(getString(R.string.cctv_vod_stream_failed))
         }
     }
@@ -192,6 +229,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         // 「时间常驻显示」：开关开时右上角常驻时钟（顶栏呼出时避让，顶栏本身带时钟）
         alwaysOnClockEnabled = PlayerSettingsStore.load(this).showAlwaysOnClock
         binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
+        // 「影视极速模式」：开=ExoPlayer 直连 h5e 流（H5e 原生解密），失败回退 WebView。
+        // 默认关：直播站 wasm 对 VOD 密文原样透传（绿屏），VOD 版 wasm 移植后改默认开。
+        nativeVodEnabled = appSettings.getCachedString(KEY_CCTV_NATIVE_VOD) == "开"
         setupButtons()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBackKey()
@@ -204,9 +244,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             return
         }
         resetLoadStage()
-        AppLog.i(TAG, "load page=$pageUrl")
         showLoading(true)
-        webHost.loadUrl(pageUrl)
+        if (nativeVodEnabled && albumId.isNotBlank()) {
+            // 原生首播：需要 guid（分集表里才有），等分集表到手再起播；
+            // 拿不到/超时都由 loadTimeout 与 fallback 兜底回 WebView。
+            AppLog.i(TAG, "native first episode album=$albumId idx=$currentEpisodeIndex")
+            startNativeFirstEpisode()
+        } else {
+            AppLog.i(TAG, "load page=$pageUrl")
+            webHost.loadUrl(pageUrl)
+        }
         // 预加载分集列表：既让选集菜单秒开，也是识别"官方自己连播到第几集"的唯一依据
         preloadEpisodes()
         scheduleControllerHide()
@@ -248,7 +295,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 canceled: Boolean
             ) {
                 seekingByUser = false
-                js("seekTo", position)
+                if (nativeMode) nativeSeekTo(position) else js("seekTo", position)
                 scheduleControllerHide()
             }
         })
@@ -286,6 +333,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         super.onResume()
         webHost.onResume()
         ViewUtils.keepScreenOn(this, true)
+        // 原生模式：回前台按用户意图恢复（非暂停态续播）
+        if (nativeMode && !userPaused) nativePlayer?.play()
         // 暂停状态下从后台回来不要自动续播
         if (!userPaused) js("play")
         // X5 的 onResume 会把焦点吸回网页层，回到页面后重新确认焦点归属
@@ -308,12 +357,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
     override fun onPause() {
         persistProgress()
+        if (nativeMode) nativePlayer?.pause()
         webHost.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
         persistProgress()
+        releaseNativePlayback()
         handler.removeCallbacksAndMessages(null)
         episodesJob?.cancel()
         playbackSession++
@@ -516,18 +567,44 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     // ---------------------------------------------------------------- 播放控制
 
     private fun togglePlayPause() {
+        if (nativeMode) {
+            val player = nativePlayer ?: return
+            userPaused = player.playWhenReady
+            player.playWhenReady = !player.playWhenReady
+            updatePlayPauseIcon(userPaused)
+            return
+        }
         // 页面侧读到的 paused 可能与本地不同步，翻转交给页面自己做；这里只记录意图
         userPaused = !pagePaused
         js("toggle")
     }
 
     private fun seekBy(deltaMs: Long) {
+        if (nativeMode) {
+            val player = nativePlayer ?: return
+            player.seekTo((player.currentPosition + deltaMs).coerceAtLeast(0))
+            return
+        }
         js("seek", deltaMs)
+    }
+
+    /** 原生模式拖动进度条落点。 */
+    private fun nativeSeekTo(position: Long) {
+        val player = nativePlayer ?: return
+        player.seekTo(position.coerceAtLeast(0))
     }
 
     // ---------------------------------------------------------------- 控制条
 
     private fun updateProgress() {
+        if (nativeMode) {
+            nativePlayer?.let { player ->
+                durationMs = player.duration.takeIf { it > 0 } ?: 0L
+                positionMs = player.currentPosition.coerceAtLeast(0)
+                // 起播后周期性落盘：ticker 是 500ms，每 10 次=5 秒（与 WebView 路径同节奏）
+                if (++saveTickCounter % 10 == 0 && !seekingByUser) persistProgress()
+            }
+        }
         if (durationMs > 0) {
             binding.seekBar.setDuration(durationMs)
             if (!seekingByUser) {
@@ -588,13 +665,17 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
     // ---------------------------------------------------------------- 菜单
 
-    /** 画质菜单：项的顺序与官方控制条里的列表一致（超清/高清/标清/流畅）。 */
+    /** 画质菜单：WebView 路径项的顺序与官方控制条一致（超清/高清/标清/流畅）；原生路径列 h5e 实际档位。 */
     private fun showQualityDialog() {
         showController()
         // 弹窗是独立窗口，按键不经过本页 dispatchKeyEvent，自动隐藏计时不会被重置；
         // 5 秒到点会把弹窗底下的控制条藏掉并把焦点收回播放区，弹窗关闭后体验割裂。
         // 弹窗期间暂停计时，关闭后重新计时。
         handler.removeCallbacks(hideControllerRunnable)
+        if (nativeMode) {
+            showNativeQualityDialog()
+            return
+        }
         val options = QUALITY_LABELS
         ChoiceDialog.show(
             context = this,
@@ -609,6 +690,43 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             qualityAutoApplied = true
             updateQualityButton(label)
             js("quality", index.toLong())
+        }
+    }
+
+    /** 原生画质菜单：自动（h5e master 自适应）+ 取流拿到的实际档位（换 URL 重挂保进度）。 */
+    private fun showNativeQualityDialog() {
+        val qualities = currentPlayInfo?.qualities.orEmpty()
+        if (qualities.isEmpty()) {
+            scheduleControllerHide()
+            AppToast.show(this, R.string.cctv_vod_stream_failed)
+            return
+        }
+        val options = ArrayList<String>(qualities.size + 1)
+        options.add(getString(R.string.cctv_quality_auto))
+        // 720P 有 1200k/2000k 两档：高码率档缀「高码率」区分
+        val labels = qualities.map { quality ->
+            val p = if (quality.height > 0) "${quality.height}P" else getString(R.string.cctv_quality)
+            if (quality.height >= 720 && quality.bandwidth >= 2_000_000) "$p（高码率）" else p
+        }
+        options.addAll(labels)
+        // 选中项：0=自动（master 自适应）；手动档位按 URL 反查（不在表内回落"自动"）
+        val selected = if (selectedQualityUrl == null) 0
+            else 1 + qualities.indexOfFirst { it.url == selectedQualityUrl }
+        ChoiceDialog.show(
+            context = this,
+            title = getString(R.string.cctv_quality),
+            options = options,
+            selectedIndex = selected,
+            onDismiss = { scheduleControllerHide() }
+        ) { index ->
+            val url = qualities.getOrNull(index - 1)?.url
+            if ((index == 0 && selectedQualityUrl != null) ||
+                (index > 0 && url != selectedQualityUrl)
+            ) {
+                setNativeQuality(url)
+                AppLog.i(TAG, "nativeQuality -> ${options[index]}")
+            }
+            updateQualityButton(options[index])
         }
     }
 
@@ -666,6 +784,20 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     }
 
     private fun switchEpisode(episode: CctvEpisode) {
+        // 原生优先：极速模式开且有 guid 就走 ExoPlayer；WebView 是兜底路径
+        if (nativeVodEnabled && !webFallbackLocked && episode.guid.isNotBlank()) {
+            startNativeEpisode(episode)
+            return
+        }
+        startWebEpisode(episode)
+    }
+
+    /** WebView 播放路径（原 switchEpisode 主体，极速模式关闭/回退时走）。 */
+    private fun startWebEpisode(episode: CctvEpisode) {
+        releaseNativePlayback()
+        nativeMode = false
+        binding.nativePlayerView.visibility = View.GONE
+        binding.webContainer.visibility = View.VISIBLE
         AppLog.i(TAG, "switchEpisode index=${episode.index} page=${episode.pageUrl}")
         // 切走前先把当前进度落盘
         persistProgress()
@@ -694,6 +826,185 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         lastPositionMs = 0L
         resetLoadStage()
         webHost.loadUrl(pageUrl)
+    }
+
+    // ---------------------------------------------------------------- 原生播放（影视极速模式）
+
+    /** 首播走原生：等分集表拿到 guid 再起播（loadTimeout 兜底超时回 WebView）。 */
+    private fun startNativeFirstEpisode() {
+        nativeLoadJob?.cancel()
+        nativeLoadJob = lifecycleScope.launch {
+            // 分集表可能已被 preloadEpisodes 先拉了一半，直接自己拉最快路径
+            if (episodes.isEmpty()) {
+                episodes = withContext(Dispatchers.IO) { api.fetchEpisodes(albumId, episodeMode) }
+            }
+            if (isFinishing || isDestroyed) return@launch
+            val episode = episodes.firstOrNull { it.index == currentEpisodeIndex }
+            if (episode == null || episode.guid.isBlank()) {
+                AppLog.w(TAG, "native first: no episode for idx=$currentEpisodeIndex, fallback web")
+                fallbackToWebView(
+                    episode ?: CctvEpisode(
+                        index = currentEpisodeIndex,
+                        title = episodeTitle,
+                        coverUrl = "",
+                        guid = "",
+                        pageUrl = pageUrl
+                    ),
+                    "no-episode"
+                )
+                return@launch
+            }
+            startNativeEpisode(episode)
+        }
+    }
+
+    /**
+     * 原生播放一集：guid → fetchPlayInfo → ExoPlayer 直连 h5e 流
+     * （[CctvH5eDataSource] vod 模式解密），视图切到 [com.mytvb.databinding.ActivityCctvVodPlayerBinding.nativePlayerView]。
+     */
+    private fun startNativeEpisode(episode: CctvEpisode) {
+        nativeLoadJob?.cancel()
+        // 与 startWebEpisode 相同的会话状态重置（WebView 路径的对照段）
+        persistProgress()
+        pageUrl = episode.pageUrl
+        currentEpisodeIndex = episode.index
+        episodeTitle = episode.title
+        binding.textTitle.text = episodeTitle
+        durationMs = 0L
+        positionMs = 0L
+        currentQualityIndex = 0
+        selectedQualityUrl = null
+        currentPlayInfo = null
+        nativeRetryCount = 0
+        updateQualityButton(getString(R.string.cctv_quality))
+        showLoading(true)
+        playbackSession++
+        pendingResumeMs = CctvVodProgressStore.load(this, albumId, currentEpisodeIndex)
+        resumeApplied = false
+        autoNextTriggered = false
+        endedRestyleApplied = false
+        userPaused = false
+        pagePaused = false
+        qualityAutoApplied = true // 原生路径画质由我们自己的菜单管理
+        playbackStarted = false
+        handler.removeCallbacks(loadTimeoutRunnable)
+        handler.postDelayed(loadTimeoutRunnable, LOAD_TIMEOUT_MS)
+        saveTickCounter = 0
+        lastPositionMs = 0L
+        resetLoadStage()
+        // 视图切换：WebView 收起（不再加载页面），原生视图亮出
+        webHost.stopLoading()
+        binding.webContainer.visibility = View.GONE
+        binding.nativePlayerView.visibility = View.VISIBLE
+        nativeMode = true
+        AppLog.i(TAG, "nativeEpisode idx=${episode.index} guid=${episode.guid}")
+        nativeLoadJob = lifecycleScope.launch {
+            val playInfo = withContext(Dispatchers.IO) {
+                runCatching { api.fetchPlayInfo(episode.guid) }.getOrNull()
+            }
+            if (isFinishing || isDestroyed) return@launch
+            if (playInfo == null || playInfo.h5eUrl.isBlank()) {
+                fallbackToWebView(episode, "fetchPlayInfo-null")
+                return@launch
+            }
+            currentPlayInfo = playInfo
+            prepareNativePlayer(playInfo.h5eUrl, episode)
+        }
+    }
+
+    /** 建（或复用）ExoPlayer 播放 h5e 地址；错误一次重试、两次回退 WebView。 */
+    @OptIn(UnstableApi::class)
+    private fun prepareNativePlayer(url: String, episode: CctvEpisode) {
+        val player = nativePlayer ?: createNativePlayer().also { nativePlayer = it }
+        val session = playbackSession
+        player.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (session != playbackSession) return
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        playbackStarted = true
+                        showLoading(false)
+                        binding.textError.visibility = View.GONE
+                        if (!resumeApplied && pendingResumeMs > 0) {
+                            player.seekTo(pendingResumeMs)
+                            resumeApplied = true
+                            AppLog.i(TAG, "nativeResume ${pendingResumeMs}ms")
+                        }
+                    }
+                    Player.STATE_ENDED -> playNextEpisode()
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (session != playbackSession) return
+                updatePlayPauseIcon(!isPlaying)
+                updatePauseIndicator(!isPlaying, if (isPlaying) 3 else 0)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (session != playbackSession) return
+                AppLog.e(TAG, "nativePlayerError: ${error.errorCodeName}", error)
+                if (nativeRetryCount < 1) {
+                    nativeRetryCount++
+                    AppLog.w(TAG, "nativeRetry #$nativeRetryCount idx=${episode.index}")
+                    player.setMediaItem(MediaItem.fromUri(selectedQualityUrl ?: url))
+                    player.prepare()
+                    player.play()
+                } else {
+                    fallbackToWebView(episode, "playerError-${error.errorCodeName}")
+                }
+            }
+        })
+        player.setMediaItem(MediaItem.fromUri(url))
+        player.prepare()
+        player.play()
+        binding.nativePlayerView.player = player
+    }
+
+    /** 解密 DataSource 链：HTTP（Referer tv.cctv.com）→ H5e vod 解密 → ExoPlayer。 */
+    @OptIn(UnstableApi::class)
+    private fun createNativePlayer(): ExoPlayer {
+        val http = DefaultHttpDataSource.Factory()
+            .setUserAgent(CctvVodApi.USER_AGENT)
+            .setDefaultRequestProperties(mapOf("Referer" to "https://tv.cctv.com/"))
+            .setConnectTimeoutMs(8_000)
+            .setReadTimeoutMs(8_000)
+            .setAllowCrossProtocolRedirects(true)
+        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true, debugContext = this)
+        return ExoPlayer.Builder(this)
+            .setMediaSourceFactory(
+                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+            )
+            .build()
+    }
+
+    /** 原生失败回退：锁原生 + 走 WebView 播同一集（pageUrl 仍在）。 */
+    private fun fallbackToWebView(episode: CctvEpisode, reason: String) {
+        AppLog.w(TAG, "nativeFallback reason=$reason idx=${episode.index} -> web")
+        webFallbackLocked = true
+        startWebEpisode(episode)
+    }
+
+    /** 释放原生播放资源（切集/回退/销毁共用；wasm 线程上下文随 Loader 线程结束）。 */
+    private fun releaseNativePlayback() {
+        nativeLoadJob?.cancel()
+        nativeLoadJob = null
+        nativePlayer?.let { runCatching { it.release() } }
+        nativePlayer = null
+        binding.nativePlayerView.player = null
+    }
+
+    /** 原生模式画质切换：换分档地址重挂（保留当前进度）；null=回到 master 自适应。 */
+    private fun setNativeQuality(url: String?) {
+        val player = nativePlayer ?: return
+        selectedQualityUrl = url
+        val position = player.currentPosition
+        val wasPlaying = player.playWhenReady
+        val target = url ?: currentPlayInfo?.h5eUrl ?: return
+        player.setMediaItem(MediaItem.fromUri(target))
+        player.prepare()
+        player.seekTo(position)
+        player.playWhenReady = wasPlaying
     }
 
     /** 本集播完：有下一集就自动连播，没有（最后一集）就停在结束画面。 */
@@ -1147,6 +1458,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
     companion object {
         const val EXTRA_PAGE_URL = "cctv_vod_page_url"
+        /** 「影视极速模式」存储键（设置页 tvGroups·CCTV影视组同 key）。 */
+        private const val KEY_CCTV_NATIVE_VOD = "cctv_native_vod"
         const val EXTRA_TITLE = "cctv_vod_title"
         const val EXTRA_GUID = "cctv_vod_episode_guid"
         const val EXTRA_ALBUM_ID = "cctv_vod_album_id"

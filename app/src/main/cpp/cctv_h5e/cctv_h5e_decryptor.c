@@ -33,6 +33,11 @@
 /* This must match the video element id used by the current CCTV live player.
  * It is part of the H5E key state, not merely a diagnostic label. */
 #define PLAYER_TAG "h5player_player"
+/* VOD (getHttpVideoInfo h5e streams) runs the same wasm entries with the page
+ * player's media tag (node-verified: the cjs wasm does mutate slices with it).
+ * The dispatch keeps g_player_argument (no "##dts##seeked" suffix buffer) —
+ * see the gating block in decrypt_nal. */
+#define VOD_PLAYER_TAG "player_container_player"
 #define PAGE_HOST "https://tv.cctv.com"
 #define LOCATION_HREF "blob:https://tv.cctv.com/5bca710b-9f02-41f0-a9f1-102bbc65192a"
 #define H5PLAYER_CONFIG "{\"h5player\":{\"ver\":20190904,\"md5\":\"c7ed5a71dbe4dee1a2ba171f660ee98d\",\"BTime\":\"2019-09-04 20:25:10\"}}"
@@ -108,6 +113,11 @@ static __thread char g_current_update_tag[16];
 static __thread int g_should_decrypt;
 static __thread u32 g_pending_fetch;
 static __thread u32 g_player_argument;
+/* VOD mode: 1 = decrypt with player_container_player tag + NAL25 gating
+ * (cctv-h5e-decrypt's GUID flow), 0 = live tag flow. */
+static __thread int g_vod_mode;
+static __thread u32 g_vod_tag_argument;
+static __thread int g_first_nal_of_segment;
 
 static int decrypt_was_cancelled(void) {
   u32 generation = __sync_add_and_fetch(&g_cancel_generation, 0);
@@ -495,6 +505,7 @@ static int reset_module_state(void) {
   memset(&g_module, 0, sizeof(g_module));
   g_pending_fetch = 0;
   g_player_argument = 0;
+  g_vod_tag_argument = 0;
   reset_emval_state();
   memset(g_env.memory.data, 0, g_env.memory.size);
   if (EMBIND_STORAGE + sizeof(CCTV_H5E_MEMORY_INIT) > g_env.memory.size) {
@@ -546,8 +557,8 @@ static int ensure_module_ready(void) {
   return g_ready;
 }
 
-static u32 allocate_player_argument(void) {
-  size_t length = strlen(PLAYER_TAG);
+static u32 allocate_tag_argument(const char* tag) {
+  size_t length = strlen(tag);
   size_t capacity = length + MEMORY_EXTEND;
   uint8_t* target;
   u32 address;
@@ -559,8 +570,12 @@ static u32 allocate_player_argument(void) {
     return 0;
   }
   memset(target, 0, capacity);
-  memcpy(target, PLAYER_TAG, length);
+  memcpy(target, tag, length);
   return address;
+}
+
+static u32 allocate_player_argument(void) {
+  return allocate_tag_argument(g_vod_mode ? VOD_PLAYER_TAG : PLAYER_TAG);
 }
 
 static int begin_session(void) {
@@ -581,7 +596,9 @@ static int begin_session(void) {
   g_session_started = 1;
   /* Current CCTV cdrmld streams may omit the legacy type-25 enable NAL while
    * still encrypting every VCL NAL. Start enabled; an explicit type-25 control
-   * NAL, when present on older feeds, still overrides this state below. */
+   * NAL, when present on older feeds, still overrides this state below.
+   * VOD segments are decrypted standalone (like live fragments), so a type-25
+   * NAL may only appear mid-segment: also start enabled there. */
   g_should_decrypt = 1;
   return 1;
 }
@@ -614,9 +631,13 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   size_t host_length = strlen(host);
   char tag[16];
   u32 output_length;
+  u32 tag_argument;
+  int type;
   int index;
   g_current_nal_length = nal_length;
   g_current_nal_type = nal_length > 0 ? nal[0] & 0x1f : -1;
+  type = g_current_nal_type;
+  tag_argument = g_player_argument;
   if (g_player_argument == 0) {
     return 0;
   }
@@ -628,6 +649,20 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   snprintf(tag, sizeof(tag), "%08x", w2c_cctv__h5e_ca(&g_module, g_player_argument));
   snprintf(g_current_update_tag, sizeof(g_current_update_tag), "%s", tag);
   g_wasm_stage = "idle";
+  if (g_first_nal_of_segment) {
+    g_first_nal_of_segment = 0;
+    LOGI("VODDBG firstNal type=%d tag=%s vod=%d should=%d",
+        type, tag, g_vod_mode, g_should_decrypt);
+  }
+  if (g_vod_mode) {
+    /* VOD experiment log only: this live-site wasm (unlike the VOD-site wasm
+     * in cctv-h5e-decrypt) appears to need the full NAL sequence fed through
+     * the dispatch, so no gating is applied here; type-25 payload[0] is just
+     * recorded. */
+    if (type == 25) {
+      g_should_decrypt = (nal_length > 1 && nal[1] == 1) ? 1 : 0;
+    }
+  }
   g_wasm_stage = "nal-malloc";
   u32 data_address = w2c_cctv__h5e_Da(&g_module,
       (u32) nal_length + (u32) host_length + NAL_MEMORY_EXTEND);
@@ -642,13 +677,13 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   for (index = 0; index < 8; index++) {
     if (strchr("0123456", tag[index]) != NULL) {
       g_wasm_stage = "vod-step";
-      functions[index](&g_module, g_player_argument, data_address,
+      functions[index](&g_module, tag_argument, data_address,
           (u32) nal_length, (u32) host_length);
       g_wasm_stage = "idle";
     }
   }
   g_wasm_stage = "vod-output";
-  output_length = functions[8](&g_module, g_player_argument, data_address,
+  output_length = functions[8](&g_module, tag_argument, data_address,
       (u32) nal_length, (u32) host_length);
   g_wasm_stage = "idle";
   if (output_length > nal_length + host_length + NAL_MEMORY_EXTEND) {
@@ -666,6 +701,14 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   }
   memcpy(*result, data, output_length);
   *result_length = output_length;
+  /* VOD debug: log only when the wasm actually rewrote a slice (silent while
+   * the live-site wasm passes VOD ciphertext through unchanged). */
+  if (g_vod_mode && (type == 1 || type == 5)
+      && !(output_length == nal_length && memcmp(data, nal, output_length) == 0)) {
+    LOGI("VODDBG nal REWRITTEN type=%d len=%u out=%u tag=%s",
+        type, (unsigned int) nal_length, (unsigned int) output_length,
+        g_current_update_tag);
+  }
   g_wasm_stage = "nal-free";
   w2c_cctv__h5e_Ca(&g_module, data_address);
   g_wasm_stage = "idle";
@@ -926,6 +969,7 @@ static int decrypt_transport_stream(uint8_t* output, const uint8_t* input, size_
     g_worker_clock_frozen = 0;
     return 0;
   }
+  g_first_nal_of_segment = 1;
   for (packet_offset = 0; packet_offset + TS_PACKET_SIZE <= length; packet_offset += TS_PACKET_SIZE) {
     const uint8_t* packet = input + packet_offset;
     size_t payload_offset = 4;
@@ -993,17 +1037,16 @@ static int decrypt_transport_stream(uint8_t* output, const uint8_t* input, size_
   return changed;
 }
 
-JNIEXPORT jbyteArray JNICALL
-Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_decryptTransportStream(
-    JNIEnv* env, jclass clazz, jbyteArray transport_stream) {
+static jbyteArray decrypt_stream_common(
+    JNIEnv* env, jbyteArray transport_stream, int vod_mode) {
   jsize length;
   jbyte* input;
   int trapped = 0;
   int decrypted = 0;
-  (void) clazz;
   if (transport_stream == NULL) {
     return NULL;
   }
+  g_vod_mode = vod_mode;
   g_decrypt_generation = __sync_add_and_fetch(&g_cancel_generation, 0);
   g_decrypt_cancelled = 0;
   length = (*env)->GetArrayLength(env, transport_stream);
@@ -1013,8 +1056,8 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_decryptTransportStream(
   }
   wasm_rt_trap_t trap = (wasm_rt_trap_t) wasm_rt_try(g_wasm_rt_jmp_buf);
   if (trap == WASM_RT_TRAP_NONE) {
-    /* The TS rewriter only updates packet slots after their source bytes have been
-     * consumed, so input and output may safely share the JNI buffer. This removes a
+    /* The TS rewriter only updates packet slots after their source bytes have
+     * been consumed, so input and output may safely share the JNI buffer. This removes a
      * full segment allocation plus two whole-buffer copies on every fragment. */
     decrypted = decrypt_transport_stream(
         (uint8_t*) input, (const uint8_t*) input, (size_t) length);
@@ -1038,12 +1081,33 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_decryptTransportStream(
     return NULL;
   }
   if (!decrypted) {
+    if (vod_mode) {
+      /* VOD library content may be unencrypted (older drama plain HLS in an
+       * h5e path): pass the segment through untouched instead of rejecting. */
+      LOGI("VOD segment had no encrypted NAL; passing through as plain TS");
+      (*env)->ReleaseByteArrayElements(env, transport_stream, input, 0);
+      return transport_stream;
+    }
     (*env)->ReleaseByteArrayElements(env, transport_stream, input, JNI_ABORT);
     LOGW("Rejecting transport stream because no encrypted video NAL was decoded");
     return NULL;
   }
   (*env)->ReleaseByteArrayElements(env, transport_stream, input, 0);
   return transport_stream;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_decryptTransportStream(
+    JNIEnv* env, jclass clazz, jbyteArray transport_stream) {
+  (void) clazz;
+  return decrypt_stream_common(env, transport_stream, 0);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_decryptVodTransportStream(
+    JNIEnv* env, jclass clazz, jbyteArray transport_stream) {
+  (void) clazz;
+  return decrypt_stream_common(env, transport_stream, 1);
 }
 
 JNIEXPORT void JNICALL
@@ -1082,6 +1146,7 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* en
   g_ready = 0;
   g_session_started = 0;
   g_should_decrypt = 0;
+  g_vod_tag_argument = 0;
   g_worker_clock_frozen = 0;
   g_wasm_stage = "idle";
 }

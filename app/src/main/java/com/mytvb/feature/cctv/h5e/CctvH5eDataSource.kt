@@ -14,8 +14,15 @@ import java.io.IOException
  * 长度 188 对齐）则经 [CctvH5eDecryptor.decryptTransportStream] 解密后回放给
  * media3 提取器；m3u8 清单（文本）与非 TS 资源原样透传——无需按 URL 后缀分流。
  * 解密在 open() 内同步完成（分片级，native 侧毫秒级），read() 只从内存缓存出。
+ *
+ * [vodMode]=true 走点播解密入口（影视 hls_h5e 流：player_container_player tag
+ * + NAL25 门控，未加密段透传），供 CctvVodPlayerActivity 原生播放复用。
  */
-class CctvH5eDataSource(private val upstream: DataSource) : DataSource {
+class CctvH5eDataSource(
+    private val context: android.content.Context?,
+    private val upstream: DataSource,
+    private val vodMode: Boolean = false
+) : DataSource {
 
     companion object {
         private const val TAG = "CctvH5eDataSource"
@@ -54,7 +61,11 @@ class CctvH5eDataSource(private val upstream: DataSource) : DataSource {
         if (looksLikeTransportStream(bytes)) {
             val started = android.os.SystemClock.elapsedRealtime()
             val decrypted = try {
-                CctvH5eDecryptor.decryptTransportStream(bytes)
+                if (vodMode) {
+                    CctvH5eDecryptor.decryptVodTransportStream(bytes)
+                } else {
+                    CctvH5eDecryptor.decryptTransportStream(bytes)
+                }
             } catch (t: Throwable) {
                 AppLog.e(TAG, "H5e 解密异常 uri=${dataSpec.uri.lastPathSegment}", t)
                 throw IOException("H5e decrypt failed: ${t.message}", t)
@@ -64,7 +75,8 @@ class CctvH5eDataSource(private val upstream: DataSource) : DataSource {
                 throw IOException("H5e decrypt rejected segment")
             }
             val cost = android.os.SystemClock.elapsedRealtime() - started
-            AppLog.i(TAG, "H5e 分片解密 ok size=${decrypted.size} costMs=$cost")
+            AppLog.i(TAG, "H5e 分片解密 ok size=${decrypted.size} costMs=$cost vod=$vodMode")
+            if (vodMode) dumpVodSegmentForDebug(dataSpec.uri.toString(), bytes)
             bytes = decrypted
         }
         decryptedBuffer = bytes
@@ -101,9 +113,29 @@ class CctvH5eDataSource(private val upstream: DataSource) : DataSource {
         return true
     }
 
+    /** 调试：VOD 解密结果落盘（仅前几段，filesDir/h5e_dump_n.ts），排查绿屏用，验证后移除。 */
+    private fun dumpVodSegmentForDebug(url: String, bytes: ByteArray) {
+        val ctx = context ?: return
+        try {
+            val seg = url.substringAfterLast('/').substringBefore('?')
+            if (!seg.endsWith(".ts")) return
+            val n = seg.removeSuffix(".ts").toIntOrNull() ?: return
+            if (n !in 0..3) return
+            val out = java.io.File(ctx.filesDir, "h5e_dump_$n.ts")
+            if (!out.exists()) out.writeBytes(bytes)
+            AppLog.i(TAG, "h5e dump -> ${out.name} size=${bytes.size}")
+        } catch (t: Throwable) {
+            AppLog.w(TAG, "h5e dump failed: ${t.message}")
+        }
+    }
+
     /** HLS 解密链 DataSource 工厂：包装上游 HTTP 工厂（带 Referer 等 header 由上游配置）。 */
-    class Factory(private val upstreamFactory: DataSource.Factory) : DataSource.Factory {
+    class Factory(
+        private val upstreamFactory: DataSource.Factory,
+        private val vodMode: Boolean = false,
+        private val debugContext: android.content.Context? = null
+    ) : DataSource.Factory {
         override fun createDataSource(): DataSource =
-            CctvH5eDataSource(upstreamFactory.createDataSource())
+            CctvH5eDataSource(debugContext, upstreamFactory.createDataSource(), vodMode)
     }
 }

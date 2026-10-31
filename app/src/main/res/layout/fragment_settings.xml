@@ -223,9 +223,9 @@
                 android:textStyle="bold"/>
         </androidx.appcompat.widget.LinearLayoutCompat>
 
-        <!-- 青少年模式分类（位于弹幕与关于之间） -->
+        <!-- 电视直播分类（位于弹幕与青少年之间）：CCTV直播/影视入口、播放模式、X5内核 -->
         <androidx.appcompat.widget.LinearLayoutCompat
-            android:id="@+id/button_setting_teen"
+            android:id="@+id/button_setting_tv"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/px20"
@@ -241,6 +241,41 @@
             app:layout_constraintEnd_toEndOf="@+id/button_setting_dm"
             app:layout_constraintStart_toStartOf="@+id/button_setting_dm"
             app:layout_constraintTop_toBottomOf="@+id/button_setting_dm">
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="@dimen/px50"
+                android:layout_height="@dimen/px50"
+                app:srcCompat="@drawable/ic_tv"
+                app:tint="?android:attr/textColorPrimary"/>
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/px20"
+                android:layout_marginStart="@dimen/px20"
+                android:layout_weight="1"
+                android:text="@string/tv_live_setting"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="@dimen/px30"
+                android:textStyle="bold"/>
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 青少年模式分类（位于电视直播与关于之间） -->
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/button_setting_teen"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/px20"
+            android:background="@drawable/cell_background"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/px30"
+            android:paddingTop="@dimen/px20"
+            android:paddingEnd="@dimen/px30"
+            android:paddingBottom="@dimen/px20"
+            app:layout_constraintEnd_toEndOf="@+id/button_setting_tv"
+            app:layout_constraintStart_toStartOf="@+id/button_setting_tv"
+            app:layout_constraintTop_toBottomOf="@+id/button_setting_tv">
             <androidx.appcompat.widget.AppCompatImageView
                 android:layout_width="@dimen/px50"
                 android:layout_height="@dimen/px50"

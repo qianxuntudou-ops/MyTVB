@@ -34,6 +34,7 @@
     <string name="display_setting">Display</string>
     <string name="player_ui_setting">Player UI</string>
     <string name="about_setting">About</string>
+    <string name="tv_live_setting">Live TV</string>
     <!-- 设置分组标题 -->
     <string name="setting_group_browse">Browsing &amp; Entries</string>
     <string name="setting_group_interact">Interaction</string>
@@ -51,6 +52,8 @@
     <string name="setting_group_dm_style">Style</string>
     <string name="setting_group_dm_area">Screen Area</string>
     <string name="setting_group_dm_filter">Filtering</string>
+    <string name="setting_group_tv_live">Live TV</string>
+    <string name="setting_group_tv_vod">CCTV VOD</string>
     <string name="setting_group_teen_time">Time Limits</string>
     <string name="setting_group_teen_psas">PSA</string>
     <string name="setting_group_about_app">App</string>
@@ -155,7 +158,9 @@
     <string name="live_entry">Live entry</string>
     <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="cctv_live">CCTV Live</string>
-    <string name="cctv_native_live">CCTV Live native streaming</string>
+    <string name="cctv_native_live">Live turbo mode</string>
+    <string name="cctv_native_vod">VOD turbo mode</string>
+    <string name="cctv_quality_auto">Auto</string>
     <string name="cast_receive">Phone casting</string>
     <string name="cast_device_name">Cast device name</string>
     <string name="cast_device_name_hint">Shown in the bilibili app as 我的小电视 plus your suffix</string>

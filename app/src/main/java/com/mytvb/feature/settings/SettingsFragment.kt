@@ -90,8 +90,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val CATEGORY_PLAY = 2
         private const val CATEGORY_PLAYER_UI = 3
         private const val CATEGORY_DM = 4
-        private const val CATEGORY_TEEN = 5
-        private const val CATEGORY_ABOUT = 6
+        private const val CATEGORY_TV = 5
+        private const val CATEGORY_TEEN = 6
+        private const val CATEGORY_ABOUT = 7
 
         private const val KEY_CACHE_LIMIT = "cache_limit"
         private const val KEY_DEFAULT_START_PAGE = "default_start_page"
@@ -105,9 +106,13 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
-        // CCTV直播原生直拉开关（issue#106 阶段二）：vdn 直调+H5e 原生解密+ExoPlayer，
-        // 关闭后回退 WebView 自构 HTML 老路径。默认开。
+        // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
+        // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
+        // CCTV影视极速模式开关（显示名「影视极速模式」）：getHttpVideoInfo h5e 流直连+H5e 原生解密。
+        // 当前默认关：直播站 wasm 解不动 VOD 密文（VOD 版 wasm 移植后改回默认开），
+        // 开着也只是绿屏后 12s 超时回退 WebView，基建（DataSource/播放器/开关）已就绪。
+        private const val KEY_CCTV_NATIVE_VOD = "cctv_native_vod"
         private const val KEY_CAST_RECEIVE = "cast_receive"
         private const val KEY_CAST_DEVICE_NAME = "cast_device_name"
         private const val KEY_MINOR_PROTECTION = "minor_protection"
@@ -210,6 +215,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     private lateinit var playerGroups: List<SettingGroup>
     private lateinit var playerUiGroups: List<SettingGroup>
     private lateinit var dmGroups: List<SettingGroup>
+    private lateinit var tvGroups: List<SettingGroup>
     private lateinit var teenGroups: List<SettingGroup>
     private lateinit var aboutGroups: List<SettingGroup>
     private val appSettings: AppSettingsDataStore by inject()
@@ -289,9 +295,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
                 stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "开"),
-                stored(KEY_CCTV_LIVE_ENTRY, R.string.cctv_live, "关"),
-                stored(KEY_CCTV_NATIVE_LIVE, R.string.cctv_native_live, "开"),
-                stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
+                // CCTV 相关条目已归入「电视直播」分类（tvGroups）
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
                 // 因此无需在 applyStored 段恢复
                 stored(KEY_CAST_RECEIVE, R.string.cast_receive, NvaDevice.receiveEnabledStored(requireContext())),
@@ -401,6 +405,21 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             ))
         )
 
+        // 电视直播：CCTV 直播（入口/极速模式/X5 内核）/ CCTV 影视
+        // X5 内核只服务于直播 WebView 路径（极速模式关闭时的兜底，以及央视频超清组整页播放），
+        // 因此从「关于·组件与诊断」归入本分类，与极速模式放一组形成语义衔接。
+        tvGroups = listOf(
+            SettingGroup(R.string.setting_group_tv_live, listOf(
+                stored(KEY_CCTV_LIVE_ENTRY, R.string.cctv_live, "关"),
+                stored(KEY_CCTV_NATIVE_LIVE, R.string.cctv_native_live, "开"),
+                plain(KEY_X5_CORE, R.string.x5_core_replace, getString(R.string.x5_status_not_installed))
+            )),
+            SettingGroup(R.string.setting_group_tv_vod, listOf(
+                stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
+                stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "关")
+            ))
+        )
+
         // 青少年模式：时间限制 / 公益广告
         teenGroups = listOf(
             SettingGroup(R.string.setting_group_teen_time, listOf(
@@ -423,7 +442,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 // plain(KEY_USAGE_TIPS, R.string.usage_tips)
             )),
             SettingGroup(R.string.setting_group_diagnostics, listOf(
-                plain(KEY_X5_CORE, R.string.x5_core_replace, getString(R.string.x5_status_not_installed)),
+                // X5 内核已归入「电视直播」分类（只服务于直播 WebView 路径）
                 plain(KEY_LOG_RECORD, R.string.log_record, getString(if (AppLog.isEnabled) R.string.on else R.string.off)),
                 plain(KEY_LAN_LOG, R.string.lan_log)
             )),
@@ -466,6 +485,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         CATEGORY_PLAY -> playerGroups
         CATEGORY_PLAYER_UI -> playerUiGroups
         CATEGORY_DM -> dmGroups
+        CATEGORY_TV -> tvGroups
         CATEGORY_TEEN -> teenGroups
         else -> aboutGroups
     }
@@ -491,7 +511,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     /** 全部分类中按 key 找条目（key 全局唯一，调换分组/顺序不影响寻址）。 */
     private fun itemOf(key: String): SettingModel? {
         sequenceOf(
-            commonGroups, displayGroups, playerGroups, playerUiGroups, dmGroups, teenGroups, aboutGroups
+            commonGroups, displayGroups, playerGroups, playerUiGroups, dmGroups, tvGroups, teenGroups, aboutGroups
         ).forEach { groups ->
             groups.forEach { group ->
                 group.items.forEach { if (it.key == key) return it }
@@ -580,6 +600,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         binding.buttonSettingPlay.setOnClickListener { showCategory(CATEGORY_PLAY) }
         binding.buttonSettingPlayerUi.setOnClickListener { showCategory(CATEGORY_PLAYER_UI) }
         binding.buttonSettingDm.setOnClickListener { showCategory(CATEGORY_DM) }
+        binding.buttonSettingTv.setOnClickListener { showCategory(CATEGORY_TV) }
         binding.buttonSettingTeen.setOnClickListener { showCategory(CATEGORY_TEEN) }
         binding.buttonSettingAbout.setOnClickListener { showCategory(CATEGORY_ABOUT) }
         // 左列分类按钮按右键：焦点进入右侧列表首条，避免几何搜索落到就近条目
@@ -599,6 +620,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         CATEGORY_PLAY -> binding.buttonSettingPlay
         CATEGORY_PLAYER_UI -> binding.buttonSettingPlayerUi
         CATEGORY_DM -> binding.buttonSettingDm
+        CATEGORY_TV -> binding.buttonSettingTv
         CATEGORY_TEEN -> binding.buttonSettingTeen
         else -> binding.buttonSettingAbout
     }
@@ -680,6 +702,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         binding.buttonSettingPlay.isSelected = category == CATEGORY_PLAY
         binding.buttonSettingPlayerUi.isSelected = category == CATEGORY_PLAYER_UI
         binding.buttonSettingDm.isSelected = category == CATEGORY_DM
+        binding.buttonSettingTv.isSelected = category == CATEGORY_TV
         binding.buttonSettingTeen.isSelected = category == CATEGORY_TEEN
         binding.buttonSettingAbout.isSelected = category == CATEGORY_ABOUT
         val buttons = listOf(
@@ -688,6 +711,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             binding.buttonSettingPlay,
             binding.buttonSettingPlayerUi,
             binding.buttonSettingDm,
+            binding.buttonSettingTv,
             binding.buttonSettingTeen,
             binding.buttonSettingAbout
         )
@@ -722,6 +746,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 (activity as? MainActivity)?.applyLiveEntryVisibility()
             }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
+            // —— 电视直播 ——
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyCctvLiveEntryVisibility()
@@ -731,6 +756,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyCctvVodEntryVisibility()
             }
+            KEY_CCTV_NATIVE_VOD -> toggle(key)
+            KEY_X5_CORE -> startXdDownload()
             KEY_CAST_RECEIVE -> toggle(key) { newValue ->
                 // 投屏开关存 cast 自有 SP（不进 appSettings），并立即生效（拉起/停止服务）
                 NvaCastController.setEnabled(requireContext(), newValue == "开")
@@ -818,7 +845,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             // —— 关于 ——
             KEY_CHECK_UPDATE -> checkForUpdate()
             KEY_USAGE_TIPS -> showUsageTipsDialog()
-            KEY_X5_CORE -> startXdDownload()
             KEY_LOG_RECORD -> {
                 val newValue = if (AppLog.isEnabled) "关" else "开"
                 AppLog.setEnabled(newValue == "开")
@@ -1333,6 +1359,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_CCTV_LIVE_ENTRY)
         applyStored(KEY_CCTV_NATIVE_LIVE)
         applyStored(KEY_CCTV_VOD_ENTRY)
+        applyStored(KEY_CCTV_NATIVE_VOD)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)
         // 旧版本存储值兜底：不属于当前选项集时回落默认
@@ -1429,7 +1456,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_DM_SMART_SHIELD)
         applyStored(KEY_DM_MERGE_DUPLICATE)
 
-        // —— 关于 ——
+        // —— 电视直播（X5 状态刷新）——
         updateX5Status()
     }
 

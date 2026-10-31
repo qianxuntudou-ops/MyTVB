@@ -34,6 +34,7 @@
     <string name="display_setting">顯示</string>
     <string name="player_ui_setting">播放介面</string>
     <string name="about_setting">關於</string>
+    <string name="tv_live_setting">電視直播</string>
     <!-- 设置分组标题 -->
     <string name="setting_group_browse">瀏覽與入口</string>
     <string name="setting_group_interact">互動</string>
@@ -51,6 +52,8 @@
     <string name="setting_group_dm_style">樣式</string>
     <string name="setting_group_dm_area">顯示區域</string>
     <string name="setting_group_dm_filter">過濾</string>
+    <string name="setting_group_tv_live">電視直播</string>
+    <string name="setting_group_tv_vod">CCTV影視</string>
     <string name="setting_group_teen_time">時間限制</string>
     <string name="setting_group_teen_psas">公益廣告</string>
     <string name="setting_group_about_app">應用程式</string>
@@ -155,7 +158,9 @@
     <string name="live_entry">直播入口</string>
     <string name="edge_tab_switch">卡片邊緣切換分頁</string>
     <string name="cctv_live">CCTV直播</string>
-    <string name="cctv_native_live">CCTV直播原生直拉</string>
+    <string name="cctv_native_live">直播極速模式</string>
+    <string name="cctv_native_vod">影視極速模式</string>
+    <string name="cctv_quality_auto">自動</string>
     <string name="cast_receive">手機投屏</string>
     <string name="cast_device_name">投屏裝置名稱</string>
     <string name="cast_device_name_hint">手機B站App投屏清單裡顯示為「我的小電視」+你填的區分名</string>

@@ -39,6 +39,8 @@ data class CctvEpisode(
 /** 取流结果。 */
 data class CctvPlayInfo(
     val hlsUrl: String,
+    /** h5e 加密版主清单（720P 四档）；原生播放模式用，WebView 模式不用。 */
+    val h5eUrl: String = "",
     val title: String,
     /** master m3u8 里的清晰度档位（低→高）。为空表示只有单档，播放器不做清晰度菜单。 */
     val qualities: List<CctvQuality> = emptyList()

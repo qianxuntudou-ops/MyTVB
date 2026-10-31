@@ -69,10 +69,15 @@ class CctvVodApi(
             val json = JSONObject(raw)
             val hlsUrl = json.optString("hls_url")
             if (hlsUrl.isBlank()) return@runCatching null
+            // manifest.hls_h5e_url：h5e 加密版主清单（同一 wasm 可解，四档含 720P），
+            // 原生播放（CctvVodPlayerActivity ExoPlayer 模式）直接播它；缺省时回退猜域名。
+            val h5eUrl = json.optJSONObject("manifest")?.optString("hls_h5e_url")
+                ?.takeIf { it.contains(".m3u8") } ?: toH5eMasterUrl(hlsUrl)
             CctvPlayInfo(
                 hlsUrl = hlsUrl,
+                h5eUrl = h5eUrl,
                 title = json.optString("title").ifBlank { "CCTV" },
-                qualities = buildQualities(hlsUrl)
+                qualities = buildQualities(h5eUrl, hlsUrl)
             )
         }.getOrElse { error ->
             AppLog.e(TAG, "parsePlayInfo failed: ${error.message}")
@@ -83,12 +88,13 @@ class CctvVodApi(
     /**
      * 生成清晰度档位。
      *
-     * 优先用网页端那套多码率清单（`dh5ws01.v.cntv.cn/asp/h5e/hls/`，含 720P 两档）；
-     * 它取不到时退回接口同源的两档（master 只列 480x270，但同路径下 850 目录是
+     * 优先 h5e 主清单（`manifest.hls_h5e_url`，450/850/1200/2000 四档、720P 封顶，
+     * 分片为 H5e 加密——与直播同一 wasm，CctvH5eDataSource vod 模式可解）；
+     * 取不到时退回接口同源的两档（master 只列 480x270，但同路径下 850 目录是
      * 另一路 640x360 转码；再往上的 1200/2000 是占位档，内容与 450 相同）。
      */
-    private fun buildQualities(hlsUrl: String): List<CctvQuality> {
-        val web = fetchMasterQualities(toH5eMasterUrl(hlsUrl))
+    private fun buildQualities(h5eUrl: String, hlsUrl: String): List<CctvQuality> {
+        val web = fetchMasterQualities(h5eUrl)
         if (web.size >= 2) return web
         return buildOriginQualities(hlsUrl)
     }
@@ -263,12 +269,14 @@ class CctvVodApi(
         val part: Int?
     )
 
-    private companion object {
+    companion object {
         private const val TAG = "CctvVodApi"
         private const val PAGE_SIZE = 24
         private const val EPISODE_PAGE_SIZE = 100
         private const val CALLBACK_NAME = "myTvbCb"
-        private const val USER_AGENT =
+
+        /** 央视点播请求 UA（原生播放的 HTTP DataSource 复用同一身份）。 */
+        const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; TV; MyTVB) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Mobile Safari/537.36"
 
         /** 网页端多档清晰度所在的主机与路径前缀（第三方可直连，但请求过密会被临时限流）。 */

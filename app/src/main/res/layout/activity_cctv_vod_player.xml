@@ -15,6 +15,17 @@
         android:layout_height="match_parent"
         android:background="@android:color/black" />
 
+    <!-- 原生播放视图：「影视极速模式」开启时 ExoPlayer 直连 h5e 流（H5e 解密），
+         WebView 整页仅作兜底。TextureView 与直播页同款（SurfaceView 长时间渲染崩）。 -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/native_player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/black"
+        android:visibility="gone"
+        app:surface_type="texture_view"
+        app:use_controller="false" />
+
     <!-- 起播黑盖层：收敛样式要等 onPageFinished 后才注入，此前 WebView 会渲染出
          央视网页原文（白底 header/正文），盖住它让加载期只见转圈不见网页（issue#103）。 -->
     <View

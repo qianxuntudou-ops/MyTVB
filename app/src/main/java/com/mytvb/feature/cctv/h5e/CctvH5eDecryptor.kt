@@ -22,6 +22,14 @@ object CctvH5eDecryptor {
      */
     external fun decryptTransportStream(transportStream: ByteArray): ByteArray?
 
+    /**
+     * 解密一段 CCTV 影视点播（getHttpVideoInfo 的 hls_h5e_url）TS 分片。
+     * 与直播同一 wasm：差异仅 mediaTag（player_container_player，slice NAL 带
+     * "##1000000##0" 后缀）与 NAL25 加密标志探测（cctv-h5e-decrypt 的 GUID 约定）。
+     * 段内无加密 NAL（未加密老剧）时原样透传而非拒绝。
+     */
+    external fun decryptVodTransportStream(transportStream: ByteArray): ByteArray?
+
     /** SPS 兼容模式：部分老盒子解码器对解密后 SPS 严格校验失败时开启。 */
     external fun setSpsCompatibilityMode(enabled: Boolean)
 
