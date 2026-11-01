@@ -433,6 +433,7 @@
     <string name="qwe_keyboard">全键盘</string>
     <string name="recent_update">最近更新</string>
     <string name="recommend">推荐</string>
+    <string name="detail_tab_collection_recommend">合集·推荐</string>
     <string name="related_video">推荐视频：</string>
     <string name="play_end_replay">重新播放</string>
     <string name="play_end_related_title">相关推荐</string>

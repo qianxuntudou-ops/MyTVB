@@ -266,6 +266,7 @@
     <string name="qwe_keyboard">全鍵盤</string>
     <string name="recent_update">最近更新</string>
     <string name="recommend">推薦</string>
+    <string name="detail_tab_collection_recommend">合輯·推薦</string>
     <string name="related_video">推薦影片：</string>
     <string name="play_end_replay">重新播放</string>
     <string name="play_end_related_title">相關推薦</string>

@@ -263,6 +263,7 @@
     <string name="qwe_keyboard">Full keyboard</string>
     <string name="recent_update">Recently updated</string>
     <string name="recommend">Recommended</string>
+    <string name="detail_tab_collection_recommend">Series·Recommended</string>
     <string name="related_video">Related videos: </string>
     <string name="play_end_replay">Play again</string>
     <string name="play_end_related_title">Related</string>

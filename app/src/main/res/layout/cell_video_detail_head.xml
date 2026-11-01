@@ -230,19 +230,76 @@
         app:layout_constraintStart_toEndOf="@+id/card_cover"
         app:layout_constraintTop_toBottomOf="@+id/button_uploader" />
 
-    <androidx.appcompat.widget.AppCompatTextView
-        android:id="@+id/text_subtitle"
+    <!-- 数据行：官方手机端样式（播放数/评论数/发布时间/正在看），图标+数字组合 -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/layout_stat_row"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/px15"
-        android:lineSpacingMultiplier="1.1"
-        android:text="@string/cell_title_placeholder"
-        android:textColor="?attr/tabBarNormal"
-        android:textSize="@dimen/px30"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         app:layout_constraintEnd_toEndOf="@+id/text_title"
         app:layout_constraintStart_toStartOf="@+id/text_title"
         app:layout_constraintTop_toBottomOf="@+id/text_title"
-        app:layout_constraintVertical_bias="0.1" />
+        app:layout_constraintVertical_bias="0.1">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/iv_stat_play"
+            android:layout_width="@dimen/px28"
+            android:layout_height="@dimen/px28"
+            app:srcCompat="@drawable/ic_play"
+            app:tint="@color/grey" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_stat_view"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px8"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px28" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/iv_stat_comment"
+            android:layout_width="@dimen/px28"
+            android:layout_height="@dimen/px28"
+            android:layout_marginStart="@dimen/px40"
+            app:srcCompat="@drawable/ic_comment"
+            app:tint="@color/grey" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_stat_reply"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px8"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px28" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_stat_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px40"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px28" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/iv_stat_online"
+            android:layout_width="@dimen/px28"
+            android:layout_height="@dimen/px28"
+            android:layout_marginStart="@dimen/px40"
+            android:visibility="gone"
+            app:srcCompat="@drawable/ic_player_watching"
+            app:tint="@color/grey" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_stat_online"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px8"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px28"
+            android:visibility="gone" />
+    </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/layout_desc_row"
@@ -253,7 +310,7 @@
         android:orientation="horizontal"
         app:layout_constraintEnd_toEndOf="@+id/text_title"
         app:layout_constraintStart_toStartOf="@+id/text_title"
-        app:layout_constraintTop_toBottomOf="@+id/text_subtitle">
+        app:layout_constraintTop_toBottomOf="@+id/layout_stat_row">
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_description"

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 详情页 Tab 栏选中下划线：B站粉短条（对齐官方手机端 tab 指示器） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/pink" />
+    <corners android:radius="@dimen/px3" />
+</shape>

@@ -48,6 +48,8 @@ internal class CommentPanelDialog(
     /** 焦点在评论条目上按菜单键：打开该用户的主页弹窗（调用方负责先关本面板）。 */
     private val onOpenOwnerSpace: (VideoCommentItem) -> Unit,
     private val onDismissed: () -> Unit,
+    /** >0：showPanel 后直达该根评论的楼中楼（详情页评论 tab 点评论条进入；BACK 仍回面板根列表）。 */
+    private val initialThreadRpid: Long = 0L,
 ) : AppCompatDialog(activity, R.style.DialogTheme) {
 
     companion object {
@@ -193,9 +195,21 @@ internal class CommentPanelDialog(
         if (aid > 0L) {
             reloadComments()
         }
+        // 直达楼中楼：面板根列表照常后台加载（BACK 可回），焦点交给楼中楼列表
+        if (initialThreadRpid > 0L) {
+            openThread(initialThreadRpid)
+        }
 
         // 初始焦点：优先列表首项，空列表/加载失败落排序 tab；窗口焦点监听 + post 双兜底
         fun requestInitialFocus() {
+            if (initialThreadRpid > 0L) {
+                // 直达模式：楼中楼首项；未落地时交给 reloadThread 完成后的 focusThread
+                val threadChild = binding.recyclerCommentThread.getChildAt(0)
+                if (threadChild != null) {
+                    threadChild.requestFocus()
+                }
+                return
+            }
             val child = binding.recyclerComments.getChildAt(0)
             when {
                 child != null -> child.requestFocus()

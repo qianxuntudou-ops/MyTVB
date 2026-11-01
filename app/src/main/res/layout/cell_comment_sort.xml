@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 详情页评论区排序行：热门/最新（样式对齐播放页评论面板） -->
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/px30"
+    android:paddingTop="@dimen/px16">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/sort_hot"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/button_common"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="@dimen/px36"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px36"
+        android:paddingBottom="@dimen/px12"
+        android:text="@string/player_comment_sort_hot"
+        android:textSize="@dimen/px28" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/sort_new"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px16"
+        android:background="@drawable/button_common"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="@dimen/px36"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px36"
+        android:paddingBottom="@dimen/px12"
+        android:text="@string/player_comment_sort_new"
+        android:textSize="@dimen/px28" />
+</androidx.appcompat.widget.LinearLayoutCompat>

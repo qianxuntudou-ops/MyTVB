@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import com.mytvb.core.ui.base.AppToast
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
@@ -47,6 +48,16 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import java.util.Locale
 import com.mytvb.core.ui.base.DialogWindowFit
+import com.mytvb.feature.player.comment.CommentImageViewerDialog
+import com.mytvb.feature.player.comment.CommentNoteImageRepository
+import com.mytvb.feature.player.comment.CommentPanelDialog
+import com.mytvb.feature.player.comment.VideoCommentItem
+import com.mytvb.feature.player.comment.VideoCommentPicture
+import com.mytvb.feature.player.comment.VideoCommentRootPagingState
+import com.mytvb.feature.player.comment.VideoCommentDataSource
+import com.mytvb.feature.player.comment.VIDEO_COMMENT_SORT_HOT
+import com.mytvb.feature.player.comment.VIDEO_COMMENT_SORT_NEW
+import com.mytvb.network.api.ApiService
 
 class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
@@ -56,6 +67,8 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         private const val ARG_AID = "aid"
         private const val ARG_BVID = "bvid"
         private const val ARG_PLAY_QUEUE_TOKEN = "play_queue_token"
+        /** 评论触底加载阈值：距最后一条评论 N 条时预取下一页。 */
+        private const val COMMENT_LOAD_MORE_THRESHOLD = 4
 
         fun newInstance(video: VideoModel, playQueue: List<VideoModel> = emptyList()): VideoDetailFragment {
             val queueToken = VideoDetailPlayQueueStore.enqueue(playQueue)
@@ -88,6 +101,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
     private var videoModel: VideoModel? = null
     private var videoView: VideoView? = null
+    private var currentDetail: VideoDetailModel? = null
     private var aid: Long? = null
     private var bvid: String? = null
     private var launchPlayQueue: List<VideoModel> = emptyList()
@@ -113,6 +127,22 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
     private var actionDialog: PlayerActionDialog? = null
     private var ownerDetailDialog: OwnerDetailDialog? = null
+
+    // ---------- 内容 Tab / 评论区（issue#108：详情页直接看评论） ----------
+    private enum class DetailTab { CONTENT, COMMENT }
+
+    private var selectedTab = DetailTab.CONTENT
+    private var commentSortNew = false
+    private val commentsState = VideoCommentRootPagingState()
+    private val expandedCommentRpids = mutableSetOf<Long>()
+    private var commentsFetchJob: kotlinx.coroutines.Job? = null
+    private var commentsFetchToken = 0
+    /** Tab 栏"评论 N"数字：初始取 stat.reply，评论接口落地后校准为 all_count。 */
+    private var commentCountOverride = -1L
+    private var commentImageViewer: CommentImageViewerDialog? = null
+    private var commentPanelDialog: CommentPanelDialog? = null
+
+    private val apiService: ApiService by inject()
 
     override fun onAttach(context: android.content.Context) {
         super.onAttach(context)
@@ -225,13 +255,65 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 result
             },
             onFollowClick = { toggleFollow() },
-            onTripleAction = { tripleAction() }
+            onTripleAction = { tripleAction() },
+            onTabSelected = { commentTab -> switchTab(commentTab) },
+            onCommentSortSelected = { sortNew -> applyCommentSort(sortNew) },
+            expandedCommentRpids = expandedCommentRpids,
+            onCommentToggleExpand = { rpid, position ->
+                if (!expandedCommentRpids.remove(rpid)) expandedCommentRpids.add(rpid)
+                if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+                    contentAdapter.notifyItemChanged(position)
+                }
+            },
+            onCommentClick = { item -> onCommentClicked(item) },
+            onCommentLongClick = { item -> onCommentLongClicked(item) },
+            onCommentPictureClick = { item, index -> openCommentPictures(item, index) },
+            onCommentItemFocused = { maybeLoadMoreCommentsFromLayout() }
         )
 
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerView.adapter = contentAdapter
         binding.recyclerView.itemAnimator = null
         binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        // 评论触底加载挂点之一：滚动（dy>0）触发（触摸模式/惯性滚动；焦点模式走 onCommentItemFocused）
+        binding.recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dy <= 0) return
+                if (selectedTab != DetailTab.COMMENT) return
+                maybeLoadMoreCommentsFromLayout()
+            }
+        })
+
+        // 分层返回：焦点在评论条/排序行时按返回，焦点先回当前选中的 tab（再按一次才退出页面）
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (focusInCommentArea()) {
+                        val tabId = if (selectedTab == DetailTab.COMMENT) {
+                            R.id.tab_comment
+                        } else {
+                            R.id.tab_content
+                        }
+                        _binding?.recyclerView?.findViewById<View>(tabId)?.requestFocus()
+                    } else {
+                        // tab 栏/Header/触摸无焦点：按默认退出详情页
+                        isEnabled = false
+                        requireActivity().onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            }
+        )
+    }
+
+    /** 焦点是否在评论区的评论条/排序行上（tab 栏与 Header 不算）。 */
+    private fun focusInCommentArea(): Boolean {
+        if (selectedTab != DetailTab.COMMENT) return false
+        val binding = _binding ?: return false
+        val focus = binding.recyclerView.findFocus() ?: return false
+        return focus.id == R.id.click_view ||
+            focus.id == R.id.sort_hot ||
+            focus.id == R.id.sort_new
     }
 
     private fun initObserver() {
@@ -315,6 +397,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
         AppLog.d(TAG, "updateUI: title=${view.title}, tags=${detail.tags?.size}, pages=${view.pages?.size}, related=${detail.related?.size}")
         videoView = view
+        currentDetail = detail
 
         if (videoModel == null) {
             videoModel = VideoModel(
@@ -353,6 +436,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
         refreshActionState()
         loadRelationState()
+        loadOnlineWatching()
     }
 
     private fun updateUIForEpisodeSwitch(detail: VideoDetailModel) {
@@ -405,7 +489,23 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             )
         )
 
-        if (ugcEpisodes.isNotEmpty()) {
+        val hasSeason = ugcEpisodes.isNotEmpty()
+        rows.add(
+            VideoDetailContentAdapter.Row.TabBar(
+                contentTabText = getString(
+                    if (hasSeason) R.string.detail_tab_collection_recommend else R.string.recommend
+                ),
+                commentTabSelected = selectedTab == DetailTab.COMMENT,
+                commentCountText = formatCommentCount()
+            )
+        )
+
+        if (selectedTab == DetailTab.COMMENT) {
+            buildCommentRows(rows)
+            return rows
+        }
+
+        if (hasSeason) {
             val videos = buildUgcSeasonVideos()
             val ordered = if (ugcReverseOrder) {
                 videos.sortedByDescending { it.pubDate }
@@ -441,6 +541,31 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         }
 
         return rows
+    }
+
+    /** 评论 tab 的 rows：排序行 + 评论条 + 状态提示（数据取 [commentsState] 缓存，切 tab 不重拉）。 */
+    private fun buildCommentRows(rows: MutableList<VideoDetailContentAdapter.Row>) {
+        rows.add(VideoDetailContentAdapter.Row.CommentSort(sortNewSelected = commentSortNew))
+        rows.addAll(commentsState.items.map { VideoDetailContentAdapter.Row.CommentEntry(it) })
+        when {
+            commentsFetchJob?.isActive == true && commentsState.items.isEmpty() ->
+                rows.add(VideoDetailContentAdapter.Row.CommentHint(getString(R.string.player_comment_loading)))
+            commentsState.items.isEmpty() && commentsState.endReached ->
+                rows.add(VideoDetailContentAdapter.Row.CommentHint(getString(R.string.player_comment_empty)))
+        }
+    }
+
+    private fun formatCommentCount(): String {
+        val count = if (commentCountOverride >= 0) {
+            commentCountOverride
+        } else {
+            videoView?.stat?.reply?.toLong() ?: videoModel?.stat?.reply?.toLong() ?: 0L
+        }
+        return if (count > 0) {
+            com.mytvb.core.common.format.NumberUtils.formatCount(requireContext(), count)
+        } else {
+            ""
+        }
     }
 
     private fun refreshActionState() {
@@ -583,10 +708,24 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         bvid = model.bvid.takeIf { it.isNotBlank() }
         videoModel = null
         videoView = null
+        currentDetail = null
         isLiked = false
         isCoined = false
         isFavorited = false
+        resetCommentState()
+        selectedTab = DetailTab.CONTENT
         loadVideoDetail()
+    }
+
+    /** 切集/换视频时清空评论区缓存（新视频重新加载）。 */
+    private fun resetCommentState() {
+        commentsFetchJob?.cancel()
+        commentsFetchJob = null
+        commentsFetchToken++
+        commentsState.reset()
+        expandedCommentRpids.clear()
+        commentCountOverride = -1L
+        commentSortNew = false
     }
 
     private fun onRelatedVideoClicked(model: VideoModel) {
@@ -634,6 +773,209 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 currentAid = view.aid
             )
             contentAdapter.submitList(newList)
+        }
+    }
+
+    // ---------- 内容 Tab / 评论区 ----------
+
+    /** 重建 rows 并提交（tab 切换/评论数据变化共用）。 */
+    private fun rebuildRows() {
+        val detail = currentDetail ?: return
+        contentAdapter.submitList(buildRows(detail))
+    }
+
+    private fun switchTab(commentTab: Boolean) {
+        val target = if (commentTab) DetailTab.COMMENT else DetailTab.CONTENT
+        if (selectedTab == target) return
+        selectedTab = target
+        if (commentTab && commentsState.items.isEmpty() && commentsFetchJob?.isActive != true) {
+            // 首次进评论 tab：先出骨架（排序行+加载提示）再异步拉数据
+            rebuildRows()
+            loadComments()
+        } else {
+            rebuildRows()
+        }
+        // 不做滚动：Header/TabBar 两个 row 稳定，DiffUtil 局部替换后列表位置天然保持
+    }
+
+    private fun applyCommentSort(sortNew: Boolean) {
+        if (commentSortNew == sortNew) return
+        commentSortNew = sortNew
+        loadComments()
+    }
+
+    /** 数据源：upMid 供评论条 UP 徽标判定。 */
+    private val commentDataSource: VideoCommentDataSource by lazy {
+        VideoCommentDataSource(upMidProvider = { videoView?.owner?.mid ?: 0L })
+    }
+
+    private fun loadComments() {
+        val currentAid = videoView?.aid ?: videoModel?.aid ?: return
+        commentsFetchJob?.cancel()
+        val token = ++commentsFetchToken
+        commentsState.beginReload()
+        rebuildRows()
+
+        commentsFetchJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val pageData = commentDataSource.loadRootPage(
+                    oid = currentAid,
+                    sort = if (commentSortNew) VIDEO_COMMENT_SORT_NEW else VIDEO_COMMENT_SORT_HOT,
+                    cursorOffset = null
+                )
+                if (token != commentsFetchToken) return@launch
+                commentsState.replace(pageData)
+                if (pageData.totalCount >= 0) {
+                    commentCountOverride = pageData.totalCount.toLong()
+                }
+                rebuildRows()
+                maybeLoadMoreCommentsFromLayout(force = true)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) return@launch
+                AppLog.w(TAG, "loadComments failed aid=$currentAid sort=$commentSortNew", t)
+                if (token != commentsFetchToken) return@launch
+                if (commentsState.items.isEmpty()) {
+                    rebuildRowsWithHint(getString(R.string.player_comment_load_failed))
+                } else {
+                    toast(t.message ?: getString(R.string.player_comment_load_failed))
+                }
+            } finally {
+                if (token == commentsFetchToken) commentsFetchJob = null
+            }
+        }
+    }
+
+    private fun loadMoreComments() {
+        if (commentsFetchJob?.isActive == true || commentsState.endReached) return
+        val currentAid = videoView?.aid ?: videoModel?.aid ?: return
+        val cursorOffset = commentsState.nextCursorOffset ?: return
+        val token = ++commentsFetchToken
+
+        commentsFetchJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val pageData = commentDataSource.loadRootPage(
+                    oid = currentAid,
+                    sort = if (commentSortNew) VIDEO_COMMENT_SORT_NEW else VIDEO_COMMENT_SORT_HOT,
+                    cursorOffset = cursorOffset,
+                    fallbackTotalCount = commentsState.totalCount
+                )
+                if (token != commentsFetchToken) return@launch
+                if (!commentsState.append(pageData)) {
+                    return@launch
+                }
+                rebuildRows()
+                maybeLoadMoreCommentsFromLayout(force = true)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) return@launch
+                AppLog.w(TAG, "loadMoreComments failed aid=$currentAid cursor=$cursorOffset", t)
+            } finally {
+                if (token == commentsFetchToken) commentsFetchJob = null
+            }
+        }
+    }
+
+    /** 评论加载失败且无缓存的提示行（items 已空，无评论行即不会误触底加载）。 */
+    private fun rebuildRowsWithHint(text: String) {
+        val detail = currentDetail ?: return
+        contentAdapter.submitList(buildRows(detail).toMutableList().apply {
+            add(VideoDetailContentAdapter.Row.CommentHint(text))
+        })
+    }
+
+    private fun maybeLoadMoreCommentsFromLayout(force: Boolean = false) {
+        if (selectedTab != DetailTab.COMMENT) return
+        if (commentsFetchJob?.isActive == true || commentsState.endReached) return
+        val recyclerView = _binding?.recyclerView ?: return
+        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val lastVisible = lm.findLastVisibleItemPosition()
+        if (lastVisible < 0) return
+        val list = contentAdapter.currentList
+        val lastCommentIndex = list.indexOfLast { it is VideoDetailContentAdapter.Row.CommentEntry }
+        if (lastCommentIndex < 0) return
+        if (force || lastVisible >= lastCommentIndex - COMMENT_LOAD_MORE_THRESHOLD) {
+            loadMoreComments()
+        }
+    }
+
+    // ---------- 评论条交互（分流对齐播放页评论面板） ----------
+
+    private fun onCommentClicked(item: VideoCommentItem) {
+        val hasPictures = item.pictures.isNotEmpty() || item.noteCvid > 0L
+        if (hasPictures) {
+            openCommentPictures(item, 0)
+            return
+        }
+        if (item.replyCount <= 0) {
+            toast(getString(R.string.player_comment_thread_empty))
+            return
+        }
+        openCommentPanelWithThread(item.rpid)
+    }
+
+    private fun onCommentLongClicked(item: VideoCommentItem): Boolean {
+        // 长按进楼中楼：与"长按查看全部 N 条回复"文案一致（触摸路径）
+        if (item.replyCount <= 0) return false
+        openCommentPanelWithThread(item.rpid)
+        return true
+    }
+
+    private fun openCommentPictures(item: VideoCommentItem, startIndex: Int) {
+        val activity = activity as? androidx.appcompat.app.AppCompatActivity ?: return
+        if (item.pictures.isNotEmpty()) {
+            ensureCommentImageViewer(activity).open(pictures = item.pictures, startIndex = startIndex)
+            return
+        }
+        AppToast.show(activity, getString(R.string.player_comment_note_image_loading))
+        CommentNoteImageRepository.load(item.noteCvid) { images ->
+            if (!isAdded) return@load
+            if (images.isEmpty()) return@load
+            ensureCommentImageViewer(activity).open(
+                pictures = images.map { VideoCommentPicture(url = it.url, width = it.width, height = it.height) },
+                startIndex = startIndex
+            )
+        }
+    }
+
+    private fun ensureCommentImageViewer(activity: androidx.appcompat.app.AppCompatActivity): CommentImageViewerDialog {
+        val existing = commentImageViewer
+        if (existing != null) return existing
+        return CommentImageViewerDialog(activity).also { commentImageViewer = it }
+    }
+
+    /** 打开评论面板直达楼中楼（面板 BACK 回其根列表，再 BACK 关面板回详情页）。 */
+    private fun openCommentPanelWithThread(rootRpid: Long) {
+        val activity = activity as? androidx.appcompat.app.AppCompatActivity ?: return
+        val currentAid = videoView?.aid ?: videoModel?.aid ?: return
+        commentPanelDialog?.dismiss()
+        commentPanelDialog = CommentPanelDialog(
+            activity = activity,
+            aid = currentAid,
+            upMid = videoView?.owner?.mid ?: 0L,
+            commentCount = if (commentCountOverride >= 0) commentCountOverride else videoView?.stat?.reply?.toLong() ?: 0L,
+            onOpenOwnerSpace = { },
+            onDismissed = { commentPanelDialog = null },
+            initialThreadRpid = rootRpid
+        ).apply { showPanel() }
+    }
+
+    // ---------- 正在看人数 ----------
+
+    private fun loadOnlineWatching() {
+        val currentBvid = videoView?.bvid
+        val currentCid = videoView?.cid ?: return
+        if (currentBvid.isNullOrBlank()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            runCatching { apiService.getOnlineTotal(bvid = currentBvid, cid = currentCid) }
+                .onSuccess { response ->
+                    val text = if (response.isSuccess) response.data?.displayText() else null
+                    if (text != null) {
+                        val binding = _binding ?: return@onSuccess
+                        val holder = binding.recyclerView
+                            .findViewHolderForAdapterPosition(0)
+                            as? VideoDetailContentAdapter.VideoDetailHeadViewHolder
+                        holder?.updateOnlineWatching(text)
+                    }
+                }
         }
     }
 
@@ -883,6 +1225,12 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         actionDialog = null
         ownerDetailDialog?.dismiss()
         ownerDetailDialog = null
+        commentsFetchJob?.cancel()
+        commentsFetchJob = null
+        commentPanelDialog?.dismiss()
+        commentPanelDialog = null
+        commentImageViewer?.dismiss()
+        commentImageViewer = null
         super.onDestroyView()
         _binding = null
         mainActivity = null
