@@ -441,10 +441,12 @@ internal class DanmakuPlayer(
                         }
                     // lateness 大 = 空闲唤醒迟到（低性能设备定时器/主线程阻塞），
                     // 醒来时播放位置已越过弹幕时刻 → dropIfLagging 可能丢弃。
-                    if (AppLog.isEnabled) {
-                        AppLog.i(
+                    // 常态 lateness 仅 0~3ms，逐条输出只会刷屏（60s 30+ 条），仅在
+                    // 迟到 ≥8ms（才可能触发丢弃）时输出。
+                    if (AppLog.isEnabled && lastIdleWakeLatenessMs >= 8L) {
+                        AppLog.w(
                             DIAG_TAG,
-                            "idle WAKE lateness=${lastIdleWakeLatenessMs}ms pos=${engineAction.currentPositionMs()}ms"
+                            "idle WAKE-LATE lateness=${lastIdleWakeLatenessMs}ms pos=${engineAction.currentPositionMs()}ms"
                         )
                     }
                     idleWakeDrawRequested.set(true)
@@ -454,12 +456,15 @@ internal class DanmakuPlayer(
                 MSG_RESUME_FROM_IDLE -> {
                     if (released || !started || !frameLoopIdle) return
                     idleResumeCount.incrementAndGet()
-                    if (AppLog.isEnabled) {
-                        AppLog.i(
-                            DIAG_TAG,
-                            "idle RESUME pos=${engineAction.currentPositionMs()}ms"
-                        )
-                    }
+                    // idle RESUME 常态打点已注释：与 idle WAKE 成对、每次恢复一条，
+                    // 60s 可刷 20+ 条且信息已由 DanmakuPerf 的 idle=x/y/z（含 resumes
+                    // 计数）覆盖；排查"唤醒后未恢复帧循环"时恢复此打点。
+                    // if (AppLog.isEnabled) {
+                    //     AppLog.i(
+                    //         DIAG_TAG,
+                    //         "idle RESUME pos=${engineAction.currentPositionMs()}ms"
+                    //     )
+                    // }
                     frameLoopIdle = false
                     // 统一走标准帧入口（MSG_FRAME_UPDATE 开头会注册下一帧 vsync 回调）；
                     // 此前直接 runFrameUpdate，animate=true 分支注册回调的逻辑已上移，
@@ -627,14 +632,16 @@ internal class DanmakuPlayer(
                         )
                         lastIdleWakeDelayMs = delayMs
                         scheduledIdleWakeAtUptimeMs = SystemClock.uptimeMillis() + delayMs
-                        // 空闲进入：active/pending 全空。若此日志后长时间没有 idle WAKE/RESUME
-                        // 而播放仍在推进，弹幕会停更（对应"引擎哑死"现场）。
-                        if (AppLog.isEnabled) {
-                            AppLog.i(
-                                DIAG_TAG,
-                                "idle ENTER pos=${engineAction.currentPositionMs()}ms nextWakeAt=${nextWakeAtMs}ms delay=${delayMs}ms"
-                            )
-                        }
+                        // 空闲进入打点已注释：active/pending 全空的空窗期每个唤醒周期一条
+                        // （60s 20+ 条，且存在同毫秒双打的重复），常态无信息量；此前用于
+                        // "引擎哑死"排查（ENTER 后无 WAKE/RESUME 而播放仍推进=弹幕停更），
+                        // 该问题已修，DanmakuPerf 的 idle=x/y/z 可见唤醒仍在跑。排查时恢复。
+                        // if (AppLog.isEnabled) {
+                        //     AppLog.i(
+                        //         DIAG_TAG,
+                        //         "idle ENTER pos=${engineAction.currentPositionMs()}ms nextWakeAt=${nextWakeAtMs}ms delay=${delayMs}ms"
+                        //     )
+                        // }
                         removeMessages(MSG_IDLE_WAKE)
                         sendEmptyMessageDelayed(MSG_IDLE_WAKE, delayMs)
                     }

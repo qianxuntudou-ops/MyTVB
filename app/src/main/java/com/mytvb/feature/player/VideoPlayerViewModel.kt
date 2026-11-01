@@ -1778,7 +1778,9 @@ class VideoPlayerViewModel(
             return
         }
         PlaybackProgressStore.savePosition(bvid, currentCid, positionMs, duration.value)
-        AppLog.i(TAG, "local_progress_saved bvid=$bvid cid=$currentCid pos=$positionMs dur=${duration.value}")
+        // 常规落盘打点已注释：跟随心跳 2s 一条（60s 30 条）且次次成功、无信息量；
+        // 上方 skip 分支（无身份/位置过小）是异常信号，保留。排查进度保存时恢复。
+        // AppLog.i(TAG, "local_progress_saved bvid=$bvid cid=$currentCid pos=$positionMs dur=${duration.value}")
     }
 
     private fun rebuildPlayback() {

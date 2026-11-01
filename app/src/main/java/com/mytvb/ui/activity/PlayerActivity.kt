@@ -1863,12 +1863,18 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     /**
      * 主线程慢消息诊断（AppLog 开启时安装）：单条消息 dispatch 超过 10ms 即打点，
      * 用于把 UI 掉帧归因到具体消息（Choreographer doFrame / 进度刷新 / 其他回调）。
-     * Printer 每条消息由框架拼一次字符串，仅在诊断期安装，onDestroy 卸载。
+     * 每条附带 heap=used/totalMB 与 gc!Δused（used 骤降标记），用于把 doFrame 超时
+     * 与 GC 事件对齐。Printer 每条消息由框架拼一次字符串，仅在诊断期安装，onDestroy 卸载。
      */
     private var mainThreadJankPrinter: Printer? = null
     private var jankMsgStartNs = 0L
     private var jankMsgText: String = ""
     private var lastJankLogAtMs = 0L
+
+    // GC 归因探针：记录上一条 jank 采样时的堆 used，骤降 ≥4MB 即两次采样之间
+    // 发生过 GC（消息内分配触发时暂停直接计入 cost）。doFrame 超时但弹幕绘制
+    // 本身 <1ms 的场景（堆顶满锯齿），靠它与 GC 事件毫秒级对齐归因。
+    private var jankLastUsedBytes = 0L
 
     private fun installMainThreadJankMonitor() {
         if (!AppLog.isEnabled) return
@@ -1884,7 +1890,19 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     val now = SystemClock.uptimeMillis()
                     if (now - lastJankLogAtMs >= 200L) {
                         lastJankLogAtMs = now
-                        AppLog.w("MainThreadJank", "main msg cost=${costMs}ms ${jankMsgText.take(140)}")
+                        val rt = Runtime.getRuntime()
+                        val usedBytes = rt.totalMemory() - rt.freeMemory()
+                        val gcLabel =
+                            if (jankLastUsedBytes > 0L && usedBytes < jankLastUsedBytes - 4L * 1024L * 1024L) {
+                                " gc!Δused=-${(jankLastUsedBytes - usedBytes) / (1024L * 1024L)}MB"
+                            } else {
+                                ""
+                            }
+                        jankLastUsedBytes = usedBytes
+                        AppLog.w(
+                            "MainThreadJank",
+                            "main msg cost=${costMs}ms heap=${usedBytes / (1024L * 1024L)}/${rt.totalMemory() / (1024L * 1024L)}MB$gcLabel ${jankMsgText.take(140)}",
+                        )
                     }
                 }
             }
