@@ -493,9 +493,10 @@ object ContentFilter {
         "秒懂",
         "虎狼之词",
         "虎狼之詞",
-        // 恐怖氛围风险词（"鬼/血"等宽泛单字也纳入，但仅在主体词同时命中时生效，靠组合判断规避误伤）
-        "鬼",
-        "血",
+        // 恐怖氛围风险词：仅在主体词同时命中时生效。不收"鬼/血"单字——正常标题的
+        // "血性/热血/超鬼/丝血反杀"会与"解说/丝"等主体词组合误拦（issue#108 电竞解说
+        // 标题"……血性……解说……"被拦），恐怖场景由鬼片/女鬼/丧尸/血腥等复合词兜底。
+        "血腥",
         "女鬼",
         "恶鬼",
         "惡鬼",
@@ -720,12 +721,14 @@ object ContentFilter {
         if (isVideoKeyBlocked(context, aid, bvid, title.orEmpty(), coverUrl)) {
             return true
         }
-        if (teenageMode != 0) return true
         val safeAuthorName = authorName.orEmpty()
         if (safeAuthorName.isNotEmpty() && isUpNameBlocked(context, safeAuthorName)) {
             return true
         }
+        // teenage_mode 仅在青少年保护开启时拦截：B 站给电竞解说等正常内容也打此标记，
+        // 不能无条件过滤（issue#108：UP 主投稿列表/搜索/历史全消失）。
         if (!isMinorProtectionEnabled(context)) return false
+        if (teenageMode != 0) return true
         if (typeId in BLOCKED_TYPE_IDS) return true
         val trimmedTypeName = typeName.orEmpty().trim().lowercase()
         if (trimmedTypeName.isNotEmpty() && trimmedTypeName in BLOCKED_TYPE_NAMES_LOWER) {
@@ -761,14 +764,15 @@ object ContentFilter {
         ) {
             return true
         }
-        if (teenageMode != 0) return true
         val safeAuthorName = authorName.orEmpty()
         if (safeAuthorName.isNotEmpty()) {
             val trimmed = safeAuthorName.trim()
             if (BLOCKED_UP_NAMES.any { it.equals(trimmed, ignoreCase = true) }) return true
             if (blockedUpNames.any { it.equals(trimmed, ignoreCase = true) }) return true
         }
+        // 与 isVideoBlocked 保持一致：teenage_mode 只在青少年保护开启时拦截。
         if (!minorProtectionEnabled) return false
+        if (teenageMode != 0) return true
         if (typeId in BLOCKED_TYPE_IDS) return true
         val trimmedTypeName = typeName.orEmpty().trim().lowercase()
         if (trimmedTypeName.isNotEmpty() && trimmedTypeName in BLOCKED_TYPE_NAMES_LOWER) {
