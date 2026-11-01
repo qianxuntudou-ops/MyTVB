@@ -4,12 +4,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.mytvb.R
+import com.mytvb.core.ui.focus.isDescendantOf
 import com.mytvb.databinding.FragmentLiveListBinding
 import com.mytvb.model.live.LiveRoomItem
 import com.mytvb.ui.activity.LivePlayerActivity
@@ -51,6 +53,7 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     private var isFirstPageLoad = true
     private var needsLogin = false
     private var tvFocusController: TvListFocusController? = null
+    private var globalFocusLoadMoreListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
     private var currentOpenStartMs = 0L
 
     companion object {
@@ -121,6 +124,8 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
             }
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
                 tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
+                // 落地即续拉：本页条数少、焦点仍贴着列表尾部时立刻预取下一页
+                checkLiveLoadMore()
             }
             override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
                 tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
@@ -158,15 +163,30 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-                val layoutManager = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
-                val totalItemCount = layoutManager.itemCount
-                val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                
-                if (!viewModel.loading.value && viewModel.hasMore.value && lastVisibleItem >= totalItemCount - 12) {
-                    viewModel.loadNextPage()
-                }
+                checkLiveLoadMore()
             }
         })
+        // LiveRoomAdapter 无焦点回调，焦点落定补查走全局焦点监听：焦点导航目标 item
+        // 已在屏内可见时不产生滚动（onScrolled 不触发），必须焦点落卡即预查，
+        // 否则要等焦点顶死最后一行才触发加载（体感"触底加载慢"，首页推荐同款修法）
+        globalFocusLoadMoreListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus != null && binding.recyclerView.isShown &&
+                newFocus.isDescendantOf(binding.recyclerView)
+            ) {
+                checkLiveLoadMore()
+            }
+        }
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(globalFocusLoadMoreListener)
+    }
+
+    /** 触底判定（滚动/焦点落定共用）：剩不足 12 个可见项即预取下一页。 */
+    private fun checkLiveLoadMore() {
+        if (viewModel.loading.value || !viewModel.hasMore.value) return
+        val layoutManager = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
+        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+        if (lastVisibleItem >= layoutManager.itemCount - 12) {
+            viewModel.loadNextPage()
+        }
     }
 
     override fun initData() {
@@ -307,6 +327,12 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     }
 
     override fun onDestroyView() {
+        globalFocusLoadMoreListener?.let { listener ->
+            if (binding.root.viewTreeObserver.isAlive) {
+                binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(listener)
+            }
+        }
+        globalFocusLoadMoreListener = null
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()

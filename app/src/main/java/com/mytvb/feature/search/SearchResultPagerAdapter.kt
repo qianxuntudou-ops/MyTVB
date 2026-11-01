@@ -259,6 +259,9 @@ class SearchResultPagerAdapter(
                     onTopEdgeUp,
                     onItemFocused = { view, position ->
                         tvFocusController?.onItemFocused(view, position)
+                        // 焦点导航下 RV 常不滚动（dy=0），onScrolled 收不到事件，必须在焦点
+                        // 落定时补查触底，否则要等焦点顶死最后一行才触发加载（体感"触底加载慢"）
+                        checkResultLoadMore()
                     },
                     onItemDpad = { view, keyCode, event ->
                         tvFocusController?.handleKey(view, keyCode, event) == true
@@ -289,27 +292,32 @@ class SearchResultPagerAdapter(
                 binding.recyclerViewResult.addOnScrollListener(object : RecyclerView.OnScrollListener() {
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                         super.onScrolled(recyclerView, dx, dy)
-                        val layoutManager =
-                            recyclerView.layoutManager as? GridLayoutManager ?: return
-                        val totalItemCount = layoutManager.itemCount
-                        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                        val pageState = currentPage ?: return
-                        if (
-                            totalItemCount > 0 &&
-                            pageState.hasMore &&
-                            !pageState.loading &&
-                            lastVisibleItem >= totalItemCount - 12
-                        ) {
-                            pageState.loading = true
-                            recyclerView.post {
-                                currentType?.let(onLoadMore)
-                            }
-                        }
+                        checkResultLoadMore()
                     }
                 })
                 installTvFocusController()
             }
             submit(page)
+        }
+
+        /** 触底判定（滚动/焦点落定共用）：剩不足 12 个可见项即预取下一页。 */
+        private fun checkResultLoadMore() {
+            val layoutManager =
+                binding.recyclerViewResult.layoutManager as? GridLayoutManager ?: return
+            val totalItemCount = layoutManager.itemCount
+            val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+            val pageState = currentPage ?: return
+            if (
+                totalItemCount > 0 &&
+                pageState.hasMore &&
+                !pageState.loading &&
+                lastVisibleItem >= totalItemCount - 12
+            ) {
+                pageState.loading = true
+                binding.recyclerViewResult.post {
+                    currentType?.let(onLoadMore)
+                }
+            }
         }
 
         fun submit(page: SearchResultPage) {
@@ -323,6 +331,8 @@ class SearchResultPagerAdapter(
                 if (changed) {
                     tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                 }
+                // 落地即续拉：本页条数少、焦点仍贴着列表尾部时立刻预取下一页
+                checkResultLoadMore()
                 Unit
             }
             if (binding.recyclerViewResult.isComputingLayout) {

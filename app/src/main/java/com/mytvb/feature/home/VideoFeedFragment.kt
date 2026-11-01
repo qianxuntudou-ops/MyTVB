@@ -62,6 +62,10 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
             onRightEdge = ::switchToNextHomeTab,
             onItemFocusedWithView = { view, position ->
                 tvFocusController?.onItemFocused(view, position)
+                // 焦点导航下 RV 常不滚动（焦点行下方还有缓冲行，dy=0），onScrolled 里的
+                // checkLoadMore 收不到事件，必须在焦点落定时补查，否则预取失效、
+                // 要等焦点顶死最后一行 TvListFocusController 才触发加载（体感"触底加载慢"）
+                checkLoadMore()
                 scheduleFocusWarmup()
             },
             onItemDpad = { view, keyCode, event ->
@@ -448,6 +452,9 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
         if (isTvListFocusEnabled()) {
             notifyTvListDataChanged(TvDataChangeReason.APPEND)
         }
+        // 落地即续拉：焦点仍贴着列表尾部（或本页去重后追加寥寥几条）时立刻预取下一页，
+        // 消除"按到底→等网络→再按一次"的空窗（与动态页同款修法）
+        checkLoadMore()
         feedViewModel.consumeListChange()
     }
 

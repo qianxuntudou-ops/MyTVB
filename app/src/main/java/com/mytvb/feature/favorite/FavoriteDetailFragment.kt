@@ -116,6 +116,9 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
             },
             onItemFocusedWithView = { view, position ->
                 tvFocusController?.onItemFocused(view, position)
+                // 焦点导航下 RV 常不滚动（dy=0），onScrolled 收不到事件，必须在焦点
+                // 落定时补查触底，否则要等焦点顶死最后一行才触发加载（体感"触底加载慢"）
+                checkLoadMoreVideos()
             },
             onItemDpad = { view, keyCode, event ->
                 tvFocusController?.handleKey(view, keyCode, event) == true
@@ -136,12 +139,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         binding.recyclerViewVideos.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-                val layoutManager = recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
-                val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                if (!isLoading && hasMore && lastVisibleItem >= layoutManager.itemCount - 5) {
-                    currentPage++
-                    loadFavoriteVideos()
-                }
+                checkLoadMoreVideos()
             }
         })
         installTvFocusController()
@@ -274,6 +272,18 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         }
     }
 
+    /** 触底判定（滚动/焦点落定共用）：剩不足 5 个可见项即预取下一页。 */
+    private fun checkLoadMoreVideos() {
+        if (isLoading || !hasMore) return
+        val layoutManager =
+            binding.recyclerViewVideos.layoutManager as? WrapContentGridLayoutManager ?: return
+        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+        if (lastVisibleItem >= layoutManager.itemCount - 5) {
+            currentPage++
+            loadFavoriteVideos()
+        }
+    }
+
     private fun loadFavoriteVideos() {
         if (folderId == 0L || !hasMore) return
         val restartFirstPage = currentPage <= 1
@@ -366,6 +376,8 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                         } else if (lastFocusedPosition != RecyclerView.NO_POSITION) {
                             restoreFocus()
                         }
+                        // 落地即续拉：本页条数少、焦点仍贴着列表尾部时立刻预取下一页
+                        checkLoadMoreVideos()
                     }
                 } else {
                     rollbackPage()

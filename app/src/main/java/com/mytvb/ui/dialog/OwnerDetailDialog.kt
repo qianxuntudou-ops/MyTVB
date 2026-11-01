@@ -84,6 +84,9 @@ class OwnerDetailDialog(
         onItemFocusedWithView = { view, position ->
             userEngagedContent = true
             tvFocusController?.onItemFocused(view, position)
+            // 焦点导航下 RV 常不滚动（dy=0），onScrolled 收不到事件，必须在焦点
+            // 落定时补查触底，否则要等焦点顶死最后一行才触发加载（体感"触底加载慢"）
+            maybeTriggerLoadMore()
         },
         onItemDpad = { view, keyCode, event ->
             tvFocusController?.handleKey(view, keyCode, event) == true

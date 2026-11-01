@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -25,6 +26,7 @@ import com.mytvb.feature.series.SeriesDetailFragment
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.core.common.cache.FileCacheManager
 import com.mytvb.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.mytvb.core.ui.focus.isDescendantOf
 import com.mytvb.core.ui.focus.SpatialFocusNavigator
 import com.mytvb.core.ui.focus.TabContentFocusHelper
 import com.mytvb.core.ui.refresh.SwipeRefreshHelper
@@ -65,6 +67,7 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     private lateinit var adapter: SeriesAdapter
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
     private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var globalFocusLoadMoreListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
 
     override fun initArguments() {
         type = arguments?.getInt(ARG_TYPE, TYPE_ANIMATION) ?: TYPE_ANIMATION
@@ -104,15 +107,13 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
-                val layoutManager = recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
-                val totalItemCount = layoutManager.itemCount
-                val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                if (!isLoading && hasMore && lastVisibleItem >= totalItemCount - 6) {
-                    currentPage++
-                    loadData()
-                }
+                checkSeriesLoadMore()
             }
         })
+        // SeriesAdapter 无焦点回调，焦点落定补查走全局焦点监听：焦点导航目标 item
+        // 已在屏内可见时不产生滚动（onScrolled 不触发），必须焦点落卡即预查，
+        // 否则要等焦点顶死最后一行才触发加载（体感"触底加载慢"，首页推荐同款修法）
+        installFocusChangeLoadMoreHook()
         installLoadMoreFocusController()
         swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
             recyclerView = binding.recyclerView,
@@ -143,6 +144,29 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 }
             }
         }
+    }
+
+    /** 触底判定（滚动/焦点落定共用）：剩不足 6 个可见项即预取下一页。 */
+    private fun checkSeriesLoadMore() {
+        if (isLoading || !hasMore) return
+        val layoutManager =
+            binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
+        val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
+        if (lastVisibleItem >= layoutManager.itemCount - 6) {
+            currentPage++
+            loadData()
+        }
+    }
+
+    private fun installFocusChangeLoadMoreHook() {
+        globalFocusLoadMoreListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus != null && binding.recyclerView.isShown &&
+                newFocus.isDescendantOf(binding.recyclerView)
+            ) {
+                checkSeriesLoadMore()
+            }
+        }
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(globalFocusLoadMoreListener)
     }
 
     private fun loadData() {
@@ -183,6 +207,8 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                         showState(getEmptyMessage(), retryVisible = false)
                     } else {
                         showContent()
+                        // 落地即续拉：本页条数少、焦点仍贴着列表尾部时立刻预取下一页
+                        checkSeriesLoadMore()
                     }
                 }
                 .onFailure { exception ->
@@ -372,6 +398,12 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     override fun onDestroyView() {
+        globalFocusLoadMoreListener?.let { listener ->
+            if (binding.root.viewTreeObserver.isAlive) {
+                binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(listener)
+            }
+        }
+        globalFocusLoadMoreListener = null
         loadMoreFocusController?.release()
         loadMoreFocusController = null
         super.onDestroyView()
