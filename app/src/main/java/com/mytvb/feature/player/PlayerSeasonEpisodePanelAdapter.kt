@@ -179,7 +179,13 @@ class PlayerSeasonEpisodePanelAdapter(
             } else {
                 binding.groupDanmaku.visibility = View.GONE
             }
-            binding.textDuration.text = NumberUtils.formatDuration(item.duration)
+            // 时长缺数据（如 PGC 剧集分集）时整块隐藏，不显示假的 00:00
+            if (item.duration > 0L) {
+                binding.textDuration.visibility = View.VISIBLE
+                binding.textDuration.text = NumberUtils.formatDuration(item.duration)
+            } else {
+                binding.textDuration.visibility = View.GONE
+            }
             if (isSelected) {
                 binding.iconPlaying.visibility = View.VISIBLE
                 ImageLoader.loadDrawableRes(binding.iconPlaying, R.drawable.playing)
