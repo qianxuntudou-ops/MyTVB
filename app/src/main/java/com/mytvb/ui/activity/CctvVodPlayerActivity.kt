@@ -90,6 +90,41 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private var playbackSession = 0
     /** 用户正在拖动进度条：此时不要用回传的播放位置覆盖进度，否则手指会被"拽回去"。 */
     private var seekingByUser = false
+
+    // ---- 快进/快退按键会话（对齐普通播放器 MyPlayerView + SeekSession 模型）----
+    // 行为：按住/连按期间只推进预览（进度条与时间文字），松手（长按）或停顿 450ms
+    // （连续短按）后才真正跳转。长按=按住 400ms 起表后每 40ms 一跳、10s 走完全片；
+    // 短按=每次 ±10s 累计；起表延迟内松手按短按累计收尾。
+
+    /** 按住的 seek 键集合：全部抬起才收尾（防左右键同时按住时提前提交）。 */
+    private val heldSeekKeyCodes = HashSet<Int>()
+    /** 按键 seek 会话激活中（DOWN 启动，短按 UP 后即复位、长按 UP 提交后复位）。 */
+    private var seekSessionActive = false
+    /** 会话推进方向（true=快进）。长按中反向键只换方向，不清已推进的预览位置。 */
+    private var seekForward = true
+    /** 长按起表后的首个 tick 是否已跑：UP 时以此区分长按（立即提交）与短按（累计）。 */
+    private var seekHoldTicked = false
+    /** 预览目标位置（长按 tick 与短按累计共用的目标值）。 */
+    private var seekTargetMs = 0L
+    /** 短按累计基准（连按串首次按下时的位置）与累计位移（≠0 表示有未提交的连按串）。 */
+    private var seekTapBaseMs = 0L
+    private var seekTapDeltaMs = 0L
+    /** 长按起表延迟（400ms 后开始 tick）/ tick 循环 / 短按延迟提交。 */
+    private var seekHoldStartRunnable: Runnable? = null
+    private var seekTickRunnable: Runnable? = null
+    private var seekTapCommitRunnable: Runnable? = null
+    /** 长按推进期间定格原生播放（松手提交后恢复；WebView 路径页面照播，仅预览推进）。 */
+    private var holdFrozen = false
+    private var holdFrozenWasPlaying = false
+
+    /**
+     * 已提交给页面的 seek 目标（-1=无）：js("seekTo") 是异步的，跳转生效前页面的
+     * 状态回传还带着旧位置，无条件覆盖会把进度条"拽回去"（短按跳转后回拉）。
+     * 提交后只接受落到目标附近（已生效）的回传，其余丢弃；[PENDING_SEEK_TIMEOUT_MS]
+     * 超时无条件恢复，防页面跳转失败时进度条永久钉死。
+     */
+    private var pendingPageSeekMs = -1L
+    private var pendingPageSeekAt = 0L
     /** 待续播位置（毫秒）：页面里视频可播后一次性 seek 过去。 */
     private var pendingResumeMs = 0L
     private var resumeApplied = false
@@ -295,7 +330,12 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 canceled: Boolean
             ) {
                 seekingByUser = false
-                if (nativeMode) nativeSeekTo(position) else js("seekTo", position)
+                if (nativeMode) {
+                    nativeSeekTo(position)
+                } else {
+                    markPendingPageSeek(position)
+                    js("seekTo", position)
+                }
                 scheduleControllerHide()
             }
         })
@@ -579,13 +619,223 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         js("toggle")
     }
 
-    private fun seekBy(deltaMs: Long) {
-        if (nativeMode) {
-            val player = nativePlayer ?: return
-            player.seekTo((player.currentPosition + deltaMs).coerceAtLeast(0))
+    // ---------------------------------------------------------------- 快进/快退按键会话
+
+    /**
+     * 左右键的统一 seek 入口（DOWN 启动会话、repeat 持续吞掉、UP 收尾）。
+     * 判定与手感对齐普通播放器 [com.mytvb.feature.player.view.MyPlayerView]：
+     * - DOWN（新会话）：显示控制条，进度条跳到当前位置，400ms 起表延迟后开始推进
+     * - DOWN（repeat / 会话激活）：吞掉（tick 循环自行推进预览，不真正跳转）
+     * - DOWN（反向）：换方向并重起起表延迟，保留已推进的预览位置
+     * - UP：起表后首个 tick 已跑=长按，立即停表提交；否则按短按累计 ±10s，
+     *   停止连按 450ms 后才提交
+     */
+    private fun handleSeekKeyEvent(event: KeyEvent): Boolean {
+        val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            cancelSeekTapCommit()
+            if (event.repeatCount == 0) heldSeekKeyCodes.add(event.keyCode)
+            if (!seekSessionActive) {
+                // 起播期/换流窗口（duration 未知）不可 seek：显示控制条反馈但不跳转
+                if (durationMs <= 0L) {
+                    showController()
+                    return true
+                }
+                startSeekSession(forward)
+            } else if (seekForward != forward) {
+                seekForward = forward
+                cancelSeekHoldStart()
+                scheduleSeekHoldStart()
+            }
+            return true
+        }
+        if (event.action == KeyEvent.ACTION_UP) {
+            heldSeekKeyCodes.remove(event.keyCode)
+            if (heldSeekKeyCodes.isEmpty() && seekSessionActive) {
+                cancelSeekHoldStart()
+                if (seekHoldTicked) {
+                    // 长按收尾：清短按累计，立即提交预览位置
+                    seekTapBaseMs = 0L
+                    seekTapDeltaMs = 0L
+                    cancelSeekTapCommit()
+                    commitSeek(seekTargetMs, "hold")
+                } else {
+                    // 短按（含起表已到、首个 40ms tick 未跑的零位移窗口）：只累计预览
+                    accumulateSeekTap(forward)
+                }
+            }
+            return true
+        }
+        return seekSessionActive
+    }
+
+    private fun startSeekSession(forward: Boolean) {
+        seekSessionActive = true
+        seekForward = forward
+        seekHoldTicked = false
+        // 连按串中再次按下：预览必须保持在累计目标上（base+delta），不能拉回当前
+        // 播放位置——否则每次 DOWN 闪回一次、UP 又跳回，表现成"连按不断回拉"。
+        // 400ms 后起表进入长按时，也从累计目标继续推进（连续语义）。
+        seekTargetMs = if (seekTapDeltaMs != 0L) {
+            (seekTapBaseMs + seekTapDeltaMs).let {
+                if (durationMs > 0L) it.coerceIn(0L, seekUpperBoundMs(durationMs)) else it.coerceAtLeast(0L)
+            }
+        } else {
+            positionMs
+        }
+        showController()
+        renderSeekPreview()
+        scheduleSeekHoldStart()
+    }
+
+    /** 长按起表延迟：按住超过 [SEEK_HOLD_START_DELAY_MS] 才进入连续推进。 */
+    private fun scheduleSeekHoldStart() {
+        cancelSeekHoldStart()
+        val runnable = Runnable {
+            seekHoldStartRunnable = null
+            if (seekSessionActive) {
+                freezeNativeForHold()
+                startSeekTickLoop()
+            }
+        }
+        seekHoldStartRunnable = runnable
+        handler.postDelayed(runnable, SEEK_HOLD_START_DELAY_MS)
+    }
+
+    private fun cancelSeekHoldStart() {
+        seekHoldStartRunnable?.let { handler.removeCallbacks(it) }
+        seekHoldStartRunnable = null
+    }
+
+    private fun startSeekTickLoop() {
+        cancelSeekTick()
+        val runnable = Runnable {
+            seekTickRunnable = null
+            if (seekSessionActive) {
+                doSeekTick()
+                if (seekSessionActive) startSeekTickLoop()
+            }
+        }
+        seekTickRunnable = runnable
+        handler.postDelayed(runnable, SEEK_HOLD_TICK_MS)
+    }
+
+    private fun cancelSeekTick() {
+        seekTickRunnable?.let { handler.removeCallbacks(it) }
+        seekTickRunnable = null
+    }
+
+    private fun doSeekTick() {
+        if (durationMs <= 0L) return
+        seekHoldTicked = true
+        val step = holdSeekStepMs(durationMs) * if (seekForward) 1 else -1
+        seekTargetMs = (seekTargetMs + step).coerceIn(0L, seekUpperBoundMs(durationMs))
+        renderSeekPreview()
+    }
+
+    /**
+     * 长按推进步长按片长自适应：长按 [SEEK_HOLD_TRAVERSE_MS] 走完全片
+     * （30 分钟剧约 7.2s/tick、2 小时电影约 28.8s/tick，普通播放器同款模型）。
+     */
+    private fun holdSeekStepMs(duration: Long): Long {
+        if (duration <= 0L) return 0L
+        val step = duration.toDouble() * SEEK_HOLD_TICK_MS / SEEK_HOLD_TRAVERSE_MS
+        return kotlin.math.round(step).toLong().coerceAtLeast(1L)
+    }
+
+    /** 短按累计：基准上累加 ±[SEEK_STEP_MS] 只动进度条，停按 [SEEK_TAP_COMMIT_DELAY_MS] 后提交。 */
+    private fun accumulateSeekTap(forward: Boolean) {
+        if (durationMs <= 0L) {
+            endSeekSession()
             return
         }
-        js("seek", deltaMs)
+        cancelSeekTapCommit()
+        if (seekTapDeltaMs == 0L) seekTapBaseMs = positionMs
+        seekTapDeltaMs += SEEK_STEP_MS * if (forward) 1 else -1
+        seekTargetMs = (seekTapBaseMs + seekTapDeltaMs).coerceIn(0L, seekUpperBoundMs(durationMs))
+        renderSeekPreview()
+        // 会话复位（新 DOWN 会重开），连按串数据保留，由提交 runnable 收尾
+        seekSessionActive = false
+        val commit = Runnable {
+            seekTapCommitRunnable = null
+            commitSeek(seekTargetMs, "tap")
+        }
+        seekTapCommitRunnable = commit
+        handler.postDelayed(commit, SEEK_TAP_COMMIT_DELAY_MS)
+    }
+
+    private fun cancelSeekTapCommit() {
+        seekTapCommitRunnable?.let { handler.removeCallbacks(it) }
+        seekTapCommitRunnable = null
+    }
+
+    /** 提交跳转：会话整体收尾 + 真正 seek（原生走 ExoPlayer，页面走注入的 seekTo）。 */
+    private fun commitSeek(targetMs: Long, source: String) {
+        val bound = if (durationMs > 0L) seekUpperBoundMs(durationMs) else targetMs
+        val target = targetMs.coerceIn(0L, bound)
+        AppLog.i(TAG, "seekCommit $source target=${target / 1000}s dur=${durationMs / 1000}s")
+        endSeekSession()
+        positionMs = target
+        if (nativeMode) {
+            nativeSeekTo(target)
+        } else {
+            markPendingPageSeek(target)
+            js("seekTo", target)
+        }
+        scheduleControllerHide()
+    }
+
+    /** 会话整体收尾（提交后 / 切集 / 不可 seek 时）：清全部挂起 runnable 与状态。 */
+    private fun endSeekSession() {
+        cancelSeekHoldStart()
+        cancelSeekTick()
+        cancelSeekTapCommit()
+        thawNativeAfterHold()
+        seekSessionActive = false
+        seekHoldTicked = false
+        seekTapBaseMs = 0L
+        seekTapDeltaMs = 0L
+        heldSeekKeyCodes.clear()
+    }
+
+    /** seek 目标距片尾的安全余量：顶到 duration 会被判播完直接触发自动连播（普通播放器同款）。 */
+    private fun seekUpperBoundMs(duration: Long): Long =
+        (duration - SEEK_END_GUARD_MS).coerceAtLeast(0L)
+
+    /** 标记一次发给页面的异步 seek：生效前的旧位置回传将被丢弃（见 [Bridge.onVideoState]）。 */
+    private fun markPendingPageSeek(targetMs: Long) {
+        pendingPageSeekMs = targetMs
+        pendingPageSeekAt = android.os.SystemClock.elapsedRealtime()
+    }
+
+    /** 快进/快退预览进行中（抑制 updateProgress 用回传位置覆盖预览进度）。 */
+    private fun isSeekPreviewActive(): Boolean =
+        seekSessionActive || seekTickRunnable != null || seekTapCommitRunnable != null
+
+    /** 渲染预览位置：只动进度条与时间文字，不触发真实跳转。 */
+    private fun renderSeekPreview() {
+        if (durationMs <= 0L) return
+        binding.seekBar.setDuration(durationMs)
+        binding.seekBar.setPosition(seekTargetMs.coerceIn(0L, durationMs))
+        binding.textPosition.text = formatTime(seekTargetMs)
+        binding.textDuration.text = formatTime(durationMs)
+    }
+
+    /** 长按推进期间定格原生播放（幂等；松手提交时恢复，长按前就在暂停的用户保持暂停）。 */
+    private fun freezeNativeForHold() {
+        if (holdFrozen || !nativeMode) return
+        val player = nativePlayer ?: return
+        holdFrozenWasPlaying = player.playWhenReady
+        holdFrozen = true
+        if (holdFrozenWasPlaying) player.pause()
+    }
+
+    private fun thawNativeAfterHold() {
+        if (!holdFrozen) return
+        holdFrozen = false
+        val resume = holdFrozenWasPlaying
+        holdFrozenWasPlaying = false
+        if (resume && nativeMode) nativePlayer?.play()
     }
 
     /** 原生模式拖动进度条落点。 */
@@ -607,14 +857,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         }
         if (durationMs > 0) {
             binding.seekBar.setDuration(durationMs)
-            if (!seekingByUser) {
+            if (!seekingByUser && !isSeekPreviewActive()) {
                 binding.seekBar.setPosition(positionMs.coerceIn(0, durationMs))
                 binding.textPosition.text = formatTime(positionMs)
             }
             binding.textDuration.text = formatTime(durationMs)
         } else {
             binding.seekBar.setDuration(0)
-            if (!seekingByUser) {
+            if (!seekingByUser && !isSeekPreviewActive()) {
                 binding.seekBar.setPosition(0)
                 binding.textPosition.text = formatTime(0)
             }
@@ -787,6 +1037,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     }
 
     private fun switchEpisode(episode: CctvEpisode) {
+        // 切集清掉未决的快进/快退会话（挂起的延迟提交会把旧位置 seek 到新集上）
+        endSeekSession()
         // 原生优先：极速模式开且有 guid 就走 ExoPlayer；WebView 是兜底路径
         if (nativeVodEnabled && !webFallbackLocked && episode.guid.isNotBlank()) {
             startNativeEpisode(episode)
@@ -810,6 +1062,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         binding.textTitle.text = episodeTitle
         durationMs = 0L
         positionMs = 0L
+        pendingPageSeekMs = -1L
         currentQualityIndex = 0
         updateQualityButton(QUALITY_LABELS.first())
         showLoading(true)
@@ -876,6 +1129,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         binding.textTitle.text = episodeTitle
         durationMs = 0L
         positionMs = 0L
+        pendingPageSeekMs = -1L
         currentQualityIndex = 0
         selectedQualityUrl = null
         currentPlayInfo = null
@@ -1161,7 +1415,22 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                         AppLog.i(TAG, "loadStage metadata ${nowMs - loadStartAt}ms")
                     }
                 }
-                positionMs = (cur * 1000).toLong()
+                // 提交过页面 seek 时屏蔽"旧位置"回传（跳转生效前 cur 仍在旧处，
+                // 覆盖会把进度条拽回去）；回传落到目标附近=已生效，恢复接受
+                val reportedMs = (cur * 1000).toLong()
+                if (pendingPageSeekMs >= 0) {
+                    val settled = kotlin.math.abs(reportedMs - pendingPageSeekMs) <= PENDING_SEEK_SETTLE_MS
+                    val expired = nowMs - pendingPageSeekAt > PENDING_SEEK_TIMEOUT_MS
+                    if (settled || expired) {
+                        if (!settled) AppLog.w(TAG, "pendingSeek expired, accept reported=${reportedMs / 1000}s")
+                        pendingPageSeekMs = -1L
+                        positionMs = reportedMs
+                    } else {
+                        positionMs = pendingPageSeekMs
+                    }
+                } else {
+                    positionMs = reportedMs
+                }
                 pagePaused = paused
                 lastStateAt = nowMs
                 updatePlayPauseIcon(paused)
@@ -1380,6 +1649,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) handleBackKey()
             return true
         }
+        // 左右键的 UP 是快进/快退会话的收尾（长按提交/短按累计），会话激活期间必须拦下，
+        // 落到 super 会先被进度条/按钮消费成焦点导航
+        if (event.action == KeyEvent.ACTION_UP &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) &&
+            (seekSessionActive || event.keyCode in heldSeekKeyCodes)
+        ) {
+            return handleSeekKeyEvent(event)
+        }
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
 
         return when (event.keyCode) {
@@ -1407,20 +1684,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 }
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                // 进度条上左右同为快进快退（对齐主播放器"进度条聚焦时左右=seek"的行为，
-                // 长按按 repeat 连续快进）；离开进度条走上下层级导航（上→返回 / 下→播放），
-                // 不存在"左右永远在调进度走不出来"的问题。
-                if (buttonFocused) moveButtonFocus(-1) else {
-                    showController()
-                    seekBy(-SEEK_STEP_MS)
-                }
+                // 进度条上左右同为快进快退（对齐主播放器"进度条聚焦时左右=seek"的行为）；
+                // 按住/连按期间只推进进度条预览，松手（长按）或停顿 450ms（连续短按）才跳转。
+                // 长按会话推进中即使焦点被上下键带到按钮行，左右仍保持 seek 语境。
+                if (buttonFocused && !seekSessionActive) moveButtonFocus(-1) else handleSeekKeyEvent(event)
                 true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                if (buttonFocused) moveButtonFocus(1) else {
-                    showController()
-                    seekBy(SEEK_STEP_MS)
-                }
+                if (buttonFocused && !seekSessionActive) moveButtonFocus(1) else handleSeekKeyEvent(event)
                 true
             }
             KeyEvent.KEYCODE_DPAD_UP -> {
@@ -1541,6 +1812,24 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         private const val PROGRESS_INTERVAL_MS = 500L
         private const val CONTROLLER_HIDE_DELAY_MS = 5_000L
         private const val SEEK_STEP_MS = 10_000L
+
+        // ---- 快进/快退按键会话参数（对齐普通播放器 MyPlayerView/SeekSession 同款手感）----
+        /** 长按起表延迟：按住超过该时长才进入连续推进，短于它=短按。 */
+        private const val SEEK_HOLD_START_DELAY_MS = 400L
+        /** 短按连按停止后多久才提交跳转。 */
+        private const val SEEK_TAP_COMMIT_DELAY_MS = 450L
+        /** 长按推进 tick 间隔。 */
+        private const val SEEK_HOLD_TICK_MS = 40L
+        /** 长按走完全片所需时长（30 分钟剧约 7.2s/tick，2 小时电影约 28.8s/tick）。 */
+        private const val SEEK_HOLD_TRAVERSE_MS = 10_000L
+        /** seek 目标距片尾的安全余量：顶到 duration 会被判播完直接触发自动连播。 */
+        private const val SEEK_END_GUARD_MS = 1_000L
+
+        /** 页面 seek 生效判定：回传位置落到目标该容差内即视为已生效（回传 1s 一次，播放中还会前进）。 */
+        private const val PENDING_SEEK_SETTLE_MS = 1_500L
+
+        /** 页面 seek 生效等待上限：超时无条件恢复接受回传（防跳转失败进度条钉死）。 */
+        private const val PENDING_SEEK_TIMEOUT_MS = 3_000L
         private const val EXIT_INTERVAL_MS = 2_000L
         /** 返回键去重窗口：KeyEvent 与 OnBackInvoked 双通道各自派发时的间隔远小于此值。 */
         private const val BACK_DEDUPE_MS = 300L
