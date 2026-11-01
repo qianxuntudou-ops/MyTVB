@@ -230,7 +230,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         alwaysOnClockEnabled = PlayerSettingsStore.load(this).showAlwaysOnClock
         binding.alwaysClock.visibility = if (alwaysOnClockEnabled) View.VISIBLE else View.GONE
         // 「影视极速模式」：开=ExoPlayer 直连 h5e 流（H5e 原生解密），失败回退 WebView。
-        nativeVodEnabled = appSettings.getCachedString(KEY_CCTV_NATIVE_VOD) == "开"
+        // 存储值"开/关"口径与设置页 toggle 一致；未设置=默认开（对齐 MarmotLiveActivity 直播开关）。
+        nativeVodEnabled = appSettings.getCachedString(KEY_CCTV_NATIVE_VOD, null).let { it == null || it == "开" }
         setupButtons()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = handleBackKey()
@@ -866,6 +867,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
      */
     private fun startNativeEpisode(episode: CctvEpisode) {
         nativeLoadJob?.cancel()
+        com.mytvb.feature.cctv.h5e.CctvH5eDataSource.resetTrapFailures()
         // 与 startWebEpisode 相同的会话状态重置（WebView 路径的对照段）
         persistProgress()
         pageUrl = episode.pageUrl
@@ -995,11 +997,43 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             .setConnectTimeoutMs(8_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(true)
-        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true)
-        return ExoPlayer.Builder(this)
-            .setMediaSourceFactory(
-                androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true).apply {
+            // 同段解密三次失败=确定性解不出（wasm trap）：绕过 media3 错误传播链
+            // （其内部恢复/重试要拖几十秒），直接切 WebView 续播同一集。
+            fatalDecryptListener = { key ->
+                handler.post {
+                    val episode = episodes.firstOrNull { it.index == currentEpisodeIndex } ?: return@post
+                    if (!webFallbackLocked && nativeMode) {
+                        AppLog.w(TAG, "decryptFailedFast uri=$key -> web")
+                        fallbackToWebView(
+                            episode.copy(pageUrl = pageUrl, title = episodeTitle),
+                            "decrypt-failed"
+                        )
+                    }
+                }
+            }
+        }
+        // H5e 解密失败是确定性失败（wasm trap），重试只会带来多轮秒级退避
+        // 卡顿；立即放弃让 onPlayerError 走 nativeRetry/WebView 回退链。
+        // （media3 1.9.3：setLoadErrorHandlingPolicy + 单参 getRetryDelayMsFor，
+        //  返回 Long.MIN_VALUE=RESULT_DISABLE_RETRY 放弃重试。）
+        val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+            .setLoadErrorHandlingPolicy(
+                object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy() {
+                    override fun getRetryDelayMsFor(
+                        loadErrorInfo: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
+                    ): Long {
+                        var cause: Throwable? = loadErrorInfo.exception
+                        while (cause != null) {
+                            if (cause is com.mytvb.feature.cctv.h5e.H5eDecryptException) return Long.MIN_VALUE
+                            cause = cause.cause
+                        }
+                        return super.getRetryDelayMsFor(loadErrorInfo)
+                    }
+                }
             )
+        return ExoPlayer.Builder(this)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
     }
 
