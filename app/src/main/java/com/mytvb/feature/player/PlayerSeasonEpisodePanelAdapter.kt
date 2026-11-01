@@ -81,17 +81,22 @@ class PlayerSeasonEpisodePanelAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         init {
-            // 封面圆角与首页卡片一致（px15）
-            binding.imageCover.clipToOutline = true
-            binding.imageCover.outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(
-                        0,
-                        0,
-                        view.width,
-                        view.height,
-                        view.resources.getDimension(R.dimen.px15)
-                    )
+            // 封面圆角与首页卡片一致（px15）。圆角裁剪必须挂在外层封面容器
+            // （imageCover.parent，无 id 的 FrameLayout）而非 imageCover：底部
+            // 信息条是 imageCover 的兄弟 View，其渐变背景为直角且贴底铺满，
+            // 只裁 imageCover 时封面下缘的两个圆角会被它盖成直角。
+            (binding.imageCover.parent as? ViewGroup)?.let { coverBox ->
+                coverBox.clipToOutline = true
+                coverBox.outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setRoundRect(
+                            0,
+                            0,
+                            view.width,
+                            view.height,
+                            view.resources.getDimension(R.dimen.px15)
+                        )
+                    }
                 }
             }
             // 列表内按返回键回到分组 tab（不关闭弹窗）；DOWN/UP 都消费，
