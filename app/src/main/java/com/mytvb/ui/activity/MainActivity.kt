@@ -1,5 +1,7 @@
 package com.mytvb.ui.activity
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.Choreographer
@@ -33,10 +35,12 @@ import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.OnBackPressedHandler
 import com.mytvb.core.ui.base.UiScale
 import com.mytvb.model.user.UserDetailInfoModel
+import com.mytvb.model.video.VideoModel
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.category.CategoryFragment
 import com.mytvb.feature.cctv.CctvLiveFragment
 import com.mytvb.feature.cctv.vod.CctvVodFragment
+import com.mytvb.feature.detail.VideoDetailFragment
 import com.mytvb.feature.dynamic.DynamicFragment
 import com.mytvb.feature.home.HomeFragment
 import com.mytvb.feature.live.LiveFragment
@@ -115,7 +119,31 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val HOME_TAB_INDEX = 0
         private const val STARTUP_TAG = "AppStartup"
         private const val TEEN_REST_DIAG_TAG = "TeenRestDiag"
+        // 播放器等独立 Activity 长按菜单「视频详情」直达：宿主容器不可达时带参拉起主页
+        private const val EXTRA_DETAIL_AID = "extra_detail_aid"
+        private const val EXTRA_DETAIL_BVID = "extra_detail_bvid"
+
+        /**
+         * 从非 MainActivity 宿主（如播放页长按菜单）直达视频详情页：
+         * CLEAR_TOP+singleTop 复用栈底主页并替换掉其上的播放器，
+         * 主页 resume 后消费参数打开详情。无 aid 且无 bvid 时返回 false，
+         * 由调用方走原有兜底。
+         */
+        fun startWithVideoDetail(context: Context, video: VideoModel): Boolean {
+            if (video.aid <= 0L && video.bvid.isBlank()) return false
+            context.startActivity(
+                Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra(EXTRA_DETAIL_AID, video.aid)
+                    .putExtra(EXTRA_DETAIL_BVID, video.bvid)
+            )
+            return true
+        }
     }
+
+    // 外部 Activity 直达详情的待消费参数：onNewIntent/冷启动 intent 写入，resume 后消费
+    private var pendingDetailAid: Long = 0L
+    private var pendingDetailBvid: String? = null
 
     /** 青少年模式：休息遮罩倒计时 Handler，每秒刷新剩余时间。 */
     private val teenRestHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -190,6 +218,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
         (application as? MyBLBLApplication)?.ensureSessionRuntimeReady("MainActivity.onCreate/sessionState")
         restoredFromSavedState = savedInstanceState != null
+        // 冷启动直达详情（主页被系统回收后经 CLEAR_TOP 重建的场景）；旋转重建不带旧参数
+        if (savedInstanceState == null) {
+            pendingDetailAid = intent.getLongExtra(EXTRA_DETAIL_AID, 0L)
+            pendingDetailBvid = intent.getStringExtra(EXTRA_DETAIL_BVID)
+        }
         val t0 = SystemClock.elapsedRealtime()
         super.onCreate(savedInstanceState)
         AppLog.i(STARTUP_TAG, "STARTUP super.onCreate elapsed=${SystemClock.elapsedRealtime() - t0}ms")
@@ -1127,6 +1160,35 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     override fun onSaveInstanceState(outState: Bundle) {
         mainNavigationViewModel.onTabSelected(currentFragmentIndex)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pendingDetailAid = intent.getLongExtra(EXTRA_DETAIL_AID, 0L)
+        pendingDetailBvid = intent.getStringExtra(EXTRA_DETAIL_BVID)
+    }
+
+    override fun onResumeFragments() {
+        super.onResumeFragments()
+        consumePendingDetailRoute()
+    }
+
+    /**
+     * 消费外部 Activity（播放页长按菜单「视频详情」）的待处理路由：
+     * fragment manager 就绪后打开详情页；无参数时零开销直接返回。
+     */
+    private fun consumePendingDetailRoute() {
+        val aid = pendingDetailAid
+        val bvid = pendingDetailBvid
+        if (aid <= 0L && bvid.isNullOrBlank()) return
+        pendingDetailAid = 0L
+        pendingDetailBvid = null
+        AppLog.d("VideoRouteNav", "host resume open detail: aid=$aid, bvid=$bvid")
+        val fragment = when {
+            aid > 0L -> VideoDetailFragment.newInstance(aid)
+            else -> VideoDetailFragment.newInstance(bvid ?: return)
+        }
+        openInHostContainer(fragment)
     }
 
     override fun onResume() {

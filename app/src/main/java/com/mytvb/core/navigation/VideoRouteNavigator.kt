@@ -97,7 +97,10 @@ object VideoRouteNavigator {
             hostActivity.openInHostContainer(VideoDetailFragment.newInstance(video, playQueue))
             return true
         }
-        return false
+        // 播放器等独立 Activity 宿主拿不到主页容器：带参拉起主页直达详情
+        // （CLEAR_TOP 复用栈底主页并替换其上的播放器）。此入口语义是「看详情」，
+        // 失败也不能兜底成播放。
+        return MainActivity.startWithVideoDetail(context, video)
     }
 
     fun openHistory(
