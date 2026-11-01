@@ -108,7 +108,8 @@ object ImageLoader {
         val diskCacheHit: Boolean
     )
 
-    private data class FetchedBytes(
+    /** 网络取回的原始字节与磁盘缓存命中标记。 */
+    data class FetchedBytes(
         val bytes: ByteArray,
         val diskCacheHit: Boolean
     )
@@ -209,6 +210,52 @@ object ImageLoader {
             priority = priority
         )
     }
+
+    /**
+     * 评论图片大图查看器：
+     * - URL 按屏幕宽请求尺寸档位（GIF 除外——格式后缀会被 CDN 转成静图，保动画须原图）；
+     * - 先用已缓存的列表缩略图作占位，避免白屏干等，原图到达后替换；
+     * - 档位后缀异常时回退原始 URL（fallbackUrl 链路与其他 load 一致）。
+     */
+    fun loadCommentViewerPicture(
+        imageView: ImageView,
+        url: String?,
+        priority: Priority = Priority.VISIBLE_HIGH
+    ) {
+        val normalizedUrl = normalizeUrl(url)
+        val optimizedUrl = buildOptimizedViewerImageUrl(imageView, normalizedUrl)
+        val thumb = peekCommentPicture(url)
+        if (thumb != null) {
+            // 用 setImageDrawable 而非 setImageBitmap：查看器的 setImageBitmap 会用 bitmap
+            // 自身宽高覆盖布局 ratio，_1c 方图占位会把原图比例的布局拉成 1:1 再弹回。
+            imageView.setImageDrawable(BitmapDrawable(imageView.resources, thumb))
+        }
+        loadInto(
+            imageView = imageView,
+            url = optimizedUrl,
+            placeholderRes = 0,
+            errorRes = 0,
+            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null,
+            priority = priority,
+            keepCurrentDrawable = thumb != null
+        )
+    }
+
+    /**
+     * 评论图片缩略图的内存缓存查询（与 [loadCommentPicture] 同 key，绝不触发网络）：
+     * 大图查看器用它先显低清占位。
+     */
+    fun peekCommentPicture(url: String?): Bitmap? {
+        val optimizedUrl = buildOptimizedCommonImageUrl(url)
+        if (optimizedUrl.isBlank()) return null
+        return cache.get(optimizedUrl)
+    }
+
+    /**
+     * 网络取图字节（64MB 磁盘缓存 + B 站 CDN host 容错，不解码、不进 bitmap 内存缓存）：
+     * 供表情等自解码场景复用图片磁盘缓存，必须在工作线程调用。
+     */
+    fun fetchImageBytes(url: String): FetchedBytes = fetchBytes(url)
 
     fun loadDrawableRes(
         imageView: ImageView,
@@ -545,7 +592,8 @@ object ImageLoader {
         priority: Priority = Priority.NORMAL,
         onSuccess: ((Bitmap) -> Unit)? = null,
         onError: (() -> Unit)? = null,
-        deferUntilPreDraw: Boolean = false
+        deferUntilPreDraw: Boolean = false,
+        keepCurrentDrawable: Boolean = false
     ) {
         val ctx = imageView.context
         if (ctx is Activity && ctx.isDestroyed) return
@@ -595,9 +643,14 @@ object ImageLoader {
             return
         }
 
-        // 设占位图
-        if (placeholderRes != 0) imageView.setImageResource(placeholderRes)
-        else if (imageView.drawable !== placeholder) imageView.setImageDrawable(placeholder)
+        // 设占位图（keepCurrentDrawable：调用方已塞好低清占位，如大图查看器先显缩略图）
+        if (keepCurrentDrawable && imageView.drawable != null) {
+            // 保留当前 drawable，不覆盖
+        } else if (placeholderRes != 0) {
+            imageView.setImageResource(placeholderRes)
+        } else if (imageView.drawable !== placeholder) {
+            imageView.setImageDrawable(placeholder)
+        }
 
         if (!imageView.isAttachedToWindow) {
             deferLoadUntilAttached(imageView, url) {
@@ -612,7 +665,8 @@ object ImageLoader {
                     priority = priority,
                     onSuccess = onSuccess,
                     onError = onError,
-                    deferUntilPreDraw = deferUntilPreDraw
+                    deferUntilPreDraw = deferUntilPreDraw,
+                    keepCurrentDrawable = keepCurrentDrawable
                 )
             }
             return
@@ -631,7 +685,8 @@ object ImageLoader {
                     priority = priority,
                     onSuccess = onSuccess,
                     onError = onError,
-                    deferUntilPreDraw = false
+                    deferUntilPreDraw = false,
+                    keepCurrentDrawable = keepCurrentDrawable
                 )
             }
             return
@@ -1373,6 +1428,18 @@ object ImageLoader {
             else -> screenWidth
         }.coerceIn(480, 2560)
         return appendImageSuffix(normalized, "@${targetW}w.webp")
+    }
+
+    /**
+     * 评论图片大图查看器档位：按屏幕宽请求等比大图（CDN 不放大小图），
+     * 上限 2560 与通栏横幅一致。GIF 必须绕过——格式后缀会被 CDN 转成 webp 静图丢动画。
+     */
+    private fun buildOptimizedViewerImageUrl(imageView: ImageView, url: String): String {
+        if (!isBilibiliImageUrl(url)) return url
+        if (url.substringBefore('?').endsWith(".gif", ignoreCase = true)) return url
+        val screenWidth = imageView.resources.displayMetrics.widthPixels
+        val targetW = screenWidth.coerceIn(1048, 2560)
+        return appendImageSuffix(url, "@${targetW}w.webp")
     }
 
     private fun buildOptimizedAvatarUrl(url: String?): String {

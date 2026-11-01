@@ -167,7 +167,8 @@ internal class CommentImageViewerDialog(
         val picture = currentPictures[idx]
         binding.ivImage.resetViewport()
         binding.ivImage.setSourceDimensions(width = picture.width, height = picture.height)
-        ImageLoader.loadOriginal(binding.ivImage, picture.url)
+        // 按屏宽请求档位大图；若列表缩略图已在内存缓存，先显低清占位、到达后替换
+        ImageLoader.loadCommentViewerPicture(binding.ivImage, picture.url)
         binding.tvIndex.text = "${idx + 1}/${currentPictures.size}"
         binding.tvIndex.isVisible = currentPictures.size > 1
         updateNavigationUi()

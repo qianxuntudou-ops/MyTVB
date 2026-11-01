@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
 import com.mytvb.core.common.log.AppLog
-import com.mytvb.network.BiliClient
+import com.mytvb.core.ui.image.ImageLoader
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,15 +82,20 @@ internal object EmoteBitmapLoader {
 
             val job =
                 scope.launch {
+                    var diskCacheHit = false
                     val bmp =
                         runCatching {
-                            val bytes = withContext(Dispatchers.IO) { BiliClient.getBytes(normalized) }
-                            withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                            val fetched = withContext(Dispatchers.IO) { ImageLoader.fetchImageBytes(normalized) }
+                            diskCacheHit = fetched.diskCacheHit
+                            withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(fetched.bytes, 0, fetched.bytes.size) }
                         }.onFailure { t ->
                             AppLog.w(TAG, "load failed url=$normalized", t)
                         }.getOrNull()
 
                     if (bmp != null) {
+                        if (diskCacheHit) {
+                            AppLog.i(TAG, "emote disk hit bytes=${bmp.byteCount} url=${normalized.takeLast(50)}")
+                        }
                         synchronized(lock) {
                             cache.put(normalized, bmp)
                         }
