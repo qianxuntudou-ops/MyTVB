@@ -245,9 +245,10 @@
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/iv_stat_play"
-            android:layout_width="@dimen/px28"
-            android:layout_height="@dimen/px28"
-            app:srcCompat="@drawable/ic_play"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px38"
+            android:adjustViewBounds="true"
+            app:srcCompat="@drawable/ic_video_play_count"
             app:tint="@color/grey" />
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -260,10 +261,11 @@
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/iv_stat_comment"
-            android:layout_width="@dimen/px28"
-            android:layout_height="@dimen/px28"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px38"
+            android:adjustViewBounds="true"
             android:layout_marginStart="@dimen/px40"
-            app:srcCompat="@drawable/ic_comment"
+            app:srcCompat="@drawable/ic_video_danmaku"
             app:tint="@color/grey" />
 
         <androidx.appcompat.widget.AppCompatTextView

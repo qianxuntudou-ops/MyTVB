@@ -1,80 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 详情页内容 Tab 栏：「合集·推荐 / 推荐」与「评论 N」切换（对齐官方手机端简介/评论 tab 结构） -->
-<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 详情页内容 Tab 栏：「合集·推荐 / 推荐」与「评论 N」切换。
+     tab 块高 px80 + 焦点框 tab_item_round_background 与首页 TabLayout 同款同尺寸；
+     分割线贴 tab 块底（首页观感），共享 indicator 紧贴分割线、切换时平移动画滑动。 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:paddingStart="@dimen/px30"
-    android:paddingTop="@dimen/px20">
+    android:layout_height="wrap_content">
 
     <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/tab_content"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@drawable/tab_item_round_background"
-        android:clickable="true"
-        android:defaultFocusHighlightEnabled="false"
-        android:focusable="true"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:paddingStart="@dimen/px10"
-        android:paddingEnd="@dimen/px10"
-        android:paddingBottom="@dimen/px10">
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_tab_content"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="@dimen/px32" />
-
-        <View
-            android:id="@+id/indicator_content"
-            android:layout_width="@dimen/px56"
-            android:layout_height="@dimen/px6"
-            android:layout_marginTop="@dimen/px8"
-            android:background="@drawable/bg_tab_indicator" />
-    </androidx.appcompat.widget.LinearLayoutCompat>
-
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/tab_comment"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/px70"
-        android:background="@drawable/tab_item_round_background"
-        android:clickable="true"
-        android:defaultFocusHighlightEnabled="false"
-        android:focusable="true"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:paddingStart="@dimen/px10"
-        android:paddingEnd="@dimen/px10"
-        android:paddingBottom="@dimen/px10">
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px30"
+        android:paddingTop="@dimen/px20">
 
         <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tab_content"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:layout_height="@dimen/px80"
+            android:background="@drawable/tab_item_round_background"
+            android:clickable="true"
+            android:defaultFocusHighlightEnabled="false"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingStart="@dimen/px16"
+            android:paddingEnd="@dimen/px16">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/text_tab_content"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/px32"
+                android:textStyle="bold" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/tab_comment"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px80"
+            android:layout_marginStart="@dimen/px40"
+            android:background="@drawable/tab_item_round_background"
+            android:clickable="true"
+            android:defaultFocusHighlightEnabled="false"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/px16"
+            android:paddingEnd="@dimen/px16">
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_tab_comment"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/player_comment_title"
-                android:textSize="@dimen/px32" />
+                android:textSize="@dimen/px32"
+                android:textStyle="bold" />
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_tab_comment_count"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="@dimen/px10"
-                android:textSize="@dimen/px32" />
+                android:textSize="@dimen/px32"
+                android:textStyle="bold" />
         </androidx.appcompat.widget.LinearLayoutCompat>
-
-        <View
-            android:id="@+id/indicator_comment"
-            android:layout_width="@dimen/px56"
-            android:layout_height="@dimen/px6"
-            android:layout_marginTop="@dimen/px8"
-            android:background="@drawable/bg_tab_indicator" />
     </androidx.appcompat.widget.LinearLayoutCompat>
-</androidx.appcompat.widget.LinearLayoutCompat>
+
+    <!-- 分割线（对齐首页 tab 栏底部灰色细线，横贯整行，颜色同评论分割线惯例），贴 tab 块底 -->
+    <View
+        android:id="@+id/tab_divider"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/px1"
+        android:layout_gravity="bottom"
+        android:background="#6B6B6B" />
+
+    <!-- 共享横条：水平位置由 TabBarViewHolder 控制（选中 tab 下方居中，紧贴分割线），切换时滑动 -->
+    <View
+        android:id="@+id/tab_indicator"
+        android:layout_width="@dimen/px56"
+        android:layout_height="@dimen/px6"
+        android:layout_gravity="bottom|start"
+        android:layout_marginBottom="@dimen/px1"
+        android:background="@drawable/bg_tab_indicator" />
+</FrameLayout>

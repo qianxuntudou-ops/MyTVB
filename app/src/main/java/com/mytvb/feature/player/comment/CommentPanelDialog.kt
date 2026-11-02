@@ -34,7 +34,8 @@ import com.mytvb.core.ui.base.AppToast
  * 视频评论面板：贴屏幕右侧的竖版弹窗（对齐合集选集弹窗形态）。
  * 根评论列表与楼中楼两个 RecyclerView 复用同一 Adapter 与 RecycledViewPool，
  * 排序 tab（热门/最新）焦点联动切换；BACK 分层返回：
- * 图片查看器 → 楼中楼回根列表（聚焦原评论）→ 关面板。
+ * 图片查看器 → 楼中楼回根列表（聚焦原评论）→ 关面板；
+ * 详情页 initialThreadRpid 直达楼中楼时根列表层不存在，BACK/X 直接关面板回来源页。
  *
  * 加载语义对齐 blbl.cat3399.feature.video.comment.VideoCommentsPanelController
  * （token 竞态防护、endReached、fallbackTotalCount）；触底加载挂三处：
@@ -48,7 +49,8 @@ internal class CommentPanelDialog(
     /** 焦点在评论条目上按菜单键：打开该用户的主页弹窗（调用方负责先关本面板）。 */
     private val onOpenOwnerSpace: (VideoCommentItem) -> Unit,
     private val onDismissed: () -> Unit,
-    /** >0：showPanel 后直达该根评论的楼中楼（详情页评论 tab 点评论条进入；BACK 仍回面板根列表）。 */
+    /** >0：showPanel 后直达该根评论的楼中楼（详情页评论 tab 点评论条进入）。
+     *  直达模式下用户没经过根列表，BACK/X 直接关面板回来源页，不插入根列表一层。 */
     private val initialThreadRpid: Long = 0L,
 ) : AppCompatDialog(activity, R.style.DialogTheme) {
 
@@ -71,6 +73,9 @@ internal class CommentPanelDialog(
     private var threadFetchJob: Job? = null
     private var threadFetchToken: Int = 0
     private val threadState = VideoCommentThreadPagingState()
+
+    /** 当前楼中楼是 initialThreadRpid 直达进入（未经过根列表）——BACK/X 直接关面板。 */
+    private var threadEnteredDirectly = false
 
     private val commentsAdapter: VideoCommentsAdapter
     private val threadAdapter: VideoCommentsAdapter
@@ -95,13 +100,15 @@ internal class CommentPanelDialog(
             onDismissed()
         }
 
-        // 楼中楼的 X 只退评论详情回根列表（同 BACK 一层），不关整个面板
+        // 楼中楼的 X 与 BACK 同语义：直达模式关整个面板回来源页，普通模式只退评论详情回根列表
         binding.buttonClose.setOnClickListener {
-            if (imageViewer.isViewing) {
-                imageViewer.dismiss()
-            } else {
-                showRoot()
-                focusRoot(threadState.consumeReturnFocusRpid())
+            when {
+                imageViewer.isViewing -> imageViewer.dismiss()
+                threadEnteredDirectly -> this@CommentPanelDialog.cancel()
+                else -> {
+                    showRoot()
+                    focusRoot(threadState.consumeReturnFocusRpid())
+                }
             }
         }
 
@@ -195,9 +202,10 @@ internal class CommentPanelDialog(
         if (aid > 0L) {
             reloadComments()
         }
-        // 直达楼中楼：面板根列表照常后台加载（BACK 可回），焦点交给楼中楼列表
+        // 直达楼中楼：面板根列表照常后台加载，焦点交给楼中楼列表；
+        // 直达模式用户没经过根列表，BACK/X 直接关面板回来源页
         if (initialThreadRpid > 0L) {
-            openThread(initialThreadRpid)
+            openThread(initialThreadRpid, direct = true)
         }
 
         // 初始焦点：优先列表首项，空列表/加载失败落排序 tab；窗口焦点监听 + post 双兜底
@@ -238,6 +246,8 @@ internal class CommentPanelDialog(
     private fun handleBackNavigation() {
         when {
             imageViewer.isViewing -> imageViewer.dismiss()
+            // 直达楼中楼：用户没经过根列表，BACK 直接关面板回来源页
+            isThreadVisible() && threadEnteredDirectly -> this@CommentPanelDialog.cancel()
             isThreadVisible() -> {
                 showRoot()
                 focusRoot(threadState.consumeReturnFocusRpid())
@@ -264,12 +274,15 @@ internal class CommentPanelDialog(
         binding.buttonClose.visibility = View.GONE
         binding.topTitle.text = activity.getString(R.string.player_comment_title)
         threadState.clearRoot()
+        // 已回到根列表：后续进楼中楼都是普通路径，BACK 恢复回根列表
+        threadEnteredDirectly = false
         commentsAdapter.invalidateSizing()
     }
 
-    private fun openThread(rootRpid: Long) {
+    private fun openThread(rootRpid: Long, direct: Boolean = false) {
         val safeRoot = rootRpid.takeIf { it > 0L } ?: return
         threadState.open(safeRoot)
+        threadEnteredDirectly = direct
         binding.recyclerComments.visibility = View.GONE
         binding.recyclerCommentThread.visibility = View.VISIBLE
         binding.sortRow.visibility = View.GONE
@@ -461,7 +474,10 @@ internal class CommentPanelDialog(
                     if (token != commentsFetchToken) return@launch
 
                     commentsState.replace(pageData)
-                    updateTitle(pageData.totalCount.coerceAtLeast(0).toLong())
+                    // 直达模式下根列表在后台加载，加载完不能覆盖楼中楼的「评论详情」标题
+                    if (!isThreadVisible()) {
+                        updateTitle(pageData.totalCount.coerceAtLeast(0).toLong())
+                    }
 
                     commentsAdapter.setItems(commentsState.items)
                     if (commentsState.items.isEmpty()) {

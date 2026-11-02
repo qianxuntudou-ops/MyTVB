@@ -46,6 +46,15 @@ internal class VideoCommentsAdapter(
     private val onTopEdge: () -> Unit = {},
     // true=楼中楼面板：主评论正文恒展开、不出"展开/收起"（点进详情就是要看全文）
     private val expandMessageFully: Boolean = false,
+    // 第一项判定（按"上"回排序 tab 的触发条件）：面板=列表第 0 项；
+    // 详情页复用 Vh 时列表位置恒>0，注入"主列表上一行是排序行"的判定
+    private val isTopEdgeItem: (RecyclerView.ViewHolder) -> Boolean = { it.bindingAdapterPosition == 0 },
+    // 最后一项判定（按"下"消费防飞出）：详情页复用 Vh 时 bindingAdapter 恒 null
+    // （内层 holder 未被主列表 attach），同样注入主列表位置判定
+    private val isBottomEdgeItem: (RecyclerView.ViewHolder) -> Boolean = { holder ->
+        val count = holder.bindingAdapter?.itemCount ?: -1
+        count > 0 && holder.bindingAdapterPosition == count - 1
+    },
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private val items = ArrayList<VideoCommentItem>()
     private val requestedNotePictures = HashSet<Long>()
@@ -110,7 +119,7 @@ internal class VideoCommentsAdapter(
             parent,
             false
         )
-        return Vh(binding, onTopEdge)
+        return Vh(binding, onTopEdge, isTopEdgeItem, isBottomEdgeItem)
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -167,6 +176,11 @@ internal class VideoCommentsAdapter(
     class Vh(
         private val binding: ItemCommentBinding,
         private val onTopEdge: () -> Unit,
+        private val isTopEdgeItem: (RecyclerView.ViewHolder) -> Boolean = { it.bindingAdapterPosition == 0 },
+        private val isBottomEdgeItem: (RecyclerView.ViewHolder) -> Boolean = { holder ->
+            val count = holder.bindingAdapter?.itemCount ?: -1
+            count > 0 && holder.bindingAdapterPosition == count - 1
+        },
     ) : RecyclerView.ViewHolder(binding.root) {
         private var boundRpid: Long = 0L
         private var rootClickFromTouch = false
@@ -179,7 +193,7 @@ internal class VideoCommentsAdapter(
             binding.clickView.setOnKeyListener { _, keyCode, event ->
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (event.action == KeyEvent.ACTION_DOWN && bindingAdapterPosition == 0) {
+                        if (event.action == KeyEvent.ACTION_DOWN && isTopEdgeItem(this)) {
                             onTopEdge()
                             true
                         } else {
@@ -188,8 +202,7 @@ internal class VideoCommentsAdapter(
                     }
                     KeyEvent.KEYCODE_DPAD_DOWN -> {
                         if (event.action == KeyEvent.ACTION_DOWN) {
-                            val count = bindingAdapter?.itemCount ?: -1
-                            if (count > 0 && bindingAdapterPosition == count - 1) {
+                            if (isBottomEdgeItem(this)) {
                                 true
                             } else {
                                 false
@@ -341,15 +354,19 @@ internal class VideoCommentsAdapter(
             binding.clickView.setOnClickListener {
                 val wasTouch = rootClickFromTouch
                 rootClickFromTouch = false
-                val shouldExpand = !isExpanded && isMessageEllipsized(binding.tvMessage)
+                val ellipsized = !isExpanded && isMessageEllipsized(binding.tvMessage)
                 when {
-                    shouldExpand -> onToggleExpand(item.rpid)
-                    // 触摸点正文 = 进楼中楼等既有行为；收起走 tv_expand 自己的点击
+                    // 触摸：点未展开长评先展开全文；收起走 tv_expand 自己的点击
+                    wasTouch && ellipsized -> onToggleExpand(item.rpid)
+                    // 触摸点正文 = 进楼中楼等既有行为
                     wasTouch -> onTouchClick(item)
-                    // 焦点模式展开后：无图可开、无楼可进（原本只剩 toast/无动作）时 OK 收起
-                    // （楼中楼面板 expandFully 恒展开，无收起语义，OK 走 onClick）
-                    !expandFully && isExpanded && item.pictures.isEmpty() && item.noteCvid <= 0L &&
-                        !(item.canOpenThread && item.replyCount > 0) -> onToggleExpand(item.rpid)
+                    // 焦点 OK 主语义对齐评论面板：带图看图、有楼进楼中楼，
+                    // 长评不再挡在前面先展开（详情页/面板统一，进楼即看全文）
+                    item.pictures.isNotEmpty() || item.noteCvid > 0L -> onClick(item)
+                    item.canOpenThread && item.replyCount > 0 -> onClick(item)
+                    // 无图无楼时长评展开/收起（楼中楼面板 expandFully 恒展开，走 onClick）
+                    !expandFully && (ellipsized || isExpanded) -> onToggleExpand(item.rpid)
+                    // 无图无楼短评：toast
                     else -> onClick(item)
                 }
             }

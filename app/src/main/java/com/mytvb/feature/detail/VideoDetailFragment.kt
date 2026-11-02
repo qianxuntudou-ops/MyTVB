@@ -295,7 +295,19 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                         } else {
                             R.id.tab_content
                         }
-                        _binding?.recyclerView?.findViewById<View>(tabId)?.requestFocus()
+                        val binding = _binding ?: return
+                        val tab = binding.recyclerView.findViewById<View>(tabId)
+                        // tab 已布局：直接聚焦；屏外（评论深滚后 TabBar 行被回收）时
+                        // BACK 已被本回调消费，必须滚动回去异步聚焦，静默失败=按键无反应
+                        if (tab != null && tab.requestFocus()) return
+                        val tabPos = contentAdapter.currentList
+                            .indexOfFirst { it is VideoDetailContentAdapter.Row.TabBar }
+                        if (tabPos >= 0) {
+                            binding.recyclerView.scrollToPosition(tabPos)
+                            binding.recyclerView.post {
+                                _binding?.recyclerView?.findViewById<View>(tabId)?.requestFocus()
+                            }
+                        }
                     } else {
                         // tab 栏/Header/触摸无焦点：按默认退出详情页
                         isEnabled = false
