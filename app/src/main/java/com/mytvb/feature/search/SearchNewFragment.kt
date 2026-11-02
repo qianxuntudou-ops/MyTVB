@@ -368,7 +368,9 @@ class SearchNewFragment :
             tabFocusable = true,
             onNavigateDown = { focusCurrentResultContent() },
             // tab 上方是结果搜索框；不传会走框架默认，焦点越层逃去主页侧栏
-            onNavigateUp = { focusResultHeader() }
+            onNavigateUp = { focusResultHeader() },
+            // 首个 tab 左键：tab 栏已被扩展恒消费（不传回调=焦点原地不动），显式指到主边栏
+            onNavigateLeft = ::focusSidebarCurrentTabFromTab
         )
         PagePerfLogger.mark("Search", "result_setup_end", setupStartMs)
         return adapter
@@ -785,7 +787,9 @@ class SearchNewFragment :
             tabFocusable = true,
             onNavigateDown = { focusCurrentResultContent() },
             // tab 上方是结果搜索框；不传会走框架默认，焦点越层逃去主页侧栏
-            onNavigateUp = { focusResultHeader() }
+            onNavigateUp = { focusResultHeader() },
+            // 首个 tab 左键：tab 栏已被扩展恒消费（不传回调=焦点原地不动），显式指到主边栏
+            onNavigateLeft = ::focusSidebarCurrentTabFromTab
         )
         viewModel.searchPageStates.value.forEach { (type, state) ->
             adapter.submitState(type, state.items, state.loading, state.hasMore)
@@ -920,6 +924,11 @@ class SearchNewFragment :
             type = adapter.getPageType(binding.viewPagerResult.currentItem),
             anchorView = anchorView
         )
+    }
+
+    /** 首个 tab 上按 LEFT：回到主边栏当前激活按钮（搜索页=搜索按钮，与卡片左边缘兜底一致）。 */
+    private fun focusSidebarCurrentTabFromTab(): Boolean {
+        return mainActivity?.focusSidebarCurrentTab() == true
     }
 
     private fun focusResultHeader(
