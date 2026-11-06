@@ -635,14 +635,15 @@ internal class VideoDetailContentAdapter(
             },
             onItemDpad = { view, keyCode, event ->
                 val handled = tvFocusController?.handleKey(view, keyCode, event) == true
-                // 合集卡片按"上"先回本 lane 的正/反序按钮（不再直接飞 Tab 栏）
-                if (!handled &&
+                when {
+                    // 焦点已移动（含左右键），必须消费事件：返回 false 会让系统
+                    // 兜底 focusSearch 从新焦点再搜一格，表现为每次按键跳两个
+                    handled -> true
+                    // 合集卡片按"上"先回本 lane 的正/反序按钮（不再直接飞 Tab 栏）
                     keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-                    event.action == android.view.KeyEvent.ACTION_DOWN
-                ) {
-                    binding.buttonOrder.requestFocus()
-                } else {
-                    false
+                        event.action == android.view.KeyEvent.ACTION_DOWN ->
+                        binding.buttonOrder.requestFocus()
+                    else -> false
                 }
             }
         )
