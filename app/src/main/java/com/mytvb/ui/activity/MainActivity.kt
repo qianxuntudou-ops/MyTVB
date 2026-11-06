@@ -1219,6 +1219,18 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             binding.root.post {
                 val focused = currentFocus
                 AppLog.d("FocusTrace", "restoreFocusAfterExternalReturn focused=${focused?.javaClass?.simpleName}#${focused?.id}")
+                // CCTV 直播 tab 不持有 Fragment（点选时直接拉起直播 Activity）：进入直播后
+                // 侧栏选中高亮停在直播按钮，但内容区仍是进入前的页面；焦点留在直播按钮上
+                // 合法存在，下方"无焦点才兜底"永远不触发——返回时须把高亮/焦点恢复到实际
+                // 显示的 tab（issue#106：退出直播后左侧焦点仍显示在直播上）
+                if (binding.myTabView.getCurrentSelectedIndex() == CCTV_TAB_INDEX &&
+                    currentFragmentIndex != CCTV_TAB_INDEX
+                ) {
+                    AppLog.d("FocusTrace", "restoreTabHighlightAfterLiveExit index=$currentFragmentIndex")
+                    binding.myTabView.restoreTabHighlight(currentFragmentIndex)
+                    binding.myTabView.focusCurrentTab()
+                    return@post
+                }
                 if (focused == null || !focused.isShown) {
                     focusSidebarCurrentTab()
                 }
