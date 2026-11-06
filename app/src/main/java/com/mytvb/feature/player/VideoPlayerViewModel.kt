@@ -933,22 +933,26 @@ class VideoPlayerViewModel(
                 // 「显示观看人数」关闭时不显示：清空并跳过拉取（读内存缓存单键，设置变更即时感知）。
                 val watchingEnabled =
                     appSettings.getCachedString(PlayerSettingsStore.KEY_SHOW_ONLINE_WATCHING) != "关"
-                if (bvid.isNullOrBlank() || cid <= 0L || !watchingEnabled) {
+                // 番剧/影视分集优先取自 pgc/web/season/section（不下发 bvid），入口 bvid 恒空；
+                // 与空降助手同款 aid 本地换算兜底（见 prepareDeferredSponsorLoad），否则全程不拉取。
+                val effectiveBvid = bvid?.takeIf { it.isNotBlank() }
+                    ?: currentAid?.takeIf { it > 0L }?.let { AvToBv.convert(it) }
+                if (effectiveBvid == null || cid <= 0L || !watchingEnabled) {
                     if (lastKey != null) {
                         lastKey = null
                         _onlineWatching.value = null
                     }
                 } else {
-                    val key = "$bvid#$cid"
+                    val key = "$effectiveBvid#$cid"
                     val now = SystemClock.elapsedRealtime()
                     if (key != lastKey) {
                         lastKey = key
                         _onlineWatching.value = null
                         lastFetchMs = now
-                        fetchOnlineWatching(bvid, cid)
+                        fetchOnlineWatching(effectiveBvid, cid)
                     } else if (now - lastFetchMs >= ONLINE_WATCHING_REFRESH_MS) {
                         lastFetchMs = now
-                        fetchOnlineWatching(bvid, cid)
+                        fetchOnlineWatching(effectiveBvid, cid)
                     }
                 }
                 delay(ONLINE_WATCHING_TICK_MS)
