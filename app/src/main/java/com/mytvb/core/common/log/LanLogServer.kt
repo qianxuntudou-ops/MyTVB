@@ -1,6 +1,7 @@
 package com.mytvb.core.common.log
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.SystemClock
 import com.google.gson.Gson
@@ -103,7 +104,7 @@ class LanLogServer(private val context: Context) {
         lastSnapshotAtMs = 0
     }
 
-    /** 展示用完整地址（首个非环回 IPv4）。 */
+    /** 展示用完整地址（当前默认网络 IPv4，见 firstLanIpv4）。 */
     fun buildUrl(): String? {
         val p = port ?: return null
         val ip = firstLanIpv4() ?: return null
@@ -342,16 +343,43 @@ class LanLogServer(private val context: Context) {
         }
     }
 
-    /** 取首个非环回 IPv4（wlan 优先枚举顺序，局域网场景够用）。 */
+    /**
+     * 取对外可用的局域网 IPv4（issue#98：海信电视曾取到 Wi-Fi Direct 接口 p2p0 的
+     * 192.168.49.1，手机扫码连不上日志页）。
+     * 首选 ConnectivityManager 当前默认网络的 LinkProperties——系统标记的真正路由网络；
+     * 兜底走网卡枚举，排除 p2p 类接口名，并按 wlan→eth 排序（对齐 NvaDevice.localIpv4，
+     * 有线/无线均可用，避免多网卡取到虚拟网卡）。
+     */
     private fun firstLanIpv4(): String? {
+        runCatching {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val linkProps = cm?.activeNetwork?.let { cm.getLinkProperties(it) }
+            val activeIp = linkProps?.linkAddresses
+                ?.mapNotNull { it.address }
+                ?.filterIsInstance<Inet4Address>()
+                ?.firstOrNull { !it.isLoopbackAddress }
+                ?.hostAddress
+            if (activeIp != null) return activeIp
+        }
         return runCatching {
-            NetworkInterface.getNetworkInterfaces().asSequence()
-                .filter { it.isUp && !it.isLoopback }
-                .flatMap { it.inetAddresses.asSequence() }
-                .filterIsInstance<Inet4Address>()
-                .filter { !it.isLoopbackAddress }
-                .map { it.hostAddress }
-                .firstOrNull()
+            val candidates =
+                NetworkInterface.getNetworkInterfaces().asSequence()
+                    .filter { it.isUp && !it.isLoopback }
+                    // Wi-Fi Direct / P2P 接口（p2p0、p2p-wlan0-x 等）有自己的 192.168.49.x
+                    // 网段但手机实际连的是 wlan0 所在网络，直接排除
+                    .filter { !it.name.contains("p2p", ignoreCase = true) }
+                    .flatMap { nic ->
+                        nic.inetAddresses.asSequence()
+                            .filterIsInstance<Inet4Address>()
+                            .filter { !it.isLoopbackAddress }
+                            .map { nic.name to it.hostAddress }
+                    }
+                    .toList()
+            val preferred =
+                candidates.firstOrNull { (name, _) -> name.startsWith("wlan") }
+                    ?: candidates.firstOrNull { (name, _) -> name.startsWith("eth") }
+                    ?: candidates.firstOrNull()
+            preferred?.second
         }.getOrNull()
     }
 }

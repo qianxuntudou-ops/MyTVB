@@ -38,7 +38,14 @@ import com.mytvb.model.video.quality.VideoCodecEnum
 object PlayerInstancePool {
     private const val TAG = "PlayerInstancePool"
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
-    private const val TARGET_BUFFER_BYTES = 20 * 1024 * 1024 // 20MB
+    // 缓冲字节硬上限（issue#98 OOM）：海信 MT9655 等电视 Java heap 仅 ~192MB，4K60 高码率
+    // （AVC/AV1/HEVC 8~22Mbps 实测）下"按时间"参数（40s 前向+回看）合法就能占 100~190MB
+    // Java heap——1080p 时代定的窗口在 4K60 码率下就是内存炸弹（华为真机 dump 实证：
+    // 2594 个 64KB allocator 段=162MB，全部为合法缓冲持有，无泄漏；旧配置 50s+50s 在
+    // 13Mbps 下即 146MB，顶死海信 192MB heap 必 OOM）。改为字节上限优先后此值真正生效；
+    // 96MB 在 22Mbps 极端码率下仍有 35s 数据（远超 1s 起播门槛），8Mbps 常规 4K 下 96s，
+    // 并给 largeHeap 不足的电视留足 heap 裕量。1080P 低码率场景摸不到上限，体验无变化。
+    private const val TARGET_BUFFER_BYTES = 96 * 1024 * 1024 // 96MB
 
     // PCM AudioTrack 缓冲：日志里 500ms 缓冲出现 underrun，放宽到 750-2000ms 抵御软解/GC 抢占。
     private const val MIN_PCM_BUFFER_DURATION_US = 750_000
@@ -302,11 +309,14 @@ object PlayerInstancePool {
                 if (isFastNetwork) WIFI_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS else CELLULAR_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
             )
             .setTargetBufferBytes(TARGET_BUFFER_BYTES)
-            .setPrioritizeTimeOverSizeThresholds(true)
-            // blbl 同款：保留约一个前向缓冲窗的回看数据（从关键帧起），
-            // 单击后退/来回扫这类"落在已播区间内"的 seek 直接命中内存缓冲，
-            // 不再丢弃数据重新走网络
-            .setBackBuffer(DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, true)
+            // 字节上限优先（issue#98 OOM）：原 true 让时间窗架空 20MB 字节上限，4K60 下
+            // 前向 40s(~100MB)+回看 50s(~125MB) 全灌进 Java heap 必然 OOM；改 false 后
+            // totalBytesAllocated 触顶即停前向加载。低码率场景仍由时间窗主导，无感。
+            .setPrioritizeTimeOverSizeThresholds(false)
+            // 回看缓冲收窄（issue#98 OOM）：回看内存只按时长裁剪、不受字节上限约束，
+            // DEFAULT_MAX_BUFFER_MS(50s) 在 20Mbps 下独占 ~125MB。12s(~30MB) 仍覆盖
+            // "单击后退/来回扫"的常见回看距离，命中内存缓冲的收益保留。
+            .setBackBuffer(12_000, true)
             .build()
         // 无缝清晰度的组间钦点（锁定 qn/codec 直接选对应编码组，绕开 media3 组间比较的
         // 不可控行为——issue#101 实测偏好注入方向正确仍被 AV1 组反超，见该类注释）。
