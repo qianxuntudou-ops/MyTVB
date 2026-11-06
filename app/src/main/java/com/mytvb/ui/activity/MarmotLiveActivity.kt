@@ -482,18 +482,25 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
      * 首帧回调掀盖；12s 无首帧或连续播放错误回退 WebView。
      */
     private fun startNativeLive(channelId: String, quality: com.mytvb.feature.cctv.CctvLiveQuality) {
-        stopNativeLivePlayer()
         if (nativeLiveBrokenForSession) {
+            stopNativeLivePlayer()
             playCctvViaWebView(channelId)
             return
         }
-        // 原生视图顶替 WebView（遮罩之下切换，用户无感）
-        binding.webviewWrapper.visibility = View.GONE
-        binding.nativePlayerView.visibility = View.VISIBLE
+        // 旧播放器保持到新台解析成功再释放（issue#106 换台提速）：release 耗时移出换台
+        // 关键路径，与 vdn 解析并行；解析期间旧画面在遮罩之下保持，失败回退时由
+        // fallbackToWebView → playCctvViaWebView 内的 stop 处置旧播放器。
+        // 取消上一轮解析 job（快速连按换台）：原由 stopNativeLivePlayer 开头承担，
+        // 延迟释放后须显式取消，防两轮解析并发以后完成者播错频道
+        nativeLiveJob?.cancel()
         showVideoCover(pollWeb = false) {
+            updateVideoCoverText(getString(R.string.cctv_stage_resolving))
             nativeLiveJob = CoroutineScope(Dispatchers.Main).launch {
                 val stream = try {
                     com.mytvb.feature.cctv.h5e.CctvVdnResolver.resolveLive(channelId, quality.bRange)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // 被新一轮换台/退出取消：静默终止，不得走回退（否则旧频道被误拉起 WebView）
+                    return@launch
                 } catch (e: Exception) {
                     if (isFinishing || isDestroyed) return@launch
                     AppLog.e(TAG, "vdn 解析失败 channel=$channelId: ${e.message}")
@@ -501,6 +508,15 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                     return@launch
                 }
                 if (isFinishing || isDestroyed) return@launch
+                updateVideoCoverText(getString(R.string.cctv_stage_connecting))
+                // 解析成功：此刻才释放旧播放器并切换视图形态（原生视图顶替 WebView，遮罩之下用户无感）
+                stopNativeLivePlayer()
+                binding.webviewWrapper.visibility = View.GONE
+                binding.nativePlayerView.visibility = View.VISIBLE
+                // 起播预取（与播放器构建/prepare 并行）：master+媒体清单+尾部 2 分片（已解密）
+                // 入一次性交接缓存，ExoPlayer 首个清单/分片请求即命中——把清单两次往返与
+                // 首段下载解密从起播关键路径移除（借鉴 nTv startup gate 机制）
+                com.mytvb.feature.cctv.h5e.CctvLivePrefetcher.prefetchAsync(stream.hlsUrl, stream.referer)
                 val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
                     .setDefaultRequestProperties(mapOf("Referer" to stream.referer))
                     .setAllowCrossProtocolRedirects(true)
@@ -511,12 +527,13 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 // 淘汰最老分片），targetOffset 不能超过窗口——15s 无处可退会致播放点钉死
                 // 淘汰线，周期性微 BUFFERING（0.2~1s 一次=用户感知卡顿）。
                 // targetOffset 8s：播放点距淘汰线恒留 4s（一分片下载+解密耗时）；
-                // 起播/二次缓冲门槛 4s（窗口小，攒更多只会拖慢起播误触 12s 超时）。
+                // 起播门槛 1.5s：预取器已把尾段解密就绪，起播无需攒 4s（首段 4s 到手即播）；
+                // 二次缓冲门槛保持 4s（网络抖动时多攒一分片，防连环 BUFFERING）。
                 val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
                     .setBufferDurationsMs(
                         /* minBufferMs = */ 10_000,
                         /* maxBufferMs = */ 15_000,
-                        /* bufferForPlaybackMs = */ 4_000,
+                        /* bufferForPlaybackMs = */ 1_500,
                         /* bufferForPlaybackAfterRebufferMs = */ 4_000
                     )
                     .build()
@@ -547,6 +564,7 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 player.playWhenReady = true
                 player.prepare()
                 mainHandler.postDelayed(nativeStartupTimeoutRunnable, NATIVE_STARTUP_TIMEOUT_MS)
+                updateVideoCoverText(getString(R.string.cctv_stage_buffering))
                 AppLog.i(TAG, "原生直拉已起播请求 url=${stream.hlsUrl.take(80)}")
             }
         }
@@ -559,19 +577,22 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
      * 首帧掀盖；超时/连续错误回退整页 WebView（同 CCTV 原生的重试与熔断节奏）。
      */
     private fun startCmgNativeLive(pid: String, cnlid: String) {
-        stopNativeLivePlayer()
         if (nativeLiveBrokenForSession) {
+            stopNativeLivePlayer()
             fallbackCurrentToWebView("央视频原生已被熔断")
             return
         }
-        binding.webviewWrapper.visibility = View.GONE
-        binding.nativePlayerView.visibility = View.VISIBLE
+        // 同 CCTV 原生路径：旧播放器延迟到三步签名链解析成功后释放（issue#106 换台提速）
+        nativeLiveJob?.cancel()
         showVideoCover(pollWeb = false) {
+            updateVideoCoverText(getString(R.string.cctv_stage_resolving))
             nativeLiveJob = CoroutineScope(Dispatchers.Main).launch {
                 val stream = try {
                     com.mytvb.feature.cctv.cmg.CmgLiveStreamResolver.resolveLive(
                         this@MarmotLiveActivity, pid, cnlid
                     )
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    return@launch
                 } catch (e: Exception) {
                     if (isFinishing || isDestroyed) return@launch
                     AppLog.e(TAG, "CMG 解析失败 pid=$pid: ${e.message}")
@@ -579,6 +600,11 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                     return@launch
                 }
                 if (isFinishing || isDestroyed) return@launch
+                updateVideoCoverText(getString(R.string.cctv_stage_connecting))
+                // 解析成功：此刻才释放旧播放器并切换视图形态
+                stopNativeLivePlayer()
+                binding.webviewWrapper.visibility = View.GONE
+                binding.nativePlayerView.visibility = View.VISIBLE
                 // 配置 CMG 解密会话（自造 tag + 服务器时钟偏移 + 播放页 href）
                 runCatching {
                     com.mytvb.feature.cctv.cmg.CmgNativeBridge.configureSession(
@@ -621,6 +647,7 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
                 player.playWhenReady = true
                 player.prepare()
                 mainHandler.postDelayed(nativeStartupTimeoutRunnable, NATIVE_STARTUP_TIMEOUT_MS)
+                updateVideoCoverText(getString(R.string.cctv_stage_buffering))
                 AppLog.i(TAG, "央视频原生直拉已起播请求 url=${stream.hlsUrl.take(90)} tag=${stream.playerTag}")
             }
         }
@@ -1576,6 +1603,7 @@ $scriptTags
         mainHandler.removeCallbacks(switchChannelRunnable)
         mainHandler.removeCallbacks(teenModeTicker)
         mainHandler.removeCallbacks(hideControllerRunnable)
+        com.mytvb.feature.cctv.h5e.CctvLivePrefetcher.cancel()
         stopNativeLivePlayer()
         com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.releaseThreadContext()
         webEngine?.let { engine ->

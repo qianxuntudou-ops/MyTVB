@@ -73,6 +73,9 @@
     <string name="activity_no_quality_options">No quality options for this channel</string>
     <string name="activity_remote_switch_channel_tip">Use the remote D-pad to switch channels quickly</string>
     <string name="activity_initializing">Initializing…</string>
+    <string name="cctv_stage_resolving">Resolving channel…</string>
+    <string name="cctv_stage_connecting">Connecting…</string>
+    <string name="cctv_stage_buffering">Buffering…</string>
     <string name="activity_loading_web">Loading web page…</string>
     <string name="activity_loading_video">Loading video…</string>
     <string name="activity_verifying_request">Requesting verification…</string>

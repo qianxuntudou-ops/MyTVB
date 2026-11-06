@@ -76,6 +76,9 @@
     <string name="activity_no_quality_options">当前频道暂无画质选项</string>
     <string name="activity_remote_switch_channel_tip">已支持遥控器上下左右可快速切台</string>
     <string name="activity_initializing">正在初始化…</string>
+    <string name="cctv_stage_resolving">正在解析频道…</string>
+    <string name="cctv_stage_connecting">正在连接视频…</string>
+    <string name="cctv_stage_buffering">正在缓冲…</string>
     <string name="activity_loading_web">正在加载网页…</string>
     <string name="activity_loading_video">正在加载视频…</string>
     <string name="activity_verifying_request">正在请求验证…</string>

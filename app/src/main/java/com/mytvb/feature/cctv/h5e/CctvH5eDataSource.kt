@@ -60,6 +60,15 @@ class CctvH5eDataSource(
     override fun open(dataSpec: DataSpec): Long {
         close()
         openedUri = dataSpec.uri
+        // 直播起播预取交接（issue#106 换台提速）：命中（清单原文/已解密分片）直接回放，
+        // 跳过上游网络与解密。take 即删——媒体清单仅首次请求命中，reload 走网络。
+        // 点播（vodMode）URL 与直播不同命名空间，天然不会误命中。
+        CctvLivePrefetcher.take(dataSpec.uri.toString())?.let { prefetched ->
+            decryptedBuffer = prefetched
+            bufferOffset = 0
+            AppLog.i(TAG, "预取命中 uri=${dataSpec.uri.lastPathSegment} size=${prefetched.size}")
+            return prefetched.size.toLong()
+        }
         upstream.open(dataSpec)
 
         // 整段读入（HLS 分片响应有 Content-Length；流式兜底读到 EOF）

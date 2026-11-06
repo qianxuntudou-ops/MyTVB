@@ -46,6 +46,11 @@ object CctvVdnResolver {
             .build()
     }
 
+    /** 解析结果短缓存（issue#106 换台提速：来回切台秒切）。nTv 同链路缓存 10 分钟，说明 URL 有效期充足，保守取 2 分钟。 */
+    private const val RESOLVE_CACHE_MS = 120_000L
+    private data class CacheEntry(val stream: CctvLiveStream, val at: Long)
+    private val resolveCache = HashMap<String, CacheEntry>()
+
     private fun md5(s: String): String {
         val d = MessageDigest.getInstance("MD5").digest(s.toByteArray())
         return d.joinToString("") { "%02x".format(it) }
@@ -60,6 +65,16 @@ object CctvVdnResolver {
      */
     suspend fun resolveLive(channelId: String, bRange: String?): CctvLiveStream =
         withContext(Dispatchers.IO) {
+            val cacheKey = "$channelId|${bRange.orEmpty()}"
+            synchronized(resolveCache) {
+                resolveCache[cacheKey]?.let { entry ->
+                    if (System.currentTimeMillis() - entry.at < RESOLVE_CACHE_MS) {
+                        AppLog.i(TAG, "vdn 解析缓存命中 channel=$channelId bRange=$bRange age=${System.currentTimeMillis() - entry.at}ms")
+                        return@withContext entry.stream
+                    }
+                    resolveCache.remove(cacheKey)
+                }
+            }
             val uid = md5(System.currentTimeMillis().toString() + Math.random())
             var lastError = ""
             for (endpoint in ENDPOINTS) {
@@ -71,6 +86,12 @@ object CctvVdnResolver {
                 }
                 if (resolved != null) {
                     AppLog.i(TAG, "vdn 解析成功 channel=$channelId endpoint=${endpoint.substringAfter("//").take(20)} bRange=$bRange")
+                    synchronized(resolveCache) {
+                        resolveCache[cacheKey] = CacheEntry(resolved, System.currentTimeMillis())
+                        if (resolveCache.size > 8) {
+                            resolveCache.keys.take(resolveCache.size - 8).forEach(resolveCache::remove)
+                        }
+                    }
                     return@withContext resolved
                 } else if (lastError.isBlank()) {
                     lastError = "endpoint $endpoint no hls_cdrm"
