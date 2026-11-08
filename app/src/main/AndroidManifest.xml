@@ -38,7 +38,7 @@
         <activity
             android:name=".ui.activity.SplashActivity"
             android:exported="true"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="screenSize|orientation|keyboardHidden"
             android:theme="@style/Theme.MyBLBL.Launcher"
             tools:ignore="DiscouragedApi">
@@ -53,7 +53,7 @@
             android:name=".ui.activity.MainActivity"
             android:exported="false"
             android:launchMode="singleTop"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="screenSize|orientation|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MyBLBL.Main"
@@ -98,7 +98,7 @@
         <activity
             android:name=".ui.activity.MarmotLiveActivity"
             android:exported="false"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="screenSize|orientation|keyboardHidden|screenLayout|uiMode"
             android:theme="@style/Theme.MyBLBL"
             tools:ignore="DiscouragedApi" />
@@ -106,7 +106,7 @@
         <activity
             android:name=".ui.activity.GaiaVgateActivity"
             android:exported="false"
-            android:screenOrientation="landscape"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="screenSize|orientation|keyboardHidden"
             android:theme="@style/Theme.MyBLBL"
             tools:ignore="DiscouragedApi" />
