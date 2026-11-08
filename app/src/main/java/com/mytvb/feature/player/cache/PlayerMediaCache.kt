@@ -2,6 +2,7 @@ package com.mytvb.feature.player.cache
 
 import android.content.Context
 import android.net.Uri
+import android.widget.Toast
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
@@ -12,6 +13,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import com.mytvb.core.ui.base.AppToast
 import com.mytvb.MyBLBLApplication
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.settings.AppSettingsDataStore
@@ -24,12 +26,22 @@ object PlayerMediaCache {
 
     private const val TAG = "PlayerMediaCache"
     private const val CACHE_DIR_NAME = "player_media_cache"
-    private const val CACHE_FRAGMENT_SIZE_BYTES = 2L * 1024L * 1024L
     private const val RESOURCE_PATH_MARKER = "/v1/resource/"
+    private const val CACHE_FRAGMENT_SIZE_BYTES = 2L * 1024L * 1024L
     private const val CACHE_HIT_LOG_INTERVAL_MS = 2_000L
 
     // 与 FileCacheManager 共用同一份"缓存限制"设置键，保证两处口径一致。
     private const val KEY_CACHE_LIMIT = "cache_limit"
+
+    // 「边看边存」开关（SettingsFragment 同名 key）。关 = 播放纯直连不建缓存层：
+    // S65（4核1.5GHz）实测边下边存的同步写盘+锁+分配在播放热路径上每帧侵占
+    // 7~10ms 渲染预算（OkHttp+Loader+GC 线程峰值 40%+ CPU），弹幕 60fps 跑不动；
+    // 关闭后帧成本 17~21ms → 5~15ms，对齐 blbl/BiliPai 的零缓存直连形态。
+    // 引导链：弱设备触发 adaptive_half_fps 降帧时一次性 toast 提示用户可关闭
+    // （maybeHintDisableCacheWrite），强设备默认保留完整缓存体验。
+    private const val KEY_MEDIA_CACHE_WRITE = "media_cache_write"
+    private const val HINT_PREFS = "perf_hint"
+    private const val HINT_KEY_CACHE_WRITE = "cache_write_hinted"
     private const val CACHE_SIZE_200_MB: Long = 200L * 1024L * 1024L
     private const val CACHE_SIZE_500_MB: Long = 500L * 1024L * 1024L
     private const val CACHE_SIZE_1_GB: Long = 1024L * 1024L * 1024L
@@ -70,6 +82,10 @@ object PlayerMediaCache {
         context: Context,
         upstreamFactory: DataSource.Factory
     ): DataSource.Factory {
+        if (isCacheWriteDisabled()) {
+            // 用户关闭「边看边存」：纯直连，不建缓存层（数据通路零额外成本）
+            return upstreamFactory
+        }
         val appContext = context.applicationContext
         val cache = getOrCreateCache(appContext)
         val cacheWriteFactory = CacheDataSink.Factory()
@@ -83,6 +99,29 @@ object PlayerMediaCache {
             .setCacheWriteDataSinkFactory(cacheWriteFactory)
             .setEventListener(cacheEventListener)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    private fun isCacheWriteDisabled(): Boolean {
+        return appSettings.getCachedString(KEY_MEDIA_CACHE_WRITE) == "关"
+    }
+
+    /**
+     * 弱设备引导（一次性）：adaptive_half_fps 触发 = 设备实测跑不动 60fps。
+     * 此时若「边看边存」仍开着，提示用户可关闭它换取流畅（低端机缓存写入的
+     * CPU 侵占正是降帧诱因之一）。SharedPreferences 记住已提示，永不重复。
+     */
+    fun maybeHintDisableCacheWrite(context: Context) {
+        runCatching {
+            val sp = context.getSharedPreferences(HINT_PREFS, Context.MODE_PRIVATE)
+            if (sp.getBoolean(HINT_KEY_CACHE_WRITE, false)) return
+            sp.edit().putBoolean(HINT_KEY_CACHE_WRITE, true).apply()
+            if (isCacheWriteDisabled()) return
+            AppToast.show(
+                context,
+                "设备性能不足已自动降帧，可在 设置→存储 关闭「边看边存」进一步提升流畅度",
+                Toast.LENGTH_LONG,
+            )
+        }
     }
 
     fun buildDefaultDataSourceFactory(

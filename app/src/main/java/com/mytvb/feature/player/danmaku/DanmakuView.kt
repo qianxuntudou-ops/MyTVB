@@ -72,6 +72,25 @@ class DanmakuView @JvmOverloads constructor(
     private var perfLogPosted: Boolean = false
     private var perfLastFrameUpdates: Long = 0L
     private var perfLastIdleCycles: Long = 0L
+
+    // ===== 自适应渲染帧率（低端设备自动降半频 30fps）=====
+    // 实测依据（华为智慧屏 S6，4核1.5GHz）：开弹幕时"每帧 traversal"固定成本 15~30ms
+    // 超出 60fps 帧预算，UI 掉到 40fps 上下、弹幕一顿一顿；关弹幕后 UI 立即恢复零慢帧
+    // （对照实验 MainThreadJank 3.3条/s → 0.06条/s）。对这类设备把弹幕重绘降到 30fps：
+    // traversal 次数减半、每次 33ms 预算充裕；慢速滚动弹幕 30fps 与 60fps 肉眼无差
+    // （B 站 web 端弹幕本就是 30fps 渲染）。只降 invalidate 频率，坐标仍逐帧现算不失真。
+    // 判定：连续 3 个 3s 窗口实际 fps<45 且绘制持续在发生（≥20fps，排除暂停/空闲）→ 降；
+    // 半频下连续 10 个窗口 fps≥26 → 升回 60 并冷却 120s（防边界震荡）。独立于日志开关。
+    @Volatile private var adaptiveHalfFps = false
+    private var adaptiveLastAdmitUpMs = 0L
+    private var adaptiveFrames = 0
+    private var adaptiveWindowStartMs = 0L
+    private var adaptiveFirstDrawMs = 0L
+    private var adaptiveSlowWindows = 0
+    private var adaptiveGoodWindows = 0
+    private var adaptiveNoEnterBeforeMs = 0L
+    private var adaptiveUpFailCount = 0
+    private var adaptiveReturnedOnce = false
     private var perfLastIdleWakes: Long = 0L
     private var perfLastIdleResumes: Long = 0L
     private val perfLogRunnable =
@@ -254,6 +273,16 @@ class DanmakuView @JvmOverloads constructor(
         AppLog.i(DIAG_TAG, "view ATTACH ${width}x${height}")
         // 表情词典预热（磁盘 + 网络，24h 刷新一次；异步无阻塞）。
         DanmakuEmoteRepository.warmup(context)
+        // 新的播放会话：自适应降频状态归零（锁定的半频、失败计数、冷却期全部重置）
+        adaptiveHalfFps = false
+        adaptiveFrames = 0
+        adaptiveWindowStartMs = 0L
+        adaptiveFirstDrawMs = 0L
+        adaptiveSlowWindows = 0
+        adaptiveGoodWindows = 0
+        adaptiveNoEnterBeforeMs = 0L
+        adaptiveUpFailCount = 0
+        adaptiveReturnedOnce = false
         updateViewportIfNeeded()
         startPerfLoggingIfNeeded()
     }
@@ -276,6 +305,16 @@ class DanmakuView @JvmOverloads constructor(
         super.onDraw(canvas)
 
         perfFramesSinceLog++
+        adaptiveFrames++
+        val nowUpMs = SystemClock.uptimeMillis()
+        if (adaptiveFirstDrawMs == 0L) adaptiveFirstDrawMs = nowUpMs
+        if (adaptiveWindowStartMs == 0L) adaptiveWindowStartMs = nowUpMs
+        val adaptiveDeltaMs = nowUpMs - adaptiveWindowStartMs
+        if (adaptiveDeltaMs >= 3000L) {
+            evaluateAdaptiveFpsWindow(adaptiveFrames, adaptiveDeltaMs, nowUpMs)
+            adaptiveFrames = 0
+            adaptiveWindowStartMs = nowUpMs
+        }
         val sampleDraw = perfDrawSampleRequested.getAndSet(false)
         val measureDraw = debugEnabled || sampleDraw || AppLog.isEnabled
         val drawStartedAtNs = if (measureDraw) System.nanoTime() else 0L
@@ -485,6 +524,7 @@ class DanmakuView @JvmOverloads constructor(
                 append(" gap25=").append(perfFrameGapCount)
                 append('/').append(perfFrameGapMaxMs).append("ms")
                 append(" jit=").append(perfSmoothJitCount)
+                append(" half=").append(if (adaptiveHalfFps) 1 else 0)
                 append(" rate=").append(String.format(Locale.US, "%.3f", player.currentTimerRate()))
             },
         )
@@ -501,7 +541,74 @@ class DanmakuView @JvmOverloads constructor(
         perfSmoothJitCount = 0
     }
 
+    /** 自适应帧率评估（主线程，onDraw 驱动每 3s 一窗）。规则见字段注释。 */
+    private fun evaluateAdaptiveFpsWindow(frames: Int, deltaMs: Long, nowUpMs: Long) {
+        val fps = if (deltaMs > 0L) frames * 1000f / deltaMs.toFloat() else 0f
+        if (!adaptiveHalfFps) {
+            if (nowUpMs < adaptiveNoEnterBeforeMs) return
+            // 跳过起播期（弹幕缓存重建、draw miss 多，fps 天然偏低，12s 内不评估）
+            if (adaptiveFirstDrawMs == 0L || nowUpMs - adaptiveFirstDrawMs < 12_000L) return
+            // 窗口有效 = 绘制持续在发生（≥20fps）：排除暂停/空闲（引擎停转 frames≈0）的误判
+            // 触发线 50 而非 45：抖动的 45~50fps（帧间隔 16~33ms 忽长忽短）对匀速滚动弹幕的
+            // 观感差于稳定 30fps（4K 场景实测 48fps/janky71% 时弹幕忽快忽慢）；52~58 的
+            // 高帧率设备不受影响
+            if (frames >= 60 && fps < 50f) {
+                adaptiveSlowWindows++
+                if (adaptiveSlowWindows >= 3) {
+                    // 若 60fps 是试探升回后再次不达标：累计失败；两次即证明该设备跑不动 60fps，
+                    // 本次 view 生命周期内锁定半频，不再周期性试探（每次试探的 9 秒都是肉眼可见卡顿）
+                    if (adaptiveReturnedOnce) {
+                        adaptiveReturnedOnce = false
+                        adaptiveUpFailCount++
+                        if (adaptiveUpFailCount >= 2) {
+                            adaptiveNoEnterBeforeMs = Long.MAX_VALUE
+                            AppLog.w("BlblDmDiag", "adaptive_half_fps LOCKED 升回试探${adaptiveUpFailCount}次失败 → 本会话保持30fps")
+                        }
+                    }
+                    adaptiveHalfFps = true
+                    adaptiveGoodWindows = 0
+                    // 降帧 = 设备实测跑不动 60fps：一次性引导用户可关闭「边看边存」换流畅
+                    com.mytvb.feature.player.cache.PlayerMediaCache.maybeHintDisableCacheWrite(context)
+                    AppLog.w(
+                        "BlblDmDiag",
+                        "adaptive_half_fps ON fps=${String.format(Locale.US, "%.1f", fps)} " +
+                            "frames=$frames/${deltaMs}ms 连续${adaptiveSlowWindows}窗<50 → 弹幕重绘降30fps",
+                    )
+                }
+            } else {
+                adaptiveSlowWindows = 0
+            }
+        } else {
+            // 半频下 fps 应≈30；仍<26 说明设备更弱，维持半频（总比 60fps 好）
+            if (fps >= 26f) {
+                adaptiveGoodWindows++
+                if (adaptiveGoodWindows >= 20) {
+                    adaptiveHalfFps = false
+                    adaptiveReturnedOnce = true
+                    adaptiveSlowWindows = 0
+                    adaptiveNoEnterBeforeMs = nowUpMs + 120_000L
+                    AppLog.w(
+                        "BlblDmDiag",
+                        "adaptive_half_fps OFF probe fps=${String.format(Locale.US, "%.1f", fps)} " +
+                            "连续${adaptiveGoodWindows}窗稳定 → 试探回升60fps，冷却120s",
+                    )
+                }
+            } else {
+                adaptiveGoodWindows = 0
+            }
+        }
+    }
+
     internal fun invalidateDanmakuAreaOnAnimation() {
+        // 半频模式：时间闸门放行（距上次放行 ≥22ms），期间请求丢弃（traversal 减半；
+        // 坐标 draw 现算，隔帧画到的是最新位置）。不能用调用奇偶计数——本函数被
+        // 主线程（onDraw 自续）与 action 线程（每 vsync 续帧）并发调用，两线程交替
+        // ++ 会让某一侧恒放行，拦截完全失效（S65 实测半频后 fps 仍 38）。
+        if (adaptiveHalfFps) {
+            val nowUp = SystemClock.uptimeMillis()
+            if (nowUp - adaptiveLastAdmitUpMs < 22L) return
+            adaptiveLastAdmitUpMs = nowUp
+        }
         val w = width.coerceAtLeast(0)
         val h = height.coerceAtLeast(0)
         if (w <= 0 || h <= 0) {

@@ -95,6 +95,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val CATEGORY_ABOUT = 7
 
         private const val KEY_CACHE_LIMIT = "cache_limit"
+        private const val KEY_MEDIA_CACHE_WRITE = "media_cache_write"
         private const val KEY_DEFAULT_START_PAGE = "default_start_page"
         // 与 FeedSourceSetting 同键（存储值「APP端/网页端」），首页推荐/热门数据来源
         private const val KEY_HOME_FEED_SOURCE = FeedSourceSetting.KEY_HOME_FEED_SOURCE
@@ -312,7 +313,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             )),
             SettingGroup(R.string.setting_group_storage, listOf(
                 plain(KEY_CLEAR_CACHE, R.string.clear_cache, "0.0kb"),
-                stored(KEY_CACHE_LIMIT, R.string.cache_limit, "200 MB")
+                stored(KEY_CACHE_LIMIT, R.string.cache_limit, "200 MB"),
+                stored(KEY_MEDIA_CACHE_WRITE, R.string.media_cache_write, "开")
             ))
         )
 
@@ -772,6 +774,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             // —— 通用·存储 ——
             KEY_CLEAR_CACHE -> clearCache()
             KEY_CACHE_LIMIT -> showCacheLimitDialog()
+            KEY_MEDIA_CACHE_WRITE -> toggleMediaCacheWrite()
             // —— 显示·外观 ——
             KEY_THEME -> showCommonChoiceDialog(key, THEME_OPTIONS)
             KEY_UI_LANGUAGE -> showLanguageChoiceDialog()
@@ -1268,6 +1271,19 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             AppToast.show(requireContext(), getString(R.string.toast_cache_cleared))
         } catch (e: Exception) {
             AppLog.e("SettingsFragment", "clearCache failed", e)
+        }
+    }
+
+    /** 「边看边存」开关：切换后释放 SimpleCache 并失效暖复用（对齐缓存上限的处理）。 */
+    private fun toggleMediaCacheWrite() {
+        val item = itemOf(KEY_MEDIA_CACHE_WRITE) ?: return
+        val newValue = if (item.value == "开") "关" else "开"
+        updateStored(KEY_MEDIA_CACHE_WRITE, newValue)
+        appSettings.putStringAsync(KEY_MEDIA_CACHE_WRITE, newValue)
+        if (newValue == "关") {
+            // 关：数据源工厂下次起播直接走纯直连（无需 reset，但统一释放避免悬挂引用）
+            PlayerMediaCache.reset(requireContext())
+            VideoPlayerViewModel.clearCachedPlayback()
         }
     }
 

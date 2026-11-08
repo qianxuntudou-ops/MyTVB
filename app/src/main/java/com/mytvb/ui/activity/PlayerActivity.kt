@@ -14,8 +14,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Printer
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.mytvb.feature.player.sponsor.SponsorProgressMarkerView
 import android.widget.TextView
@@ -510,6 +513,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private val playerPerfListener = object : AnalyticsListener {
+        // 当前视频流规格缓存：掉帧(video_dropped_frames)行尾自动附带，
+        // 中途导出的日志无需依赖起播时的 video_format 行也能判断 4K/帧率/编码。
+        private var lastVideoFormatDesc: String = "?"
+
         override fun onLoadStarted(
             eventTime: AnalyticsListener.EventTime,
             loadEventInfo: LoadEventInfo,
@@ -585,6 +592,42 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             // 无缝切档时状态恒为 READY 不触发状态回调，视频格式变化即切换真实生效，
             // 以此作为「画质切换中」提示的撤除信号（起播首次回调时无提示，hide 幂等无害）。
             if (::playerView.isInitialized) playerView.hideQualitySwitchingHint()
+            val desc = buildString {
+                append("${format.width}x${format.height}")
+                append(" fps=${if (format.frameRate > 0f) format.frameRate.toInt() else "?"}")
+                append(" codec=${format.sampleMimeType ?: format.codecs ?: "?"}")
+                append(" bitrate=${if (format.bitrate > 0) "${format.bitrate / 1000}kbps" else "?"}")
+            }
+            if (desc != lastVideoFormatDesc) {
+                lastVideoFormatDesc = desc
+                AppLog.i(
+                    "PlaybackPerf",
+                    "video_format pos=${eventTime.eventPlaybackPositionMs}ms $desc"
+                )
+            }
+        }
+
+        override fun onDownstreamFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            mediaLoadData: MediaLoadData
+        ) {
+            // 无缝切档（同 codec 的 DASH representation 切换）不触发 onVideoInputFormatChanged，
+            // 这里才是切档真实生效的信号；不更新缓存会让 video_dropped_frames 行尾附带的规格变成陈旧值。
+            if (mediaLoadData.trackType != C.TRACK_TYPE_VIDEO) return
+            val format = mediaLoadData.trackSelectionData as? androidx.media3.common.Format ?: return
+            val desc = buildString {
+                append("${format.width}x${format.height}")
+                append(" fps=${if (format.frameRate > 0f) format.frameRate.toInt() else "?"}")
+                append(" codec=${format.sampleMimeType ?: format.codecs ?: "?"}")
+                append(" bitrate=${if (format.bitrate > 0) "${format.bitrate / 1000}kbps" else "?"}")
+            }
+            if (desc != lastVideoFormatDesc) {
+                lastVideoFormatDesc = desc
+                AppLog.i(
+                    "PlaybackPerf",
+                    "video_format(downstream) pos=${eventTime.eventPlaybackPositionMs}ms $desc"
+                )
+            }
         }
 
         override fun onAudioUnderrun(
@@ -618,7 +661,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             AppLog.w(
                 "PlaybackPerf",
                 "video_dropped_frames pos=${eventTime.eventPlaybackPositionMs}ms " +
-                    "dropped=${droppedFrames} windowMs=${elapsedMs}"
+                    "dropped=${droppedFrames} windowMs=${elapsedMs} video=$lastVideoFormatDesc"
             )
         }
 
@@ -732,6 +775,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         // 播放会推进服务端历史，启动时预取的旧快照若被消费会把新进度顶回旧的
         personalFeedPrewarmer.invalidatePlaybackSensitiveCache()
         installMainThreadJankMonitor()
+        installFrameStageProbe()
         handleIntent(intent)
     }
 
@@ -1839,6 +1883,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     override fun onDestroy() {
         NvaCastController.get()?.detachBridge(castBridge)
         uninstallMainThreadJankMonitor()
+        uninstallFrameStageProbe()
         uiCoordinator.removeListener(coordinatorStateListener)
         playerView.removeCallbacks(resumePlaybackRunnable)
         stopProgressUpdates()
@@ -1915,6 +1960,114 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val printer = mainThreadJankPrinter ?: return
         mainThreadJankPrinter = null
         Looper.getMainLooper().setMessageLogging(null)
+    }
+
+    // ==================== 帧分段探针 ====================
+    // 已知病症：doFrame 常态 10~40ms 但弹幕 onDraw 仅 0.2ms，慢帧的工作量在现有
+    // 日志里不可见。本探针把每帧拆成两段：
+    //   preDraw 段 = doFrame 回调(anim 阶段) → onPreDraw：animation 回调 + measure + layout（纯工作量）
+    //   其余 = onPreDraw → 下一帧 doFrame：display list 记录 + vsync 等待（含空闲，参考值）
+    // preDraw 段大 → 布局/动画风暴；其余段大且 preDraw 小 → draw 记录或帧提交阻塞。
+    // 开弹幕时弹幕 view 每帧 invalidate，每帧必有 traversal，onPreDraw 必触发，统计连续。
+    private var frameStageCb: Choreographer.FrameCallback? = null
+    private var frameStagePreDrawInstalled = false
+    private var fsLastStartNs = 0L
+    private var fsLastPreDrawNs = 0L
+    private var fsFrames = 0
+    private var fsSlow = 0
+    private var fsPreDrawTotalUs = 0L
+    private var fsMaxPreDrawUs = 0L
+    private var fsMaxTotalUs = 0L
+    private var fsWindowStartMs = 0L
+
+    private val frameStagePreDrawListener = ViewTreeObserver.OnPreDrawListener {
+        fsLastPreDrawNs = System.nanoTime()
+        true
+    }
+
+    // 慢帧溯源：递归给 view 树挂 layout 监听，慢帧打印时列出该帧内被布局过的 view，
+    // 直接指认谁在制造布局风暴（invalidate 不触发 layout，只有 requestLayout/尺寸变化才会）。
+    private val fsLayoutHits = ArrayList<String>()
+
+    private fun viewLabel(v: View, depth: Int): String {
+        val id = try {
+            if (v.id != View.NO_ID) "${v.resources.getResourceEntryName(v.id)}@" else ""
+        } catch (_: Exception) {
+            ""
+        }
+        return "${" ".repeat(depth * 2)}${v.javaClass.simpleName}$id"
+    }
+
+    private fun installLayoutTracer(view: View, depth: Int) {
+        view.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            fsLayoutHits.add(viewLabel(v, depth))
+        }
+        if (depth < 15 && view is ViewGroup) {
+            for (i in 0 until view.childCount) installLayoutTracer(view.getChildAt(i), depth + 1)
+        }
+    }
+
+    private fun installFrameStageProbe() {
+        if (!AppLog.isEnabled) return
+        if (frameStageCb != null) return
+        val cb = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                val start = fsLastStartNs
+                val preDraw = fsLastPreDrawNs
+                if (start != 0L && preDraw > start) {
+                    val nowNs = System.nanoTime()
+                    val preDrawUs = (preDraw - start) / 1000
+                    val totalUs = (nowNs - start) / 1000
+                    fsFrames++
+                    fsPreDrawTotalUs += preDrawUs
+                    if (preDrawUs > fsMaxPreDrawUs) fsMaxPreDrawUs = preDrawUs
+                    if (totalUs > fsMaxTotalUs) fsMaxTotalUs = totalUs
+                    if (totalUs > 22_000) {
+                        fsSlow++
+                        val hits = if (fsLayoutHits.isEmpty()) "" else {
+                            " layouts=" + fsLayoutHits.distinct().take(12).joinToString("|")
+                        }
+                        AppLog.w(
+                            "PlaybackPerf",
+                            "frame_stage_slow preDraw=${preDrawUs / 1000}ms total=${totalUs / 1000}ms$hits"
+                        )
+                    }
+                    fsLayoutHits.clear()
+                }
+                fsLastStartNs = System.nanoTime()
+                if (fsWindowStartMs == 0L) fsWindowStartMs = SystemClock.uptimeMillis()
+                if (SystemClock.uptimeMillis() - fsWindowStartMs >= 3000 && fsFrames > 0) {
+                    AppLog.i(
+                        "PlaybackPerf",
+                        "frame_stage frames=$fsFrames slow=$fsSlow " +
+                            "avgPreDraw=${fsPreDrawTotalUs / fsFrames / 1000}ms " +
+                            "maxPreDraw=${fsMaxPreDrawUs / 1000}ms maxFrame=${fsMaxTotalUs / 1000}ms"
+                    )
+                    fsFrames = 0
+                    fsSlow = 0
+                    fsPreDrawTotalUs = 0
+                    fsMaxPreDrawUs = 0
+                    fsMaxTotalUs = 0
+                    fsWindowStartMs = 0
+                }
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+        frameStageCb = cb
+        Choreographer.getInstance().postFrameCallback(cb)
+        window?.decorView?.viewTreeObserver?.addOnPreDrawListener(frameStagePreDrawListener)
+        frameStagePreDrawInstalled = true
+        window?.decorView?.let { installLayoutTracer(it, 0) }
+    }
+
+    private fun uninstallFrameStageProbe() {
+        frameStageCb?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        frameStageCb = null
+        if (frameStagePreDrawInstalled) {
+            window?.decorView?.viewTreeObserver?.removeOnPreDrawListener(frameStagePreDrawListener)
+            frameStagePreDrawInstalled = false
+        }
+        // layout tracer 不单独卸载：listener 挂在 view 上，随 decorView 整树回收
     }
 
     private data class StartupTrace(
