@@ -160,6 +160,34 @@ class VideoPlayerViewModel(
             return cached
         }
 
+        /**
+         * fallback 换源后抹掉复用缓存里的无缝目录：缓存条目记录的 mediaSource/catalog 是
+         * prepare 时的多档源，换源后已与 player 实际（单 representation 源）不符，若不抹掉，
+         * zero-overhead 复用会把过期目录恢复进 VM，切档再次静默失败。
+         */
+        @Synchronized
+        internal fun invalidateCachedSeamlessCatalog(bvid: String?, cid: Long) {
+            val key = cachePlaybackKey(bvid, cid)
+            val cached = cachedPlaybacks[key] ?: return
+            if (cached.seamlessCatalog == null) return
+            cachedPlaybacks[key] = cached.copy(seamlessCatalog = null)
+        }
+
+        /**
+         * 无缝切档后回写复用缓存快照的档位：快照在 prepare 时写入，播放中切档若不回写，
+         * 快速重进会恢复起播档而非用户最后选择的档（zero-overhead 复用读取此快照）。
+         */
+        @Synchronized
+        internal fun updateCachedSelectionQuality(bvid: String?, cid: Long, qualityId: Int) {
+            val key = cachePlaybackKey(bvid, cid)
+            val cached = cachedPlaybacks[key] ?: return
+            val snapshot = cached.selectionSnapshot
+            if (snapshot.selectedQualityId == qualityId) return
+            cachedPlaybacks[key] = cached.copy(
+                selectionSnapshot = snapshot.copy(selectedQualityId = qualityId)
+            )
+        }
+
         @UnstableApi
         @Synchronized
         internal fun putCachedPlayback(
@@ -406,6 +434,11 @@ class VideoPlayerViewModel(
     private var currentSeamlessCatalog: SeamlessQualityCatalog? = null
     // 无缝会话当前生效的编码（初始=目录初始值；渲染器回读真实值后更新，见 onSeamlessVideoTrackChanged）。
     private var currentSeamlessCodec: VideoCodecEnum? = null
+    // 无缝源真实挂载标志。catalog 只描述"最后一次构建的目录"，fallback 换源（首帧超时/卡顿/错误
+    // 换线）会把 player 上的源换成单 representation 直链而目录残留——selectVideoQuality 必须以本标志
+    // 确认源仍在线，否则 setTarget 后无人应用，切档被静默吞掉（issue 现场：首帧超时换 bcache 直链后
+    // 切 360P 无效，UI 已切实际仍 4K）。
+    private var seamlessSourceAttached: Boolean = false
     private val seamlessQualitySwitchEnabled: Boolean
         get() = com.mytvb.feature.player.settings.PlayerSettingsStore
             .load(appContext).seamlessQualitySwitch
@@ -764,6 +797,24 @@ class VideoPlayerViewModel(
 
         // ===== UI/派发写 =====
         override fun emitPlaybackRequest(request: PlaybackRequest) {
+            // 本回调仅 PlaybackFallbackController 换源时调用（加载主链 applyPreparedPlayback 直接
+            // 赋值 _playbackRequest，不经此处）。fallback 派发的源（换CDN/切编码）是单 representation
+            // 源而非多档 seamless MPD：必须同步失效 VM 目录/挂载标志/全局 target/复用缓存四处无缝
+            // 状态——否则 selectVideoQuality 误判可无缝切换 → setTarget 后无人应用 → 切档静默失败；
+            // warm reuse 也会把缓存里的过期目录恢复回来继续误导。
+            if (this@VideoPlayerViewModel.currentSeamlessCatalog != null ||
+                SeamlessQualitySelector.targetQn() > 0
+            ) {
+                AppLog.w(
+                    "SeamlessQuality",
+                    "seamless state dropped: fallback dispatched non-seamless source cid=${request.cid}"
+                )
+            }
+            this@VideoPlayerViewModel.currentSeamlessCatalog = null
+            this@VideoPlayerViewModel.currentSeamlessCodec = null
+            this@VideoPlayerViewModel.seamlessSourceAttached = false
+            SeamlessQualitySelector.clearTarget()
+            invalidateCachedSeamlessCatalog(request.bvid, request.cid)
             _playbackRequest.value = request
             armFirstFrameWatchdog(request)
         }
@@ -1325,10 +1376,14 @@ class VideoPlayerViewModel(
         // 只改 TrackSelection 目标并丢弃旧档缓冲，不重建 MediaSource、不黑屏不重seek。
         val catalog = currentSeamlessCatalog
         val codec = currentSeamlessCodec
-        if (catalog != null && codec != null && catalog.hasTrack(quality.id, codec)) {
+        // 双闸门：目录非空且源真实挂载（seamlessSourceAttached，fallback 换源会同步置 false）。
+        // 缺任一条件都走下方重建路径——宁可短暂黑屏重 seek，也不能 setTarget 后无人应用静默吞掉切换。
+        if (catalog != null && codec != null && seamlessSourceAttached && catalog.hasTrack(quality.id, codec)) {
             capturePlaybackSnapshot(currentPositionMs, playWhenReady)
             SeamlessQualitySelector.setTarget(quality.id, codec.id)
             currentDashSession = currentDashSession?.copy(actualQualityId = quality.id)
+            // 回写复用缓存快照档位：否则快速重进会恢复起播档而非用户刚选的档。
+            updateCachedSelectionQuality(currentBvid, currentCid, quality.id)
             AppLog.i(
                 TAG,
                 "seamless quality switch qn=${quality.id} codec=${codec.id} " +
@@ -1875,6 +1930,7 @@ class VideoPlayerViewModel(
         applySelectionSnapshot(selectionSnapshot)
         // 与 applyPreparedPlayback 同步维护无缝会话状态（切换编码/音轨重建后保持无缝能力）。
         currentSeamlessCatalog = rebuiltSeamlessCatalog
+        seamlessSourceAttached = rebuiltSeamlessCatalog != null
         if (rebuiltSeamlessCatalog != null) {
             currentSeamlessCodec = rebuiltSeamlessCatalog.initialCodec
             SeamlessQualitySelector.setTarget(
@@ -2150,7 +2206,27 @@ class VideoPlayerViewModel(
                     }
                 } == cached.selectionSnapshot.selectedCodec
             } ?: true
-            if (cachedPlayback != null && playerHasSameSource && codecStillMatchesRequest) {
+            // 画质档位校验：与上方编码校验同决策（issue#101 只修了编码这一半）。快照档位是上次
+            // prepare 时的值，若用户设置的默认画质已变（且该档在本视频可用），复用会把旧档位
+            // 顶掉新设置——放弃复用走重建。请求档位本视频没有时（上次已回落）不因此放弃，
+            // 重建后同样回落，复用无害。
+            val qualityStillMatchesRequest = cachedPlayback?.let { cached ->
+                val requested = requestedQualityId
+                val cachedQn = cached.selectionSnapshot.selectedQualityId
+                when {
+                    requested == null || requested <= 0 || cachedQn == requested -> true
+                    cached.selectionSnapshot.qualities.any { it.id == requested } -> {
+                        AppLog.w(
+                            TAG,
+                            "zero_overhead_reuse_quality_mismatch: cached=$cachedQn " +
+                                "requested=$requested — rebuild source"
+                        )
+                        false
+                    }
+                    else -> true
+                }
+            } ?: true
+            if (cachedPlayback != null && playerHasSameSource && codecStillMatchesRequest && qualityStillMatchesRequest) {
                 // 诊断：对照"请求身份"与"VM 缓存命中内容"，防止跨视频串台。
                 val cachedUri = catchingRequest {
                     cachedPlayback.mediaSource.mediaItem.localConfiguration?.uri?.toString()
@@ -2173,8 +2249,11 @@ class VideoPlayerViewModel(
                 currentPlayInfo = cachedPlayback.playInfo
                 // zero-overhead 复用：player 上仍挂着同一 MediaSource（可能是多清晰度 MPD），
                 // TrackSelection target 无人改动、保持用户上次选择的档位即可，这里只恢复 VM 侧目录状态。
+                // 缓存目录可能已被 fallback 换源时抹掉（invalidateCachedSeamlessCatalog），恢复为
+                // null 属预期——player 实际挂的已是单 representation 源，切档须走重建。
                 currentSeamlessCatalog = cachedPlayback.seamlessCatalog
                 currentSeamlessCodec = cachedPlayback.seamlessCatalog?.initialCodec
+                seamlessSourceAttached = cachedPlayback.seamlessCatalog != null
                 val playInfo = cachedPlayback.playInfo
                 val resumePositionMs = if (preferLastPlayTime && !isSteinsGateVideo && currentGraphVersion <= 0L) {
                     val cachedResume = VideoPlayerPlayInfoCache.get(
@@ -2988,6 +3067,7 @@ class VideoPlayerViewModel(
         // 无缝会话状态：挂新源前重置 TrackSelection 目标，避免上一个视频的档位串到新视频。
         val seamlessCatalog = preparedPlayback.seamlessCatalog
         currentSeamlessCatalog = seamlessCatalog
+        seamlessSourceAttached = seamlessCatalog != null
         if (seamlessCatalog != null) {
             currentSeamlessCodec = seamlessCatalog.initialCodec
             SeamlessQualitySelector.setTarget(seamlessCatalog.initialQualityId, seamlessCatalog.initialCodec.id)
