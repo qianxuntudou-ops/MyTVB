@@ -1,4 +1,4 @@
-package com.mytvb.feature.home
+package com.mytvb.core.ui.tab
 
 import com.mytvb.core.ui.focus.TabContentFocusTarget
 

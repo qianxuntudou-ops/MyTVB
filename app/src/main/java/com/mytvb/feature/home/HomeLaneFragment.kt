@@ -18,6 +18,7 @@ import com.mytvb.event.AppEventHub
 import com.mytvb.core.ui.focus.SpatialFocusNavigator
 import com.mytvb.core.ui.focus.TabContentFocusHelper
 import com.mytvb.core.ui.render.FirstScreenRenderer
+import com.mytvb.core.ui.tab.HomeTabPage
 import com.mytvb.feature.series.AllSeriesFragment
 import com.mytvb.feature.series.SeriesDetailFragment
 import com.mytvb.model.lane.HomeLaneSection

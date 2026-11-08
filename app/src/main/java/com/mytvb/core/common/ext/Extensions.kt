@@ -60,14 +60,21 @@ fun isVipColorfulDanmakuAllowed(): Boolean {
     return getToggleSetting("dm_allow_vip_colorful_dm", true)
 }
 
-fun getHomeDefaultStartPageIndex(maxIndex: Int, defaultIndex: Int = 1): Int {
+fun getHomeDefaultStartPageIndex(
+    maxIndex: Int,
+    defaultIndex: Int = 1,
+    animationIndex: Int = 2,
+    cinemaIndex: Int = 3
+): Int {
     val safeMaxIndex = maxIndex.coerceAtLeast(0)
     val clampedDefault = defaultIndex.coerceIn(0, safeMaxIndex)
     val mappedFromLabel = when (appSettings.getCachedString("default_start_page")?.trim()) {
         "推荐" -> 0
         "热门" -> 1
-        "番剧" -> 2
-        "影视" -> 3
+        // 番剧/影视的实际位置随「首页个人页签」开关变化（默认 2/3，开启时 4/5），
+        // 由调用方按当前 tab 配置传入
+        "番剧" -> animationIndex
+        "影视" -> cinemaIndex
         "动态" -> clampedDefault
         else -> null
     }

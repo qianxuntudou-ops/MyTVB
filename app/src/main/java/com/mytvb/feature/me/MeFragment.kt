@@ -32,7 +32,8 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBackPressedHandler {
+class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBackPressedHandler,
+    com.mytvb.core.ui.tab.SecondaryTabHost {
     companion object {
         private const val USER_INFO_CACHE_TTL_MS = 10 * 60 * 1000L
 
@@ -155,12 +156,14 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 mainNavigationViewModel.events.collectLatest { event ->
-                    // MainTabSelected(5) 是「正在切到本页」的信号：事件经 Main.immediate
+                    // MainTabSelected(ME=6) 是「正在切到本页」的信号：事件经 Main.immediate
                     // 同步分发，先于 showFragment 的 show 事务生效，此刻 isHidden 仍是
                     // true——本页自己的选中事件若被下面的 isHidden 守卫吞掉，从其它主
                     // tab 切回时 SELECT_TAB4 永远送不到子 tab（历史页表现为不刷新）。
+                    // （历史遗留：CCTV影视 tab 插入后本页索引从 5 变 6，此处曾长期
+                    // 误判 5，导致切 CCTV影视 时误触发本页刷新、切「我的」反而不触发。）
                     if (event is MainNavigationViewModel.Event.MainTabSelected) {
-                        if (event.index == 5) {
+                        if (event.index == 6) {
                             if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
                                 viewModel.loadUserInfo()
                             }
@@ -173,7 +176,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
                     }
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabReselected ->
-                            if (event.index == 5) {
+                            if (event.index == 6) {
                                 if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
                                     viewModel.loadUserInfo()
                                 }
@@ -188,11 +191,9 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
                             }
                         }
 
-                        MainNavigationViewModel.Event.MenuPressed -> {
-                            dispatchHostEvent(MeTabPage.HostEvent.KEY_MENU_PRESS) {
-                                getCurrentTabPage()?.refresh()
-                            }
-                        }
+                        // MenuPressed（菜单键刷新）不再经宿主派发：子页
+                        // （MeListFragment/FavoriteFragment）已各自订阅
+                        // MainNavigationViewModel.events 直接刷新，宿主转发会双发。
 
                         else -> Unit
                     }
@@ -259,12 +260,12 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
     }
 
     /** 列表顶行 UP 的落点：聚焦当前选中的二级 tab（不切页）。 */
-    fun focusSelectedTabFromContent(): Boolean {
+    override fun focusSelectedTabFromContent(): Boolean {
         return tabLayout.focusSelectedTab()
     }
 
     /** 内容网格左右边缘切二级 tab（与 HomeFragment 一致）；首/末 tab 越界方向保持原有行为。 */
-    fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
+    override fun switchAdjacentTabFromContentEdge(delta: Int): Boolean {
         // 设置「卡片边缘切换标签」关闭：只关「切 tab」——左边缘环绕回主边栏
         // 当前主 tab 对应按钮；右边缘吞键停原地（对齐 blbl 右边缘无外流）
         if (!EdgeTabSwitch.enabled(appSettings)) {

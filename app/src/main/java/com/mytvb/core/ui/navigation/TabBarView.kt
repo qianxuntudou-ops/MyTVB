@@ -153,6 +153,7 @@ class TabBarView @JvmOverloads constructor(
         if (index == 3 && buttonLive.visibility == GONE) return
         if (index == 4 && buttonCctvLive.visibility == GONE) return
         if (index == 5 && buttonCctvVod.visibility == GONE) return
+        if (index == 6 && buttonMe.visibility == GONE) return
         if (currentSelectedIndex == index) {
             if (index == searchIndex) {
                 onTabClickListener?.onSearchClick()
@@ -207,6 +208,14 @@ class TabBarView @JvmOverloads constructor(
 
     fun isCategoryButtonVisible(): Boolean {
         return buttonCategory.visibility == VISIBLE
+    }
+
+    fun setMeButtonVisible(visible: Boolean) {
+        buttonMe.visibility = if (visible) VISIBLE else GONE
+    }
+
+    fun isMeButtonVisible(): Boolean {
+        return buttonMe.visibility == VISIBLE
     }
 
     fun showAvatar(show: Boolean) {

@@ -19,6 +19,7 @@ import com.mytvb.core.ui.base.RecyclerViewPoolPrewarmer
 import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.focus.tv.TvDataChangeReason
 import com.mytvb.core.ui.render.FirstScreenRenderer
+import com.mytvb.core.ui.tab.HomeTabPage
 import com.mytvb.event.AppEventHub
 import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.model.video.VideoModel

@@ -1,11 +1,14 @@
 package com.mytvb.feature.me
 
-import com.mytvb.core.ui.focus.TabContentFocusTarget
+import com.mytvb.core.ui.tab.HomeTabPage
 
-interface MeTabPage : TabContentFocusTarget {
-    fun scrollToTop()
-    fun refresh()
-    fun onTabSelected() {}
+/**
+ * 「我的」页子 tab（历史/收藏/稍后观看）协议：HomeTabPage 的严格超集，
+ * 额外携带重选回顶/会话刷新让位/宿主事件三个语义。
+ * 这些页面同时可作为首页个人页签复用（见 HomeFragmentStateAdapter），
+ * 届时仅按 HomeTabPage 使用，扩展方法不被调用。
+ */
+interface MeTabPage : HomeTabPage {
     fun onTabReselected() {}
 
     /**
@@ -13,12 +16,6 @@ interface MeTabPage : TabContentFocusTarget {
      * 返回 false 表示页面无法接手，宿主回退到普通 scrollToTop。
      */
     fun scrollToTopAndFocus(): Boolean = false
-
-    /**
-     * tab 栏按 DOWN 的落点：就近聚焦当前可见的第一个内容项，列表位置保持不动；
-     * 可见首项被裁半截时轻滚补齐。返回 false 时宿主回退到普通 focusPrimaryContent。
-     */
-    fun focusNearestVisibleContent(): Boolean = false
 
     /**
      * 会话跳变（UserSessionChanged）触发的全量刷新是否让位：

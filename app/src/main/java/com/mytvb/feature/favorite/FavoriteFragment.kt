@@ -7,6 +7,7 @@ import android.view.ViewGroup
 
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.os.bundleOf
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -18,8 +19,8 @@ import com.mytvb.network.session.SessionStateRepository
 import com.mytvb.repository.UserRepository
 import com.mytvb.repository.FavoriteRepository
 import com.mytvb.ui.adapter.FavoriteFolderAdapter
+import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.core.ui.base.BaseFragment
-import com.mytvb.feature.me.MeFragment
 import com.mytvb.feature.me.MeTabPage
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
@@ -56,6 +57,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     }
 
     private val appEventHub: AppEventHub by inject()
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val sessionGateway: SessionStateRepository by inject()
     private val favoriteRepository: FavoriteRepository by inject()
     private val userRepository: UserRepository by inject()
@@ -194,6 +196,22 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
                     if (event == AppEventHub.Event.UserSessionChanged && !isHidden && isVisible) {
+                        loadFavoriteFolders()
+                    }
+                }
+            }
+        }
+
+        // 菜单键 = 刷新（对齐首页 tab 页：MENU 即刷新键）。原 MeFragment 宿主经
+        // HostEvent(KEY_MENU_PRESS) 派发的链路已移除，并入首页个人页签后由本页自订阅承接；
+        // 两种宿主下行为一致（MeFragment 已删对应 dispatch，不会双发）。
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden || !isVisible) {
+                        return@collectLatest
+                    }
+                    if (event is MainNavigationViewModel.Event.MenuPressed && !isLoadingFolders) {
                         loadFavoriteFolders()
                     }
                 }
@@ -505,15 +523,16 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     }
 
     private fun focusTopTab(): Boolean {
-        return (parentFragment as? MeFragment)?.focusCurrentTab() == true
+        // 宿主可能是 MeFragment 或并入个人页签的 HomeFragment，走 SecondaryTabHost 接口
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.focusSelectedTabFromContent() == true
     }
 
     private fun switchToPrevMeTab(): Boolean {
-        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.switchAdjacentTabFromContentEdge(-1) == true
     }
 
     private fun switchToNextMeTab(): Boolean {
-        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(1) == true
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.switchAdjacentTabFromContentEdge(1) == true
     }
 
     private fun requestEmptyStateFocus(): Boolean {

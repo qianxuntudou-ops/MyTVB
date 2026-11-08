@@ -156,6 +156,7 @@
     <string name="liked_">已按讚</string>
     <string name="live">直播</string>
     <string name="live_entry">直播入口</string>
+    <string name="home_personal_tabs">首頁顯示歷史、稍後觀看、收藏</string>
     <string name="edge_tab_switch">卡片邊緣切換分頁</string>
     <string name="cctv_live">CCTV直播</string>
     <string name="cctv_native_live">直播極速模式</string>

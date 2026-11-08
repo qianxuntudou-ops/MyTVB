@@ -156,6 +156,7 @@
     <string name="liked_">Liked</string>
     <string name="live">Live</string>
     <string name="live_entry">Live entry</string>
+    <string name="home_personal_tabs">History, watch later and favorites on home</string>
     <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="cctv_live">CCTV Live</string>
     <string name="cctv_native_live">Live turbo mode</string>

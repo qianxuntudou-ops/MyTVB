@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -21,6 +22,7 @@ import com.mytvb.model.video.HistoryVideoModel
 import com.mytvb.model.video.VideoModel
 import com.mytvb.ui.adapter.HistoryVideoAdapter
 import com.mytvb.ui.adapter.VideoAdapter
+import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.core.ui.base.BaseFragment
 import com.mytvb.core.ui.base.BaseListFragment
 import com.mytvb.core.ui.base.VideoRecyclerViewTuning
@@ -66,6 +68,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private val appEventHub: AppEventHub by inject()
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val viewModel: MeListViewModel by viewModel()
     private var videoAdapter: VideoAdapter? = null
     private var historyAdapter: HistoryVideoAdapter? = null
@@ -397,6 +400,22 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                         }
 
                         else -> Unit
+                    }
+                }
+            }
+        }
+
+        // 菜单键 = 刷新（对齐首页 tab 页：MENU 即刷新键）。原 MeFragment 宿主经
+        // HostEvent(KEY_MENU_PRESS) 派发的链路已移除，并入首页个人页签后由本页自订阅承接；
+        // 两种宿主下行为一致（MeFragment 已删对应 dispatch，不会双发）。
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden || !isVisible) {
+                        return@collectLatest
+                    }
+                    if (event is MainNavigationViewModel.Event.MenuPressed && !viewModel.loading.value) {
+                        refresh()
                     }
                 }
             }
@@ -1027,7 +1046,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
 
     private fun focusTopTab(): Boolean {
         // UP 顶行落"当前选中的二级 tab"（不切页），与首页一致
-        return (parentFragment as? MeFragment)?.focusSelectedTabFromContent() == true
+        // （宿主可能是 MeFragment 或并入个人页签的 HomeFragment，走 SecondaryTabHost 接口）
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.focusSelectedTabFromContent() == true
     }
 
     /** tab 栏 DOWN 的落点：就近聚焦（锚点优先），位置保持不动，半截轻滚补齐。 */
@@ -1086,11 +1106,11 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
     }
 
     private fun switchToPrevMeTab(): Boolean {
-        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(-1) == true
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.switchAdjacentTabFromContentEdge(-1) == true
     }
 
     private fun switchToNextMeTab(): Boolean {
-        return (parentFragment as? MeFragment)?.switchAdjacentTabFromContentEdge(1) == true
+        return (parentFragment as? com.mytvb.core.ui.tab.SecondaryTabHost)?.switchAdjacentTabFromContentEdge(1) == true
     }
 
     private fun restoreContentFocus() {

@@ -221,6 +221,7 @@
     <string name="liked_">已点赞</string>
     <string name="live">直播</string>
     <string name="live_entry">直播入口</string>
+    <string name="home_personal_tabs">首页显示历史、稍后观看、收藏</string>
     <string name="edge_tab_switch">卡片边缘切换标签</string>
     <string name="cctv_live">CCTV直播</string>
     <string name="cctv_native_live">直播极速模式</string>

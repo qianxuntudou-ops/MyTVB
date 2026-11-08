@@ -33,6 +33,7 @@ import com.mytvb.databinding.FragmentSettingsBinding
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.cast.NvaDevice
 import com.mytvb.feature.home.FeedSourceSetting
+import com.mytvb.feature.home.HomeFragmentStateAdapter
 import com.mytvb.model.SettingModel
 import com.mytvb.ui.adapter.SettingAdapter
 import com.mytvb.ui.adapter.SettingRow
@@ -103,6 +104,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_IMAGE_QUALITY = "image_quality"
         private const val KEY_THEME = "theme"
         private const val KEY_LIVE_ENTRY = "live_entry"
+        // 首页个人页签开关（与 HomeFragmentStateAdapter.PERSONAL_TABS_KEY 同键，存储值"开/关"），
+        // 默认开：历史/稍后观看/收藏并入首页 tab，隐藏侧栏「我的」入口
+        private const val KEY_HOME_PERSONAL_TABS = HomeFragmentStateAdapter.PERSONAL_TABS_KEY
         // 与 EdgeTabSwitch 同键（存储值"开/关"），默认开：卡片左右移到列表边缘切换顶部 tab
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
@@ -294,6 +298,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HOME_FEED_SOURCE, R.string.home_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
+                stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
                 stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "开"),
                 // CCTV 相关条目已归入「电视直播」分类（tvGroups）
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
@@ -745,6 +750,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyLiveEntryVisibility()
+            }
+            KEY_HOME_PERSONAL_TABS -> toggle(key) {
+                appSettings.putStringAsync(key, it)
+                (activity as? MainActivity)?.applyMeEntryVisibility()
             }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
             // —— 电视直播 ——
@@ -1370,6 +1379,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
         }
         applyStored(KEY_LIVE_ENTRY)
+        applyStored(KEY_HOME_PERSONAL_TABS)
         applyStored(KEY_EDGE_TAB_SWITCH)
         applyStored(KEY_CCTV_LIVE_ENTRY)
         applyStored(KEY_CCTV_NATIVE_LIVE)

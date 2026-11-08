@@ -43,6 +43,7 @@ import com.mytvb.feature.cctv.vod.CctvVodFragment
 import com.mytvb.feature.detail.VideoDetailFragment
 import com.mytvb.feature.dynamic.DynamicFragment
 import com.mytvb.feature.home.HomeFragment
+import com.mytvb.feature.home.HomeFragmentStateAdapter
 import com.mytvb.feature.live.LiveFragment
 import com.mytvb.feature.me.MeFragment
 import com.mytvb.ui.fragment.main.MainNavigationViewModel
@@ -115,6 +116,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val SETTINGS_OVERLAY_EXIT_ANIM_MS = 275L
         private const val CCTV_TAB_INDEX = 4
         private const val CCTV_VOD_TAB_INDEX = 5
+        private const val ME_TAB_INDEX = 6
         private const val SEARCH_TAB_INDEX = 7
         private const val HOME_TAB_INDEX = 0
         private const val STARTUP_TAG = "AppStartup"
@@ -319,6 +321,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         applyLiveEntryVisibility()
         applyCctvLiveEntryVisibility()
         applyCctvVodEntryVisibility()
+        applyMeEntryVisibility()
         AppLog.i(STARTUP_TAG, "STARTUP MainActivity.initView elapsed=${SystemClock.elapsedRealtime() - t0}ms")
     }
 
@@ -487,6 +490,20 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
     }
 
+    /**
+     * 「首页个人页签」开关（默认开）：开启时隐藏侧栏「我的」入口，历史/稍后观看/
+     * 收藏并入首页 tab；关闭时完全恢复。设置页切换后即时调用，冷启动由 initView 重放。
+     */
+    fun applyMeEntryVisibility() {
+        val personalTabs = HomeFragmentStateAdapter.personalTabsEnabled(appSettings)
+        binding.myTabView.setMeButtonVisible(!personalTabs)
+        // HomeFragment 尚未创建（lazy factory）时跳过，其 onViewCreated 会按开关读初始配置
+        (fragments.getOrNull(HOME_TAB_INDEX) as? HomeFragment)?.applyPersonalTabsEnabled(personalTabs)
+        if (personalTabs && currentFragmentIndex == ME_TAB_INDEX) {
+            binding.myTabView.selectTab(0)
+        }
+    }
+
     private fun initFragments() {
         // 不再在这里同步 new 6 个 Fragment，全部走 [getOrCreateFragment] 按需 lazy 构造。
         // savedInstanceState 恢复路径下，FragmentManager 自带 restoredFragment，下面 showFragment
@@ -503,6 +520,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (index == 3 && !binding.myTabView.isLiveButtonVisible()) return
         if (index == CCTV_TAB_INDEX && !binding.myTabView.isCctvLiveButtonVisible()) return
         if (index == CCTV_VOD_TAB_INDEX && !binding.myTabView.isCctvVodButtonVisible()) return
+        if (index == ME_TAB_INDEX && !binding.myTabView.isMeButtonVisible()) return
         if (currentFragmentIndex == index) return
 
         val fragmentTag = "fragment_$index"
