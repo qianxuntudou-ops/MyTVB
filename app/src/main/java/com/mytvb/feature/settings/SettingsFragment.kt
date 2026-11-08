@@ -299,7 +299,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
                 stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
-                stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "关"),
+                // 打开方式：点卡片直接播放 / 先进详情页（与默认首页等同属浏览行为）
+                stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
                 // CCTV 相关条目已归入「电视直播」分类（tvGroups）
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
                 // 因此无需在 applyStored 段恢复
@@ -307,8 +308,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 plain(KEY_CAST_DEVICE_NAME, R.string.cast_device_name, NvaDevice.displayName(requireContext()))
             )),
             SettingGroup(R.string.setting_group_interact, listOf(
-                stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
-                stored(KEY_DOUYIN_MODE, R.string.douyin_mode, "关"),
+                stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "关"),
                 stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2")
             )),
             SettingGroup(R.string.setting_group_network, listOf(
@@ -355,7 +355,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_RESUME_PLAYBACK, R.string.resume_playback, "开"),
                 stored(KEY_SKIP_OFFICIAL_OP_ED, R.string.skip_official_op_ed, "开"),
                 stored(KEY_AFTER_PLAY, R.string.after_play, "播推荐视频"),
-                stored(KEY_PLAY_FINISH_EXIT_PLAYER, R.string.play_finish_exit_player, "开")
+                stored(KEY_PLAY_FINISH_EXIT_PLAYER, R.string.play_finish_exit_player, "开"),
+                // 抖音模式是播放器内遥控上下切视频，从「通用·交互」归入播放行为
+                stored(KEY_DOUYIN_MODE, R.string.douyin_mode, "关")
             )),
             // 空降助手：总开关 + 逐类跳过开关（默认总开关开，跳过类型只开赞助/恰饭，其余默认关）
             SettingGroup(R.string.setting_group_sponsor_skip, listOf(

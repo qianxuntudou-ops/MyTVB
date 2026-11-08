@@ -22,6 +22,7 @@
     <string name="chapter_playing">正在播放</string>
     <string name="show_chapter_bar">章節進度條</string>
     <string name="clear_cache">清除快取</string>
+    <string name="media_cache_write">播放時快取影片</string>
     <string name="risk_control_verify">風控驗證</string>
     <string name="risk_register_failed_format">申請失敗：%1$s</string>
     <string name="risk_submit_failed_format">提交失敗：%1$s</string>

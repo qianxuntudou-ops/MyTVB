@@ -31,7 +31,7 @@
     <string name="bottomsheet_drag_handle_clicked">Drag handle double-tapped</string>
     <string name="bottomsheet_drag_handle_content_description">Drag handle</string>
     <string name="cache_limit">缓存上限</string>
-    <string name="media_cache_write">边看边存</string>
+    <string name="media_cache_write">播放时缓存视频</string>
     <string name="call_notification_answer_action">Answer</string>
     <string name="call_notification_answer_video_action">Video</string>
     <string name="call_notification_decline_action">Decline</string>
