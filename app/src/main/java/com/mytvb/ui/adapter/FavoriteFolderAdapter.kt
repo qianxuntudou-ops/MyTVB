@@ -151,7 +151,9 @@ class FavoriteFolderAdapter(
             binding.tvTitle.isSelected = isFocused
             binding.tvTitle.text = item.title
             binding.tvCount.text = item.mediaCount.toString()
-            ImageLoader.loadSeriesCover(
+            // 卡片封面为 16:9 横版，须用 loadVideoCover；loadSeriesCover 的竖版裁剪参数
+            // (@320w_426h_1c) 会把横图先裁成竖条再被 centerCrop 放大，显示成局部放大图
+            ImageLoader.loadVideoCover(
                 imageView = binding.imageCover,
                 url = item.displayImageUrl,
                 placeholder = R.drawable.favorite_folder_cover_placeholder,
