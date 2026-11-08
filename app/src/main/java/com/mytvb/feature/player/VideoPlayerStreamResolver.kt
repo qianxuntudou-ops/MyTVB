@@ -822,10 +822,14 @@ internal class VideoPlayerStreamResolver(
     }
 
     private fun createCandidateAwareFactory(urls: List<String>): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
-        val candidates = urls
-            .map(urlNormalizer)
-            .filter { it.isNotBlank() }
-            .distinct()
+        // 构建时刻按最新健康分+TTFB 重排（fallback 重建复用固化 route 时，让新记的降权生效；
+        // 与 VideoPlayerDashMediaSourceFactory 同款口径，初次构建幂等）。
+        val candidates = CdnLatencyProfile.sortUrlsByLatency(
+            urls
+                .map(urlNormalizer)
+                .filter { it.isNotBlank() }
+                .distinct()
+        )
         if (candidates.size <= 1) {
             return dataSourceFactory to null
         }

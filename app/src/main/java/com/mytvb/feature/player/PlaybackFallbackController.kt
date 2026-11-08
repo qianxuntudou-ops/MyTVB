@@ -157,8 +157,9 @@ internal class PlaybackFallbackController(
         // CDN 健康分：网络/未知类错误多半与线路相关，对当前 host 记一次播放错误
         // （DECODER 类是解码问题，不是 CDN 的锅，不记）。换线重建前记，
         // 让重建用的候选排序和下次播放都能避开该 host。
+        // 只记 hasOpened 的 state：无缝目录的 cdnStates 含全部档位，未用过的流不该背锅。
         if (errorType != PlaybackErrorType.DECODER) {
-            context.cdnStates.forEach { state ->
+            context.cdnStates.filter { it.hasOpened() }.forEach { state ->
                 state.currentHostUrl()?.let { url ->
                     CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.PLAYBACK_ERROR)
                 }
@@ -204,7 +205,8 @@ internal class PlaybackFallbackController(
         // 卡顿降权：把当前正在用的 CDN host 记一条惩罚性 TTFB，让后续视频的 sortUrlsByLatency
         // 把它排到 candidates 末尾，避免重复踩坑。借助 CdnLatencyProfile 的 5 条淘汰机制自动稀释，
         // 一次卡顿不会判死刑。放在 fallback 重建之前，确保本次重建的 state 也是基于降权后的排序。
-        context.cdnStates.forEach { it.penalizeCurrentHost() }
+        // 只罚 hasOpened 的 state：未用过的流（无缝目录其余档位）的 candidates[0] 是无辜 host。
+        context.cdnStates.filter { it.hasOpened() }.forEach { it.penalizeCurrentHost() }
         val handled =
             trySwitchToAvc(lastPlaybackPositionMs, reason = "stall_${stalledMs}ms_prefer_avc") ||
                 tryNextCdnInCurrentCodec(lastPlaybackPositionMs, reason = "stall_${stalledMs}ms") ||
@@ -222,7 +224,10 @@ internal class PlaybackFallbackController(
      */
     fun handleFirstFrameTimeout(positionMs: Long): Boolean {
         lastPlaybackPositionMs = positionMs.coerceAtLeast(0L)
-        context.cdnStates.forEach { state ->
+        // 只记 hasOpened 的 state：无缝目录挂载时 cdnStates=全部档位（S65 实测 19 个），
+        // 真正在用的只有当前档位的视频+音频两个，全池记账把无辜 host 刷成负分
+        // （cn-sccd 系好节点被记 fft 的来源）。首帧还没出时当前流必然 open 过（数据请求已发出）。
+        context.cdnStates.filter { it.hasOpened() }.forEach { state ->
             state.currentHostUrl()?.let { url ->
                 CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.FIRST_FRAME_TIMEOUT)
             }

@@ -15,16 +15,29 @@ internal class VideoPlayerCdnFailoverState(
     private var preferredIndex: Int = 0
     private var diagnosticOpenCount: Int = 0
 
+    /** 本 state 是否真正 open 成功过（= 该流确实在用它传数据）。 */
+    @Volatile
+    private var opened = false
+
     @Synchronized
     fun preferredIndex(): Int {
         val lastIndex = candidates.lastIndex.coerceAtLeast(0)
         return preferredIndex.coerceIn(0, lastIndex)
     }
 
+    /**
+     * 该 state 是否承载过真实数据传输。健康分记账（首帧超时/卡顿降权等）只应归因到
+     * 真正用过的流：无缝目录挂载时 cdnStates 含全部档位的 state，未 open 的 state
+     * 的 currentHostUrl() 返回的是 candidates[0]（并未使用），全池记账会把好 host
+     * 冤枉成负分（S65 现场：一次看门狗 fired 对 19 个 state 记 fft，hwo1 被刷到 36 次）。
+     */
+    fun hasOpened(): Boolean = opened
+
     @Synchronized
     fun markPreferred(index: Int) {
         val lastIndex = candidates.lastIndex.coerceAtLeast(0)
         preferredIndex = index.coerceIn(0, lastIndex)
+        opened = true
     }
 
     /** 当前实际使用的候选 URL（open 成功后由 markPreferred 持续更新），供健康事件回流取 host。 */

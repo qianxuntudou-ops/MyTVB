@@ -389,7 +389,8 @@ class VideoPlayerViewModel(
         )
         .setDefaultRequestProperties(
             mapOf(
-                "Origin" to "https://www.bilibili.com",
+                // 刻意不带 Origin：blbl 同款口径（PC UA + Referer、无 Origin）——
+                // 部分 B 站 CDN 对带 Origin 的媒体请求 403/限速，表现为播放中卡顿。
                 "Referer" to "https://www.bilibili.com"
             )
         )

@@ -1979,6 +1979,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private var fsMaxPreDrawUs = 0L
     private var fsMaxTotalUs = 0L
     private var fsWindowStartMs = 0L
+    // frame_stage_slow 明细节流：S65 级设备弹幕场景普遍每帧 22ms+，逐帧打日志
+    // 每秒 7 条把 2000 条日志缓冲 3 分钟刷满，真正的播放事件（BUFFERING/fallback）
+    // 全被冲掉。慢帧计数仍进 3s 窗口的 frame_stage 汇总，明细最多 2s 一条。
+    private var fsLastSlowLogMs = 0L
 
     private val frameStagePreDrawListener = ViewTreeObserver.OnPreDrawListener {
         fsLastPreDrawNs = System.nanoTime()
@@ -2024,13 +2028,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     if (totalUs > fsMaxTotalUs) fsMaxTotalUs = totalUs
                     if (totalUs > 22_000) {
                         fsSlow++
-                        val hits = if (fsLayoutHits.isEmpty()) "" else {
-                            " layouts=" + fsLayoutHits.distinct().take(12).joinToString("|")
+                        val nowMs = SystemClock.uptimeMillis()
+                        if (nowMs - fsLastSlowLogMs >= 2_000) {
+                            fsLastSlowLogMs = nowMs
+                            val hits = if (fsLayoutHits.isEmpty()) "" else {
+                                " layouts=" + fsLayoutHits.distinct().take(12).joinToString("|")
+                            }
+                            AppLog.w(
+                                "PlaybackPerf",
+                                "frame_stage_slow preDraw=${preDrawUs / 1000}ms total=${totalUs / 1000}ms$hits"
+                            )
                         }
-                        AppLog.w(
-                            "PlaybackPerf",
-                            "frame_stage_slow preDraw=${preDrawUs / 1000}ms total=${totalUs / 1000}ms$hits"
-                        )
                     }
                     fsLayoutHits.clear()
                 }

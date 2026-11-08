@@ -90,10 +90,17 @@ internal class VideoPlayerDashMediaSourceFactory(
     }
 
     private fun createCandidateAwareFactory(urls: List<String>): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
-        val candidates = urls
-            .map(urlNormalizer)
-            .filter { it.isNotBlank() }
-            .distinct()
+        // 构建时刻按最新健康分+TTFB（含惩罚性记录）排序：route.videoUrls 在 resolveDashRoutePlan
+        // 时已排过一次，但 fallback 换线重建复用同一 route 对象，构建时重排才能吃到两次构建之间
+        // 新记的卡顿/超时惩罚——否则重建后 candidates[0] 还是那个刚被降权的烂 host，换线换了个
+        // 寂寞（S65 现场：hwo1 被记 30+ 次首帧超时后，fallback:dash 重建 attempt=1 仍是它）。
+        // 初次构建时排序幂等（同一时刻分数不变）。
+        val candidates = CdnLatencyProfile.sortUrlsByLatency(
+            urls
+                .map(urlNormalizer)
+                .filter { it.isNotBlank() }
+                .distinct()
+        )
         if (candidates.size <= 1) {
             return dataSourceFactory to null
         }

@@ -42,10 +42,14 @@ internal class SeamlessDashMediaSourceFactory(
         val cdnStates = ArrayList<VideoPlayerCdnFailoverState>()
 
         fun routeFactoryFor(urls: List<String>): DataSource.Factory {
-            val candidates = urls
-                .map(urlNormalizer)
-                .filter { it.isNotBlank() }
-                .distinct()
+            // 同 VideoPlayerDashMediaSourceFactory 口径：候选按构建时刻最新健康分+TTFB 排序，
+            // open 失败的轮换顺序吃到最新降权。路由 key 仍用 representation.baseUrl 原值，不受影响。
+            val candidates = CdnLatencyProfile.sortUrlsByLatency(
+                urls
+                    .map(urlNormalizer)
+                    .filter { it.isNotBlank() }
+                    .distinct()
+            )
             if (candidates.size <= 1) return baseDataSourceFactory
             val state = VideoPlayerCdnFailoverState(candidates = candidates.map(Uri::parse))
             cdnStates.add(state)
