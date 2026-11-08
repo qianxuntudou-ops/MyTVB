@@ -299,7 +299,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
                 stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
-                stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "开"),
+                stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "关"),
                 // CCTV 相关条目已归入「电视直播」分类（tvGroups）
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
                 // 因此无需在 applyStored 段恢复
