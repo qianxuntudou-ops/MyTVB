@@ -28,6 +28,7 @@ import com.mytvb.core.common.ext.toast
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.ChoiceDialog
+import com.mytvb.core.ui.system.ViewUtils
 import com.mytvb.databinding.ActivityMarmotLiveBinding
 import com.mytvb.feature.cctv.CctvLiveQuality
 import com.mytvb.feature.player.settings.PlayerSettingsStore
@@ -1597,6 +1598,9 @@ $scriptTags
         super.onResume()
         webEngine?.onResume()
         nativePlayer?.playWhenReady = true
+        // 直播页存续即在看：无论原生直拉还是 WebView 播放都保持屏幕常亮
+        // （对标 PlayerActivity/CctvPlayerActivity，缺失时手机按系统超时熄屏）
+        ViewUtils.keepScreenOn(this, true)
     }
 
     override fun onDestroy() {
@@ -1613,6 +1617,7 @@ $scriptTags
             engine.destroy()
         }
         webEngine = null
+        ViewUtils.keepScreenOn(this, false)
         super.onDestroy()
     }
 }

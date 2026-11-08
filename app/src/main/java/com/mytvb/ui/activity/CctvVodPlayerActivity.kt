@@ -272,6 +272,11 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             override fun handleOnBackPressed() = handleBackKey()
         })
         ViewUtils.keepScreenOn(this, true)
+        // 诊断：有用户反馈影视播放中手机熄屏，此处打 flag 实际状态供复现判读
+        // （若日志 flag=true 仍熄屏则非本应用窗口 flag 问题）
+        AppLog.i(TAG, "keepScreenOn set at onCreate, flag=" +
+            (window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                != 0) + " native=$nativeVodEnabled")
         setupWebHost()
         installFocusGuard()
         if (pageUrl.isBlank()) {
@@ -396,6 +401,10 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     }
 
     override fun onPause() {
+        // 诊断：熄屏/后台都先走这里。若此处 flag=false 说明中途被清（对照 onCreate 的 flag=true）
+        AppLog.i(TAG, "onPause keepScreenOn flag=" +
+            (window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                != 0) + " native=$nativeMode userPaused=$userPaused")
         persistProgress()
         if (nativeMode) nativePlayer?.pause()
         webHost.onPause()
