@@ -76,6 +76,27 @@ class TabBarView @JvmOverloads constructor(
         }
 
         setupClickListeners()
+        updateSideFocusChain()
+    }
+
+    /**
+     * 侧栏竖向焦点链动态维护：XML 只给「我的」写了 nextFocusDown=头像，但按钮可见性
+     * 随设置增删（个人页签开时「我的」隐藏），组内最后一个可见按钮按下键会落回几何
+     * 搜索，被垂直更近的内容区卡片抢走焦点（关注页实测跳到 UP 卡片而非头像）。
+     * 每次可见性变化后重算：组内最后一个可见按钮显式接到底部元素（头像可见接头像，
+     * 否则接设置），头像的 nextFocusUp 同步回接，其余按钮恢复默认几何搜索。
+     */
+    private fun updateSideFocusChain() {
+        // 视觉顺序自上而下（搜索按钮在侧栏最顶部，不属于底部组）
+        val bottomButtons = listOf(
+            buttonHome, buttonCategory, buttonDynamic, buttonLive,
+            buttonCctvLive, buttonCctvVod, buttonMe
+        )
+        bottomButtons.forEach { it.nextFocusDownId = View.NO_ID }
+        val lastVisible = bottomButtons.lastOrNull { it.visibility == VISIBLE }
+        val downTargetId = if (imageAvatar.visibility == VISIBLE) imageAvatar.id else buttonSetting.id
+        lastVisible?.nextFocusDownId = downTargetId
+        imageAvatar.nextFocusUpId = lastVisible?.id ?: View.NO_ID
     }
 
     private fun applyTabColor(view: View, isSelected: Boolean) {
@@ -180,6 +201,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun setLiveButtonVisible(visible: Boolean) {
         buttonLive.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun isLiveButtonVisible(): Boolean {
@@ -188,6 +210,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun setCctvLiveButtonVisible(visible: Boolean) {
         buttonCctvLive.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun isCctvLiveButtonVisible(): Boolean {
@@ -196,6 +219,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun setCctvVodButtonVisible(visible: Boolean) {
         buttonCctvVod.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun isCctvVodButtonVisible(): Boolean {
@@ -204,6 +228,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun setCategoryButtonVisible(visible: Boolean) {
         buttonCategory.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun isCategoryButtonVisible(): Boolean {
@@ -212,6 +237,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun setMeButtonVisible(visible: Boolean) {
         buttonMe.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun isMeButtonVisible(): Boolean {
@@ -220,6 +246,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun showAvatar(show: Boolean) {
         imageAvatar.visibility = if (show) VISIBLE else GONE
+        updateSideFocusChain()
     }
 
     fun setAvatarUrl(avatarUrl: String?) {
