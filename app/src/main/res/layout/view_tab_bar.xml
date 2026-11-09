@@ -110,6 +110,22 @@
         app:srcCompat="@drawable/ic_cctv"
         app:tint="?attr/tabBarNormal"/>
     <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/button_hongguo"
+        android:background="@drawable/tab_round_background"
+        android:padding="@dimen/px12"
+        android:focusable="true"
+        android:clickable="true"
+        android:visibility="gone"
+        android:layout_width="@dimen/px70"
+        android:layout_height="@dimen/px70"
+        android:layout_marginTop="@dimen/px20"
+        android:contentDescription="@string/hongguo"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_cctv_vod"
+        app:srcCompat="@drawable/ic_hongguo"
+        app:tint="?attr/tabBarNormal"/>
+    <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/button_me"
         android:background="@drawable/tab_round_background"
         android:padding="@dimen/px12"
@@ -122,7 +138,7 @@
         android:contentDescription="@string/me"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/button_cctv_vod"
+        app:layout_constraintTop_toBottomOf="@+id/button_hongguo"
         app:srcCompat="@drawable/tab_me"
         app:tint="?attr/tabBarNormal"/>
     <com.mytvb.core.ui.image.AvatarBadgeView

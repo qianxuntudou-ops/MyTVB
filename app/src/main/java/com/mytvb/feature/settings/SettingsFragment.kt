@@ -111,6 +111,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
+        // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
+        // 红果账号/设备身份与 B 站完全隔离（独立 DataStore + 独立网络栈）
+        private const val KEY_HONGGUO_ENTRY = "hongguo_entry"
         // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
         // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
@@ -425,6 +428,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_tv_vod, listOf(
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
                 stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "开")
+            )),
+            SettingGroup(R.string.setting_group_hongguo, listOf(
+                stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关")
             ))
         )
 
@@ -769,6 +775,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 (activity as? MainActivity)?.applyCctvVodEntryVisibility()
             }
             KEY_CCTV_NATIVE_VOD -> toggle(key)
+            // —— 红果短剧 ——
+            KEY_HONGGUO_ENTRY -> toggle(key) {
+                appSettings.putStringAsync(key, it)
+                (activity as? MainActivity)?.applyHongguoEntryVisibility()
+            }
             KEY_X5_CORE -> startXdDownload()
             KEY_CAST_RECEIVE -> toggle(key) { newValue ->
                 // 投屏开关存 cast 自有 SP（不进 appSettings），并立即生效（拉起/停止服务）
@@ -1387,6 +1398,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_CCTV_NATIVE_LIVE)
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_CCTV_NATIVE_VOD)
+        applyStored(KEY_HONGGUO_ENTRY)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)
         // 旧版本存储值兜底：不属于当前选项集时回落默认

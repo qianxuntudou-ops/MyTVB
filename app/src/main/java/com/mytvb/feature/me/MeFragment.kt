@@ -156,14 +156,15 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 mainNavigationViewModel.events.collectLatest { event ->
-                    // MainTabSelected(ME=6) 是「正在切到本页」的信号：事件经 Main.immediate
+                    // MainTabSelected(ME=7) 是「正在切到本页」的信号：事件经 Main.immediate
                     // 同步分发，先于 showFragment 的 show 事务生效，此刻 isHidden 仍是
                     // true——本页自己的选中事件若被下面的 isHidden 守卫吞掉，从其它主
                     // tab 切回时 SELECT_TAB4 永远送不到子 tab（历史页表现为不刷新）。
-                    // （历史遗留：CCTV影视 tab 插入后本页索引从 5 变 6，此处曾长期
-                    // 误判 5，导致切 CCTV影视 时误触发本页刷新、切「我的」反而不触发。）
+                    // （历史遗留①：CCTV影视 tab 插入后本页索引从 5 变 6，此处曾长期
+                    // 误判 5。②：红果短剧 tab 插入后从 6 变 7，同步更新。新增侧栏 tab
+                    // 时必须同步 MainActivity 常量与此处判断。）
                     if (event is MainNavigationViewModel.Event.MainTabSelected) {
-                        if (event.index == 6) {
+                        if (event.index == 7) {
                             if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
                                 viewModel.loadUserInfo()
                             }
@@ -176,7 +177,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
                     }
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabReselected ->
-                            if (event.index == 6) {
+                            if (event.index == 7) {
                                 if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
                                     viewModel.loadUserInfo()
                                 }

@@ -103,6 +103,14 @@
             android:theme="@style/Theme.MyBLBL"
             tools:ignore="DiscouragedApi" />
 
+        <!-- 红果短剧独立播放器（media3，与 B 站 PlayerActivity 隔离） -->
+        <activity
+            android:name=".feature.hongguo.HongguoPlayerActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="screenSize|orientation|keyboardHidden|screenLayout|uiMode"
+            android:theme="@style/Theme.MyBLBL" />
+
         <activity
             android:name=".ui.activity.GaiaVgateActivity"
             android:exported="false"

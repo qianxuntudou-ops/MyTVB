@@ -338,6 +338,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // 纯 JVM 单测中 stub Context 等含 final 方法的 Android 类（mockable jar 无法被子类覆写）
     testImplementation("org.mockito:mockito-core:5.14.2")
+    // 纯 JVM 单测用真 org.json（android.jar 里的 org.json 是抛异常的 stub）
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.1.5")
 }

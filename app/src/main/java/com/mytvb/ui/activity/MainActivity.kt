@@ -116,8 +116,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val SETTINGS_OVERLAY_EXIT_ANIM_MS = 275L
         private const val CCTV_TAB_INDEX = 4
         private const val CCTV_VOD_TAB_INDEX = 5
-        private const val ME_TAB_INDEX = 6
-        private const val SEARCH_TAB_INDEX = 7
+        private const val HONGGUO_TAB_INDEX = 6
+        private const val ME_TAB_INDEX = 7
+        private const val SEARCH_TAB_INDEX = 8
         private const val HOME_TAB_INDEX = 0
         private const val STARTUP_TAG = "AppStartup"
         private const val TEEN_REST_DIAG_TAG = "TeenRestDiag"
@@ -160,7 +161,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     // tab 顺序固定（与 fragmentFactories 一一对应）：
-    // 0 推荐 / 1 分类 / 2 动态 / 3 直播 / 4 CCTV直播 / 5 CCTV影视 / 6 我的 / 7 搜索。
+    // 0 推荐 / 1 分类 / 2 动态 / 3 直播 / 4 CCTV直播 / 5 CCTV影视 / 6 红果短剧 / 7 我的 / 8 搜索。
     // 用 lazy factory 让非首屏 tab 真正点中时再构造，省去 1.1s 的 onCreate 大段时间。
     private val fragmentFactories: List<() -> Fragment> = listOf(
         { HomeFragment.newInstance() },
@@ -169,6 +170,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         { LiveFragment.newInstance() },
         { CctvLiveFragment.newInstance() },
         { CctvVodFragment.newInstance() },
+        { com.mytvb.feature.hongguo.HongguoFragment.newInstance() },
         { MeFragment.newInstance() },
         { SearchNewFragment.newInstance() }
     )
@@ -321,6 +323,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         applyLiveEntryVisibility()
         applyCctvLiveEntryVisibility()
         applyCctvVodEntryVisibility()
+        applyHongguoEntryVisibility()
         applyMeEntryVisibility()
         AppLog.i(STARTUP_TAG, "STARTUP MainActivity.initView elapsed=${SystemClock.elapsedRealtime() - t0}ms")
     }
@@ -490,6 +493,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
     }
 
+    /** 红果短剧入口开关（默认关）：开启后侧栏出现红果按钮，与 B 站会话完全隔离。 */
+    fun applyHongguoEntryVisibility() {
+        val entry = appSettings.getCachedString("hongguo_entry", "关") ?: "关"
+        val show = entry == "开"
+        binding.myTabView.setHongguoButtonVisible(show)
+        if (!show && currentFragmentIndex == HONGGUO_TAB_INDEX) {
+            binding.myTabView.selectTab(0)
+        }
+    }
+
     /**
      * 「首页个人页签」开关（默认开）：开启时隐藏侧栏「我的」入口，历史/稍后观看/
      * 收藏并入首页 tab；关闭时完全恢复。设置页切换后即时调用，冷启动由 initView 重放。
@@ -520,6 +533,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (index == 3 && !binding.myTabView.isLiveButtonVisible()) return
         if (index == CCTV_TAB_INDEX && !binding.myTabView.isCctvLiveButtonVisible()) return
         if (index == CCTV_VOD_TAB_INDEX && !binding.myTabView.isCctvVodButtonVisible()) return
+        if (index == HONGGUO_TAB_INDEX && !binding.myTabView.isHongguoButtonVisible()) return
         if (index == ME_TAB_INDEX && !binding.myTabView.isMeButtonVisible()) return
         if (currentFragmentIndex == index) return
 
