@@ -8,6 +8,7 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import androidx.appcompat.app.AppCompatDialog
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.DialogWindowFit
 import com.mytvb.databinding.DialogCctvVodSearchBinding
 import com.mytvb.feature.search.view.KeyboardView
@@ -45,8 +46,24 @@ class CctvVodSearchDialog(
         }
         binding.viewKeyboard.setKeySelectListener(this)
         // 自绘键盘输入同步进输入框；输入框自身的文本变化（系统输入法/删除）统一走监听。
-        // showSoftInputOnFocus=false：聚焦不自动弹系统键盘，想打中文走「输入法」按钮
+        // showSoftInputOnFocus=false：聚焦不自动弹系统键盘，由下方三通道显式呼出
+        // （对齐 SearchNewFragment 已验证行为）：聚焦/点击/OK 都能唤出系统输入法，
+        // 焦点移去按钮或自家 T9 键盘时自动收起
         binding.editQuery.showSoftInputOnFocus = false
+        binding.editQuery.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) showSystemInputMethod() else hideSystemInputMethod()
+        }
+        binding.editQuery.setOnClickListener { showSystemInputMethod() }
+        binding.editQuery.setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN &&
+                (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
+            ) {
+                showSystemInputMethod()
+                true
+            } else {
+                false
+            }
+        }
         binding.editQuery.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
@@ -67,12 +84,7 @@ class CctvVodSearchDialog(
                 false
             }
         }
-        binding.buttonIme.setOnClickListener {
-            binding.editQuery.requestFocus()
-            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE)
-                as? android.view.inputmethod.InputMethodManager
-            imm?.showSoftInput(binding.editQuery, 0)
-        }
+        binding.buttonIme.setOnClickListener { showSystemInputMethod() }
         // 触屏点输入框以外收系统输入法见 dispatchTouchEvent override
         // （OnTouchListener 收不到被子控件消费的触摸，如自家 T9 键盘按键/条目点击）
         binding.buttonConfirm.setOnClickListener { dismiss() }
@@ -111,6 +123,19 @@ class CctvVodSearchDialog(
     }
 
     override fun onSearch() = dismiss()
+
+    private fun showSystemInputMethod() {
+        val editText = binding.editQuery
+        editText.requestFocus()
+        // 点击当帧焦点可能还没落到输入框，showSoftInput 会直接失败，等一帧再呼
+        // （SearchNewFragment 同款）；flags=0 显式请求，SHOW_IMPLICIT 允许系统静默忽略
+        editText.post {
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE)
+                as? android.view.inputmethod.InputMethodManager
+            val accepted = imm?.showSoftInput(editText, 0) ?: false
+            AppLog.d(TAG, "showSystemInputMethod: focused=${editText.isFocused} accepted=$accepted")
+        }
+    }
 
     private fun hideSystemInputMethod() {
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE)
@@ -151,6 +176,8 @@ class CctvVodSearchDialog(
     }
 
     companion object {
+        private const val TAG = "CctvVodSearchDialog"
+
         fun show(context: Context, initialQuery: String, onQueryChanged: (String) -> Unit) {
             CctvVodSearchDialog(context, initialQuery, onQueryChanged).show()
         }
