@@ -54,20 +54,6 @@ class HongguoPlay(
         identity: HongguoDeviceRegister.Identity,
     ): PlayUrl {
         require(vid.matches(Regex("\\d{1,30}"))) { "分集编号无效" }
-        // K-M1 body（multi/v1，Node playbackRequest 验证版）
-        val multiBody = JSONObject()
-            .put(
-                "biz_param", JSONObject()
-                    .put("detail_page_version", 0)
-                    .put("device_level", 3)
-                    .put("disable_digg_stat", false)
-                    .put("need_all_video_definition", true)
-                    .put("need_mp4_align", false)
-                    .put("use_os_player", false)
-                    .put("use_server_dns", false)
-                    .put("video_platform", 1024)
-            )
-            .put("mixed_video_id_map", JSONObject().put("1004", org.json.JSONArray().put(vid)))
         // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932；body 带其扩展字段）
         // video_platform=3（HGTV T1 默认）：1024 会请求到 ByteVC2 自研编码，
         // 3 请求通用 h264/hevc（2026-11-10 实测 7703473857562151961 修复）
@@ -94,12 +80,41 @@ class HongguoPlay(
             vid,
             listOf(
                 "/novel/player/multi_video_model/player/v1" to hgtvBody.toString().toByteArray(Charsets.UTF_8),
-                "/novel/player/multi_video_model/v1/" to multiBody.toString().toByteArray(Charsets.UTF_8)
+                "/novel/player/multi_video_model/v1/" to m1ModelBody(vid, 1024)
             ),
             identity
         )
-        return parseEntry(vid, entry)
+        return try {
+            parseEntry(vid, entry)
+        } catch (e: PlayException) {
+            if (e.code != "UNSUPPORTED_BYTEVC2") throw e
+            // 2026-11-10：服务端对新转码剧集仅下发 ByteVC2（内容维度必现，换号无效）。
+            // M1 同端点换 video_platform=3（player/v1 hgtvBody 同参数，实测能拿到通用
+            // h264/hevc）重发一次；首发仍 1024，重试失败不影响原报错。
+            android.util.Log.w(TAG, "bytevc2-only; M1 retry with video_platform=3 vid=$vid")
+            val retry = runCatching {
+                fetchM1Entry(vid, m1ModelBody(vid, 3), identity, allowRotate = false)
+            }.getOrElse { throw e }
+            parseEntry(vid, retry)
+        }
     }
+
+    /** K-M1 body（multi/v1，Node playbackRequest 验证版）。video_platform：1024 会
+     *  拿到 ByteVC2 自研编码，3 请求通用 h264/hevc（与 player/v1 hgtvBody 同参数）。 */
+    private fun m1ModelBody(vid: String, videoPlatform: Int): ByteArray = JSONObject()
+        .put(
+            "biz_param", JSONObject()
+                .put("detail_page_version", 0)
+                .put("device_level", 3)
+                .put("disable_digg_stat", false)
+                .put("need_all_video_definition", true)
+                .put("need_mp4_align", false)
+                .put("use_os_player", false)
+                .put("use_server_dns", false)
+                .put("video_platform", videoPlatform)
+        )
+        .put("mixed_video_id_map", JSONObject().put("1004", org.json.JSONArray().put(vid)))
+        .toString().toByteArray(Charsets.UTF_8)
 
     // ---- 播放签名 POST：HGTV 号模型（持久化复用+空响应自愈），host 集群轮询 ----
     private fun fetchModelEntry(
@@ -143,35 +158,47 @@ class HongguoPlay(
         // player/v1 收紧后的实际可用端点（HGTV 本尊 fallback_api 二跳同路径）。
         // 沿用当前号；空响应再自愈一次重发（两发保 K-M1 在两种环境下都首发可过）。
         val m1Body = endpoints.last { it.first.contains("multi_video_model/v1/") }.second
-        val m1Url = "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/"
-        runCatching {
-            var text = ""
-            for (m1Attempt in 0 until 2) {
-                if (m1Attempt == 1) current = runCatching { rotateIdentity() }.getOrElse { current }
-                val m1q = java.util.LinkedHashMap<String, String>()
-                m1q["device_id"] = current.deviceId
-                m1q["iid"] = current.installId
-                if (current.deviceToken.isNotEmpty()) m1q["device_token"] = current.deviceToken
-                m1q["ac"] = "wifi"; m1q["channel"] = "update_64"; m1q["aid"] = "8662"
-                m1q["app_name"] = "novelread"
-                m1q["version_code"] = "71332"; m1q["version_name"] = "7.1.3.32"
-                m1q["device_platform"] = "android"; m1q["os"] = "android"; m1q["ssmix"] = "a"
-                m1q["device_type"] = "25053RT47C"; m1q["device_brand"] = "Redmi"; m1q["language"] = "zh"
-                m1q["os_api"] = "36"; m1q["os_version"] = "16"
-                m1q["manifest_version_code"] = "71332"
-                m1q["resolution"] = "1280*2772"; m1q["dpi"] = "520"
-                m1q["update_version_code"] = "71332"; m1q["host_abi"] = "arm64-v8a"
-                m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "71332"
-                m1q["compliance_status"] = "0"; m1q["need_personal_recommend"] = "1"
-                m1q["player_so_load"] = "1"; m1q["is_android_pad_screen"] = "0"
-                android.util.Log.d(TAG, "play fallback K-M1 vid=$vid attempt=$m1Attempt device=${current.deviceId}")
-                text = kotlinSignedPost(m1Url, m1q, m1Body, "7.1.3.32", current.deviceId,
-                    Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua("71332"), gzipHeader = false)
-                if (text.isNotEmpty()) return extractEntry(vid, JSONObject(text))
-            }
-            throw EmptyBodyException()
-        }.onFailure { android.util.Log.w(TAG, "M1 fallback fail: ${it.message}") }
+        runCatching { return fetchM1Entry(vid, m1Body, current, allowRotate = true) }
+            .onFailure { android.util.Log.w(TAG, "M1 fallback fail: ${it.message}") }
         throw lastError ?: PlayException("播放接口无响应", "EMPTY_RESPONSE")
+    }
+
+    /**
+     * M1 兜底请求：sinfonlineb multi/v1 + 71332 档案 + 明文 body，空响应换号重发一次。
+     * bytevc2-only 重试传 allowRotate=false（编码与号无关，换号不改变下发编码集）。
+     */
+    private fun fetchM1Entry(
+        vid: String,
+        body: ByteArray,
+        startIdentity: HongguoDeviceRegister.Identity,
+        allowRotate: Boolean
+    ): JSONObject {
+        var current = startIdentity
+        val m1Url = "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/"
+        for (m1Attempt in 0 until 2) {
+            if (m1Attempt == 1 && allowRotate) current = runCatching { rotateIdentity() }.getOrElse { current }
+            val m1q = java.util.LinkedHashMap<String, String>()
+            m1q["device_id"] = current.deviceId
+            m1q["iid"] = current.installId
+            if (current.deviceToken.isNotEmpty()) m1q["device_token"] = current.deviceToken
+            m1q["ac"] = "wifi"; m1q["channel"] = "update_64"; m1q["aid"] = "8662"
+            m1q["app_name"] = "novelread"
+            m1q["version_code"] = "71332"; m1q["version_name"] = "7.1.3.32"
+            m1q["device_platform"] = "android"; m1q["os"] = "android"; m1q["ssmix"] = "a"
+            m1q["device_type"] = "25053RT47C"; m1q["device_brand"] = "Redmi"; m1q["language"] = "zh"
+            m1q["os_api"] = "36"; m1q["os_version"] = "16"
+            m1q["manifest_version_code"] = "71332"
+            m1q["resolution"] = "1280*2772"; m1q["dpi"] = "520"
+            m1q["update_version_code"] = "71332"; m1q["host_abi"] = "arm64-v8a"
+            m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "71332"
+            m1q["compliance_status"] = "0"; m1q["need_personal_recommend"] = "1"
+            m1q["player_so_load"] = "1"; m1q["is_android_pad_screen"] = "0"
+            android.util.Log.d(TAG, "play fallback K-M1 vid=$vid attempt=$m1Attempt device=${current.deviceId}")
+            val text = kotlinSignedPost(m1Url, m1q, body, "7.1.3.32", current.deviceId,
+                Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua("71332"), gzipHeader = false)
+            if (text.isNotEmpty()) return extractEntry(vid, JSONObject(text))
+        }
+        throw EmptyBodyException()
     }
 
     private fun extractEntry(vid: String, payload: JSONObject): JSONObject {
@@ -482,10 +509,15 @@ class HongguoPlay(
         val rows = candidates.filter { it.codecRank < if (hasCompatible) 2 else 3 }
             .sortedWith(compareBy({ it.codecRank }, { -it.pixels }))
         if (rows.isEmpty()) {
-            // 排障 dump：看 fplay/multi 响应里到底给了什么（2026-11-10 player/v1 形态）
+            // 排障 dump：看 fplay/multi 响应里到底给了什么（2026-11-10 player/v1 形态；
+            // video_list 为 JSONArray 时 optJSONObject 恒 null，附 codecs 汇总与二跳线索）
             runCatching {
+                val codecs = candidates.joinToString(",") { it.codec }
                 android.util.Log.w(TAG, "no codec candidates; info.keys=" + info.keys().asSequence().toList() +
-                    " video_list=" + info.optJSONObject("video_list")?.toString()?.take(600))
+                    " codecs=[" + codecs + "]" +
+                    " video_list=" + (info.optJSONArray("video_list")?.toString()
+                        ?.take(600) ?: "null") +
+                    " fallback_api=" + model.opt("fallback_api")?.toString()?.take(200))
             }
             if (candidates.any { it.codec in listOf("bytevc2", "bvc2") } && !hasCompatible) {
                 throw PlayException("本集使用 ByteVC2 编码，当前播放器暂不支持", "UNSUPPORTED_BYTEVC2")
