@@ -74,6 +74,8 @@ class HongguoPlay(
             )
             .put("mixed_video_id_map", JSONObject().put("1004", org.json.JSONArray().put(vid)))
         // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932；body 带其扩展字段）
+        // video_platform=3（HGTV T1 默认）：1024 会请求到 ByteVC2 自研编码，
+        // 3 请求通用 h264/hevc（2026-11-10 实测 7703473857562151961 修复）
         val hgtvBody = JSONObject()
             .put(
                 "biz_param", JSONObject()
@@ -86,10 +88,13 @@ class HongguoPlay(
                     .put("use_os_player", false)
                     .put("use_server_dns", true)
                     .put("use_server_dns_scene", "cold_start_stage")
-                    .put("video_platform", 1024)
+                    .put("video_platform", 3)
             )
             .put("dr_scene", "player")
             .put("mixed_video_id_map", JSONObject().put("1004", org.json.JSONArray().put(vid)))
+        // 端点策略（2026-11-10 实测定案）：主=player/v1（73932 档案，大部分剧）；
+        // player/v1 对部分内容报 code=100001 参数错误 → fetchModelEntry 内置
+        // L1-M1 兜底（sinfonlineb multi/v1 + 71332 档案，编码直接下发 hevc/h264）。
         val entry = fetchModelEntry(
             vid,
             listOf(
@@ -102,7 +107,7 @@ class HongguoPlay(
         return parseEntry(vid, entry, allowBytevc2)
     }
 
-    // ---- 播放签名 POST：多端点×多身份重试（transport 优先 WebView 通道） ----
+    // ---- 播放签名 POST：多端点×新号首发轮询（transport 优先 WebView 通道） ----
     private fun fetchModelEntry(
         vid: String,
         endpoints: List<Pair<String, ByteArray>>,
@@ -125,19 +130,49 @@ class HongguoPlay(
             } catch (e: EmptyBodyException) {
                 lastError = e
             } catch (e: PlayException) {
-                // 业务拒绝/缺模型：号还有效，直接抛
-                throw e
+                // 业务拒绝/编码不兼容：换端点（platform=3 兜底）再试，号已消耗
+                lastError = e
             }
         }
-        // 兜底：std 端点（kotlin-tv 构造，依赖传入身份在真实设备上的可用性）
-        for ((path, raw) in endpoints.filter { !it.first.contains("player/v1") }) {
+        // 兜底①：L1 签名的 M1 端点（sinfonlineb multi/v1 + Node 线上验证的 71332 档案，
+        // 全走字节码签名+传输——player/v1 对部分内容报 100001 参数错误的救场通道）
+        if (HongguoL1.signAvailable) {
+            runCatching {
+                val fresh = HongguoDeviceRegister.registerFresh()
+                val m1q = java.util.LinkedHashMap<String, String>()
+                m1q["device_id"] = fresh.deviceId
+                m1q["iid"] = fresh.installId
+                m1q["ac"] = "wifi"; m1q["channel"] = "update_64"; m1q["aid"] = "8662"
+                m1q["app_name"] = "novelread"
+                m1q["version_code"] = "71332"; m1q["version_name"] = "7.1.3.32"
+                m1q["device_platform"] = "android"; m1q["os"] = "android"; m1q["ssmix"] = "a"
+                m1q["device_type"] = "25053RT47C"; m1q["device_brand"] = "Redmi"; m1q["language"] = "zh"
+                m1q["os_api"] = "36"; m1q["os_version"] = "16"
+                m1q["manifest_version_code"] = "71332"
+                m1q["resolution"] = "1280*2772"; m1q["dpi"] = "520"
+                m1q["update_version_code"] = "71332"; m1q["host_abi"] = "arm64-v8a"
+                m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "71332"
+                m1q["compliance_status"] = "0"; m1q["need_personal_recommend"] = "1"
+                m1q["player_so_load"] = "1"; m1q["is_android_pad_screen"] = "0"
+                val m1Body = endpoints.last { it.first.contains("multi_video_model/v1/") }.second
+                android.util.Log.d(TAG, "play fallback L1-M1 vid=$vid fresh=${fresh.deviceId}")
+                val text = HongguoL1.signAndPost(
+                    "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/",
+                    m1q, m1Body, gzip = false
+                )
+                return extractEntry(vid, JSONObject(text))
+            }.onFailure { android.util.Log.w(TAG, "L1-M1 fallback fail: ${it.message}") }
+        }
+        // 兜底②：platform=3 与 std 端点（每请求新号——首请求模型）
+        for ((path, raw) in endpoints.drop(1)) {
             try {
-                android.util.Log.d(TAG, "play fallback path=$path vid=$vid device=${identity.deviceId}")
-                return extractEntry(vid, postVideoModel(path, raw, identity, transport))
+                val fresh = runCatching { HongguoDeviceRegister.registerFresh() }.getOrElse { identity }
+                android.util.Log.d(TAG, "play fallback path=$path vid=$vid fresh=${fresh.deviceId}")
+                return extractEntry(vid, postVideoModel(path, raw, fresh, transport))
             } catch (e: EmptyBodyException) {
                 lastError = e
             } catch (e: PlayException) {
-                throw e
+                lastError = e
             }
         }
         throw lastError ?: PlayException("播放接口无响应", "EMPTY_RESPONSE")
@@ -149,7 +184,11 @@ class HongguoPlay(
 
     private fun extractEntry(vid: String, payload: JSONObject): JSONObject {
         val code = payload.optInt("Code", payload.optInt("code", 0))
-        if (code != 0) throw PlayException("播放接口 code=$code", "BUSINESS_REJECTED")
+        if (code != 0) {
+            val msg = payload.optString("message", payload.optString("Message", ""))
+            android.util.Log.w(TAG, "play biz code=$code msg=$msg")
+            throw PlayException("播放接口 code=$code${if (msg.isNotEmpty()) "：$msg" else ""}", "BUSINESS_REJECTED")
+        }
         val data = payload.optJSONObject("data") ?: JSONObject()
         return data.optJSONObject("video_model")
             ?: data.optJSONObject(vid)
@@ -380,6 +419,11 @@ class HongguoPlay(
     object HongguoPlayDebug {
         var baseUrlOverride: String? = null
         var dumpRequests = false
+
+        /** /sdcard/hg_ksign 存在时 hgtvLane 用 Kotlin 签名链（传输仍走 L1）——黑盒分离实验。 */
+        val kotlinSignFirst: Boolean by lazy {
+            java.io.File("/sdcard/hg_ksign").exists()
+        }
     }
 
     // ---- entry 解析：video_model 内联或 fallback_api 二跳（对照 parseEntryPlayInfo） ----

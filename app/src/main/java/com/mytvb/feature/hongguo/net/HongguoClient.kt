@@ -296,14 +296,20 @@ class HongguoClient(
         }
     }
 
-    // ---- 匿名签名 POST：一次性随机身份 + 空响应轮换重试（对照 postSignedJSON） ----
+    // ---- 签名 POST：注册身份（L1 优先）+ 空响应轮换换号重试 ----
+    @Volatile private var feedIdentity: HongguoDeviceRegister.Identity? = null
+
     private fun postSignedJson(path: String, body: JSONObject): JSONObject {
         val raw = body.toString().toByteArray(Charsets.UTF_8)
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
             try {
-                return postOnce(path, raw, randomId(), randomId())
+                // 注册号复用，空响应才换新（feed 翻页高频，不能每页注册）
+                val identity = feedIdentity?.takeIf { attempt == 0 }
+                    ?: HongguoDeviceRegister.registerFresh().also { feedIdentity = it }
+                return postOnce(path, raw, identity.deviceId, identity.installId)
             } catch (e: EmptyResponseException) {
+                feedIdentity = null
                 lastError = e
                 if (attempt == 2) break
                 Thread.sleep(100)
@@ -325,6 +331,36 @@ class HongguoClient(
     }
 
     private fun postOnce(path: String, raw: ByteArray, deviceId: String, installId: String): JSONObject {
+        // L1 签名通道（2026-11-10）：旧 Kotlin 签名链+随机假身份在模拟器出口全空（实证），
+        // feed 与播放同走 HGTV 字节码签名+传输（landpage 73532 档案+真环境+注册号）
+        if (HongguoL1.signAvailable) {
+            val q = java.util.LinkedHashMap<String, String>()
+            q["iid"] = installId
+            q["device_id"] = deviceId
+            q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
+            q["app_name"] = "novelread"
+            q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
+            q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
+            q["device_type"] = HongguoEnv.deviceType
+            q["device_brand"] = HongguoEnv.deviceBrand
+            q["language"] = "zh"
+            q["os_api"] = HongguoEnv.osApi
+            q["os_version"] = HongguoEnv.osVersion
+            q["manifest_version_code"] = "73532"
+            q["resolution"] = HongguoEnv.resolution
+            q["dpi"] = HongguoEnv.dpi
+            q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
+            q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
+            q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
+            q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
+            q["ts"] = (System.currentTimeMillis() / 1000).toString()
+            val text = HongguoL1.signAndPost(
+                "https://api5-normal-sinfonlinea.fqnovel.com$path", q, raw, gzip = false
+            )
+            android.util.Log.d("Hongguo", "feed(L1) $path len=${text.length}")
+            if (text.isEmpty()) throw EmptyResponseException()
+            return JSONObject(text)
+        }
         val nowSec = System.currentTimeMillis() / 1000
         val q = TreeMap<String, String>()
         q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"

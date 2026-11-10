@@ -115,14 +115,19 @@ app/src/main/java/com/mytvb/feature/hongguo/
 4. **DNS 分流**：sinfonlinea→CNAME 字节直连机房（116.169.164.x，l7-online-self-max-v6.s.dsa.cdnbuild.net）；sinfonlineb→金山云 CDN（q1-quic.gslb.ksyuncdn.com 58.144.x）。pi5 域名公网不解析（pcap 里的 pi5 连接来自 MuMu 其它 TTNet app，与 HGTV 无关）
 5. **注册 Cookie**：注册下发 install_id/ttreq 等 Set-Cookie，信任号不需要回带（删 Cookie 重放仍过）
 
-**打通方案（现行代码）**——`HongguoL1.signAndPost`：
-- **签名也走 HGTV 字节码**：反射调 `S0.s1.d(inst, baseUrl, query, bodyGzip, null, query, 8)`（真实类名 S0.s1 非 jadx 的 C0257s1；M2.a=url/b=headers/c=body/d=method）→ 返回签名头集（UA 由 query map 派生=W2.c 同源）→ Kotlin 侧做 G0 改写（删 request-tag/x-tt-dt、passport=5051452、加 lc/x-ss-dp/x-vc-bdturing/x-tt-trace-id/Content-Encoding/store-region）+E0 外层头 → `HongguoL1.post`（HGTV okhttp3 传输）
-- **每号新号首发**：`fetchModelEntry` 每轮 `registerFresh()`→立即首发 player/v1（Identity.registeredAt<30s 可复用）；号废即换
+**打通方案（现行代码）**——`HongguoL1.signAndPost`（**1.3.6 字节码，双版本自适应**）：
+- **签名也走 HGTV 字节码**：反射调签名器产出 url+签名头集（UA 由 query map 派生）→ Kotlin 侧做 G0 改写（删 request-tag/x-tt-dt、passport=5051452、加 lc/x-ss-dp/x-vc-bdturing/x-tt-trace-id/Content-Encoding(gzip 时)/store-region）+E0 外层头 → L1 okhttp 传输
+- **双版本混淆映射**（运行时按签名器类名自动探测，真实类名均 dexdump 验证）：
+  - 1.3.4：`S0.s1.d`/M2(a,b,c,d)/okhttp=L1 包(x,y,D,C,w)/TLS `S0.S0.a`/Protocol `L1.z.c`/RequestBody `H0.j.b`
+  - 1.3.6（2026-11-10 起 embed 默认）：`F0.x1.e`/`F0.c3`(a,b,c,d)/okhttp=H1 包(z=Builder,A=Client,F=Request.Builder,E=Call)/TLS `F0.U0.a(H1.z)`/Protocol `H1.B.c`/MediaType `H1.y.a`/RequestBody `H1.H.c`/Response `H1.J`(c=code,g=body)
+  - 1.3.6 坑：`H1.F.b(String,H)` 非 public（getMethods 取不到，须 declaredMethods+setAccessible）；headers 走 Builder 内部字段 c（`B.Z.u`）；client=`new H1.A(z)`；1.3.6 = pan8664716 独立线（修复推荐空屏/播放重试）
+- **播放端点策略**（12:52 双剧回归通过）：主=`player/v1`(73932 档案+gzip body)；**部分内容报 code=100001 参数错误**→自动 L1-M1 兜底（`sinfonlineb multi_video_model/v1/`+71332 档案+明文 body+L1 签名——编码直接下发 hevc/h264，bvc2 问题也随之消解；**video_platform=3 是伪解**，对 player/v1 恒报参数错误，已删）
+- **feed（推荐/分类）也走 L1 签名**：landpage 73532 档案+真环境+注册号复用（空响应才换号），gzip=false
+- **每号新号首发**：`fetchModelEntry` 每轮 `registerFresh()`→立即首发（Identity.registeredAt<30s 可复用）；号废即换
 - **注册+播放共享连接池**：`HongguoHttp` 单例（HongguoTls 同款）
-- **环境如实上报**：`HongguoEnv`（Build.MODEL/RESOLUTION/densityDpi 等动态读取，host_abi 恒 arm64-v8a——红果无 x86_64 官方包）；注册 payload/query/播放 query 三处同源
-- **MuMu 实测**：`L1 resp http=200 len=25xxx` 稳定出数据，`play picked codec=bytevc1 quality=1080p 1920x1080 encrypted=true host=v9-reading-video.qznovelvod.com`
+- **环境如实上报**：`HongguoEnv`（Build.MODEL/RESOLUTION/densityDpi 等动态读取，host_abi 恒 arm64-v8a）；注册 payload/query/播放 query 三处同源
 - **video_list 双形态**：player/v1 响应的 video_model.video_list 是 **JSONArray**（multi/v1 是 JSONObject 键值）——parseEntry 已兼容
-- 打包：`app-debug-l1.apk`（`scripts/embed_hgtv_dex.py` 塞 classes20/21.dex+重签名；**注意 assembleDebug 必须成功后再跑 embed**，否则装的是旧包）
+- 打包：`app-debug-l1.apk`（`scripts/embed_hgtv_dex.py --hg=136 默认`塞 dex+重签名；**assembleDebug 必须成功后再跑 embed**，否则装旧包）
 
 **CENC 加密流解密播放（已完成，2026-11-10 12:00 MuMu 实测出画面+切集全通）**：
 - `HongguoMp4Decrypt`（Node hongguo.js decryptMp4Buffer 的 Kotlin 移植）：parseBoxes→trackInfo（stsz/stco/stsc/senc→样本偏移+8B IV 表）→逐样本 AES-128-CTR（IV=nonce+8B 零计数器）→rebuildMoov（prone senc/saio/saiz/sgpd/sbgp、encv/enca 经 sinf/frma 还原原始 codec 条目、stco/co64 重定位、moov 前移 mdat 前）
