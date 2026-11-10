@@ -72,18 +72,6 @@
         android:layout_width="@dimen/px480"
         android:layout_height="@dimen/px64"/>
     <androidx.appcompat.widget.AppCompatButton
-        android:id="@+id/button_cloud_history"
-        android:text="云端历史"
-        android:textSize="@dimen/px24"
-        android:textColor="@color/textColor"
-        android:background="@drawable/button_common"
-        android:paddingStart="@dimen/px40"
-        android:paddingEnd="@dimen/px40"
-        android:layout_marginTop="@dimen/px20"
-        android:visibility="gone"
-        android:layout_width="@dimen/px480"
-        android:layout_height="@dimen/px64"/>
-    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_logout"
         android:text="@string/hongguo_logout"
         android:textSize="@dimen/px24"

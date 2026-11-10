@@ -145,9 +145,24 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private fun load(mode: String, genre: String, withPanel: Boolean) {
         when (mode) {
             MODE_HISTORY -> {
+                // 本地记录秒显；登录态再拉云端合并刷新（手机 App 同账号记录）
                 adapter.setDataDeduplicated(repository.history().map { it.toUi() })
-                hasMore = false
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                hasMore = false
+                if (!repository.loggedIn) return
+                loadJob?.cancel()
+                loadJob = viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        binding.progressLoading.visibility = View.VISIBLE
+                        val merged = repository.mergedHistory()
+                        adapter.setDataDeduplicated(merged.map { it.toUi() })
+                        binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                    } catch (e: CancellationException) {
+                        throw e
+                    } finally {
+                        binding.progressLoading.visibility = View.GONE
+                    }
+                }
                 return
             }
             MODE_FAVORITE -> {

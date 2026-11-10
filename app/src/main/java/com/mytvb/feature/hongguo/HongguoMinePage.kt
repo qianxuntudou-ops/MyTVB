@@ -47,7 +47,6 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             AppToast.show(requireContext(), "已退出红果账号")
         }
         binding.buttonSubscribe.setOnClickListener { showSubscribeList() }
-        binding.buttonCloudHistory.setOnClickListener { showCloudHistory() }
         binding.buttonWatchLaterList.setOnClickListener { showWatchLaterList() }
         binding.buttonClear.setOnClickListener {
             repository.clearLocal()
@@ -96,36 +95,6 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         }
     }
 
-    /** 云端观看历史（手机 App 同账号记录）：点选条目进详情可续播。 */
-    private fun showCloudHistory() {
-        lifecycleScope.launch {
-            val items = try {
-                repository.cloudHistory()
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                AppToast.show(requireContext(), "云端历史拉取失败：${e.message}")
-                return@launch
-            }
-            if (items.isEmpty()) {
-                AppToast.show(requireContext(), "云端暂无观看历史")
-                return@launch
-            }
-            val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
-            ChoiceDialog.show(
-                requireContext(), "云端历史（选择打开）",
-                items.map { item ->
-                    val ep = if (item.episodeCount > 0) "看到${item.episodeIndex1}/${item.episodeCount}集" else "看到第${item.episodeIndex1}集"
-                    val pct = if (item.durationMs > 0) " ${((item.positionMs * 100) / item.durationMs).coerceIn(0, 100)}%" else ""
-                    "${item.title} · $ep$pct · ${fmt.format(Date(item.lastPlayedAtMs))}"
-                }
-            ) { index ->
-                items.getOrNull(index)?.let { item ->
-                    HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
-                }
-            }
-        }
-    }
-
     /** 本地稍后看列表：点选条目弹详情（详情里可继续/移除）。 */
     private fun showWatchLaterList() {
         val items = repository.watchLater()
@@ -157,7 +126,6 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             binding.buttonLogin.visibility = View.GONE
             binding.buttonLogout.visibility = View.VISIBLE
             binding.buttonSubscribe.visibility = View.VISIBLE
-            binding.buttonCloudHistory.visibility = View.VISIBLE
             // 启动登录态校验+token 滚动（HGTV H0/g.c() scene=boot 同款；失败静默）
             lifecycleScope.launch {
                 runCatching { withContext(Dispatchers.IO) { repository.sync.bootVerify() } }
@@ -183,7 +151,6 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             binding.buttonLogin.visibility = View.VISIBLE
             binding.buttonLogout.visibility = View.GONE
             binding.buttonSubscribe.visibility = View.GONE
-            binding.buttonCloudHistory.visibility = View.GONE
             binding.imageAvatar.setImageResource(R.drawable.ic_hongguo)
         }
     }

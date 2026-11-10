@@ -234,6 +234,50 @@ class HongguoRepository private constructor(context: Context) {
     suspend fun cloudHistory(): List<HongguoSync.CloudHistoryItem> =
         withContext(Dispatchers.IO) { sync.cloudHistory() }
 
+    /** 登录态便捷判断。 */
+    val loggedIn: Boolean get() = session.loggedIn
+
+    /**
+     * 历史 tab 数据源：本地记录 + 登录态拉云端合并。
+     * 同剧集新者胜（updatedAt），title/cover/集数/时长缺失时用另一侧互补；云端失败回落本地。
+     */
+    suspend fun mergedHistory(): List<WatchRecord> {
+        val local = history()
+        if (!session.loggedIn) return local
+        return try {
+            val cloud = withContext(Dispatchers.IO) { sync.cloudHistory() }.map { c ->
+                WatchRecord(
+                    seriesId = c.seriesId, title = c.title, cover = c.cover,
+                    episodeIndex = (c.episodeIndex1 - 1).coerceAtLeast(0), episodeCount = c.episodeCount,
+                    positionMs = c.positionMs, durationMs = c.durationMs, updatedAt = c.lastPlayedAtMs
+                )
+            }
+            val byId = LinkedHashMap<String, WatchRecord>()
+            for (r in local + cloud) {
+                val old = byId[r.seriesId]
+                byId[r.seriesId] = when {
+                    old == null -> r
+                    r.updatedAt > old.updatedAt -> r.fillFrom(old)
+                    else -> old.fillFrom(r)
+                }
+            }
+            byId.values.sortedByDescending { it.updatedAt }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("Hongguo", "cloud history merge fail: ${e.message}")
+            local
+        }
+    }
+
+    /** 用 other 补齐本条缺失的展示字段（新记录可能不带标题/封面）。 */
+    private fun WatchRecord.fillFrom(other: WatchRecord) = copy(
+        title = title.ifEmpty { other.title },
+        cover = cover.ifEmpty { other.cover },
+        episodeCount = if (episodeCount > 0) episodeCount else other.episodeCount,
+        durationMs = if (durationMs > 0) durationMs else other.durationMs
+    )
+
     /** 云端历史删除（本地历史清空时同步）。 */
     fun deleteHistoryCloud(seriesIds: List<String>) =
         cloudAsync { deleteHistory(seriesIds) }
