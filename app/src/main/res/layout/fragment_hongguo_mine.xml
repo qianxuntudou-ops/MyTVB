@@ -22,6 +22,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
     <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_uid"
+        android:textSize="@dimen/px22"
+        android:textColor="@color/grey"
+        android:visibility="gone"
+        android:layout_marginTop="@dimen/px8"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+    <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/text_stats"
         android:textSize="@dimen/px22"
         android:textColor="@color/grey"
@@ -54,6 +62,18 @@
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_subscribe"
         android:text="@string/hongguo_my_subscribe"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/textColor"
+        android:background="@drawable/button_common"
+        android:paddingStart="@dimen/px40"
+        android:paddingEnd="@dimen/px40"
+        android:layout_marginTop="@dimen/px20"
+        android:visibility="gone"
+        android:layout_width="@dimen/px480"
+        android:layout_height="@dimen/px64"/>
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_cloud_history"
+        android:text="云端历史"
         android:textSize="@dimen/px24"
         android:textColor="@color/textColor"
         android:background="@drawable/button_common"

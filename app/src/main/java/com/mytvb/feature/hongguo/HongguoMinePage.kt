@@ -47,6 +47,7 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             AppToast.show(requireContext(), "已退出红果账号")
         }
         binding.buttonSubscribe.setOnClickListener { showSubscribeList() }
+        binding.buttonCloudHistory.setOnClickListener { showCloudHistory() }
         binding.buttonWatchLaterList.setOnClickListener { showWatchLaterList() }
         binding.buttonClear.setOnClickListener {
             repository.clearLocal()
@@ -95,6 +96,36 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         }
     }
 
+    /** 云端观看历史（手机 App 同账号记录）：点选条目进详情可续播。 */
+    private fun showCloudHistory() {
+        lifecycleScope.launch {
+            val items = try {
+                repository.cloudHistory()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppToast.show(requireContext(), "云端历史拉取失败：${e.message}")
+                return@launch
+            }
+            if (items.isEmpty()) {
+                AppToast.show(requireContext(), "云端暂无观看历史")
+                return@launch
+            }
+            val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
+            ChoiceDialog.show(
+                requireContext(), "云端历史（选择打开）",
+                items.map { item ->
+                    val ep = if (item.episodeCount > 0) "看到${item.episodeIndex1}/${item.episodeCount}集" else "看到第${item.episodeIndex1}集"
+                    val pct = if (item.durationMs > 0) " ${((item.positionMs * 100) / item.durationMs).coerceIn(0, 100)}%" else ""
+                    "${item.title} · $ep$pct · ${fmt.format(Date(item.lastPlayedAtMs))}"
+                }
+            ) { index ->
+                items.getOrNull(index)?.let { item ->
+                    HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+                }
+            }
+        }
+    }
+
     /** 本地稍后看列表：点选条目弹详情（详情里可继续/移除）。 */
     private fun showWatchLaterList() {
         val items = repository.watchLater()
@@ -120,20 +151,30 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         val stats = "本机收藏 ${repository.favorites().size} 部 · 历史 ${repository.history().size} 条"
         if (profile != null) {
             binding.textNickname.text = profile.name.ifEmpty { "红果用户" }
+            binding.textUid.text = "红果号：${profile.uid}"
+            binding.textUid.visibility = View.VISIBLE
             binding.textStats.text = stats
             binding.buttonLogin.visibility = View.GONE
             binding.buttonLogout.visibility = View.VISIBLE
             binding.buttonSubscribe.visibility = View.VISIBLE
+            binding.buttonCloudHistory.visibility = View.VISIBLE
             // 启动登录态校验+token 滚动（HGTV H0/g.c() scene=boot 同款；失败静默）
             lifecycleScope.launch {
                 runCatching { withContext(Dispatchers.IO) { repository.sync.bootVerify() } }
             }
             if (profile.avatar.startsWith("http")) {
+                binding.imageAvatar.imageTintList = null
                 ImageLoader.load(
                     imageView = binding.imageAvatar,
                     url = profile.avatar,
                     placeholder = R.drawable.ic_hongguo,
                     error = R.drawable.ic_hongguo
+                )
+            } else {
+                // 无头像：恢复默认图标+主题色染色（清掉上次网络图残留的 tint=null）
+                binding.imageAvatar.setImageResource(R.drawable.ic_hongguo)
+                binding.imageAvatar.imageTintList = android.content.res.ColorStateList.valueOf(
+                    com.google.android.material.color.MaterialColors.getColor(binding.imageAvatar, androidx.appcompat.R.attr.colorAccent)
                 )
             }
         } else {
@@ -142,6 +183,8 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             binding.buttonLogin.visibility = View.VISIBLE
             binding.buttonLogout.visibility = View.GONE
             binding.buttonSubscribe.visibility = View.GONE
+            binding.buttonCloudHistory.visibility = View.GONE
+            binding.imageAvatar.setImageResource(R.drawable.ic_hongguo)
         }
     }
 

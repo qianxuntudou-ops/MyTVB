@@ -230,6 +230,10 @@ class HongguoRepository private constructor(context: Context) {
     suspend fun cancelSubscribe(seriesId: String): Boolean =
         withContext(Dispatchers.IO) { sync.cancelSubscribe(seriesId) }
 
+    /** 云端观看历史（手机 App 同款账号的观看记录，按最近播放倒序）。 */
+    suspend fun cloudHistory(): List<HongguoSync.CloudHistoryItem> =
+        withContext(Dispatchers.IO) { sync.cloudHistory() }
+
     /** 云端历史删除（本地历史清空时同步）。 */
     fun deleteHistoryCloud(seriesIds: List<String>) =
         cloudAsync { deleteHistory(seriesIds) }
