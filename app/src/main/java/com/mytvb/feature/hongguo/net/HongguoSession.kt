@@ -62,6 +62,11 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
         get() = prefs.getString(K_KLINK, "") ?: ""
         set(v) = prefs.edit().putString(K_KLINK, v).apply()
 
+    /** 注册响应 device_token（HGTV 每个 API 请求 query 随带）。 */
+    override var deviceToken: String
+        get() = prefs.getString(K_DEVICE_TOKEN, "") ?: ""
+        set(v) = prefs.edit().putString(K_DEVICE_TOKEN, v).apply()
+
     val registered: Boolean
         get() = deviceId.isNotEmpty() && installId.isNotEmpty() &&
             deviceId != "0" && installId != "0"
@@ -121,6 +126,7 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
         private const val K_PROFILE = "account_profile"
         private const val K_LOGIN_METHOD = "login_method"
         private const val K_KLINK = "klink_egdi"
+        private const val K_DEVICE_TOKEN = "device_token"
     }
 }
 

@@ -17,7 +17,7 @@
 | 分类筛选面板（selector_rows 8 维 chip + ChoiceDialog 单选） | ✅ MuMu 实测（8 chip 全出） |
 | 登录三通道（扫码二维码+轮询 / 短信 / 导入 sessionid） | ✅ MuMu 实测（二维码拉取+轮询通） |
 | 历史/收藏（本地 SP `hongguo_local`，与 B 站零共享） | ✅ |
-| 播放器（media3，UP/DOWN 切集、OK 暂停、左右 ±10s、进度回写；L1 签名通道+CENC 解密） | ✅ **MuMu 实测出画面**（1080p+切集全通，见§五） |
+| 播放器（media3，UP/DOWN 切集、OK 暂停、左右 ±10s、进度回写；纯 Kotlin 签名+TLS 传输+CENC 解密） | ✅ **MuMu 双包实测出画面**（签名/传输零字节码，见§五晚节） |
 
 
 ## 二、代码结构（P2 后）
@@ -36,14 +36,19 @@ app/src/main/java/com/mytvb/feature/hongguo/
 ├── HongguoRepository.kt        # 数据门面：身份/搜索/榜单(带网页兜底)/播放/账号/收藏
 └── net/
     ├── HongguoCrypto.kt        # 签名栈（SM3/Gorgon/Helios/F13×2branch/Medusa/Proto/XMXOR/AESV3）
+    ├── HongguoArgus.kt         # 真版 X-Argus/X-Ladon/X-Helios（F0.o/F0.x1 逐字段对拍）
+    ├── HongguoEnv.kt           # 设备环境（如实上报）+ ua(versionCode) 模板
+    ├── HongguoHttp.kt          # 共享 OkHttpClient（HongguoTls）
+    ├── HongguoTls.kt           # TLS 形态（ALPN ttp/1.1+15 套件+TLS1.3/1.2+HTTP/1.1）
+    ├── HongguoMp4Decrypt.kt    # CENC 解密（senc→AES-128-CTR→moov 重建）
     ├── HongguoDeviceRegister.kt# TTEncrypt V5 设备注册（registerFresh 内核可独立调用）
     ├── HongguoSession.kt       # 设备身份+账号票据持久化（SP hongguo_session）
-    ├── HongguoClient.kt        # landpage feed(+select_items/selector_rows) + rank GET(cell/change)
-    ├── HongguoSearch.kt        # 搜索（search/tab 72232 GET 签名）+ 联想词（网页免签）
-    ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入 sessionid）
+    ├── HongguoClient.kt        # landpage feed + rank GET（均 Kotlin HGTV 形态签名）
+    ├── HongguoSearch.kt        # 搜索（72232 GET，Kotlin HGTV 形态签名）+ 联想词（网页免签）
+    ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入：cookieStore.xml 全文/32hex sessionid/cookie 串）
     ├── HongguoWeb.kt           # 网页详情（Googlebot UA→_ROUTER_DATA）+ 榜单网页兜底
     ├── HongguoWebSigner.kt     # 播放 WebView 通道（同源桥接页 XHR，Chromium TLS 栈）
-    └── HongguoPlay.kt          # 播放地址解析（71332 明文构造；transport 可注入 WebView）
+    └── HongguoPlay.kt          # 播放地址解析（host 轮询+K-M1 兜底+kotlinSignedPost）
 ```
 
 修改的既有文件：`TabBarView`（button_hongguo+焦点链）、`MainActivity`（HONGGUO_TAB_INDEX=6/ME→7/SEARCH→8+工厂+applyHongguoEntryVisibility）、`SettingsFragment`（KEY_HONGGUO_ENTRY）、`MeFragment`（**event.index 6→7**，加新侧栏tab必须同步此处！）、`view_tab_bar.xml`、`strings.xml`、`AndroidManifest`、`build.gradle.kts`（testImplementation org.json）。
@@ -115,7 +120,7 @@ app/src/main/java/com/mytvb/feature/hongguo/
 4. **DNS 分流**：sinfonlinea→CNAME 字节直连机房（116.169.164.x，l7-online-self-max-v6.s.dsa.cdnbuild.net）；sinfonlineb→金山云 CDN（q1-quic.gslb.ksyuncdn.com 58.144.x）。pi5 域名公网不解析（pcap 里的 pi5 连接来自 MuMu 其它 TTNet app，与 HGTV 无关）
 5. **注册 Cookie**：注册下发 install_id/ttreq 等 Set-Cookie，信任号不需要回带（删 Cookie 重放仍过）
 
-**打通方案（现行代码）**——`HongguoL1.signAndPost`（**1.3.6 字节码，双版本自适应**）：
+**打通方案（历史方案，当晚已拆除——见下方去黑盒节）**——`HongguoL1.signAndPost`（1.3.6 字节码，双版本自适应）：
 - **签名也走 HGTV 字节码**：反射调签名器产出 url+签名头集（UA 由 query map 派生）→ Kotlin 侧做 G0 改写（删 request-tag/x-tt-dt、passport=5051452、加 lc/x-ss-dp/x-vc-bdturing/x-tt-trace-id/Content-Encoding(gzip 时)/store-region）+E0 外层头 → L1 okhttp 传输
 - **双版本混淆映射**（运行时按签名器类名自动探测，真实类名均 dexdump 验证）：
   - 1.3.4：`S0.s1.d`/M2(a,b,c,d)/okhttp=L1 包(x,y,D,C,w)/TLS `S0.S0.a`/Protocol `L1.z.c`/RequestBody `H0.j.b`
@@ -135,7 +140,26 @@ app/src/main/java/com/mytvb/feature/hongguo/
 - 播放器：`HongguoPlayerActivity.resolvePlayable`——下载整集（okhttp 直链无风控）→解密→`cacheDir/hongguo/<vid>.mp4` 缓存→media3 播本地（同集二次进入秒开）
 - 实测：1080p hevc 单集约 8.7MB，下载 1.2s+解密 0.3s，state=READY 稳定；DOWN 切集每集 ~3s 全链路
 
-**遗留（P3）**：MFA 短信上行、竖屏 9:16 模糊垫底形态、弹幕/评论（明确不做）
+### 2026-11-10 晚：彻底去黑盒——签名+传输 100% Kotlin 源码（L1 已整体拆除）
+
+**黑盒已除**：`app-debug.apk` feed/rank/search/播放/切集/CENC 全功能可用（MuMu 实测）。**L1 字节码通道（HongguoL1.kt/embed_hgtv_dex.py/app-debug-l1.apk）已删除**——embed 的 HGTV dex +1.9MB 包体，纯 Kotlin 通道与之实测等价后无保留价值。
+
+**签名栈对拍定案**（jadx `--single-class F0.x1` 破 Windows 大小写覆盖坑后逐行核对）：
+- F0.x1/F0.o **纯 Java 实现，零 native**：分支判定=ivTransform(SM3(query), 0x20230928)+MD5(body)+le32(ts)（与 HongguoCrypto.branch 本就一致——Y0.V 是 SM3 不是 MD5）；gorgon/helios/ladon 算法与 Kotlin 版逐位一致；**HGTV 栈根本没有 X-Medusa**（我们 Kotlin 链也不发它）
+- **HongguoArgus 修 3 处对拍差异**（此前被拒的直接原因）：①field13=`SM3(MD5(body))` 前 6 字节（少包一层 SM3）②field3=`le32(rand[6..10)) & 0x7fffffff`（漏位清零）③field23 嵌套 field4=`21474836480L`(0x500000000)（写成 2147483648 差 10 倍）
+- **E0.b(2)=hex 编码**（不是 base64）——gorgon/stub/helios-key 输出形态本就一致
+- r3.c UA：POST 带 Cronet 尾串/GET 短版，版本取 query 的 version_code（版本位不敏感）；CP_NONE="none"
+- argus key 表=`SM3(secret+"3ccc567b"+secret)` 72 项（C0173m case 0 预计算），常量 0x3DC94C3A046D678B ✓
+
+**传输层定案**：HGTV 的 TLS 定制（F0.U0+SSLSocketFactory 包装器）只是 cipher 套件交集+TLSv1.3/1.2，无 BoringSSL——**JVM okhttp+HongguoTls 完全等价**（实测 TLS_1_3/AES_256_GCM 与 L1 字节码传输同响应）。
+
+**通道架构（HongguoPlay，全纯 Kotlin）**：`fetchModelEntry` 每轮=新号+新 host（round0/1/2 = sinfonlinea/b/c，HGTV F0.n3.f() 同款集群轮询）→ 兜底 K-M1（`sinfonlineb multi_video_model/v1/`+71332 档案+明文 body，`kotlinSignedPost`=F0.x1.d 形态签名+JVM 传输）。**player/v1 端点 2026-11-10 起服务端整体收紧**（三 host 全 code=100001，与签名无关——HGTV 本尊靠多 host 轮询+fallback_api 二跳同路径续命）；multi/v1+71332 档案是实际可用端点。
+- feed/rank/search 全部 Kotlin HGTV 形态（HongguoClient.postOnce/getOnce、HongguoSearch：插入序 query+真版 Ladon/Argus/Helios+G0 改写头集+TLS 定制传输；**P1 占位签名 base64(be32(ts)) 是空响应主因**）
+- HongguoEnv.ua(versionCode)：UA 模板统一（feed 73532/播放 71332/搜索 72232 GET 短版）
+
+**验证基线（改签名/通道后必跑）**：feed len>70000 / rank len>200000 / search len>40000 / 播放 state=3 / 切集 CENC decrypt 日志（MuMu 实测参考值：feed 78KB/rank 245KB/search 47KB/K-M1 25KB）。
+
+**遗留（P3）**：MFA 短信上行、竖屏 9:16 模糊垫底形态、弹幕/评论（明确不做）；player/v1 恢复时通道自动回到主端点（round0 优先）。
 
 **踩坑记录（勿再踩）**：
 - frida hook 混淆类字段名必须 dexdump 验证（jadx fNNNN 是显示名）；frida Map.toString 在 hook 里变 [object Object]，用 Java.cast(...).toString()
@@ -196,7 +220,7 @@ app/src/main/java/com/mytvb/feature/hongguo/
 - **筛选面板**：首页 `need_selector_panel=true + req_type="default"`，翻页 `false/"only_content"`；`select_items` 8 键全发（空选=空数组）；creation_status 行部分 scene 不下发→硬编码补齐；`selector_item_id` 题材格式 `cate_\d{1,8}`
 - **四板榜单**：GET `cell/change/v`，`tab_type` 首页 26 翻页 18，`cell_id=7470092475068071998` 固定，四板=(selected_items, sub_selected_items) 二元组；GET 无 body→无 X-SS-STUB/Content-Type
 - **搜索**：72232 profile + UA 无 Cronet 后缀 + `tab_type=11` + 相关性过滤（分词全命中元数据，防无结果塞热门）；翻页游标 search_id+passback+next_offset；联想词走 `hongguoduanju.com/incent_resource/suggestion`（免签）
-- **登录**：扫码全走 hongguoduanju.com/passport/web/*（免签，浏览器头+cookie jar）；短信走 api5-normal-lq passport（签名 form POST，手机号每字节 XOR 0x05 hex）；导入=32 hex sessionid+/reading/user/info/v1 校验；票据存 HongguoSession.accountCookies（登出只清账号票据保留设备身份）
+- **登录**：扫码全走 hongguoduanju.com/passport/web/*（免签，浏览器头+cookie jar）；短信走 api5-normal-lq passport（签名 form POST，手机号每字节 XOR 0x05 hex）；导入通道（2026-11-10 对齐 HGTV 1.3.6 L0.M0）收三种输入——官方 App cookieStore.xml 全文（`HongguoCookieStoreParser`：snssdk.com 域正则+TLV hex 值解码+16 项白名单拼串）/32 hex sessionid/含 sessionid= 的 cookie 串，统一走 /reading/user/info/v1 校验（失败不落盘）；fetchProfile 发白名单序完整 Cookie 串（非单 sessionid）；票据存 HongguoSession.accountCookies（登出只清账号票据保留设备身份）；**免 root 导出路**：`tool/hongguo_cookie_export.user.js` 油猴脚本（Tampermonkey，需 GM_cookie）——电脑浏览器登录 hongguoduanju.com 后一键导出仿 cookieStore.xml（TLV hex 编码与 App 解码器互逆，已 Node 往返+端到端验证）+复制 sessionid，文件内容直接粘进 App 导入框
 - **WebView 通道**（HongguoWebSigner）：shouldInterceptRequest 拦 `sinfonlineb.fqnovel.com/__hg_bridge__` 注入 HTML（与 API 同源免 CORS），JS XHR setRequestHeader 保留大写头名，UA 在 WebView settings 设（XHR forbidden）；响应 encodeURIComponent 后 console 桥回
 - **对话框协程坑**：Dialog 里 lifecycleScope.launch 默认 Main dispatcher，**网络调用必须 withContext(Dispatchers.IO)**（NetworkOnMainThreadException）
 
@@ -205,6 +229,8 @@ app/src/main/java/com/mytvb/feature/hongguo/
 1. MFA 短信上行验证（encrypt_uid/sms_code_key 流程，HongguoAccount.smsLogin 已识别并提示暂不支持）
 2. 竖屏剧播放形态（9:16 居中+两侧模糊垫底）——当前 RESIZE_MODE_FIT 已居中
 3. 弹幕/评论（明确不做）
+
+~~号消耗优化~~ **2026-11-10 夜已完成（device_token 根因+号模型）**：①**注册响应的 `device_token` 是号活性关键**——HGTV 每个 API 请求 query 随带（E.java:4397），我们与全部开源参考线均丢弃此字段；已补齐全链（Identity/Session K_DEVICE_TOKEN/播放 query）；②全局改 HGTV 号模型——播放（HongguoPlay）一个号贯穿 host 轮询+空响应才经 rotateIdentity 自愈（Repository.registerAndSave 持久化到 session）；K-M1 两发保底；search 轮换走 registerAndSave；rank GET 号内存复用；③**MuMu 实测定案**：同号 3 集连播 12 连发全成功零重注册（切集 0.7s/CENC 0.4s/state=3）——旧「每号首请求有效次发即拒」结论是签名 bug 时代（argus 硬伤修复前）的观察，已不成立；④HGTV 重注册会把旧 device_id/iid/klink_egdi 塞进注册 payload（b.java:5074 账号继承语义），我们 rotateIdentity 全新随机——可选后续对齐。
 
 ## 附、相关记忆条目（本机 ZCode 记忆库）
 

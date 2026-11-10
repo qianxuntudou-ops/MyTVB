@@ -49,12 +49,14 @@ internal object HongguoEnv {
         get() = Triple(deviceType, osVersion, CHANNEL)
 
     /**
-     * 播放 UA（HGTV 实测形态）：版本 71332 + 真实环境 + Cronet 尾串。
-     * 实测样本：`com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C;
-     * Build/V417IR; Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)`
+     * 请求 UA（HGTV F0.r3.c 同款模板）：POST 带 Cronet 尾串，版本号取 query 的
+     * version_code（feed=73532 / 播放实测样本=71332；版本位不敏感，两形态均过）。
      */
-    fun playbackUa(): String =
-        "com.phoenix.read/71332 (Linux; U; Android $osVersion; zh_CN; $deviceType; " +
+    fun ua(versionCode: String): String =
+        "com.phoenix.read/$versionCode (Linux; U; Android $osVersion; zh_CN; $deviceType; " +
             "Build/${Build.ID ?: "V417IR"}; " +
             "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
+
+    /** 播放 UA（HGTV 实测形态）：版本 71332。 */
+    fun playbackUa(): String = ua("71332")
 }

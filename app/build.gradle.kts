@@ -151,6 +151,12 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        // JVM 单测里 android.util.Log 等框架桩返回默认值而非抛异常
+        //（HongguoDeviceRegister.registerDevice 的日志曾炸掉联网冒烟测试）
+        unitTests.isReturnDefaultValues = true
+    }
     
     buildFeatures {
         viewBinding = true

@@ -211,23 +211,48 @@ class HongguoAccount(private val session: HongguoSession) {
         return saveAccount(uid, name, avatar, "phone")
     }
 
-    // ---- 导入通道（sessionid / cookie 串） ----
+    // ---- 导入通道（cookieStore.xml / sessionid / cookie 串） ----
 
-    /** 导入 32 位十六进制 sessionid（或含 sessionid=... 的 cookie 串），导入即校验。 */
+    /**
+     * 导入登录态，粘贴三种内容之一（对照 HGTV 1.3.6 L0.M0 + F0.AbstractC0133c）：
+     * 1. 官方 App 的 cookieStore.xml 全文（TTNet 把 cookie 按 `https://snssdk.com/|name` 存
+     *    shared_prefs，值是 TLV hex 编码的字符串数组）——取 snssdk.com 域、按白名单拼完整 cookie 串；
+     * 2. 32 位十六进制 sessionid；
+     * 3. 含 sessionid=... 的 cookie 串。
+     * 导入即校验（拉资料失败不落盘）。
+     */
     fun importSession(rawInput: String): Profile {
         val input = rawInput.trim()
-        val sid = when {
-            input.matches(Regex("^[0-9a-fA-F]{32}$")) -> input
-            else -> Regex("sessionid(?:_ss)?=([0-9a-fA-F]{32})").find(input)?.groupValues?.get(1)
-                ?: throw AccountException("需要 32 位十六进制 sessionid 或含它的 cookie 串")
+        if (input.contains("<map") || input.contains("<string name=")) {
+            importCookieStoreXml(input)
+        } else {
+            val sid = when {
+                input.matches(Regex("^[0-9a-fA-F]{32}$")) -> input
+                else -> Regex("sessionid(?:_ss)?=([0-9a-fA-F]{32})").find(input)?.groupValues?.get(1)
+                    ?: throw AccountException("粘贴官方 App 的 cookieStore.xml 全文，或一个 sessionid")
+            }
+            putAccountCookie("sessionid", sid)
         }
-        cookieStore.getOrPut("hongguoduanju.com") { ConcurrentHashMap() }["sessionid"] =
-            Cookie.Builder().name("sessionid").value(sid)
-                .domain("hongguoduanju.com").path("/").build()
         val profile = fetchProfile()
-            ?: throw AccountException("sessionid 已失效或拉取资料失败")
+            ?: throw AccountException("登录态已失效或拉取资料失败（cookieStore.xml 要取最新的那一份）")
         saveAccount(profile.uid, profile.name, profile.avatar, "import")
         return profile
+    }
+
+    /**
+     * 解析官方 App 的 cookieStore.xml（[HongguoCookieStoreParser.parse]）：
+     * 只收 snssdk.com 域条目，值经 TLV hex 解码。与 HGTV 一致不做 sid_guard 过期本地判定
+     * （失效由资料拉取兜底报错）。
+     */
+    private fun importCookieStoreXml(xml: String) {
+        val found = HongguoCookieStoreParser.parse(xml)
+        for (name in HongguoCookieStoreParser.COOKIE_ORDER) found[name]?.let { putAccountCookie(name, it) }
+    }
+
+    private fun putAccountCookie(name: String, value: String) {
+        cookieStore.getOrPut("hongguoduanju.com") { ConcurrentHashMap() }[name] =
+            Cookie.Builder().name(name).value(value)
+                .domain("hongguoduanju.com").path("/").build()
     }
 
     /** 已登录时拉资料（/reading/user/info/v1 带 cookie；未登录返回 null）。 */
@@ -260,7 +285,14 @@ class HongguoAccount(private val session: HongguoSession) {
                 .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
                 .header("Sdk-Version", "2")
                 .header("X-SS-DP", "8662")
-                .header("Cookie", "sessionid=$sid")
+                // 完整 cookie 串（白名单序，对照 HGTV AbstractC0133c.c——比单发 sessionid 更接近官方 App 形态）
+                .header(
+                    "Cookie",
+                    HongguoCookieStoreParser.COOKIE_ORDER.mapNotNull { name ->
+                        (cookieValue(name).ifEmpty { session.accountCookies[name].orEmpty() })
+                            .takeIf { it.isNotEmpty() }?.let { "$name=$it" }
+                    }.joinToString("; ").ifEmpty { "sessionid=$sid" }
+                )
                 .build()
         ).execute().use { it.body?.string().orEmpty() }
         if (text.isBlank()) return null
@@ -386,5 +418,68 @@ class HongguoAccount(private val session: HongguoSession) {
     private companion object {
         const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+    }
+}
+
+/**
+ * 官方 App cookieStore.xml 解析（对照 HGTV 1.3.6 L0.M0 + F0.AbstractC0133c）。
+ * xml 形态：`<string name="https://snssdk.com/|cookie名">hex编码的字符串数组</string>`，
+ * 值为 TLV 序列化（'t' + 2 字节 BE 长度 + 可打印 ASCII payload），cookie 名的下一项即值。
+ */
+internal object HongguoCookieStoreParser {
+
+    /** cookie 拼串白名单与顺序（HGTV AbstractC0133c.f1871a，16 项）。 */
+    val COOKIE_ORDER = listOf(
+        "sessionid", "sessionid_ss", "sid_tt", "uid_tt", "uid_tt_ss", "d_ticket",
+        "sid_guard", "session_tlb_tag", "store-region", "store-region-src",
+        "install_id", "n_mh", "odin_tt", "ttreq", "passport_csrf_token",
+        "passport_csrf_token_default"
+    )
+
+    /** 解析：只收 snssdk.com 域条目；无 sessionid/sessionid_ss 抛错。 */
+    fun parse(xml: String): Map<String, String> {
+        val found = LinkedHashMap<String, String>()
+        val entry = Regex("<string name=\"(https?://[^\"]+?)/\\|([^\"]+)\">([^<]*)</string>")
+        for (m in entry.findAll(xml)) {
+            val host = m.groupValues[1]
+                .removePrefix("http://").removePrefix("https://").removeSuffix("/")
+            if (host != "snssdk.com") continue
+            val name = m.groupValues[2]
+            val value = decodeTlvCookieValue(m.groupValues[3], name) ?: continue
+            found[name] = value
+        }
+        if (found["sessionid"].isNullOrEmpty() && found["sessionid_ss"].isNullOrEmpty()) {
+            throw HongguoAccount.AccountException("没解析到 sessionid，请确认是官方 App 的 cookieStore.xml")
+        }
+        return found
+    }
+
+    /** TTNet cookieStore 值解码：hex 字节流里扫 't' + len16(BE) + ASCII payload 的字符串数组，取 name 的下一项。 */
+    fun decodeTlvCookieValue(raw: String, name: String): String? {
+        if (raw.isEmpty() || raw.length % 2 != 0) return null
+        if (!Regex("^[0-9a-fA-F]+$").matches(raw)) return null
+        return try {
+            val bytes = ByteArray(raw.length / 2) {
+                Integer.parseInt(raw.substring(it * 2, it * 2 + 2), 16).toByte()
+            }
+            val parts = ArrayList<String>()
+            var i = 0
+            while (i < bytes.size - 2) {
+                val len = ((bytes[i + 1].toInt() and 0xFF) shl 8) or (bytes[i + 2].toInt() and 0xFF)
+                if (bytes[i] == 0x74.toByte() && len in 1 until 2049 && i + 3 + len <= bytes.size) {
+                    val payload = bytes.copyOfRange(i + 3, i + 3 + len)
+                    if (payload.all { it in 32..126 }) {
+                        parts.add(String(payload, Charsets.UTF_8))
+                        i += len + 3
+                        continue
+                    }
+                }
+                i++
+            }
+            val idx = parts.indexOf(name)
+            if (idx >= 0 && idx + 1 < parts.size) parts[idx + 1] else null
+        } catch (_: Exception) {
+            null
+        }
     }
 }

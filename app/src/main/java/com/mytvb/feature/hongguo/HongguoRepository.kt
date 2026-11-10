@@ -21,7 +21,8 @@ class HongguoRepository private constructor(context: Context) {
     private val session = HongguoSession(appContext)
     private val client = HongguoClient()
     private val web = HongguoWeb()
-    private val play = HongguoPlay()
+    // 设备自愈钩子（HGTV "device healed" 同款）：空响应=号被拒 → 换新号并持久化
+    private val play = HongguoPlay(rotateIdentity = { registerAndSave() })
     private val search = HongguoSearch()
     val account = HongguoAccount(session)
 
@@ -32,19 +33,41 @@ class HongguoRepository private constructor(context: Context) {
     private fun identity(): HongguoDeviceRegister.Identity {
         cachedIdentity?.let { return it }
         session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->
-            HongguoDeviceRegister.Identity(s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies, s.klinkEgdi)
-                .also { cachedIdentity = it; return it }
+            HongguoDeviceRegister.Identity(
+                s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies,
+                s.klinkEgdi, s.deviceToken, s.clientUdid
+            ).also { cachedIdentity = it; return it }
         }
-        val fresh = HongguoDeviceRegister.registerFresh()
-        session.deviceId = fresh.deviceId
-        session.installId = fresh.installId
-        session.cdid = fresh.cdid
-        session.openUdid = fresh.openUdid
-        session.clientUdid = ""
-        session.cookies = fresh.cookies.toMutableMap()
-        session.klinkEgdi = fresh.klinkEgdi
-        cachedIdentity = fresh
+        return registerAndSave()
+    }
+
+    /**
+     * 注册新号并持久化到 session（HGTV O0/E.java registered-* 持久化复用模型）。
+     * 有旧号时走身份继承重注册（registerFresh(carry)：声明旧三件套+设备指纹沿用，
+     * 对照 HGTV b.java r0「device healed」的换号继承语义），首装/null 全新随机。
+     */
+    private fun registerAndSave(): HongguoDeviceRegister.Identity {
+        val carry = cachedIdentity ?: session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->
+            HongguoDeviceRegister.Identity(
+                s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies,
+                s.klinkEgdi, s.deviceToken, s.clientUdid
+            )
+        }
+        val fresh = HongguoDeviceRegister.registerFresh(carry)
+        saveIdentity(fresh)
         return fresh
+    }
+
+    private fun saveIdentity(id: HongguoDeviceRegister.Identity) {
+        session.deviceId = id.deviceId
+        session.installId = id.installId
+        session.cdid = id.cdid
+        session.openUdid = id.openUdid
+        session.clientUdid = id.clientUdid
+        session.cookies = id.cookies.toMutableMap()
+        session.klinkEgdi = id.klinkEgdi
+        session.deviceToken = id.deviceToken
+        cachedIdentity = id
     }
 
     /** 空响应=身份被拒时轮换新注册身份重试一次（对照 Node getPlaybackDevice.reset）。 */
@@ -92,7 +115,7 @@ class HongguoRepository private constructor(context: Context) {
             } catch (e: HongguoSearch.EmptyResponseException) {
                 lastError = e
                 if (attempt == 2) break
-                current = HongguoDeviceRegister.registerFresh()
+                current = registerAndSave()
                 Thread.sleep(120)
             }
         }

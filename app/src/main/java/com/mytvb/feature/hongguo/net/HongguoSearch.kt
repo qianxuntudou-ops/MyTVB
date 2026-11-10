@@ -5,8 +5,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.TreeMap
-import java.util.concurrent.TimeUnit
 
 /**
  * 红果短剧搜索：/reading/bookapi/search/tab/v（GET 签名，72232 profile）。
@@ -15,12 +13,8 @@ import java.util.concurrent.TimeUnit
  */
 class HongguoSearch {
 
-    private val http: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
-    }
+    /** TLS 定制共享 client（HongguoTls；搜索接口同样校验 TLS 形态）。 */
+    private val http: OkHttpClient by lazy { HongguoHttp.ok }
 
     data class SearchResult(
         val seriesId: String,
@@ -50,19 +44,27 @@ class HongguoSearch {
     ): SearchPage {
         val kw = keyword.trim().take(80)
         require(kw.isNotEmpty()) { "搜索词为空" }
-        val q = TreeMap<String, String>()
-        q["ac"] = "wifi"; q["channel"] = "update_64"; q["aid"] = "8662"
+        // 2026-11-10 对齐 HGTV F0.x1 形态：插入序 query（72232 档案+HongguoEnv 真实环境）+
+        // 真版 Ladon/Argus/Helios（占位版被空响应拒）+ G0 改写后头集 + TLS 定制传输。
+        val q = java.util.LinkedHashMap<String, String>()
+        q["iid"] = identity.installId
+        q["device_id"] = identity.deviceId
+        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
         q["app_name"] = "novelread"
         q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
         q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = "25053RT47C"; q["device_brand"] = "Redmi"; q["language"] = "zh"
-        q["os_api"] = "36"; q["os_version"] = "16"
-        q["manifest_version_code"] = "72232"; q["resolution"] = "1280*2772"; q["dpi"] = "520"
-        q["update_version_code"] = "72232"; q["host_abi"] = "arm64-v8a"
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "72232"; q["compliance_status"] = "0"
-        q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"; q["is_android_pad_screen"] = "0"
-        q["iid"] = identity.installId
-        q["device_id"] = identity.deviceId
+        q["device_type"] = HongguoEnv.deviceType
+        q["device_brand"] = HongguoEnv.deviceBrand
+        q["language"] = "zh"
+        q["os_api"] = HongguoEnv.osApi
+        q["os_version"] = HongguoEnv.osVersion
+        q["manifest_version_code"] = "72232"
+        q["resolution"] = HongguoEnv.resolution
+        q["dpi"] = HongguoEnv.dpi
+        q["update_version_code"] = "72232"; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = "72232"
+        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
+        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
         q["cdid"] = identity.cdid
         q["query"] = kw
         q["count"] = "20"
@@ -75,38 +77,46 @@ class HongguoSearch {
         q["offset"] = offset.toString()
 
         val nowMs = System.currentTimeMillis()
+        val versionName = "7.2.2.32"
         val signed = HongguoCrypto.signRequest(
             q, null, nowMs, identity.deviceId,
-            targetBranch = 0, version = "7.2.2.32"
+            targetBranch = 0, version = versionName
         )
         val ts = signed.headers["X-Khronos"]?.toIntOrNull() ?: (nowMs / 1000).toInt()
-        fun be32(n: Int): ByteArray = byteArrayOf(
-            ((n shr 24) and 0xFF).toByte(), ((n shr 16) and 0xFF).toByte(),
-            ((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte()
+        val realLadonArgus = HongguoArgus.generate(
+            signed.query, null, ts, versionName, identity.deviceId,
+            deviceProfile = HongguoEnv.argusProfile
         )
-
-        fun le32(n: Int): ByteArray = byteArrayOf(
-            (n and 0xFF).toByte(), ((n shr 8) and 0xFF).toByte(),
-            ((n shr 16) and 0xFF).toByte(), ((n shr 24) and 0xFF).toByte()
-        )
+        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
+        val traceHex = java.util.UUID.randomUUID().toString().replace("-", "")
 
         val req = Request.Builder()
             .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/search/tab/v?${signed.query}")
             .get()
+            // E0 外层
+            .header("User-Agent", SEARCH_UA)
+            .header("Accept-Language", "zh-CN,zh;q=0.9")
+            .header("X-SS-DP", "8662")
+            .header("X-Tt-Store-Region", "cn")
+            .header("X-Tt-Store-Region-Src", "did")
+            .header("X-XS-From-Web", "0")
+            .header("Sdk-Version", "2")
+            // F0.x1.d 签名头集（G0 改写后，GET 无 body 头）
             .header("User-Agent", SEARCH_UA)
             .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
-            .header("x-ss-req-ticket", signed.headers["X-SS-Req-Ticket"] ?: "")
-            .header("x-tt-request-tag", "t=0;n=0")
+            .header("x-ss-req-ticket", ticket)
             .header("sdk-version", "2")
-            .header("passport-sdk-version", "50561")
+            .header("passport-sdk-version", "5051452")
             .header("x-xs-from-web", "0")
             .header("x-khronos", signed.headers["X-Khronos"] ?: "")
-            .header("x-ladon", HongguoCrypto.base64(be32(ts)))
-            .header("x-argus", HongguoCrypto.base64(le32(ts)))
+            .header("x-ladon", realLadonArgus.ladon)
+            .header("x-argus", realLadonArgus.argus)
             .header("x-gorgon", signed.headers["X-Gorgon"] ?: "")
-            .header("x-helios", signed.headers["X-Helios"] ?: "")
-            .header("x-medusa", signed.headers["X-Medusa"] ?: "")
-            .header("x-tt-dt", "")
+            .header("x-helios", HongguoArgus.helios(ts))
+            // G0 追加
+            .header("lc", "101")
+            .header("x-ss-dp", "8662")
+            .header("x-tt-trace-id", "00-$traceHex-${traceHex.substring(0, 16)}-01")
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
@@ -273,8 +283,9 @@ class HongguoSearch {
     }
 
     private companion object {
-        /** 搜索专用 UA（72232 无 Cronet 后缀，对照 Node SEARCH_UA）。 */
-        const val SEARCH_UA =
-            "com.phoenix.read/72232 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3)"
+        /** 搜索 UA（GET 模板：72232 无 Cronet 后缀）+真实环境（与 query 同源防矛盾）。 */
+        val SEARCH_UA: String
+            get() = "com.phoenix.read/72232 (Linux; U; Android ${HongguoEnv.osVersion}; " +
+                "zh_CN; ${HongguoEnv.deviceType}; Build/${android.os.Build.ID ?: "V417IR"})"
     }
 }

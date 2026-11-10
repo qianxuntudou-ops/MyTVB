@@ -13,7 +13,9 @@ import javax.crypto.spec.SecretKeySpec
  * 真版 X-Argus/X-Ladon（占位版被播放接口风控拒后的完整实现）。
  *
  * 算法骨架：tsukiyo CommentSignature（Argus/Simon 结构，MIT 源 tr4cex/TikTok-Encryption，
- * 评论接口线上验证）；proto 字段表按 HGTV 反编译 AbstractC0240o.e()（播放通道 aid=8662）逐字段对齐。
+ * 评论接口线上验证）；proto 字段表按 HGTV 反编译逐字段对齐
+ * （1.3.4 AbstractC0240o.e / 1.3.6 F0.o.e，播放通道 aid=8662；jadx --single-class 破 Windows
+ * 大小写覆盖坑后 2026-11-10 复核）。
  * 仅算法结构对照，常量与字节全部来自本仓已授权的 HGTV 反编译与 tsukiyo 线上实现。
  */
 internal object HongguoArgus {
@@ -175,22 +177,24 @@ internal object HongguoArgus {
         deviceId: String,
         deviceProfile: Triple<String, String, String>
     ): String {
+        // HGTV F0.o.e：le32 的 int 有符号提升后 & 0x7fffffff（bit31 恒清零）
         val random =
-            ByteBuffer.wrap(nonce, 6, 4).order(ByteOrder.LITTLE_ENDIAN).int.toLong() and 0xffffffffL
-        // field15 嵌套（HGTV bArrR：d(1,1)/d(2,1)/d(3,1)/d(7,3348294860)）
+            ByteBuffer.wrap(nonce, 6, 4).order(ByteOrder.LITTLE_ENDIAN).int.toLong() and 0x7fffffffL
+        // field15 嵌套（HGTV bArrS：d(1,1)/d(2,1)/d(3,1)/d(7,3348294860)）
         val nested = proto(
             linkedMapOf(
                 1 to 1L, 2 to 1L, 3 to 1L, 7 to 3348294860L
             )
         )
-        // field23 嵌套（HGTV bArrR3：设备三元组+保留 varint；三元组与 query 环境一致）
+        // field23 嵌套（HGTV bArrS3：设备三元组 + d(4, 21474836480L)=0x500000000）
         val nested23 = proto(
             linkedMapOf(
                 1 to deviceProfile.first, 2 to deviceProfile.second, 3 to deviceProfile.third,
-                4 to 2147483648L
+                4 to 21474836480L
             )
         )
-        // 最外层字段表逐项对齐 HGTV AbstractC0240o.e()
+        // 最外层字段表逐项对齐 HGTV F0.o.e()（1.3.6 dexdump+jadx 双重核对，2026-11-10）：
+        // field13=SM3(MD5(body)) 前 6 字节（不是裸 md5 前 6）；field14=SM3(query) 前 6。
         val bodyMd5 = if (body != null && body.isNotEmpty()) md5(body) else ByteArray(16)
         val message = proto(
             linkedMapOf(
@@ -206,7 +210,7 @@ internal object HongguoArgus {
                 10 to ByteArray(8),
                 11 to 0L,
                 12 to ts.toLong() * 2,
-                13 to bodyMd5.copyOf(6),
+                13 to sm3(bodyMd5).copyOf(6),
                 14 to sm3(query.toByteArray()).copyOf(6),
                 15 to nested,
                 16 to ByteArray(0),

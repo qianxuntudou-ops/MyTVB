@@ -105,7 +105,7 @@
     <string name="hongguo_login_qr_hint">用红果 App 扫码</string>
     <string name="hongguo_login_sms">短信登录</string>
     <string name="hongguo_login_import">导入账号</string>
-    <string name="hongguo_login_import_hint">粘贴 32 位 sessionid</string>
+    <string name="hongguo_login_import_hint">粘贴官方 App 的 cookieStore.xml 全文，或一个 sessionid</string>
     <string name="hongguo_phone_hint">请输入手机号</string>
     <string name="hongguo_code_hint">验证码</string>
     <string name="hongguo_send_code">发送验证码</string>

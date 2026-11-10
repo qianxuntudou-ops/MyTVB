@@ -229,14 +229,21 @@ class HongguoClient(
         return RankPage(items, hasMore, nextOffset, data.optString("session_id"))
     }
 
-    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。 */
+    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。号内存复用+空响应轮换。 */
+    @Volatile
+    private var signedGetIdentity: HongguoDeviceRegister.Identity? = null
+
     private fun getSignedJson(path: String, values: LinkedHashMap<String, String>): JSONObject {
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
             try {
-                return getOnce(path, values, randomId(), randomId())
+                // 号复用+空响应轮换（feedIdentity 同款；随机假身份在模拟器出口全空——实证）
+                val identity = signedGetIdentity?.takeIf { attempt == 0 }
+                    ?: HongguoDeviceRegister.registerFresh().also { signedGetIdentity = it }
+                return getOnce(path, values, identity.deviceId, identity.installId)
             } catch (e: EmptyResponseException) {
                 lastError = e
+                signedGetIdentity = null
                 if (attempt == 2) break
                 Thread.sleep(100)
             }
@@ -244,42 +251,68 @@ class HongguoClient(
         throw lastError ?: IllegalStateException("红果接口无响应")
     }
 
+    /** GET 签名（bookmall 等）：F0.x1 形态（73532 档案+HongguoEnv+真版签名头集）。 */
     private fun getOnce(
         path: String, values: LinkedHashMap<String, String>,
         deviceId: String, installId: String
     ): JSONObject {
-        val nowSec = System.currentTimeMillis() / 1000
-        val q = TreeMap<String, String>()
-        q["ac"] = "wifi"; q["channel"] = "update_64"; q["aid"] = "8662"
-        q["app_name"] = "novelread"
+        val q = java.util.LinkedHashMap<String, String>()
+        q["iid"] = installId
         q["device_id"] = deviceId
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["device_brand"] = "Redmi"; q["dpi"] = "520"; q["iid"] = installId
-        q["language"] = "zh"; q["manifest_version_code"] = "73532"
-        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
-        q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
-        q["pv_player"] = "73532"; q["compliance_status"] = "0"
-        q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"
-        q["is_android_pad_screen"] = "0"
-        q["ts"] = nowSec.toString()
-        q["update_version_code"] = "73532"; q["version_code"] = "73532"
-        q["version_name"] = "7.3.5.32"
+        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
+        q["app_name"] = "novelread"
+        q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
+        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
+        q["device_type"] = HongguoEnv.deviceType
+        q["device_brand"] = HongguoEnv.deviceBrand
+        q["language"] = "zh"
+        q["os_api"] = HongguoEnv.osApi
+        q["os_version"] = HongguoEnv.osVersion
+        q["manifest_version_code"] = "73532"
+        q["resolution"] = HongguoEnv.resolution
+        q["dpi"] = HongguoEnv.dpi
+        q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
+        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
+        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
+        q["ts"] = (System.currentTimeMillis() / 1000).toString()
         q.putAll(values)
 
-        val signed = HongguoCrypto.signRequest(q, null, System.currentTimeMillis(), deviceId)
+        val versionName = "7.3.5.32"
+        val signed = HongguoCrypto.signRequest(q, null, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
+        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
+        val realLadonArgus = HongguoArgus.generate(
+            signed.query, null, nowSec, versionName, deviceId,
+            deviceProfile = HongguoEnv.argusProfile
+        )
+        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
+        val ua = HongguoEnv.ua("73532")
+        val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
+            .let { "00-$it-${it.substring(0, 16)}-01" }
         val req = Request.Builder()
             .url("$apiBase$path?${signed.query}")
             .get()
-            .header("User-Agent", HongguoDeviceRegister.USER_AGENT)
-            .header("Accept", "application/json")
-            .header("Accept-Encoding", "identity")
-            .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
-            .header("X-XS-From-Web", "0")
-            .header("Sdk-Version", "2")
+            .header("User-Agent", ua)
+            .header("Accept-Language", "zh-CN,zh;q=0.9")
             .header("X-SS-DP", "8662")
             .header("X-Tt-Store-Region", "cn")
             .header("X-Tt-Store-Region-Src", "did")
+            .header("X-XS-From-Web", "0")
+            .header("Sdk-Version", "2")
+            .header("User-Agent", ua)
+            .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
+            .header("x-ss-req-ticket", ticket)
+            .header("sdk-version", "2")
+            .header("passport-sdk-version", "5051452")
+            .header("x-xs-from-web", "0")
+            .header("x-khronos", (signed.headers["X-Khronos"] ?: ""))
+            .header("x-ladon", realLadonArgus.ladon)
+            .header("x-argus", realLadonArgus.argus)
+            .header("x-gorgon", (signed.headers["X-Gorgon"] ?: ""))
+            .header("x-helios", HongguoArgus.helios(nowSec))
+            .header("lc", "101")
+            .header("x-ss-dp", "8662")
+            .header("x-tt-trace-id", traceId)
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
@@ -296,7 +329,7 @@ class HongguoClient(
         }
     }
 
-    // ---- 签名 POST：注册身份（L1 优先）+ 空响应轮换换号重试 ----
+    // ---- 签名 POST：注册身份 + 空响应轮换换号重试 ----
     @Volatile private var feedIdentity: HongguoDeviceRegister.Identity? = null
 
     private fun postSignedJson(path: String, body: JSONObject): JSONObject {
@@ -331,80 +364,76 @@ class HongguoClient(
     }
 
     private fun postOnce(path: String, raw: ByteArray, deviceId: String, installId: String): JSONObject {
-        // L1 签名通道（2026-11-10）：旧 Kotlin 签名链+随机假身份在模拟器出口全空（实证），
-        // feed 与播放同走 HGTV 字节码签名+传输（landpage 73532 档案+真环境+注册号）
-        if (HongguoL1.signAvailable) {
-            val q = java.util.LinkedHashMap<String, String>()
-            q["iid"] = installId
-            q["device_id"] = deviceId
-            q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-            q["app_name"] = "novelread"
-            q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
-            q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-            q["device_type"] = HongguoEnv.deviceType
-            q["device_brand"] = HongguoEnv.deviceBrand
-            q["language"] = "zh"
-            q["os_api"] = HongguoEnv.osApi
-            q["os_version"] = HongguoEnv.osVersion
-            q["manifest_version_code"] = "73532"
-            q["resolution"] = HongguoEnv.resolution
-            q["dpi"] = HongguoEnv.dpi
-            q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
-            q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
-            q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-            q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
-            q["ts"] = (System.currentTimeMillis() / 1000).toString()
-            val text = HongguoL1.signAndPost(
-                "https://api5-normal-sinfonlinea.fqnovel.com$path", q, raw, gzip = false
-            )
-            android.util.Log.d("Hongguo", "feed(L1) $path len=${text.length}")
-            if (text.isEmpty()) throw EmptyResponseException()
-            return JSONObject(text)
-        }
-        val nowSec = System.currentTimeMillis() / 1000
-        val q = TreeMap<String, String>()
-        q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"
-        q["channel"] = "update_64"; q["device_brand"] = "Redmi"
+        // Kotlin 签名链（2026-11-10 与 F0.x1 逐字段对拍后，L1 字节码通道已拆除）：
+        // （73532+HongguoEnv 动态环境+插入序）+ 真版 Ladon/Argus/Helios/Gorgon +
+        // HGTV 同款头集（E0 外层+G0 改写后形态）。播放接口三通道实测与 L1 字节码等价。
+        val q = java.util.LinkedHashMap<String, String>()
+        q["iid"] = installId
         q["device_id"] = deviceId
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["dpi"] = "520"; q["iid"] = installId
-        q["language"] = "zh"; q["manifest_version_code"] = "73532"
-        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
-        q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
-        q["pv_player"] = "73532"; q["compliance_status"] = "0"
-        q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"
-        q["is_android_pad_screen"] = "0"
-        q["ts"] = nowSec.toString()
-        q["update_version_code"] = "73532"; q["version_code"] = "73532"
-        q["version_name"] = "7.3.5.32"
+        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
+        q["app_name"] = "novelread"
+        q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
+        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
+        q["device_type"] = HongguoEnv.deviceType
+        q["device_brand"] = HongguoEnv.deviceBrand
+        q["language"] = "zh"
+        q["os_api"] = HongguoEnv.osApi
+        q["os_version"] = HongguoEnv.osVersion
+        q["manifest_version_code"] = "73532"
+        q["resolution"] = HongguoEnv.resolution
+        q["dpi"] = HongguoEnv.dpi
+        q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
+        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
+        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
+        q["ts"] = (System.currentTimeMillis() / 1000).toString()
 
-        val signed = HongguoCrypto.signRequest(q, raw, System.currentTimeMillis(), deviceId)
-        fun be32(n: Long): ByteArray = byteArrayOf(
-            ((n shr 24) and 0xFF).toByte(), ((n shr 16) and 0xFF).toByte(),
-            ((n shr 8) and 0xFF).toByte(), (n and 0xFF).toByte()
+        val versionName = "7.3.5.32"
+        val signed = HongguoCrypto.signRequest(q, raw, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
+        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
+        val realLadonArgus = HongguoArgus.generate(
+            signed.query, raw, nowSec, versionName, deviceId,
+            deviceProfile = HongguoEnv.argusProfile
         )
-
-        fun le32(n: Long): ByteArray = byteArrayOf(
-            (n and 0xFF).toByte(), ((n shr 8) and 0xFF).toByte(),
-            ((n shr 16) and 0xFF).toByte(), ((n shr 24) and 0xFF).toByte()
+        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
+        val ua = HongguoEnv.ua("73532")
+        val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
+            .let { "00-$it-${it.substring(0, 16)}-01" }
+        val headers: List<Pair<String, String>> = listOf(
+            // E0 外层
+            "User-Agent" to ua,
+            "Accept-Language" to "zh-CN,zh;q=0.9",
+            "X-SS-DP" to "8662",
+            "X-Tt-Store-Region" to "cn",
+            "X-Tt-Store-Region-Src" to "did",
+            "X-XS-From-Web" to "0",
+            "Sdk-Version" to "2",
+            // F0.x1.d 签名头集（G0 改写后）
+            "User-Agent" to ua,
+            "Accept" to "application/json; charset=utf-8,application/x-protobuf",
+            "x-ss-req-ticket" to ticket,
+            "sdk-version" to "2",
+            "passport-sdk-version" to "5051452",
+            "x-xs-from-web" to "0",
+            "x-khronos" to (signed.headers["X-Khronos"] ?: ""),
+            "x-ladon" to realLadonArgus.ladon,
+            "x-argus" to realLadonArgus.argus,
+            "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
+            "x-helios" to HongguoArgus.helios(nowSec),
+            "Content-Type" to "application/json; charset=UTF-8",
+            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
+            "x-reading-request" to "$ticket-${java.security.SecureRandom().nextLong() and 0xffffffffL}",
+            "x-ss-stub" to (signed.headers["X-SS-STUB"] ?: ""),
+            // G0 追加（feed 明文 body，无 Content-Encoding）
+            "lc" to "101",
+            "x-ss-dp" to "8662",
+            "x-tt-trace-id" to traceId
         )
 
         val req = Request.Builder()
             .url("$apiBase$path?${signed.query}")
-            .post(raw.toRequestBody("application/json; charset=utf-8".toMediaType()))
-            .header("User-Agent", HongguoDeviceRegister.USER_AGENT)
-            .header("Accept", "application/json")
-            .header("Accept-Encoding", "identity")
-            .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
-            .header("X-XS-From-Web", "0")
-            .header("Sdk-Version", "2")
-            .header("X-SS-DP", "8662")
-            .header("X-Tt-Store-Region", "cn")
-            .header("X-Tt-Store-Region-Src", "did")
-            .header("X-Ladon", HongguoCrypto.base64(be32(nowSec)))
-            .header("X-Argus", HongguoCrypto.base64(le32(nowSec)))
-            .header("X-Tt-Dt", "")
+            .post(raw.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+            .apply { headers.forEach { (k, v) -> header(k, v) } }
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)

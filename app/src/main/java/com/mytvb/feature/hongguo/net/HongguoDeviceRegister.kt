@@ -62,23 +62,40 @@ object HongguoDeviceRegister {
         val cookies: Map<String, String> = emptyMap(),
         /** 注册响应下发的设备令牌（播放 query 首参，HGTV 实证必带）。 */
         val klinkEgdi: String = "",
-        /** 注册完成时刻（「每号首请求」模型：号仅首次播放请求有效）。 */
+        /** 注册响应 device_token（HGTV 每个 API 请求 query 随带，开源参考线均丢弃——号活性关键嫌疑）。 */
+        val deviceToken: String = "",
+        /** 设备指纹（重注册沿用，HGTV b.java:5073 map 有旧值就带）。 */
+        val clientUdid: String = "",
+        /** 注册完成时刻（号复用监控用）。 */
         val registeredAt: Long = System.currentTimeMillis()
     )
 
     /**
      * 注册内核（不落盘）：调用方负责持久化。多视频模型等播放接口
      * 校验真实设备身份，匿名随机 id 会被空响应拒绝（Node/Go 版同行为）。
+     *
+     * @param carry 旧身份（身份继承重注册，对照 HGTV b.java r0：payload header 声明旧
+     * device_id/install_id/klink_egdi（服务端关联新旧号），cdid/openUdid/clientUdid 设备指纹
+     * 沿用不换——服务端按「设备换新号」语义下发关联新号；null=首装全新注册。
      */
-    fun registerFresh(): Identity {
+    fun registerFresh(carry: Identity? = null): Identity {
         val rnd = SecureRandom()
-        val cdid = uuidV4(rnd)
-        val open = ByteArray(8)
-        rnd.nextBytes(open)
-        val openUdid = HongguoCrypto.toHex(open)
-        val holder = InMemorySession(cdid, uuidV4(rnd), openUdid)
+        val cdid = carry?.cdid?.takeIf { it.isNotEmpty() } ?: uuidV4(rnd)
+        val openUdid = carry?.openUdid?.takeIf { it.isNotEmpty() } ?: run {
+            val open = ByteArray(8); rnd.nextBytes(open); HongguoCrypto.toHex(open)
+        }
+        val clientUdid = carry?.clientUdid?.takeIf { it.isNotEmpty() } ?: uuidV4(rnd)
+        val holder = InMemorySession(cdid, clientUdid, openUdid)
+        carry?.let {
+            holder.deviceId = it.deviceId
+            holder.installId = it.installId
+            holder.klinkEgdi = it.klinkEgdi
+        }
         registerDevice(holder)
-        return Identity(holder.deviceId, holder.installId, cdid, openUdid, holder.cookies, holder.klinkEgdi)
+        return Identity(
+            holder.deviceId, holder.installId, cdid, openUdid,
+            holder.cookies, holder.klinkEgdi, holder.deviceToken, clientUdid
+        )
     }
 
     /** 注册流程复用的最小会话视图（不依赖 Android Context）。 */
@@ -90,6 +107,7 @@ object HongguoDeviceRegister {
         override var deviceId: String = ""
         override var installId: String = ""
         override var klinkEgdi: String = ""
+        override var deviceToken: String = ""
         override var deviceCreated: Long = System.currentTimeMillis()
         override var cookies: MutableMap<String, String> = mutableMapOf()
     }
@@ -104,6 +122,8 @@ object HongguoDeviceRegister {
         var deviceCreated: Long
         var cookies: MutableMap<String, String>
         var klinkEgdi: String
+        /** 注册响应下发的设备令牌（HGTV E.java:4397 实证：每个 API 请求 query 必带 device_token）。 */
+        var deviceToken: String
     }
 
     private fun uuidV4(rnd: SecureRandom): String {
@@ -187,6 +207,11 @@ object HongguoDeviceRegister {
         header.put("cdid", session.cdid)
         header.put("clientudid", session.clientUdid)
         header.put("openudid", session.openUdid)
+        // 身份继承（HGTV b.java:5074-5103：重注册声明旧 device_id/install_id/klink_egdi，
+        // 服务端按设备换号语义关联新旧号；首装时三值为空=不带，与 HGTV「有才带」一致）
+        if (session.deviceId.isNotEmpty()) header.put("device_id", session.deviceId)
+        if (session.installId.isNotEmpty()) header.put("install_id", session.installId)
+        if (session.klinkEgdi.isNotEmpty()) header.put("klink_egdi", session.klinkEgdi)
         header.put("cpu_abi", HongguoEnv.HOST_ABI)
         header.put("display_name", "红果免费短剧")
         header.put("sdk_version", "3.7.0-rc.34-fanqie-xiaoshuo")
@@ -301,10 +326,15 @@ object HongguoDeviceRegister {
             require(did.isNotEmpty() && iid.isNotEmpty() && did != "0" && iid != "0") {
                 "设备注册未返回有效身份"
             }
-            android.util.Log.d("Hongguo", "register resp keys=${obj.keys().asSequence().take(24).toList()} klink=${obj.optString("klink_egdi").take(20)}")
+            android.util.Log.d(
+                "Hongguo",
+                "register resp keys=${obj.keys().asSequence().take(24).toList()} " +
+                    "klink=${obj.optString("klink_egdi").take(20)} token=${obj.optString("device_token").length}ch"
+            )
             session.deviceId = did
             session.installId = iid
             session.klinkEgdi = obj.optString("klink_egdi")
+            session.deviceToken = obj.optString("device_token")
             val cookies = session.cookies.toMutableMap()
             for (name in listOf("store-region", "store-region-src", "ttreq", "odin_tt")) {
                 resp.headers("Set-Cookie").firstOrNull { it.startsWith("$name=") }?.let { header ->
