@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果热搜榜行：排名（前三橙）+ 剧名 + 角标（card_tips）。整行聚焦即时高亮（官方口径） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/bg_cctv_vod_episode_cell"
+    android:focusable="true"
+    android:clickable="true"
+    android:paddingStart="@dimen/px20"
+    android:paddingEnd="@dimen/px20"
+    android:layout_marginTop="@dimen/px12"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/px68">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_hongguo_hot_rank"
+        android:textSize="@dimen/px28"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_width="@dimen/px44"
+        android:layout_height="wrap_content"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_hongguo_hot_title"
+        android:textSize="@dimen/px26"
+        android:textColor="?android:attr/textColorPrimary"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:layout_marginStart="@dimen/px12"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_hongguo_hot_tip"
+        android:textSize="@dimen/px20"
+        android:textColor="@color/grey"
+        android:maxLines="1"
+        android:layout_marginStart="@dimen/px12"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+</LinearLayout>

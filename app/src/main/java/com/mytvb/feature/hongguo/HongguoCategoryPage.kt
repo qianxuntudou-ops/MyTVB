@@ -12,7 +12,7 @@ import androidx.viewpager2.widget.ViewPager2
 import com.mytvb.databinding.FragmentHongguoCategoryBinding
 
 /** 红果分类页：全部/漫剧/AI剧 三子档（landpage genre 切换）。 */
-class HongguoCategoryPage : Fragment() {
+class HongguoCategoryPage : Fragment(), HongguoPageFocus {
 
     private var _binding: FragmentHongguoCategoryBinding? = null
     private val binding get() = _binding!!
@@ -36,6 +36,13 @@ class HongguoCategoryPage : Fragment() {
         TabLayoutMediator(binding.tabGenre, binding.viewPager) { tab, position ->
             tab.text = genres[position].first
         }.attach()
+    }
+
+    /** 侧栏 RIGHT / 红果 tab DOWN 的落点：当前子档第一张卡片。 */
+    override fun focusFirstCard(): Boolean {
+        if (!isAdded || view == null) return false
+        val page = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        return (page as? HongguoPageFocus)?.focusFirstCard() == true
     }
 
     override fun onDestroyView() {

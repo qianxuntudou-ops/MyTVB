@@ -49,12 +49,51 @@ class HongguoLoginDialog(
         startQr()
     }
 
+    override fun show() {
+        super.show()
+        // 窗口 attach 后再聚焦（onCreate 时 view 未 attach，requestFocus 会被根容器吃掉）
+        binding.radioLoginQr.post { binding.radioLoginQr.requestFocus() }
+    }
+
     private fun setupChannels() {
-        binding.tabLoginChannel.setOnCheckedChangeListener { _, checkedId ->
-            binding.panelQr.visibility = if (checkedId == R.id.radio_login_qr) View.VISIBLE else View.GONE
-            binding.panelSms.visibility = if (checkedId == R.id.radio_login_sms) View.VISIBLE else View.GONE
-            binding.panelImport.visibility = if (checkedId == R.id.radio_login_import) View.VISIBLE else View.GONE
-            if (checkedId == R.id.radio_login_qr && binding.imageQr.drawable == null) startQr()
+        // TV 页签：点击切换 + 选中态；页签 DOWN 落当前面板首控件，面板 UP 回选中页签
+        val tabs = listOf(binding.radioLoginQr, binding.radioLoginSms, binding.radioLoginImport)
+        tabs.forEach { tab ->
+            tab.setOnClickListener { selectChannel(tab) }
+        }
+        selectChannel(binding.radioLoginQr)
+    }
+
+    /** 页签切换（选中紫实底白字）+ 面板显隐 + 页签↔面板双向焦点链。 */
+    private fun selectChannel(selected: android.widget.TextView) {
+        val tabs = listOf(binding.radioLoginQr, binding.radioLoginSms, binding.radioLoginImport)
+        val grey = context.getColor(R.color.grey)
+        tabs.forEach { tab ->
+            tab.isSelected = tab === selected
+            tab.setTextColor(if (tab.isSelected) android.graphics.Color.WHITE else grey)
+        }
+        binding.panelQr.visibility =
+            if (selected === binding.radioLoginQr) View.VISIBLE else View.GONE
+        binding.panelSms.visibility =
+            if (selected === binding.radioLoginSms) View.VISIBLE else View.GONE
+        binding.panelImport.visibility =
+            if (selected === binding.radioLoginImport) View.VISIBLE else View.GONE
+        if (selected === binding.radioLoginQr && binding.imageQr.drawable == null) startQr()
+        // 页签 DOWN 落当前面板首个可聚焦控件
+        val firstFocus = when (selected.id) {
+            R.id.radio_login_qr -> R.id.button_qr_refresh
+            R.id.radio_login_sms -> R.id.edit_phone
+            else -> R.id.edit_import
+        }
+        tabs.forEach { it.nextFocusDownId = firstFocus }
+        // 面板首控件 UP 回选中页签（MFA 指引按钮一并回）
+        when (selected.id) {
+            R.id.radio_login_qr -> binding.buttonQrRefresh.nextFocusUpId = selected.id
+            R.id.radio_login_sms -> {
+                binding.editPhone.nextFocusUpId = selected.id
+                binding.buttonMfaSent.nextFocusUpId = selected.id
+            }
+            else -> binding.editImport.nextFocusUpId = selected.id
         }
     }
 

@@ -32,7 +32,8 @@
         android:id="@+id/button_hongguo_search"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="@drawable/tab_round_background"
+        android:background="@drawable/bg_search_input"
+        android:addStatesFromChildren="true"
         android:focusable="true"
         android:clickable="true"
         android:paddingStart="@dimen/px20"
@@ -49,12 +50,12 @@
             android:layout_width="@dimen/px40"
             android:layout_height="@dimen/px40"
             app:srcCompat="@drawable/ic_search"
-            app:tint="?attr/tabBarNormal"/>
+            app:tint="?android:attr/textColorSecondary"/>
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_hongguo_search_hint"
             android:text="@string/hongguo_search_hint"
             android:textSize="@dimen/px24"
-            android:textColor="?attr/tabBarNormal"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_marginStart="@dimen/px8"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>

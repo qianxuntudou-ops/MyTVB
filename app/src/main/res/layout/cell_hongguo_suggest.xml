@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 红果词 chip（历史/猜你想搜/联想/筛选）：主 APP 同款 button_common 胶囊，
+     默认暗灰底、聚焦高亮块（全 App 统一聚焦口径）。 -->
 <androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
     android:layout_height="@dimen/px56"
@@ -6,8 +8,8 @@
     android:paddingStart="@dimen/px28"
     android:paddingEnd="@dimen/px28"
     android:layout_marginEnd="@dimen/px16"
-    android:background="@drawable/tab_round_background"
+    android:background="@drawable/button_common"
     android:focusable="true"
     android:clickable="true"
     android:textSize="@dimen/px24"
-    android:textColor="?android:attr/textColorSecondary"/>
+    android:textColor="@color/textColor"/>

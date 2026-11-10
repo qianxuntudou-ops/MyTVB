@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果详情选集格：数字居中，选中/聚焦态由 bg_hongguo_episode 驱动 -->
+<androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/text_hongguo_episode"
+    android:background="@drawable/bg_hongguo_episode"
+    android:focusable="true"
+    android:clickable="true"
+    android:gravity="center"
+    android:textSize="@dimen/px26"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/px64"/>

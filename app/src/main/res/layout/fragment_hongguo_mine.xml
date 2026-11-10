@@ -40,38 +40,50 @@
         android:layout_width="wrap_content"
         android:layout_height="@dimen/px70"/>
     <androidx.appcompat.widget.AppCompatButton
-        android:id="@+id/button_logout"
-        android:text="@string/hongguo_logout"
+        android:id="@+id/button_watch_later_list"
+        android:text="@string/hongguo_watch_later"
         android:textSize="@dimen/px24"
-        android:textColor="@color/grey"
-        android:background="@drawable/tab_round_background"
+        android:textColor="@color/textColor"
+        android:background="@drawable/button_common"
         android:paddingStart="@dimen/px40"
         android:paddingEnd="@dimen/px40"
         android:layout_marginTop="@dimen/px20"
-        android:visibility="gone"
-        android:layout_width="wrap_content"
-        android:layout_height="@dimen/px60"/>
+        android:layout_width="@dimen/px480"
+        android:layout_height="@dimen/px64"/>
+
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_subscribe"
         android:text="@string/hongguo_my_subscribe"
         android:textSize="@dimen/px24"
-        android:textColor="@color/grey"
-        android:background="@drawable/tab_round_background"
+        android:textColor="@color/textColor"
+        android:background="@drawable/button_common"
         android:paddingStart="@dimen/px40"
         android:paddingEnd="@dimen/px40"
         android:layout_marginTop="@dimen/px20"
         android:visibility="gone"
-        android:layout_width="wrap_content"
-        android:layout_height="@dimen/px60"/>
+        android:layout_width="@dimen/px480"
+        android:layout_height="@dimen/px64"/>
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_logout"
+        android:text="@string/hongguo_logout"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/textColor"
+        android:background="@drawable/button_common"
+        android:paddingStart="@dimen/px40"
+        android:paddingEnd="@dimen/px40"
+        android:layout_marginTop="@dimen/px20"
+        android:visibility="gone"
+        android:layout_width="@dimen/px480"
+        android:layout_height="@dimen/px64"/>
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_clear"
         android:text="@string/hongguo_clear_local"
         android:textSize="@dimen/px24"
-        android:textColor="@color/grey"
-        android:background="@drawable/tab_round_background"
+        android:textColor="@color/textColor"
+        android:background="@drawable/button_common"
         android:paddingStart="@dimen/px40"
         android:paddingEnd="@dimen/px40"
         android:layout_marginTop="@dimen/px20"
-        android:layout_width="wrap_content"
-        android:layout_height="@dimen/px60"/>
+        android:layout_width="@dimen/px480"
+        android:layout_height="@dimen/px64"/>
 </LinearLayout>

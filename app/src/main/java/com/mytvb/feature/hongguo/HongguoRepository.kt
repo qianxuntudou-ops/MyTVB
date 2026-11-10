@@ -133,6 +133,48 @@ class HongguoRepository private constructor(context: Context) {
     suspend fun suggestions(keyword: String): List<String> =
         withContext(Dispatchers.IO) { search.suggestions(keyword) }
 
+    // ---- 搜索发现（猜你想搜 + 热搜榜；匿名元数据读取，失败返回空由 UI 隐藏该区） ----
+    suspend fun searchDiscovery(): HongguoClient.DiscoveryData? =
+        withContext(Dispatchers.IO) {
+            try {
+                client.discovery()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.d("Hongguo", "discovery fail: ${e.javaClass.simpleName}: ${e.message}")
+                null
+            }
+        }
+
+    // ---- 搜索历史（hongguo_local SP，最新在前、去重、≤10 条） ----
+    fun searchHistory(): List<String> {
+        val raw = localPrefs.getString("search_history", null) ?: return emptyList()
+        return try {
+            val arr = org.json.JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                arr.optString(i).takeIf { it.isNotBlank() }
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun saveSearchKeyword(keyword: String): List<String> {
+        val kw = keyword.trim()
+        if (kw.isEmpty()) return searchHistory()
+        val updated = searchHistory().toMutableList().apply {
+            removeAll { it == kw }
+            add(0, kw)
+            while (size > 10) removeAt(lastIndex)
+        }
+        val arr = org.json.JSONArray()
+        updated.forEach(arr::put)
+        localPrefs.edit().putString("search_history", arr.toString()).apply()
+        return updated
+    }
+
+    fun clearSearchHistory() {
+        localPrefs.edit().remove("search_history").apply()
+    }
+
     fun accountMethod(): String = session.loginMethod
 
     // ---- 详情 ----
@@ -220,6 +262,22 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     fun history(): List<WatchRecord> = readRecords("history")
+
+    // ---- 稍后看（本地书签，红果官方详情「稍后看」；不云同步） ----
+    fun watchLater(): List<WatchRecord> = readRecords("watch_later")
+
+    fun isWatchLater(seriesId: String): Boolean =
+        localPrefs.getString("watch_later", null)?.contains("\"$seriesId\"") == true
+
+    fun toggleWatchLater(record: WatchRecord): Boolean {
+        val list = watchLater().toMutableList()
+        val existing = list.indexOfFirst { it.seriesId == record.seriesId }
+        return if (existing >= 0) {
+            list.removeAt(existing); writeRecords("watch_later", list); false
+        } else {
+            list.add(0, record); writeRecords("watch_later", list.take(50)); true
+        }
+    }
 
     fun saveProgress(record: WatchRecord, vid: String = record.seriesId) {
         val list = history().filter { it.seriesId != record.seriesId }.toMutableList()

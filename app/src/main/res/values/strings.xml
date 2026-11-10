@@ -91,6 +91,14 @@
     <string name="hongguo_tab_category">分类</string>
     <string name="hongguo_tab_mine">我的</string>
     <string name="hongguo_search_hint">搜索</string>
+    <string name="hongguo_search_history">搜索历史</string>
+    <string name="hongguo_search_clear_history">清空</string>
+    <string name="hongguo_search_guess">猜你想搜</string>
+    <string name="hongguo_board_short">短剧热搜榜</string>
+    <string name="hongguo_board_comic">漫剧热搜榜</string>
+    <string name="hongguo_pick_episode">选集</string>
+    <string name="hongguo_watch_later">稍后看</string>
+    <string name="hongguo_watch_later_empty">稍后看还是空的</string>
     <string name="hongguo_coming_soon">功能开发中，敬请期待</string>
     <string name="hongguo_empty">暂无内容</string>
     <string name="hongguo_play_continue">继续播放</string>

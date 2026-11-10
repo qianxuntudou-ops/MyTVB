@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果搜索联想行：放大镜图标 + 推荐词，整行胶囊块（主 APP 搜索历史行同款） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/button_common"
+    android:focusable="true"
+    android:clickable="true"
+    android:paddingStart="@dimen/px30"
+    android:paddingEnd="@dimen/px30"
+    android:layout_marginTop="@dimen/px10"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/px72">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:layout_width="@dimen/px30"
+        android:layout_height="@dimen/px30"
+        android:contentDescription="@string/search"
+        app:srcCompat="@drawable/ic_search"
+        app:tint="?android:attr/textColorSecondary"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_hongguo_suggest_word"
+        android:textSize="@dimen/px28"
+        android:textColor="?android:attr/textColorPrimary"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="wrap_content"/>
+</LinearLayout>

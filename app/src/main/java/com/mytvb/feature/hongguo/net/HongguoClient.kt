@@ -73,6 +73,29 @@ class HongguoClient(
         val sessionId: String
     )
 
+    /**
+     * 搜索发现条目（猜你想搜/热搜榜共用）：seriesId 非空=可直接弹详情的剧；
+     * 空=纯推荐词（点击执行搜索）。tip 为角标文案（card_tips/rec_text，如「96.4%完播」）；
+     * contentType 仅 mixed 榜分类用（1/7=短剧、1004=漫剧）。
+     */
+    data class DiscoveryItem(
+        val title: String,
+        val seriesId: String = "",
+        val cover: String = "",
+        val episodeCount: Int = 0,
+        val score: String = "",
+        val playCount: Long = 0L,
+        val tip: String = "",
+        val contentType: String = ""
+    )
+
+    data class DiscoveryBoard(val id: String, val items: List<DiscoveryItem>)
+
+    data class DiscoveryData(
+        val guesses: List<DiscoveryItem>,
+        val boards: List<DiscoveryBoard>
+    )
+
     /** 分类路径 → (req_scene, genre)：全部/漫剧/AI剧 三形态，对照 categorySpecFor。 */
     private fun specFor(path: String): Pair<String, String> = when (path) {
         "/category/comic-drama", "/category/comic" -> "comic_series" to "comic_series"
@@ -229,6 +252,161 @@ class HongguoClient(
             return RankPage(items, false, nextOffset, data.optString("session_id"))
         }
         return RankPage(items, hasMore, nextOffset, data.optString("session_id"))
+    }
+
+    // ---- 搜索发现（猜你想搜 + 短剧/漫剧热搜榜） ----
+    //
+    // 上游 GET /reading/bookapi/plan/v1/（from=search_input_page&bookstore_tab=16），
+    // 匿名元数据读取（本通道本就不带账号票据，语义同 Go 版清 token/uid 后请求）。
+    // 解析对照 hongguo-tv parseSearchDiscovery：递归 lynx_data/cell_data 找
+    // cell_name=猜你想搜（≤4 条）/短剧热搜榜/漫剧热搜榜（各 ≤6 条）；「热搜榜」
+    // 混合榜按 content_type 分类（1/7=短剧、1004=漫剧）。仅接受已知 cell——
+    // 话题/图书/广告块即使带 ID 也不冒充可播放剧集。失败抛错由调用方隐藏该区。
+
+    /** 搜索输入页发现接口（照抄 Go searchDiscoveryQuery 参数集）。 */
+    fun discovery(): DiscoveryData {
+        val values = linkedMapOf(
+            "user_is_login" to "0",
+            "bookstore_tab" to "16",
+            "bookstore_tab_type" to "16",
+            "scene" to "10",
+            "limit" to "0",
+            "tab_name" to "feed",
+            "from" to "search_input_page",
+            "query_history_removed" to "false",
+            "offset" to "0",
+            "search_middle_page_version" to "4",
+            "search_source" to "1",
+            "new_search_middle_page" to "true",
+            "hot_word_exchange" to "false"
+        )
+        val payload = getSignedJson("/reading/bookapi/plan/v1/", values)
+        return parseDiscovery(payload)
+    }
+
+    private fun parseDiscovery(payload: JSONObject): DiscoveryData {
+        val guesses = ArrayList<DiscoveryItem>()
+        val boards = LinkedHashMap<String, MutableList<DiscoveryItem>>()
+        fun visit(value: Any?, depth: Int) {
+            if (depth > 8 || value == null) return
+            when (value) {
+                is String -> {
+                    // lynx_data 可能是 JSON 字符串（Go 版 decode 后递归）
+                    if (value.length <= 2 * 1024 * 1024) {
+                        runCatching {
+                            visit(org.json.JSONTokener(value).nextValue(), depth + 1)
+                        }
+                    }
+                }
+                is JSONArray -> {
+                    val n = minOf(value.length(), 128)
+                    for (i in 0 until n) visit(value.opt(i), depth + 1)
+                }
+                is JSONObject -> {
+                    val name = value.optString("cell_name")
+                    if (name == "猜你想搜" && guesses.isEmpty()) {
+                        guesses += discoveryItems(value.opt("video_data"), "", 4)
+                        if (guesses.isEmpty()) {
+                            // 推荐词形态：search_tag_data[].tag_title（tag ID 不冒充剧集 ID）
+                            val tags = value.optJSONArray("search_tag_data")
+                            if (tags != null) {
+                                val rows = JSONArray()
+                                for (i in 0 until tags.length()) {
+                                    val tag = tags.optJSONObject(i) ?: continue
+                                    rows.put(JSONObject().put("title", tag.optString("tag_title")))
+                                }
+                                guesses += discoveryItems(rows, "", 4)
+                            }
+                        }
+                    }
+                    when (name) {
+                        "短剧热搜榜" -> if (boards["short"].isNullOrEmpty()) {
+                            boards["short"] = discoveryItems(value.opt("video_data"), "short", 6).toMutableList()
+                        }
+                        "漫剧热搜榜" -> if (boards["comic"].isNullOrEmpty()) {
+                            boards["comic"] = discoveryItems(value.opt("video_data"), "comic", 6).toMutableList()
+                        }
+                        "热搜榜" -> {
+                            // 现网部分计划只叫「热搜榜」：按明确 content_type 分类，不猜
+                            for (item in discoveryItems(value.opt("video_data"), "mixed", 6)) {
+                                val id = if (item.contentType == "1004") "comic" else "short"
+                                val bucket = boards.getOrPut(id) { mutableListOf() }
+                                if (bucket.none { it.seriesId == item.seriesId } && bucket.size < 6) {
+                                    bucket.add(item)
+                                }
+                            }
+                        }
+                    }
+                    visit(value.opt("lynx_data"), depth + 1)
+                    visit(value.opt("cell_data"), depth + 1)
+                }
+            }
+        }
+        visit(payload.opt("data"), 0)
+        val boardList = listOf("short", "comic").mapNotNull { id ->
+            boards[id]?.takeIf { it.isNotEmpty() }?.let { DiscoveryBoard(id, it) }
+        }
+        return DiscoveryData(guesses, boardList)
+    }
+
+    /** content_type 透传位（mixed 榜分类用）。 */
+    private fun discoveryItems(value: Any?, board: String, limit: Int): List<DiscoveryItem> {
+        if (value == null) return emptyList()
+        val rows = when (value) {
+            is JSONArray -> value
+            is JSONObject -> JSONArray().put(value)
+            else -> return emptyList()
+        }
+        val out = ArrayList<DiscoveryItem>()
+        val seen = HashSet<String>()
+        for (index in 0 until rows.length()) {
+            if (out.size >= limit) break
+            val row = rows.optJSONObject(index) ?: continue
+            val title = normalizeSearchQuery(row.optString("title")) ?: continue
+            val id = row.optString("series_id_str").ifEmpty { row.optString("series_id") }
+            val kind = row.optString("content_type")
+            if (kind.isNotEmpty() && kind != "1" && kind != "7" && kind != "1004") continue
+            if (board == "mixed" && kind.isEmpty()) continue
+            val key: String
+            val item: DiscoveryItem
+            if (id.matches(Regex("\\d{1,30}")) && id != "0") {
+                val drama = normalizeDrama(row)
+                key = id
+                item = DiscoveryItem(
+                    title = title,
+                    seriesId = id,
+                    cover = HongguoCoverUrl.rewrite(
+                        drama?.cover ?: row.optString("cover").ifEmpty { row.optString("cover_url") }
+                            .takeIf { it.startsWith("http") } ?: ""
+                    ),
+                    episodeCount = drama?.episodeCount ?: 0,
+                    score = drama?.score ?: "",
+                    playCount = drama?.playCount ?: 0L,
+                    tip = row.optString("card_tips").ifEmpty { row.optString("rec_text") },
+                    contentType = kind.ifEmpty {
+                        when (board) {
+                            "comic" -> "1004"
+                            "mixed" -> ""
+                            else -> "1"
+                        }
+                    }
+                )
+            } else {
+                if (board.isNotEmpty()) continue
+                item = DiscoveryItem(title = title)
+                key = "query:$title"
+            }
+            if (!seen.add(key)) continue
+            out.add(item)
+        }
+        return out
+    }
+
+    /** 搜索词规整（对照 Go normalizeSearchQuery：空白折叠、空串拒绝）。 */
+    private fun normalizeSearchQuery(value: String): String? {
+        val collapsed = value.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            .joinToString(" ")
+        return collapsed.takeIf { it.isNotEmpty() }
     }
 
     /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。与 feed 共用一号。 */

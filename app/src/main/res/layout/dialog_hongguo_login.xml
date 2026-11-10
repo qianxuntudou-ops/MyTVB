@@ -1,40 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 红果登录弹窗（TV 化）：顶部三页签（选中紫实底/聚焦高亮块）+ 三通道面板。
+     焦点链：页签 DOWN 落当前面板首控件；面板 UP 回页签；BACK 关弹窗（IME 先收）。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
-    android:padding="@dimen/px40"
+    android:paddingStart="@dimen/px40"
+    android:paddingTop="@dimen/px36"
+    android:paddingEnd="@dimen/px40"
+    android:paddingBottom="@dimen/px40"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <RadioGroup
+    <!-- 页签行（RadioGroup→TV 页签钮，ID 保留兼容代码） -->
+    <LinearLayout
         android:id="@+id/tab_login_channel"
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <androidx.appcompat.widget.AppCompatRadioButton
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/radio_login_qr"
             android:text="@string/hongguo_login_qr"
             android:textSize="@dimen/px26"
-            android:layout_marginEnd="@dimen/px40"
-            android:checked="true"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:background="@drawable/bg_hongguo_login_tab"
+            android:focusable="true"
+            android:clickable="true"
+            android:gravity="center"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="@dimen/px64"/>
 
-        <androidx.appcompat.widget.AppCompatRadioButton
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/radio_login_sms"
             android:text="@string/hongguo_login_sms"
             android:textSize="@dimen/px26"
-            android:layout_marginEnd="@dimen/px40"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
+            android:background="@drawable/bg_hongguo_login_tab"
+            android:focusable="true"
+            android:clickable="true"
+            android:gravity="center"
+            android:layout_marginStart="@dimen/px16"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="@dimen/px64"/>
 
-        <androidx.appcompat.widget.AppCompatRadioButton
+        <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/radio_login_import"
             android:text="@string/hongguo_login_import"
             android:textSize="@dimen/px26"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-    </RadioGroup>
+            android:background="@drawable/bg_hongguo_login_tab"
+            android:focusable="true"
+            android:clickable="true"
+            android:gravity="center"
+            android:layout_marginStart="@dimen/px16"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="@dimen/px64"/>
+    </LinearLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -53,8 +73,8 @@
                 android:id="@+id/image_qr"
                 android:background="@color/white"
                 android:padding="@dimen/px10"
-                android:layout_width="@dimen/px350"
-                android:layout_height="@dimen/px350"/>
+                android:layout_width="@dimen/px330"
+                android:layout_height="@dimen/px330"/>
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_qr_status"
@@ -69,8 +89,8 @@
                 android:id="@+id/button_qr_refresh"
                 android:text="@string/hongguo_qr_refresh"
                 android:textSize="@dimen/px24"
-                android:textColor="@color/grey"
-                android:background="@drawable/tab_round_background"
+                android:textColor="@color/textColor"
+                android:background="@drawable/bg_owner_dialog_outline_button"
                 android:paddingStart="@dimen/px40"
                 android:paddingEnd="@dimen/px40"
                 android:layout_marginTop="@dimen/px16"
@@ -89,7 +109,7 @@
 
             <androidx.appcompat.widget.AppCompatEditText
                 android:id="@+id/edit_phone"
-                android:background="@drawable/tab_round_background"
+                android:background="@drawable/bg_search_input"
                 android:focusable="true"
                 android:singleLine="true"
                 android:inputType="phone"
@@ -110,7 +130,7 @@
 
                 <androidx.appcompat.widget.AppCompatEditText
                     android:id="@+id/edit_sms_code"
-                    android:background="@drawable/tab_round_background"
+                    android:background="@drawable/bg_search_input"
                     android:focusable="true"
                     android:singleLine="true"
                     android:inputType="number"
@@ -127,13 +147,13 @@
                     android:id="@+id/button_send_code"
                     android:text="@string/hongguo_send_code"
                     android:textSize="@dimen/px24"
-                    android:textColor="@color/grey"
-                    android:background="@drawable/tab_round_background"
+                    android:textColor="@color/textColor"
+                    android:background="@drawable/bg_owner_dialog_outline_button"
                     android:paddingStart="@dimen/px24"
                     android:paddingEnd="@dimen/px24"
                     android:layout_marginStart="@dimen/px16"
                     android:layout_width="wrap_content"
-                    android:layout_height="@dimen/px64"/>
+                    android:layout_height="@dimen/px70"/>
             </LinearLayout>
 
             <androidx.appcompat.widget.AppCompatButton
@@ -183,7 +203,7 @@
 
             <androidx.appcompat.widget.AppCompatEditText
                 android:id="@+id/edit_import"
-                android:background="@drawable/tab_round_background"
+                android:background="@drawable/bg_search_input"
                 android:focusable="true"
                 android:singleLine="true"
                 android:hint="@string/hongguo_login_import_hint"

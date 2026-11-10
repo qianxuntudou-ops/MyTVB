@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.mytvb.R
@@ -22,7 +23,7 @@ import java.util.Locale
  * 红果「我的」页：登录态直达（未登录点开三通道登录弹窗；已登录显示昵称+退出+我的预约）。
  * 红果账号与 B 站完全隔离（票据在 hongguo_session，登出只清红果票据保留设备身份）。
  */
-class HongguoMinePage : Fragment() {
+class HongguoMinePage : Fragment(), HongguoPageFocus {
 
     private var _binding: FragmentHongguoMineBinding? = null
     private val binding get() = _binding!!
@@ -46,12 +47,20 @@ class HongguoMinePage : Fragment() {
             AppToast.show(requireContext(), "已退出红果账号")
         }
         binding.buttonSubscribe.setOnClickListener { showSubscribeList() }
+        binding.buttonWatchLaterList.setOnClickListener { showWatchLaterList() }
         binding.buttonClear.setOnClickListener {
             repository.clearLocal()
             refreshLoginState()
             AppToast.show(requireContext(), "已清除本机红果数据")
         }
         refreshLoginState()
+    }
+
+    /** 侧栏 RIGHT / 顶部 tab DOWN 的落点：未登录→登录按钮，已登录→稍后看。 */
+    override fun focusFirstCard(): Boolean {
+        if (!isAdded || view == null) return false
+        val target = if (binding.buttonLogin.isVisible) binding.buttonLogin else binding.buttonWatchLaterList
+        return target.requestFocus()
     }
 
     /** 云端预约列表（subscribe/list，登录态才有数据）：点选条目=取消该预约。 */
@@ -82,6 +91,26 @@ class HongguoMinePage : Fragment() {
                         .onSuccess { AppToast.show(requireContext(), "已取消预约：${target.title}") }
                         .onFailure { AppToast.show(requireContext(), "取消失败：${it.message}") }
                 }
+            }
+        }
+    }
+
+    /** 本地稍后看列表：点选条目弹详情（详情里可继续/移除）。 */
+    private fun showWatchLaterList() {
+        val items = repository.watchLater()
+        if (items.isEmpty()) {
+            AppToast.show(requireContext(), getString(R.string.hongguo_watch_later_empty))
+            return
+        }
+        ChoiceDialog.show(
+            requireContext(), getString(R.string.hongguo_watch_later),
+            items.map { item ->
+                val progress = if (item.episodeCount > 0) " · 看到${item.episodeIndex + 1}/${item.episodeCount}集" else ""
+                item.title + progress
+            }
+        ) { index ->
+            items.getOrNull(index)?.let { item ->
+                HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
             }
         }
     }

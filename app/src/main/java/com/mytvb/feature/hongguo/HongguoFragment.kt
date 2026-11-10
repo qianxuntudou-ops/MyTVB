@@ -59,8 +59,11 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
                     if (searchShown) {
                         hideSearchOverlay()
                     } else {
+                        // 转发给 Activity 前先短暂停用自己，转发完必须恢复，
+                        // 否则回调永久失效，之后搜索层的 BACK 会穿透到退出链
                         isEnabled = false
                         requireActivity().onBackPressedDispatcher.onBackPressed()
+                        isEnabled = true
                     }
                 }
             }
@@ -84,9 +87,18 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             tab.text = getString(PAGE_TITLES[position])
         }.attach()
+        // 离屏页视图全保留，但必须不可聚焦：否则遥控按键会被不可见页的
+        // 控件（筛选 chip 等）几何截走（搜索返回焦点被离屏页抢走同款问题）
+        binding.viewPager.registerOnPageChangeCallback(object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                syncPageFocusability(position)
+            }
+        })
+        binding.viewPager.post { syncPageFocusability(binding.viewPager.currentItem) }
 
         // tab 焦点导航：UP/左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）；
-        // DOWN 落当前页第一张卡片（不接则框架几何搜索把焦点送进侧栏/筛选行死循环）
+        // DOWN 落当前页第一张卡片（不接则框架几何搜索把焦点送进侧栏/筛选行死循环）；
+        // 右边缘进同排搜索胶囊（行内移动，非页面边缘环绕）
         binding.tabLayout.enableDirectTabNavigation(
             onNavigateUp = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
@@ -94,7 +106,8 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
             onNavigateDown = { focusCurrentPageContent() },
             onEdgeLeft = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
-            }
+            },
+            onEdgeRight = { binding.buttonHongguoSearch.requestFocus() }
         )
     }
 
@@ -102,6 +115,16 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
     private fun focusCurrentPageContent(): Boolean {
         val page = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
         return (page as? HongguoPageFocus)?.focusFirstCard() == true
+    }
+
+    /** 只允许当前页可聚焦（离屏页 BLOCK；切换时必须恢复当前页防死锁）。 */
+    private fun syncPageFocusability(current: Int) {
+        for (i in 0 until PAGE_TITLES.size) {
+            val page = childFragmentManager.findFragmentByTag("f$i") ?: continue
+            val pageView = page.view as? ViewGroup ?: continue
+            pageView.descendantFocusability =
+                if (i == current) ViewGroup.FOCUS_AFTER_DESCENDANTS else ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        }
     }
 
     override fun focusEntryFromMainTab(): Boolean = focusCurrentPageContent()
@@ -117,10 +140,15 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         if (searchShown) return
         searchShown = true
         binding.containerHongguoSearch.visibility = View.VISIBLE
-        if (childFragmentManager.findFragmentById(R.id.container_hongguo_search) == null) {
+        val existing = childFragmentManager
+            .findFragmentById(R.id.container_hongguo_search) as? HongguoSearchPage
+        if (existing == null) {
             childFragmentManager.beginTransaction()
                 .add(R.id.container_hongguo_search, HongguoSearchPage.newInstance())
-                .commit()
+                .commitNowAllowingStateLoss()
+        } else {
+            // 复用已存在的实例：view onViewCreated 不会再跑，聚焦必须显式归还输入框
+            existing.requestInputFocus()
         }
     }
 
