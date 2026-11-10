@@ -39,20 +39,6 @@ object HongguoDeviceRegister {
         HongguoHttp.ok
     }
 
-    fun ensureRegistered(session: HongguoSession) {
-        if (session.registered) return
-        if (session.cdid.isEmpty()) {
-            val rnd = SecureRandom()
-            session.cdid = uuidV4(rnd)
-            session.clientUdid = uuidV4(rnd)
-            val open = ByteArray(8)
-            rnd.nextBytes(open)
-            session.openUdid = HongguoCrypto.toHex(open)
-            session.deviceCreated = System.currentTimeMillis()
-        }
-        registerDevice(session)
-    }
-
     /** 真注册身份（multi_video_model 播放接口要求，不吃一次性随机值）。 */
     data class Identity(
         val deviceId: String,
@@ -66,8 +52,6 @@ object HongguoDeviceRegister {
         val deviceToken: String = "",
         /** 设备指纹（重注册沿用，HGTV b.java:5073 map 有旧值就带）。 */
         val clientUdid: String = "",
-        /** 注册完成时刻（号复用监控用）。 */
-        val registeredAt: Long = System.currentTimeMillis()
     )
 
     /**

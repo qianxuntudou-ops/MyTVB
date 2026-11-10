@@ -361,15 +361,6 @@ class HongguoClient(
 
     private class EmptyResponseException : IllegalStateException("empty body")
 
-    private fun randomId(): String {
-        val buf = ByteArray(8)
-        SecureRandom().nextBytes(buf)
-        var v = 0L
-        for (b in buf) v = (v shl 8) or (b.toLong() and 0xFF)
-        v %= 8_000_000_000_000_000_000L
-        v += 1_000_000_000_000_000_000L
-        return v.toString()
-    }
 
     private fun postOnce(path: String, raw: ByteArray, deviceId: String, installId: String): JSONObject {
         // Kotlin 签名链（2026-11-10 与 F0.x1 逐字段对拍后，L1 字节码通道已拆除）：
@@ -494,7 +485,7 @@ class HongguoClient(
         return Drama(
             seriesId = id,
             title = title,
-            cover = str("series_cover", "cover", "cover_url"),
+            cover = HongguoCoverUrl.rewrite(str("series_cover", "cover", "cover_url")),
             intro = str("series_intro", "video_desc", "description"),
             score = str("score", "rating", "scoreText"),
             playCount = obj.optLong("play_cnt", 0L),

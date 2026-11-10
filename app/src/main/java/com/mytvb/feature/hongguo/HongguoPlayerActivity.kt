@@ -14,7 +14,6 @@ import androidx.media3.ui.PlayerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
-import com.mytvb.feature.hongguo.net.HongguoWebSigner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -60,33 +59,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
         loadAndPlay()
     }
 
-    /** WebView 通道（Chromium TLS 指纹）：播放接口对 OkHttp 空响应，签名链走 WebView XHR。 */
-    private fun webViewTransport(): (String, Map<String, String>, ByteArray) -> String {
-        return { url, headers, body ->
-            val latch = java.util.concurrent.CountDownLatch(1)
-            val slot = arrayOfNulls<String>(2)
-            runOnUiThread {
-                val gzipped = headers["Content-Encoding"] == "gzip"
-                HongguoWebSigner.get(this).post(
-                    HongguoWebSigner.BridgeRequest(
-                        url, headers,
-                        if (gzipped) android.util.Base64.encodeToString(body, android.util.Base64.NO_WRAP)
-                        else String(body, Charsets.UTF_8),
-                        bodyBase64 = gzipped
-                    )
-                ) { text, reason ->
-                    slot[0] = text; slot[1] = reason
-                    latch.countDown()
-                }
-            }
-            if (!latch.await(20, java.util.concurrent.TimeUnit.SECONDS)) {
-                throw IllegalStateException("WebView 通道超时")
-            }
-            slot[1]?.let { throw IllegalStateException(it) }
-            slot[0] ?: throw IllegalStateException("WebView 通道无响应")
-        }
-    }
-
     /**
      * 加密流（CENC）落地：下载整集 MP4 → AES-128-CTR 逐样本解密+moov 重建 → 本地文件。
      * 未加密直接返回原 URL。Node 同款方案（hongguo.js decryptMp4Buffer，单集约 30MB）。
@@ -124,17 +96,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
         return android.net.Uri.fromFile(outFile).toString()
     }
 
-    /** 双通道取播放地址：OkHttp（ttp/1.1 伪装栈）优先 → WebView fallback（Chromium 指纹）。 */
-    private suspend fun resolvePlayUrl(vid: String): com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl {
-        return try {
-            repository.playUrl(vid)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            android.util.Log.w("Hongguo", "okhttp channel failed, fallback webview: ${e.message}")
-            repository.playUrl(vid, webViewTransport())
-        }
-    }
+    /** 取播放地址（纯 Kotlin 签名+JVM okhttp 传输；WebView 通道已删——实证从未成功）。 */
+    private suspend fun resolvePlayUrl(vid: String): com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl =
+        repository.playUrl(vid)
 
     private fun loadAndPlay() {
         val vid = intent.getStringExtra(EXTRA_VID) ?: return

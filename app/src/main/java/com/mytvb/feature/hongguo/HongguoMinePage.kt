@@ -95,6 +95,10 @@ class HongguoMinePage : Fragment() {
             binding.buttonLogin.visibility = View.GONE
             binding.buttonLogout.visibility = View.VISIBLE
             binding.buttonSubscribe.visibility = View.VISIBLE
+            // 启动登录态校验+token 滚动（HGTV H0/g.c() scene=boot 同款；失败静默）
+            lifecycleScope.launch {
+                runCatching { withContext(Dispatchers.IO) { repository.sync.bootVerify() } }
+            }
             if (profile.avatar.startsWith("http")) {
                 ImageLoader.load(
                     imageView = binding.imageAvatar,

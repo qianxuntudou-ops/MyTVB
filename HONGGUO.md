@@ -48,8 +48,10 @@ app/src/main/java/com/mytvb/feature/hongguo/
     ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入：cookieStore.xml 全文/32hex sessionid/cookie 串）+x-tt-token/sid_guard 过期解析
     ├── HongguoSync.kt          # 账号云同步+保活（进度/收藏/历史/预约接口 + beat 心跳 + boot 校验 + token 滚动）
     ├── HongguoWeb.kt           # 网页详情（Googlebot UA→_ROUTER_DATA）+ 榜单网页兜底
-    ├── HongguoWebSigner.kt     # 播放 WebView 通道（同源桥接页 XHR，Chromium TLS 栈）
     └── HongguoPlay.kt          # 播放地址解析（host 轮询+K-M1 兜底+kotlinSignedPost）
+```
+
+**2026-11-10 夜瘦身处决（-740 行，全功能回归绿）**：X-Medusa 全家（HongguoCrypto 764→493 行，去黑盒定案 HGTV 无此头）/HongguoWebSigner 整文件+播放 WebView 通道（实证从未成功）/播放兜底②（video_model/v1+multi/v1 重发，K-M1 之后从未命中）+singleBody+postVideoModel 非 hgtvLane 分支（VENDOR_* 常量）/randomId/ensureRegistered/Identity.registeredAt/HongguoPlayDebug/medusa 相关测试×2。bootVerify 补接线（MinePage 登录态刷新异步校验）。
 ```
 
 修改的既有文件：`TabBarView`（button_hongguo+焦点链）、`MainActivity`（HONGGUO_TAB_INDEX=6/ME→7/SEARCH→8+工厂+applyHongguoEntryVisibility）、`SettingsFragment`（KEY_HONGGUO_ENTRY）、`MeFragment`（**event.index 6→7**，加新侧栏tab必须同步此处！）、`view_tab_bar.xml`、`strings.xml`、`AndroidManifest`、`build.gradle.kts`（testImplementation org.json）。

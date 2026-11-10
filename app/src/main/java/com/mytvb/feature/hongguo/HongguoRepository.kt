@@ -140,17 +140,11 @@ class HongguoRepository private constructor(context: Context) {
         withContext(Dispatchers.IO) { web.seriesDetail(seriesId) }
 
     // ---- 播放 ----
-    /**
-     * @param transport 传输通道：真机/模拟器传 WebView 通道（Chromium TLS 指纹，
-     * OkHttp 会被播放接口空响应拒）；JVM 单测传 null 走 OkHttp（预期空响应，验证签名用）。
-     */
-    suspend fun playUrl(
-        vid: String,
-        transport: ((url: String, headers: Map<String, String>, body: ByteArray) -> String)? = null
-    ): HongguoPlay.PlayUrl = withContext(Dispatchers.IO) {
+    /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。 */
+    suspend fun playUrl(vid: String): HongguoPlay.PlayUrl = withContext(Dispatchers.IO) {
         var result: HongguoPlay.PlayUrl? = null
         for (attempt in 0 until 2) {
-            if (withIdentity { id -> result = play.playUrl(vid, id, transport = transport) }) break
+            if (withIdentity { id -> result = play.playUrl(vid, id) }) break
         }
         result ?: throw IllegalStateException("红果播放地址解析失败")
     }

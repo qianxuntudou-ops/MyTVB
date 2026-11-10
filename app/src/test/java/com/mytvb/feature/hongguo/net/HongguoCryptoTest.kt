@@ -9,7 +9,7 @@ import java.util.TreeMap
 /**
  * 红果签名栈验证：
  * 1) SM3 用国标 GB/T 32905 公开向量验证（手写压缩函数最易错，先钉死基座）；
- * 2) 匿名 feed 联网冒烟——直接验证 Gorgon/Helios/Medusa 全套信封能否过风控。
+ * 2) 匿名 feed 联网冒烟——直接验证 Gorgon/Helios 全套信封能否过风控。
  */
 class HongguoCryptoTest {
 
@@ -89,57 +89,6 @@ class HongguoCryptoTest {
         assertTrue("剧目应有 seriesId", first.seriesId.isNotEmpty())
         assertTrue("剧目应有标题", first.title.isNotEmpty())
         println("HG-SMOKE first=${first.title} id=${first.seriesId} eps=${first.episodeCount} hasMore=${page.hasMore} nextOffset=${page.nextOffset}")
-    }
-
-    @Test
-    fun medusaRelayDump() {
-        // 中继对拍：把 Kotlin 生成的播放请求(url/body/headers)落盘，由 node_medusa_relay.js
-        // 用 Node 线上版信封逐头替换验证（定位 x-medusa 翻译是否正确）
-        val payload = ("{\"biz_param\":{\"detail_page_version\":0,\"device_level\":3,\"disable_digg_stat\":false," +
-            "\"need_all_video_definition\":true,\"need_mp4_align\":false,\"use_os_player\":false,\"use_server_dns\":false," +
-            "\"video_platform\":1024},\"mixed_video_id_map\":{\"1004\":[\"7701937936731737112\"]}}")
-            .toByteArray(Charsets.UTF_8)
-        val q = TreeMap<String, String>()
-        q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"
-        q["channel"] = "update_64"; q["device_brand"] = "Redmi"
-        q["device_id"] = "1234567890123456789"
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["dpi"] = "520"; q["iid"] = "9876543210987654321"
-        q["cdid"] = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-        q["openudid"] = "0011223344556677"
-        q["language"] = "zh"; q["manifest_version_code"] = "71332"
-        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
-        q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
-        q["pv_player"] = "71332"; q["compliance_status"] = "0"
-        q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"
-        q["is_android_pad_screen"] = "0"
-        q["update_version_code"] = "71332"; q["version_code"] = "71332"
-        q["version_name"] = "7.1.3.32"
-        val signed = HongguoCrypto.signRequest(
-            q, payload, System.currentTimeMillis(), "1234567890123456789",
-            targetBranch = 0, version = "7.1.3.32"
-        )
-        val out = JSONObject()
-        out.put("url", "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/?${signed.query}")
-        out.put("body", String(payload, Charsets.UTF_8))
-        out.put("headers", JSONObject(signed.headers))
-        java.io.File("E:/MyTool/MyBLBL/.trae/hg-verify/kotlin_request.json").writeText(out.toString())
-        println("HG-RELAY dumped query=${signed.query.take(60)}...")
-    }
-
-    @Test
-    fun dumpOkHttpRequest() {
-        // 原始报文对比：OkHttp 发到本地 dump 服务器（node dump_server.js）
-        HongguoPlay.HongguoPlayDebug.baseUrlOverride = "http://127.0.0.1:18123"
-        try {
-            HongguoPlay().playUrl(
-                "7701937936731737112",
-                HongguoDeviceRegister.Identity("1234567890123456789", "9876543210987654321", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "0011223344556677")
-            )
-        } catch (_: Exception) {
-        }
-        HongguoPlay.HongguoPlayDebug.baseUrlOverride = null
     }
 
     @Test
