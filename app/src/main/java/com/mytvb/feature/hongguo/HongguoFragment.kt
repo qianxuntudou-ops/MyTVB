@@ -13,7 +13,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.material.tabs.TabLayoutMediator
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
-import com.mytvb.core.ui.tab.enableDirectTabNavigation
+import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoBinding
 import com.mytvb.ui.activity.MainActivity
@@ -98,17 +98,24 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
 
         // tab 焦点导航：UP/左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）；
         // DOWN 落当前页第一张卡片（不接则框架几何搜索把焦点送进侧栏/筛选行死循环）；
-        // 右边缘进同排搜索胶囊（行内移动，非页面边缘环绕）
-        binding.tabLayout.enableDirectTabNavigation(
+        // 右边缘进同排搜索胶囊（行内移动，非页面边缘环绕）。
+        // 必须用 enableTouchNavigation（同 B 站各主页签）：其 OK 键/点击走
+        // setCurrentItemFromTab 瞬切+滑入动画；enableDirectTabNavigation 不接管 OK 键，
+        // 切换落到 TabLayoutMediator 的 setCurrentItem(pos, true) 平滑滚动，
+        // 远端页签（推荐→我的）会逐页滑过 ~800ms
+        binding.tabLayout.enableTouchNavigation(
+            viewPager = binding.viewPager,
             onNavigateUp = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             },
             onNavigateDown = { focusCurrentPageContent() },
-            onEdgeLeft = {
+            onNavigateLeft = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             },
-            onEdgeRight = { binding.buttonHongguoSearch.requestFocus() }
+            onNavigateRight = { binding.buttonHongguoSearch.requestFocus() }
         )
+        // enableTouchNavigation 内部强制开启触摸滑动，恢复 TV 页面禁滑动的原设计
+        binding.viewPager.isUserInputEnabled = false
     }
 
     /** 侧栏 RIGHT / tab DOWN 的统一入口：聚焦当前 ViewPager2 子页的第一张卡片。 */
