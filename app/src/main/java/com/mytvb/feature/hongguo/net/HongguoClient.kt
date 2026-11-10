@@ -229,21 +229,17 @@ class HongguoClient(
         return RankPage(items, hasMore, nextOffset, data.optString("session_id"))
     }
 
-    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。号内存复用+空响应轮换。 */
-    @Volatile
-    private var signedGetIdentity: HongguoDeviceRegister.Identity? = null
-
+    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。与 feed 共用一号。 */
     private fun getSignedJson(path: String, values: LinkedHashMap<String, String>): JSONObject {
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
             try {
-                // 号复用+空响应轮换（feedIdentity 同款；随机假身份在模拟器出口全空——实证）
-                val identity = signedGetIdentity?.takeIf { attempt == 0 }
-                    ?: HongguoDeviceRegister.registerFresh().also { signedGetIdentity = it }
+                // 号复用+空响应轮换（apiIdentity 共享；随机假身份在模拟器出口全空——实证）
+                val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
                 return getOnce(path, values, identity.deviceId, identity.installId)
             } catch (e: EmptyResponseException) {
                 lastError = e
-                signedGetIdentity = null
+                apiIdentity = null
                 if (attempt == 2) break
                 Thread.sleep(100)
             }
@@ -329,8 +325,21 @@ class HongguoClient(
         }
     }
 
-    // ---- 签名 POST：注册身份 + 空响应轮换换号重试 ----
-    @Volatile private var feedIdentity: HongguoDeviceRegister.Identity? = null
+    // ---- 签名请求身份：feed(POST)/rank(GET) 共用一号，注册互斥 + 空响应轮换 ----
+    @Volatile private var apiIdentity: HongguoDeviceRegister.Identity? = null
+
+    /** 注册互斥（多页并发首启时防竞态各注册一号——2026-11-10 实测一次启动烧 3 个号）。 */
+    private val registerLock = Any()
+
+    private fun obtainApiIdentity(): HongguoDeviceRegister.Identity =
+        apiIdentity ?: synchronized(registerLock) {
+            apiIdentity ?: HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
+        }
+
+    private fun rotateApiIdentity(): HongguoDeviceRegister.Identity =
+        synchronized(registerLock) {
+            HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
+        }
 
     private fun postSignedJson(path: String, body: JSONObject): JSONObject {
         val raw = body.toString().toByteArray(Charsets.UTF_8)
@@ -338,11 +347,10 @@ class HongguoClient(
         for (attempt in 0 until 3) {
             try {
                 // 注册号复用，空响应才换新（feed 翻页高频，不能每页注册）
-                val identity = feedIdentity?.takeIf { attempt == 0 }
-                    ?: HongguoDeviceRegister.registerFresh().also { feedIdentity = it }
+                val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
                 return postOnce(path, raw, identity.deviceId, identity.installId)
             } catch (e: EmptyResponseException) {
-                feedIdentity = null
+                apiIdentity = null
                 lastError = e
                 if (attempt == 2) break
                 Thread.sleep(100)

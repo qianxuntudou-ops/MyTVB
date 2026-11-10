@@ -52,6 +52,18 @@
         android:layout_width="wrap_content"
         android:layout_height="@dimen/px60"/>
     <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_subscribe"
+        android:text="@string/hongguo_my_subscribe"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/grey"
+        android:background="@drawable/tab_round_background"
+        android:paddingStart="@dimen/px40"
+        android:paddingEnd="@dimen/px40"
+        android:layout_marginTop="@dimen/px20"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/px60"/>
+    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_clear"
         android:text="@string/hongguo_clear_local"
         android:textSize="@dimen/px24"

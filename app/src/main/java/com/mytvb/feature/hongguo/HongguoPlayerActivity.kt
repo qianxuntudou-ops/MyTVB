@@ -39,6 +39,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var episodeIndex = 1
     private var episodeCount = 0
     private var resumeMs = 0L
+    /** 当前集视频 id（云端进度上传 item_id）。 */
+    private var currentVid = ""
 
     private var controlsVisible = true
     private var hideRunnable = Runnable { setControlsVisible(false) }
@@ -136,6 +138,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
     private fun loadAndPlay() {
         val vid = intent.getStringExtra(EXTRA_VID) ?: return
+        currentVid = vid
+        // 登录态心跳（30 分钟阈值内部判定，未登录空操作）
+        repository.beatIfNeeded()
         lifecycleScope.launch {
             try {
                 android.util.Log.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
@@ -210,7 +215,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
             HongguoRepository.WatchRecord(
                 seriesId, title, "", episodeIndex, episodeCount,
                 positionMs, durationMs(), System.currentTimeMillis()
-            )
+            ),
+            vid = currentVid.ifEmpty { seriesId }
         )
     }
 
@@ -229,6 +235,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 val episode = detail.episodes.getOrNull(index - 1) ?: return@launch
                 episodeIndex = index
                 resumeMs = 0L
+                currentVid = episode.videoId
                 binding.textTitle.text = "$title · 第${episodeIndex}集"
                 val play = resolvePlayUrl(episode.videoId)
                 binding.progressBuffering.visibility = View.VISIBLE

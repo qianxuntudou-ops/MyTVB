@@ -5,13 +5,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
+import com.mytvb.core.ui.base.ChoiceDialog
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.FragmentHongguoMineBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * 红果「我的」页：登录态直达（未登录点开三通道登录弹窗；已登录显示昵称+退出）。
+ * 红果「我的」页：登录态直达（未登录点开三通道登录弹窗；已登录显示昵称+退出+我的预约）。
  * 红果账号与 B 站完全隔离（票据在 hongguo_session，登出只清红果票据保留设备身份）。
  */
 class HongguoMinePage : Fragment() {
@@ -37,12 +45,45 @@ class HongguoMinePage : Fragment() {
             refreshLoginState()
             AppToast.show(requireContext(), "已退出红果账号")
         }
+        binding.buttonSubscribe.setOnClickListener { showSubscribeList() }
         binding.buttonClear.setOnClickListener {
             repository.clearLocal()
             refreshLoginState()
             AppToast.show(requireContext(), "已清除本机红果数据")
         }
         refreshLoginState()
+    }
+
+    /** 云端预约列表（subscribe/list，登录态才有数据）：点选条目=取消该预约。 */
+    private fun showSubscribeList() {
+        lifecycleScope.launch {
+            val items = try {
+                withContext(Dispatchers.IO) { repository.subscribeList(onlyOnline = false) }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                AppToast.show(requireContext(), "预约列表拉取失败：${e.message}")
+                return@launch
+            }
+            if (items.isEmpty()) {
+                AppToast.show(requireContext(), "暂无云端预约")
+                return@launch
+            }
+            val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.CHINA)
+            ChoiceDialog.show(
+                requireContext(), "我的预约（选择取消）",
+                items.map { item ->
+                    val time = if (item.onlineTimeSec > 0) fmt.format(Date(item.onlineTimeSec * 1000)) else "待定"
+                    (if (item.isOnline) "已上线 " else "$time 上线 ") + item.title
+                }
+            ) { index ->
+                val target = items.getOrNull(index) ?: return@show
+                lifecycleScope.launch {
+                    runCatching { withContext(Dispatchers.IO) { repository.cancelSubscribe(target.seriesId) } }
+                        .onSuccess { AppToast.show(requireContext(), "已取消预约：${target.title}") }
+                        .onFailure { AppToast.show(requireContext(), "取消失败：${it.message}") }
+                }
+            }
+        }
     }
 
     private fun refreshLoginState() {
@@ -53,6 +94,7 @@ class HongguoMinePage : Fragment() {
             binding.textStats.text = stats
             binding.buttonLogin.visibility = View.GONE
             binding.buttonLogout.visibility = View.VISIBLE
+            binding.buttonSubscribe.visibility = View.VISIBLE
             if (profile.avatar.startsWith("http")) {
                 ImageLoader.load(
                     imageView = binding.imageAvatar,
@@ -66,6 +108,7 @@ class HongguoMinePage : Fragment() {
             binding.textStats.text = "游客模式 · $stats"
             binding.buttonLogin.visibility = View.VISIBLE
             binding.buttonLogout.visibility = View.GONE
+            binding.buttonSubscribe.visibility = View.GONE
         }
     }
 

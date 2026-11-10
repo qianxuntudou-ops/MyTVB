@@ -99,6 +99,21 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
         get() = prefs.getString(K_LOGIN_METHOD, "") ?: ""
         set(v) = prefs.edit().putString(K_LOGIN_METHOD, v).apply()
 
+    /** 登录票据第二因子 x-tt-token（每个登录态请求 header 随带+响应滚动续期，对照 HGTV H0/b.java）。 */
+    var accountToken: String
+        get() = prefs.getString(K_ACCOUNT_TOKEN, "") ?: ""
+        set(v) = prefs.edit().putString(K_ACCOUNT_TOKEN, v).apply()
+
+    /** 登录态绝对过期时间（秒，sid_guard 解析；临期 3 天触发 beat 校验，对照 HGTV j()）。 */
+    var accountExpires: Long
+        get() = prefs.getLong(K_ACCOUNT_EXPIRES, 0L)
+        set(v) = prefs.edit().putLong(K_ACCOUNT_EXPIRES, v).apply()
+
+    /** 上次 beat 心跳时刻（毫秒，30 分钟阈值，对照 HGTV j() 的 1800000ms）。 */
+    var lastBeatAt: Long
+        get() = prefs.getLong(K_LAST_BEAT_AT, 0L)
+        set(v) = prefs.edit().putLong(K_LAST_BEAT_AT, v).apply()
+
     val loggedIn: Boolean
         get() = !accountCookies["sessionid"].isNullOrEmpty() || !accountCookies["sessionid_ss"].isNullOrEmpty()
 
@@ -106,6 +121,7 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
     fun clearAccount() {
         prefs.edit()
             .remove(K_ACCOUNT_COOKIES).remove(K_PROFILE).remove(K_LOGIN_METHOD)
+            .remove(K_ACCOUNT_TOKEN).remove(K_ACCOUNT_EXPIRES).remove(K_LAST_BEAT_AT)
             .apply()
     }
 
@@ -125,6 +141,9 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
         private const val K_ACCOUNT_COOKIES = "account_cookies"
         private const val K_PROFILE = "account_profile"
         private const val K_LOGIN_METHOD = "login_method"
+        private const val K_ACCOUNT_TOKEN = "account_token"
+        private const val K_ACCOUNT_EXPIRES = "account_expires"
+        private const val K_LAST_BEAT_AT = "last_beat_at"
         private const val K_KLINK = "klink_egdi"
         private const val K_DEVICE_TOKEN = "device_token"
     }

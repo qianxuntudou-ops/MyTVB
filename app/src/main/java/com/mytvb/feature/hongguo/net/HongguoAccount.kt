@@ -294,7 +294,13 @@ class HongguoAccount(private val session: HongguoSession) {
                     }.joinToString("; ").ifEmpty { "sessionid=$sid" }
                 )
                 .build()
-        ).execute().use { it.body?.string().orEmpty() }
+        ).execute().use { resp ->
+            // x-tt-token 滚动（C0051b:68 同款：X-Tt-Token 响应头 >=99 字符直接收）
+            resp.headers.values("X-Tt-Token").firstOrNull()?.takeIf { it.length >= 99 }?.let {
+                session.accountToken = it
+            }
+            resp.body?.string().orEmpty()
+        }
         if (text.isBlank()) return null
         val data = JSONObject(text).optJSONObject("data") ?: return null
         val uid = data.optString("biz_user_id").ifEmpty { data.optString("user_id") }
@@ -313,6 +319,17 @@ class HongguoAccount(private val session: HongguoSession) {
         }
         session.accountCookies = cookies
         session.loginMethod = method
+        // x-tt-token 第二票据（passport Set-Cookie 下发；请求 header 随带+响应滚动续期，对照 HGTV H0/b.java）
+        cookies["x-tt-token"]?.takeIf { it.length >= 99 }?.let { session.accountToken = it }
+        // sid_guard 过期解析（AbstractC0133c.b：`<uid>|<登录ts>|<有效秒>|...`，%7C 解码）
+        cookies["sid_guard"]?.let { guard ->
+            val parts = guard.replace("%7C", "|").split("|")
+            if (parts.size >= 3) {
+                val ts = parts[1].toLongOrNull()
+                val ttl = parts[2].toLongOrNull()
+                if (ts != null && ttl != null) session.accountExpires = ts + ttl
+            }
+        }
         val profile = Profile(uid, name, avatar)
         session.profile = JSONObject()
             .put("uid", uid).put("name", name).put("avatar", avatar)

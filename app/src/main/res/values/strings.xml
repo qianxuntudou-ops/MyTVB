@@ -101,6 +101,7 @@
     <string name="hongguo_login_p2">红果账号登录将在下一版本提供，与 B 站账号完全独立</string>
     <string name="hongguo_clear_local">清除本机红果数据</string>
     <string name="hongguo_logout">退出登录</string>
+    <string name="hongguo_my_subscribe">我的预约</string>
     <string name="hongguo_login_qr">扫码登录</string>
     <string name="hongguo_login_qr_hint">用红果 App 扫码</string>
     <string name="hongguo_login_sms">短信登录</string>

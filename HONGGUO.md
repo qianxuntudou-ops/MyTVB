@@ -45,7 +45,8 @@ app/src/main/java/com/mytvb/feature/hongguo/
     ├── HongguoSession.kt       # 设备身份+账号票据持久化（SP hongguo_session）
     ├── HongguoClient.kt        # landpage feed + rank GET（均 Kotlin HGTV 形态签名）
     ├── HongguoSearch.kt        # 搜索（72232 GET，Kotlin HGTV 形态签名）+ 联想词（网页免签）
-    ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入：cookieStore.xml 全文/32hex sessionid/cookie 串）
+    ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入：cookieStore.xml 全文/32hex sessionid/cookie 串）+x-tt-token/sid_guard 过期解析
+    ├── HongguoSync.kt          # 账号云同步+保活（进度/收藏/历史/预约接口 + beat 心跳 + boot 校验 + token 滚动）
     ├── HongguoWeb.kt           # 网页详情（Googlebot UA→_ROUTER_DATA）+ 榜单网页兜底
     ├── HongguoWebSigner.kt     # 播放 WebView 通道（同源桥接页 XHR，Chromium TLS 栈）
     └── HongguoPlay.kt          # 播放地址解析（host 轮询+K-M1 兜底+kotlinSignedPost）
@@ -229,6 +230,19 @@ app/src/main/java/com/mytvb/feature/hongguo/
 1. MFA 短信上行验证（encrypt_uid/sms_code_key 流程，HongguoAccount.smsLogin 已识别并提示暂不支持）
 2. 竖屏剧播放形态（9:16 居中+两侧模糊垫底）——当前 RESIZE_MODE_FIT 已居中
 3. 弹幕/评论（明确不做）
+4. 预约列表 UI 入口（数据层 HongguoSync.subscribeList 已就位，缺页面接线）
+
+~~账号云同步全量~~ **2026-11-10 夜已完成（对照 HGTV 账号模块逐接口对齐，HongguoSync.kt）**：
+- 业务接口（73932 档案+明文 JSON body+Cookie/x-tt-token 登录头，b.java h()/b1() 同构）：
+  read_progress/upload（播放进度→跨设备续播，播放器 saveProgress 挂点+20s 节流）、
+  bookshelf/video/update（收藏云同步，toggleFavorite 挂点，operate 0=加/1=移除）、
+  read_history/update（历史上传，is_delete 双形态）、user/subscribe/list+delete（预约，数据层就位 UI 后接）；
+- 保活（H0/g.java 同构）：token/beat/v2 心跳（30min 阈值+播放启动触发 scene=play）、
+  account/info/v2 boot 校验、sid_guard 临期 3 天预警（Session.accountExpires）、
+  x-tt-token 滚动续期（响应头 X-Tt-Token/Set-Cookie >=99 字符，C0051b 同款）；
+- 语义：本地为准云端尽力（cloudAsync 失败静默，SESSION_EXPIRED 只停云同步不清本地）；登录通道 saveAccount 统一收 token/过期。
+- **并发烧号修复**：feed(POST)/rank(GET) 共用 apiIdentity 单槽+注册互斥（此前三页并发首启一次烧 3 号→现在 1 号/启动，MuMu 实测）。
+- 验证口径：未登录静默短路+播放回归 state=3 无回归已实测；**在线链路（进度/收藏真上云、beat 真保活）待真实账号导入后实测**（MuMu 无红果账号凭据）。
 
 ~~号消耗优化~~ **2026-11-10 夜已完成（device_token 根因+号模型）**：①**注册响应的 `device_token` 是号活性关键**——HGTV 每个 API 请求 query 随带（E.java:4397），我们与全部开源参考线均丢弃此字段；已补齐全链（Identity/Session K_DEVICE_TOKEN/播放 query）；②全局改 HGTV 号模型——播放（HongguoPlay）一个号贯穿 host 轮询+空响应才经 rotateIdentity 自愈（Repository.registerAndSave 持久化到 session）；K-M1 两发保底；search 轮换走 registerAndSave；rank GET 号内存复用；③**MuMu 实测定案**：同号 3 集连播 12 连发全成功零重注册（切集 0.7s/CENC 0.4s/state=3）——旧「每号首请求有效次发即拒」结论是签名 bug 时代（argus 硬伤修复前）的观察，已不成立；④HGTV 重注册会把旧 device_id/iid/klink_egdi 塞进注册 payload（b.java:5074 账号继承语义），我们 rotateIdentity 全新随机——可选后续对齐。
 
