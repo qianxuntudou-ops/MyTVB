@@ -163,11 +163,13 @@ class HongguoDramaAdapter(
                 views.coverMetaOverlay.visibility = View.GONE
             }
             views.imageView.clearColorFilter()
-            ImageLoader.load(
+            // 竖版剧海报用 series 通道：自带 px15 圆角 outline 裁剪（load 无圆角参数）
+            ImageLoader.loadSeriesCover(
                 imageView = views.imageView,
                 url = item.cover,
                 placeholder = R.drawable.default_video,
-                error = R.drawable.default_video
+                error = R.drawable.default_video,
+                priority = ImageLoader.Priority.VISIBLE_HIGH
             )
         }
     }
