@@ -3,6 +3,7 @@ package com.mytvb.feature.hongguo.net
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import android.util.Log
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -111,15 +112,32 @@ class HongguoAccount(private val session: HongguoSession) {
         ).execute().use { it.body?.string().orEmpty() }
         if (text.isBlank()) return
         val data = JSONObject(text).optJSONObject("data") ?: return
-        when (data.optInt("status", 1)) {
-            1 -> ticket.status = 1
-            2 -> ticket.status = 2
-            3 -> {
-                ticket.status = 3
-                ticket.redirectUrl = data.optString("redirect_url")
+        val newStatus = parseQrStatus(data)
+        if (newStatus != ticket.status) {
+            Log.d("Hongguo", "qr poll status ${ticket.status}->$newStatus raw=${data.opt("status")} keys=${data.keys().asSequence().joinToString(",")}")
+        }
+        if (newStatus == 3) {
+            ticket.redirectUrl = data.optString("redirect_url")
+            if (ticket.redirectUrl.isEmpty()) {
+                Log.w("Hongguo", "qr confirmed but redirect_url empty, resp=${text.take(300)}")
             }
-            4 -> ticket.status = 4
-            5 -> ticket.status = 5
+        }
+        ticket.status = newStatus
+    }
+
+    /** 扫码状态解析：新版 passport 下发字符串枚举（"new"/"scaned"/"confirmed"…），兼容旧数字 1~5。 */
+    private fun parseQrStatus(data: JSONObject): Int {
+        return when (val raw = data.opt("status")) {
+            is Number -> raw.toInt()
+            is String -> raw.trim().toIntOrNull() ?: when (raw.trim().lowercase()) {
+                "new", "created" -> 1
+                "scaned", "scanned" -> 2
+                "confirmed", "confirm" -> 3
+                "canceled", "cancelled" -> 4
+                "expired" -> 5
+                else -> 1.also { Log.w("Hongguo", "qr status unknown raw=$raw") }
+            }
+            else -> 1
         }
     }
 
@@ -127,6 +145,7 @@ class HongguoAccount(private val session: HongguoSession) {
     fun finishQrLogin(ticket: QrTicket): Profile {
         var url = ticket.redirectUrl
         if (url.isEmpty()) throw AccountException("缺少确认跳转地址")
+        Log.d("Hongguo", "qr finish start host=${url.toHttpUrlOrNull()?.host}")
         for (hop in 0 until 5) {
             val parsed = url.toHttpUrlOrNull() ?: throw AccountException("跳转地址无效")
             if (!parsed.isHttps || !(parsed.host == "hongguoduanju.com" || parsed.host.endsWith(".hongguoduanju.com"))) {
@@ -141,29 +160,52 @@ class HongguoAccount(private val session: HongguoSession) {
             val location = resp.header("Location")
             resp.close()
             if (location.isNullOrEmpty()) break
+            Log.d("Hongguo", "qr finish hop=$hop -> ${location.toHttpUrlOrNull()?.host}${location.toHttpUrlOrNull()?.encodedPath}")
             url = location
         }
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
+        Log.d("Hongguo", "qr finish sidGot=${sid.isNotEmpty()} name=${cookieValue("sessionid_ss").isNotEmpty()}")
         if (sid.isEmpty()) throw AccountException("扫码未取得会话票据")
-        // 网页域账号资料
+        // 昵称权威来源 = 网页 SSR（passport info/v2 的账号级资料常是未初始化默认值「用户+数字」）
+        var ssrName = ""
+        var ssrAvatar = ""
+        runCatching {
+            val home = http.newCall(
+                Request.Builder().url("https://hongguoduanju.com/")
+                    .header("User-Agent", DESKTOP_UA)
+                    .header("Referer", "https://hongguoduanju.com/")
+                    .build()
+            ).execute().use { it.body?.string().orEmpty() }
+            ssrName = Regex("当前登录用户[：:]([^\"<]+)").find(home)?.groupValues?.get(1)?.trim().orEmpty()
+            ssrAvatar = Regex("pc-profile__avatar-[A-Za-z0-9_]+\"><img src=\"([^\"]+)").find(home)?.groupValues?.get(1).orEmpty()
+                .replace("&amp;", "&")   // HTML 实体还原，否则 query 签名参数对不上
+                .replace("http://", "https://")
+            Log.d("Hongguo", "qr profile ssr name=$ssrName avatar=${ssrAvatar.isNotEmpty()} homeLen=${home.length}")
+        }
+        // passport 账号资料：uid 权威；头像仅在真实设置过时采用（mosaic-legacy 是未设置占位）
         val info = http.newCall(
             Request.Builder().url("https://hongguoduanju.com/passport/account/info/v2/")
                 .header("User-Agent", DESKTOP_UA)
                 .header("Referer", "https://hongguoduanju.com/")
                 .build()
         ).execute().use { it.body?.string().orEmpty() }
+        Log.d("Hongguo", "qr finish info len=${info.length}")
         var uid = ""
-        var name = "红果用户"
+        var passportName = ""
         var avatar = ""
         if (info.isNotBlank()) {
             val data = JSONObject(info).optJSONObject("data")
             uid = data?.optString("user_id_str").orEmpty().ifEmpty { data?.optString("user_id").orEmpty() }
-            name = data?.optString("screen_name").orEmpty()
+            passportName = data?.optString("screen_name").orEmpty()
                 .ifEmpty { data?.optString("name").orEmpty() }
                 .ifEmpty { data?.optString("username").orEmpty() }
-                .ifEmpty { "红果用户" }
             avatar = data?.optString("avatar_url").orEmpty()
+                .takeUnless { it.contains("mosaic-legacy") }
+                .orEmpty()
         }
+        val name = ssrName.ifEmpty { passportName }.ifEmpty { "红果用户" }
+        // 头像：SSR 渲染的 src（官方默认图或真实头像）优先，passport 资料兜底（已滤 mosaic 占位）
+        avatar = ssrAvatar.ifEmpty { avatar }
         return saveAccount(uid, name, avatar, "qr")
     }
 

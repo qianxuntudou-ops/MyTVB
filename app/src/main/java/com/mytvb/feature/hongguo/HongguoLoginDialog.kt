@@ -125,8 +125,9 @@ class HongguoLoginDialog(
             while (isActive && System.currentTimeMillis() < deadline && isShowing) {
                 try {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.account.pollQrStatus(ticket) }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     // 网络抖动继续轮询（对照 Go 行为）
+                    android.util.Log.w("Hongguo", "qr poll error: ${e.javaClass.simpleName}: ${e.message}")
                 }
                 when (ticket.status) {
                     2 -> binding.textQrStatus.setText(R.string.hongguo_qr_scanned)
