@@ -1,44 +1,49 @@
 # 红果短剧集成开发文档（HG 分支交接）
 
-> 2026-11-09 P1 全功能完成并打包通过。本文档供在其他电脑上继续开发使用。
-> 分支：`HG`（基于 main f37ca5de）。改动：8 个修改文件 + `feature/hongguo/` 新模块（见文末清单）。
+> 2026-11-09 P2 全功能完成（搜索/四板榜单/筛选面板/登录三通道/详情修复），MuMu 回归通过。
+> 分支：`HG`（基于 main f37ca5de，P1 提交 54b75b30）。本文档供在其他电脑上继续开发使用。
 
-## 一、功能现状（P1 已完成）
+## 一、功能现状（P2 后）
 
 | 功能 | 状态 |
 |---|---|
 | 设置开关（电视直播 tab → 红果短剧组，默认关） | ✅ |
 | 侧栏红果入口（CCTV影视之后，图标=果子） | ✅ |
-| 六 tab 主页：推荐/历史/收藏/榜单/分类/我的 + 搜索胶囊（占位） | ✅ |
-| 推荐流（landpage 匿名 feed，横版卡无限滚动） | ✅ 线上验证 |
-| 详情弹窗（网页端免签名，封面/简介/收藏/选集网格 10列） | ✅ 线上验证 |
-| 播放器（独立 media3，UP/DOWN 切集、OK 暂停、左右 ±10s、进度回写） | ⚠️ 签名已验证，TLS 待真机 |
+| 六 tab 主页 + 搜索覆盖层（输入+联想+结果网格+BACK 收层） | ✅ MuMu 实测 |
+| 推荐流（landpage 匿名 feed） | ✅ MuMu 实测（间歇风控见§五） |
+| 详情弹窗（Googlebot UA 走 SSR `_ROUTER_DATA`，浏览器 UA 会拿到 stream 版无数据） | ✅ MuMu 实测 |
+| 四板官方榜单（bookmall/cell/change GET：热播/真人/漫剧/AI剧） | ✅ MuMu 实测（官方接口直通） |
+| 榜单网页兜底（fqnovel 被拒时 hongguoduanju.com/rank SSR） | ✅ 代码就位 |
+| 分类筛选面板（selector_rows 8 维 chip + ChoiceDialog 单选） | ✅ MuMu 实测（8 chip 全出） |
+| 登录三通道（扫码二维码+轮询 / 短信 / 导入 sessionid） | ✅ MuMu 实测（二维码拉取+轮询通） |
 | 历史/收藏（本地 SP `hongguo_local`，与 B 站零共享） | ✅ |
-| 榜单（landpage 热度序近似；官方四板 P2） | ✅ 近似 |
-| 分类（全部/漫剧/AI剧 genre 切换；七维筛选面板 P2） | ✅ 基础 |
-| 我的（游客态；扫码/短信/导入登录三通道 P2） | ✅ 占位 |
+| 播放器（media3，UP/DOWN 切集、OK 暂停、左右 ±10s、进度回写；L1 签名通道+CENC 解密） | ✅ **MuMu 实测出画面**（1080p+切集全通，见§五） |
 
-**关键待验证**：播放接口 `multi_video_model` 对 TLS 指纹敏感——JVM 单测（SunJSSE）空响应、Node（BoringSSL）通；Android 真机 OkHttp 走 Conscrypt（BoringSSL 系）大概率直过。**换电脑第一件事=装 MuMu/真机跑通播放链路**。
 
-## 二、代码结构
+## 二、代码结构（P2 后）
 
 ```
 app/src/main/java/com/mytvb/feature/hongguo/
-├── HongguoFragment.kt          # 主容器：六tab ViewPager + tab焦点导航
-├── HongguoFeedPage.kt          # 推荐/历史/收藏共用列表页（横版卡 Grid）
-├── HongguoRankPage.kt          # 榜单页（大卡双列排名号）
+├── HongguoFragment.kt          # 主容器：六tab ViewPager + 搜索覆盖层 + BACK 分层
+├── HongguoFeedPage.kt          # 推荐/历史/收藏/分类共用列表页 + 筛选 chip 行（selector_rows）
+├── HongguoRankPage.kt          # 四板官方榜单（热播/真人/漫剧/AI剧 RadioGroup + 大卡排名）
 ├── HongguoCategoryPage.kt      # 分类页（genre 子tab + FeedPage）
-├── HongguoMinePage.kt          # 我的页（游客态）
+├── HongguoMinePage.kt          # 我的页（登录态直达 + 退出）
+├── HongguoSearchPage.kt        # 搜索覆盖层（输入框呼 IME + 联想词 + 结果网格）
+├── HongguoLoginDialog.kt       # 登录弹窗（扫码/短信/导入 三通道 tab）
 ├── HongguoDetailDialog.kt      # 详情弹窗（AppCompatDialog + DialogWindowFit.overlay）
-├── HongguoPlayerActivity.kt    # 独立播放器（media3，manifest 已注册）
-├── HongguoRepository.kt        # 数据门面：身份管理 + feed/详情/播放 + 收藏/进度
+├── HongguoPlayerActivity.kt    # 独立播放器（resolvePlayUrl=WebView→OkHttp 双通道）
+├── HongguoRepository.kt        # 数据门面：身份/搜索/榜单(带网页兜底)/播放/账号/收藏
 └── net/
     ├── HongguoCrypto.kt        # 签名栈（SM3/Gorgon/Helios/F13×2branch/Medusa/Proto/XMXOR/AESV3）
     ├── HongguoDeviceRegister.kt# TTEncrypt V5 设备注册（registerFresh 内核可独立调用）
-    ├── HongguoSession.kt       # 身份持久化（SP hongguo_session）+ HongguoGzip 手写gzip流
-    ├── HongguoClient.kt        # landpage feed（匿名随机身份）
-    ├── HongguoWeb.kt           # 网页详情（hongguoduanju.com /detail _ROUTER_DATA 提取）
-    └── HongguoPlay.kt          # 播放地址解析（video_model→video_list→codec过滤→spade解密）
+    ├── HongguoSession.kt       # 设备身份+账号票据持久化（SP hongguo_session）
+    ├── HongguoClient.kt        # landpage feed(+select_items/selector_rows) + rank GET(cell/change)
+    ├── HongguoSearch.kt        # 搜索（search/tab 72232 GET 签名）+ 联想词（网页免签）
+    ├── HongguoAccount.kt       # 登录三通道（扫码网页免签/短信 passport/导入 sessionid）
+    ├── HongguoWeb.kt           # 网页详情（Googlebot UA→_ROUTER_DATA）+ 榜单网页兜底
+    ├── HongguoWebSigner.kt     # 播放 WebView 通道（同源桥接页 XHR，Chromium TLS 栈）
+    └── HongguoPlay.kt          # 播放地址解析（71332 明文构造；transport 可注入 WebView）
 ```
 
 修改的既有文件：`TabBarView`（button_hongguo+焦点链）、`MainActivity`（HONGGUO_TAB_INDEX=6/ME→7/SEARCH→8+工厂+applyHongguoEntryVisibility）、`SettingsFragment`（KEY_HONGGUO_ENTRY）、`MeFragment`（**event.index 6→7**，加新侧栏tab必须同步此处！）、`view_tab_bar.xml`、`strings.xml`、`AndroidManifest`、`build.gradle.kts`（testImplementation org.json）。
@@ -91,18 +96,111 @@ app/src/main/java/com/mytvb/feature/hongguo/
   4. 头消融（ablation.js）
 - UI 设计稿（11屏）：会话可视化文件，焦点动线/主题色/榜单样式等按设计稿打磨
 
-## 五、P2 待办（优先级序）
+## 五、播放通道攻坚结论（2026-11-10 终极破解版，接手必读）
 
-1. **真机/MuMu 验证播放 TLS**（换电脑第一件事）——若 Conscrypt 也被拒：备选方案 a) OkHttp 定制 ConnectionSpec 模拟 Chrome JA3；b) 播放签名请求走 WebView（CCTV H5e 同款方案）
-2. **加密流播放**：`PlayUrl.contentKeyHex != null` 的 spade 加密流（AES 解密 DataSource，参考 Node decryptSpadeUrl/deriveContentKey 已有 Kotlin 实现可直接复用 key）
-3. bytevc2 降档提示（codec 过滤已有 UNSUPPORTED_BYTEVC2 分支，接 UI 提示）
-4. 搜索页（suggestion+search/tab，profile=72232，参考 Node signedSearchRequest）
-5. 官方四板榜单（RankBoard 网页路由 hot-drama/hot-real/hot-comic/hot-ai）
-6. 分类七维筛选面板（landpage need_selector_panel=true + selector_rows 解析）
-7. 登录三通道：扫码/短信/导入参数（蓝本=自研 Go `account_scan.go` 388行 + `account_phone.go`，票据存 HongguoSession，与 B 站零共享）
-8. 竖屏剧播放页形态（9:16 居中+两侧模糊垫底，设计稿③）——当前 RESIZE_MODE_FIT 自适应
-9. 弹幕/评论（端点在 HGTV 反编译 core/b.java：/novel/commentapi/*）
+### 2026-11-10 下午终极破解：HGTV 全链路实证 + L1 签名通道打通（MuMu 实测出片源）
 
-## 六、相关记忆条目（本机 ZCode 记忆库）
+**方法论教训**：上午「MuMu 全拒/缓存假象」两个结论全部错误——起因是 frida hook 脚本用了 jadx 显示字段名（f2240a）取 URL 恒 undefined → 过滤条件永不命中 → 「没抓到请求」的假证据。**hook 混淆类必须先 dexdump 取真实字段名**（M2.a/b/c/d、S0.s1.d）。
+
+**frida 实抓 HGTV 全链路**（attach 模式+真实字段名，hook_hgtv_ssl.js）：
+- 播放：`POST api5-normal-sinfonlinea.fqnovel.com/novel/player/multi_video_model/player/v1`（无尾斜杠）query 73932 档案+klink_egdi 最前+cdid+**如实上报设备环境**（2211133C/V417IR/1280*720/240，不伪装），gzip body=biz_param+dr_scene+mixed_video_id_map，RESP 386KB/15 集 ✅
+- 视频流：`GET vas-lf-x.snssdk.com/video/fplay/1/<md5>/<vid>?...&stream_type=encrypt`（**免签**，m2=null，URL 带 auth_policy/ptoken）
+- 头集（弹幕同构）：UA=`com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR; Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)`（**UA 版本 71332 与 query 73932 不同档**）+真版 ladon/argus+gorgon/helios/khronos/ticket/stub+x-tt-request-tag+passport-sdk-version 6031190（播放 G0 改写后无 request-tag/x-tt-dt、passport=5051452、加 lc/x-ss-dp/x-vc-bdturing/x-tt-trace-id/Content-Encoding:x-reading-request）+**无 x-medusa**
+- HGTV 号是它自己 pm clear 后**新注册的**（非内置老号）；**Argus field23 三元组从环境 map 动态取**（"25053RT47C" 只是 fallback 默认值，proto 与 query 环境一致是关键）
+
+**服务端行为模型**（Node 交叉实验矩阵实证，bisect_*.js）：
+1. **每号首请求**：新注册号只有第一次播放请求有效（首发 ✅ 次发 ❌ 与客户端栈无关）；Node 线上版稳定通过=EMPTY 自动 reset 重注册
+2. **信任号分级**：HGTV 的号可跨连接多次请求（行为分高）；我们新号跨请求/跨连接即拒
+3. **入口分集群**：`sinfonlineb+/v1/`（M1 可用）；`sinfonlinea+/player/v1` 要求 HGTV 完整签名形态（M1 弱版单换 host 或单换路径都过、双换拒；Kotlin 移植签名在 Node 也拒=移植细节有差）
+4. **DNS 分流**：sinfonlinea→CNAME 字节直连机房（116.169.164.x，l7-online-self-max-v6.s.dsa.cdnbuild.net）；sinfonlineb→金山云 CDN（q1-quic.gslb.ksyuncdn.com 58.144.x）。pi5 域名公网不解析（pcap 里的 pi5 连接来自 MuMu 其它 TTNet app，与 HGTV 无关）
+5. **注册 Cookie**：注册下发 install_id/ttreq 等 Set-Cookie，信任号不需要回带（删 Cookie 重放仍过）
+
+**打通方案（现行代码）**——`HongguoL1.signAndPost`：
+- **签名也走 HGTV 字节码**：反射调 `S0.s1.d(inst, baseUrl, query, bodyGzip, null, query, 8)`（真实类名 S0.s1 非 jadx 的 C0257s1；M2.a=url/b=headers/c=body/d=method）→ 返回签名头集（UA 由 query map 派生=W2.c 同源）→ Kotlin 侧做 G0 改写（删 request-tag/x-tt-dt、passport=5051452、加 lc/x-ss-dp/x-vc-bdturing/x-tt-trace-id/Content-Encoding/store-region）+E0 外层头 → `HongguoL1.post`（HGTV okhttp3 传输）
+- **每号新号首发**：`fetchModelEntry` 每轮 `registerFresh()`→立即首发 player/v1（Identity.registeredAt<30s 可复用）；号废即换
+- **注册+播放共享连接池**：`HongguoHttp` 单例（HongguoTls 同款）
+- **环境如实上报**：`HongguoEnv`（Build.MODEL/RESOLUTION/densityDpi 等动态读取，host_abi 恒 arm64-v8a——红果无 x86_64 官方包）；注册 payload/query/播放 query 三处同源
+- **MuMu 实测**：`L1 resp http=200 len=25xxx` 稳定出数据，`play picked codec=bytevc1 quality=1080p 1920x1080 encrypted=true host=v9-reading-video.qznovelvod.com`
+- **video_list 双形态**：player/v1 响应的 video_model.video_list 是 **JSONArray**（multi/v1 是 JSONObject 键值）——parseEntry 已兼容
+- 打包：`app-debug-l1.apk`（`scripts/embed_hgtv_dex.py` 塞 classes20/21.dex+重签名；**注意 assembleDebug 必须成功后再跑 embed**，否则装的是旧包）
+
+**CENC 加密流解密播放（已完成，2026-11-10 12:00 MuMu 实测出画面+切集全通）**：
+- `HongguoMp4Decrypt`（Node hongguo.js decryptMp4Buffer 的 Kotlin 移植）：parseBoxes→trackInfo（stsz/stco/stsc/senc→样本偏移+8B IV 表）→逐样本 AES-128-CTR（IV=nonce+8B 零计数器）→rebuildMoov（prone senc/saio/saiz/sgpd/sbgp、encv/enca 经 sinf/frma 还原原始 codec 条目、stco/co64 重定位、moov 前移 mdat 前）
+- **坑**：stco 重定位就地修改后必须**重新 serialize(tree)**（Node 语义），返回重定位前的序列化会导致容器解析失败（0xbb9）
+- 播放器：`HongguoPlayerActivity.resolvePlayable`——下载整集（okhttp 直链无风控）→解密→`cacheDir/hongguo/<vid>.mp4` 缓存→media3 播本地（同集二次进入秒开）
+- 实测：1080p hevc 单集约 8.7MB，下载 1.2s+解密 0.3s，state=READY 稳定；DOWN 切集每集 ~3s 全链路
+
+**遗留（P3）**：MFA 短信上行、竖屏 9:16 模糊垫底形态、弹幕/评论（明确不做）
+
+**踩坑记录（勿再踩）**：
+- frida hook 混淆类字段名必须 dexdump 验证（jadx fNNNN 是显示名）；frida Map.toString 在 hook 里变 [object Object]，用 Java.cast(...).toString()
+- frida-server 必须原生 x86_64（ARM 版跑在 houdini 下 spawn 崩+连接不稳）；spawn 模式被 HGTV 反检测杀，**attach 模式可用**
+- MuMu adb 命令要 MSYS_NO_PATHCONV=1；HGTV/MyTVB 的 TV 页面导航用「卡片焦点 LEFT→侧栏→DOWN 果子(第3图标)→OK」路径稳定
+- Node 签名链借用：createRequire(app-source.js 目录)+源码切片 new Function 提取 playbackRequest（bisect_identity.js 模板）
+
+
+
+### 2026-11-10 HGTV 全面破解（静态+动态双实证）
+
+**HGTV 播放链路全解**（`.trae/HGTV/jadx/`，com.hgtv.star.core.b 7027 行 + S0 包）：
+- 传输层：`L1.x`（okhttp 魔改名）`protocols=[HTTP_1_1]` + `dns(P0)`（HTTPDNS+运营下发 IP 表，实际与系统 DNS 同 IP）+ `S0.a()` TLS 定制（自标注 **tls-7**，作者跟风控迭代第 7 版）
+- **关键伪装（MuMu tcpdump ClientHello 实测，不是静态代码说的）**：`ALPN=ttp/1.1`（TTNet 私有值！静态代码里 ConnectionSpec 的 4-CBC 是早期遗物，TLSSocketFactory 层跳过 apply）；cipher=Conscrypt 默认 15 套件序；TLS1.3/1.2；与系统 DNS 同 IP 直连
+- 签名：`C0257s1.d`（khronos 分支循环/RC4 变种 gorgon/Simon34 helios[salt 1588093228]/真版 ladon/argus）+ G0 头集改写（删 x-tt-dt/x-tt-request-tag、passport→5051452、加 lc/x-tt-trace-id/Content-Encoding）
+- 身份：内置公共老号 `W2.f3571a`（device_id=1905892595378490/iid=1905892595382586，Redmi 25053RT47C/71332 档案）+ 未注册播放；**播放数据整季本地缓存**（G0 每批 15 集，切集零网络）——pm clear 后甚至离线可播（内置离线内容包）
+- **frida hook 实锤**：hook E0/C0257s1.d/L1.C.d+b 全部抓不到播放请求=走缓存；HGTV 能播≠它实时过风控
+
+**我们的复刻与逐层证伪（每项都实测）**：
+1. ✅ `HongguoTls`（ttp/1.1+15cipher+HTTP/1.1）——MuMu 抓包验证 ClientHello 与 HGTV 完全一致（CBC 四件必须 OpenSSL 名 `*_CBC_SHA`，JSSE 名被 Conscrypt 交集过滤）
+2. ✅ 修复真 bug：`x-ss-req-ticket` 空串（signRequest branch 调参取错 map）、`x-medusa` 丢失、escapeGo 对齐 pythonUrlEncode（`*` 不编码/空格 %20）
+3. ❌ HGTV 全头集+UA73932+老号：Node 回放也空（违反 M1 实证：UA73932/多余头触拒）——已回滚 M1 构造
+4. ❌ 真版 Ladon/Argus：设备 proto 与 query 档案不一致反而拒——M1 弱版（ts 字节）通过，已回滚
+5. ❌ klink_egdi 首参：**毒药**（Node A/B：M1+egdi 必空；HGTV 带 egdi 能过靠完整行为链）——已移除
+6. ❌ 连接预热+复用（模拟 PSK 会话行为）：仍空
+7. ❌ 「号被标记」证伪：Node 号在 Node 首用 PASS 后塞 MuMu 用 → 空，且该号回 Node 也死——**MuMu 出口对请求本身识别，与号无关**
+
+**终局判定**：MuMu 出口风控维度深于 TLS ClientHello（ttp/1.1/15cipher 全对齐仍空；Chromium WebView 栈也空），剩余嫌疑=HTTP/1.1 头编码细节/TLS 会话 ticket 内容/连接行为时序/TCP 层——**静态可复刻层已穷尽**。真机（kotlin-tv 同栈被 release 用户验证可播）仍是最终判据。
+
+### 2026-11-09 初版结论（历史保留）
+
+
+**最终突破（22:40）**：Node 矩阵探针 `.trae/hg-verify/node_hgtv_matrix.js` 找到稳定通过组合 **M1**：
+`player/v1 + gzip body + batch=单vid + query 73932(official-v1 档案+cdid+klink_egdi+ts) + UA 71332 Cronet + 简头集（UA/Accept/req-ticket/sdk-version/xs-from-web/khronos/ladon/argus/gorgon/helios/medusa/Content-Type/x-ss-stub/Content-Encoding:gzip）`——**多余头（request-tag/passport-sdk/x-tt-dt/bdturing/reading-request）与 UA73932 反而触发拒绝；batch>1 也拒**。M1 在 Node(OpenSSL) 下稳定返回 26KB 播放数据。Kotlin 侧已完整实现（`HongguoPlay` hgtvLane + `HongguoArgus` 真版 Ladon/Argus + 注册层 klink_egdi）。
+
+**传输层终局矩阵**（M1 同构造）：Node=**200 数据**；OkHttp Conscrypt（h2/1.1/cipher复刻Node序）=空；Chromium WebView（同源桥接页+gzip base64）=空；X5=MuMu 无 x86 内核不可用。**MuMu 模拟器网络出口对非白名单 TLS 指纹全拒**（HGTV 本尊 okhttp3 能过=其指纹恰在白名单；OkHttp4/5 无法复刻 okhttp3 的 h2 帧序）。**真机是最终判据**：kotlin-tv（同 OkHttp4/5+Conscrypt）在真实设备被 release 用户验证可播=真机环境风控宽容，M1 组合大概率直通。
+
+播放接口 `multi_video_model`（71332 明文构造，签名经中继验证有效）的**传输层评分风控**：
+
+| 传输层 | 出口 | 结果 |
+|---|---|---|
+| Node axios（Node 原生 TLS） | 宿主机直连 | **通** |
+| OkHttp Conscrypt（h2 或 1.1） | MuMu 直连 | 空（HTTP 200 len=0） |
+| WebView XHR（Chromium 栈，同源桥接页） | MuMu | 空 |
+| OkHttp Conscrypt 经宿主 Clash 出口 | 宿主网络 | 空 |
+| HGTV APK（反编译版，Conscrypt+自家 okhttp） | MuMu | **通**（走 73932+gzip+player/v1 构造，但我照抄后在 Node/Kotlin 均空——还缺因子，疑似真版 X-Ladon/X-Argus，生成器在 `HGTV jadx S0/AbstractC0240o.java` 238 行未移植） |
+
+**结论**：不是 TLS 指纹单因子，是「传输层×请求构造×IP」综合评分；MuMu 出口对 71332 POST 接口几乎全拒（feed 也间歇空），但 **GET 接口（rank/search）放行**、`hongguoduanju.com` 网页域完全放行。**真机（真实设备网络+Conscrypt）是下一判据——官方 App 同栈可用，大概率直通**。当前实现（2026-11-10 起改）：`resolvePlayUrl` 先 OkHttp（`HongguoTls` 伪装栈）再 fallback WebView 通道（`HongguoWebSigner`）。
+
+**若真机也不通的三条路**（按优先序，2026-11-10 更新：①已实施被 MuMu 证伪但真机待验）：
+1. ~~移植 `AbstractC0240o`~~ 已移植（`HongguoArgus`）——MuMu 实证真版 ladon/argus 设备 proto 与 query 档案不一致反而拒，M1 弱版可用
+2. okhttp3 依赖隔离（shade/relocate 同包名冲突，HGTV 的 L1 即魔改 okhttp3——若其魔改含传输层补丁则这是唯一复刻路径）
+3. Cronet 依赖（Chromium 网络栈 +8MB）/ 网页播放通道（hongguoduanju.com 播放器接口逆向）
+
+## 六、P2 实现要点速查（接手改代码前看）
+
+- **详情页必须 Googlebot UA**：浏览器 UA 返回 stream 渲染版（data-fn-args 仅推荐列表，无 _ROUTER_DATA/seriesDetail）
+- **筛选面板**：首页 `need_selector_panel=true + req_type="default"`，翻页 `false/"only_content"`；`select_items` 8 键全发（空选=空数组）；creation_status 行部分 scene 不下发→硬编码补齐；`selector_item_id` 题材格式 `cate_\d{1,8}`
+- **四板榜单**：GET `cell/change/v`，`tab_type` 首页 26 翻页 18，`cell_id=7470092475068071998` 固定，四板=(selected_items, sub_selected_items) 二元组；GET 无 body→无 X-SS-STUB/Content-Type
+- **搜索**：72232 profile + UA 无 Cronet 后缀 + `tab_type=11` + 相关性过滤（分词全命中元数据，防无结果塞热门）；翻页游标 search_id+passback+next_offset；联想词走 `hongguoduanju.com/incent_resource/suggestion`（免签）
+- **登录**：扫码全走 hongguoduanju.com/passport/web/*（免签，浏览器头+cookie jar）；短信走 api5-normal-lq passport（签名 form POST，手机号每字节 XOR 0x05 hex）；导入=32 hex sessionid+/reading/user/info/v1 校验；票据存 HongguoSession.accountCookies（登出只清账号票据保留设备身份）
+- **WebView 通道**（HongguoWebSigner）：shouldInterceptRequest 拦 `sinfonlineb.fqnovel.com/__hg_bridge__` 注入 HTML（与 API 同源免 CORS），JS XHR setRequestHeader 保留大写头名，UA 在 WebView settings 设（XHR forbidden）；响应 encodeURIComponent 后 console 桥回
+- **对话框协程坑**：Dialog 里 lifecycleScope.launch 默认 Main dispatcher，**网络调用必须 withContext(Dispatchers.IO)**（NetworkOnMainThreadException）
+
+## 七、P3 待办（优先级序）
+
+1. MFA 短信上行验证（encrypt_uid/sms_code_key 流程，HongguoAccount.smsLogin 已识别并提示暂不支持）
+2. 竖屏剧播放形态（9:16 居中+两侧模糊垫底）——当前 RESIZE_MODE_FIT 已居中
+3. 弹幕/评论（明确不做）
+
+## 附、相关记忆条目（本机 ZCode 记忆库）
 
 `hongguo-p1-impl`（本次实现全档）/ `hgtv-decompile-reference`（HGTV 溯源+接口全景）/ `hongguo-refs-cloned-hg-branch`（参考项目入库）。其他电脑首次接手先读本文档，再按需查记忆。

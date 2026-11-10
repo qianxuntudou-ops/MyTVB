@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/px30"
+        android:paddingEnd="@dimen/px30"
+        android:paddingTop="@dimen/px20"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatEditText
+            android:id="@+id/edit_hongguo_keyword"
+            android:background="@drawable/tab_round_background"
+            android:focusable="true"
+            android:singleLine="true"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:hint="@string/hongguo_search_hint"
+            android:textSize="@dimen/px28"
+            android:textColorHint="@color/grey"
+            android:textColor="?android:attr/textColorPrimary"
+            android:paddingStart="@dimen/px24"
+            android:paddingEnd="@dimen/px24"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="@dimen/px70"/>
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/button_hongguo_search_go"
+            android:text="@string/hongguo_search_hint"
+            android:textSize="@dimen/px26"
+            android:textColor="@color/white"
+            android:background="@drawable/hongguo_btn_play"
+            android:layout_marginStart="@dimen/px20"
+            android:paddingStart="@dimen/px40"
+            android:paddingEnd="@dimen/px40"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px70"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_hongguo_suggest"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px30"
+        android:paddingEnd="@dimen/px30"
+        android:paddingTop="@dimen/px16"
+        android:clipToPadding="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_hongguo_results"
+        android:clipToPadding="false"
+        android:padding="@dimen/px20"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_hongguo_search_empty"
+        android:text="@string/hongguo_search_no_result"
+        android:textSize="@dimen/px30"
+        android:textColor="@color/grey"
+        android:gravity="center"
+        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:visibility="gone"/>
+
+    <ProgressBar
+        android:id="@+id/progress_hongguo_search"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="@dimen/px30"
+        android:layout_width="@dimen/px50"
+        android:layout_height="@dimen/px50"
+        android:visibility="gone"/>
+</LinearLayout>

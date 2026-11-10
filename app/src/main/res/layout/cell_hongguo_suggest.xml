@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/px56"
+    android:gravity="center"
+    android:paddingStart="@dimen/px28"
+    android:paddingEnd="@dimen/px28"
+    android:layout_marginEnd="@dimen/px16"
+    android:background="@drawable/tab_round_background"
+    android:focusable="true"
+    android:clickable="true"
+    android:textSize="@dimen/px24"
+    android:textColor="?android:attr/textColorSecondary"/>

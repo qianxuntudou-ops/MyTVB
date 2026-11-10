@@ -69,4 +69,12 @@
         android:layout_marginTop="@dimen/px105"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
+
+    <!-- 搜索覆盖层：胶囊点击时叠在六页签之上，返回键收起 -->
+    <FrameLayout
+        android:id="@+id/container_hongguo_search"
+        android:background="?android:attr/windowBackground"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

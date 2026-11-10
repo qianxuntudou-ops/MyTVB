@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <RadioGroup
+        android:id="@+id/tab_rank_boards"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px30"
+        android:paddingEnd="@dimen/px30"
+        android:paddingTop="@dimen/px16"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatRadioButton
+            android:id="@+id/radio_rank_hot"
+            android:text="@string/hongguo_rank_hot"
+            android:textSize="@dimen/px26"
+            android:layout_marginEnd="@dimen/px30"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"/>
+
+        <androidx.appcompat.widget.AppCompatRadioButton
+            android:id="@+id/radio_rank_real"
+            android:text="@string/hongguo_rank_real"
+            android:textSize="@dimen/px26"
+            android:layout_marginEnd="@dimen/px30"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <androidx.appcompat.widget.AppCompatRadioButton
+            android:id="@+id/radio_rank_comic"
+            android:text="@string/hongguo_rank_comic"
+            android:textSize="@dimen/px26"
+            android:layout_marginEnd="@dimen/px30"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <androidx.appcompat.widget.AppCompatRadioButton
+            android:id="@+id/radio_rank_ai"
+            android:text="@string/hongguo_rank_ai"
+            android:textSize="@dimen/px26"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </RadioGroup>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_rank"
+            android:padding="@dimen/px20"
+            android:clipToPadding="false"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_rank_empty"
+            android:text="@string/hongguo_empty"
+            android:textSize="@dimen/px30"
+            android:textColor="@color/grey"
+            android:layout_gravity="center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"/>
+
+        <ProgressBar
+            android:id="@+id/progress_rank"
+            android:layout_gravity="center"
+            android:layout_width="@dimen/px50"
+            android:layout_height="@dimen/px50"
+            android:visibility="gone"/>
+    </FrameLayout>
+</LinearLayout>

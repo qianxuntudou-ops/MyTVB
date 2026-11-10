@@ -6,6 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
     <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/image_avatar"
         android:src="@drawable/ic_hongguo"
         app:tint="?attr/colorAccent"
         xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -38,6 +39,18 @@
         android:layout_marginTop="@dimen/px30"
         android:layout_width="wrap_content"
         android:layout_height="@dimen/px70"/>
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_logout"
+        android:text="@string/hongguo_logout"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/grey"
+        android:background="@drawable/tab_round_background"
+        android:paddingStart="@dimen/px40"
+        android:paddingEnd="@dimen/px40"
+        android:layout_marginTop="@dimen/px20"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/px60"/>
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_clear"
         android:text="@string/hongguo_clear_local"

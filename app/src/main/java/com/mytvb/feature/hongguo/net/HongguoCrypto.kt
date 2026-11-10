@@ -695,7 +695,7 @@ internal object HongguoCrypto {
     internal class SignedRequest(val query: String, val headers: Map<String, String>)
 
     internal fun signRequest(
-        params: TreeMap<String, String>,
+        params: Map<String, String>,
         body: ByteArray?,
         stampMs: Long,
         deviceId: String,
@@ -705,9 +705,10 @@ internal object HongguoCrypto {
         // 分支调参：仅变 _rticket 重选签名分支（branchOf = (iv&15)%3）
         var raw = ""
         var br: Branch? = null
+        val tuned = LinkedHashMap(params)
         for (tweak in 0 until 256L) {
-            params["_rticket"] = (stampMs + tweak).toString()
-            raw = encodeQuery(params)
+            tuned["_rticket"] = (stampMs + tweak).toString()
+            raw = encodeQuery(tuned)
             val cand = branch(raw, body, (stampMs / 1000).toInt())
             if ((cand.iv and 15) % 3 == targetBranch) {
                 br = cand
@@ -720,7 +721,9 @@ internal object HongguoCrypto {
         val med = medusa(raw, ts, n0, n1, n2, deviceId, branchObj.iv, branchObj.queryHash, branchObj.bodyMd5, version, targetBranch)
         val headers: LinkedHashMap<String, String> = linkedMapOf(
             "X-Khronos" to ts.toUInt().toString(),
-            "X-SS-Req-Ticket" to (params["_rticket"] ?: ""),
+            // branch 调参会改写 tuned._rticket（签名 query 里带的才是最终值），
+            // 取原 params 恒为空串——服务端校验 ticket/query 一致性时空串必拒。
+            "X-SS-Req-Ticket" to (tuned["_rticket"] ?: params["_rticket"] ?: ""),
             "X-Helios" to helios(ts, n3),
             "X-Medusa" to med,
             "X-Gorgon" to gorgon(raw, body, ts, n0 and 0xFFFF)
@@ -745,7 +748,10 @@ internal object HongguoCrypto {
                 ch in 'a'..'z' || ch in 'A'..'Z' || ch in '0'..'9' ||
                     ch == '-' || ch == '_' || ch == '.' || ch == '~' ->
                     sb.append(ch)
-                ch == ' ' -> sb.append('+')
+                // 2026-11-10 对齐 pythonUrlEncode（Node M1 实证风格）：`*` 不编码、
+                // 空格 %20——官方 TTNet query 从不出现 %2A/+，风控按形态评分。
+                ch == '*' -> sb.append('*')
+                ch == ' ' -> sb.append("%20")
                 else -> {
                     for (b in ch.toString().toByteArray(Charsets.UTF_8)) {
                         sb.append('%').append(String.format("%02X", b))

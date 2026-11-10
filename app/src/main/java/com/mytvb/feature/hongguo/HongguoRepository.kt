@@ -1,16 +1,18 @@
 package com.mytvb.feature.hongguo
 
 import android.content.Context
+import com.mytvb.feature.hongguo.net.HongguoAccount
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoDeviceRegister
 import com.mytvb.feature.hongguo.net.HongguoPlay
+import com.mytvb.feature.hongguo.net.HongguoSearch
 import com.mytvb.feature.hongguo.net.HongguoSession
 import com.mytvb.feature.hongguo.net.HongguoWeb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * 红果数据门面：统一身份管理（真注册持久化）+ feed/详情/播放 + 本地收藏/进度。
+ * 红果数据门面：统一身份管理（真注册持久化）+ feed/详情/播放/搜索/榜单 + 账号 + 本地收藏/进度。
  * 全部 IO 走 Dispatchers.IO；红果会话独立于 B 站。
  */
 class HongguoRepository private constructor(context: Context) {
@@ -20,6 +22,8 @@ class HongguoRepository private constructor(context: Context) {
     private val client = HongguoClient()
     private val web = HongguoWeb()
     private val play = HongguoPlay()
+    private val search = HongguoSearch()
+    val account = HongguoAccount(session)
 
     // ---- 身份（真注册，multi_video_model 需要） ----
     @Volatile
@@ -28,7 +32,7 @@ class HongguoRepository private constructor(context: Context) {
     private fun identity(): HongguoDeviceRegister.Identity {
         cachedIdentity?.let { return it }
         session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->
-            HongguoDeviceRegister.Identity(s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies)
+            HongguoDeviceRegister.Identity(s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies, s.klinkEgdi)
                 .also { cachedIdentity = it; return it }
         }
         val fresh = HongguoDeviceRegister.registerFresh()
@@ -38,6 +42,7 @@ class HongguoRepository private constructor(context: Context) {
         session.openUdid = fresh.openUdid
         session.clientUdid = ""
         session.cookies = fresh.cookies.toMutableMap()
+        session.klinkEgdi = fresh.klinkEgdi
         cachedIdentity = fresh
         return fresh
     }
@@ -47,6 +52,7 @@ class HongguoRepository private constructor(context: Context) {
         return try {
             block(identity()); true
         } catch (e: Exception) {
+            android.util.Log.w("Hongguo", "withIdentity failed: ${e.javaClass.simpleName}: ${e.message}")
             cachedIdentity = null
             session.clearAll()
             false
@@ -54,18 +60,66 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     // ---- feed ----
-    suspend fun feed(path: String, offset: Int, sessionId: String): HongguoClient.CategoryPage =
-        withContext(Dispatchers.IO) { client.category(path, offset, sessionId) }
+    suspend fun feed(
+        path: String, offset: Int, sessionId: String,
+        filters: Map<String, String> = emptyMap(), withPanel: Boolean = false
+    ): HongguoClient.CategoryPage =
+        withContext(Dispatchers.IO) { client.category(path, offset, sessionId, filters, withPanel) }
+
+    // ---- 榜单（四板；fqnovel 被风控时网页 SSR 兜底） ----
+    suspend fun rank(boardIndex: Int, offset: Int, sessionId: String): HongguoClient.RankPage =
+        withContext(Dispatchers.IO) {
+            try {
+                client.rank(boardIndex, offset, sessionId)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                // App 通道空响应（模拟器传输层风控）→ 网页榜单兜底（offset 即页码）
+                web.rankFromWeb(boardIndex, if (offset <= 0) 1 else offset)
+            }
+        }
+
+    // ---- 搜索 ----
+    /** 空响应轮换新注册身份重试。 */
+    suspend fun search(
+        keyword: String, offset: Int,
+        cursor: HongguoSearch.SearchPage.Cursor?
+    ): HongguoSearch.SearchPage = withContext(Dispatchers.IO) {
+        var current = identity()
+        var lastError: Exception? = null
+        for (attempt in 0 until 3) {
+            try {
+                return@withContext search.searchTab(keyword, offset, cursor, current)
+            } catch (e: HongguoSearch.EmptyResponseException) {
+                lastError = e
+                if (attempt == 2) break
+                current = HongguoDeviceRegister.registerFresh()
+                Thread.sleep(120)
+            }
+        }
+        throw lastError ?: IllegalStateException("搜索接口无响应")
+    }
+
+    suspend fun suggestions(keyword: String): List<String> =
+        withContext(Dispatchers.IO) { search.suggestions(keyword) }
+
+    fun accountMethod(): String = session.loginMethod
 
     // ---- 详情 ----
     suspend fun detail(seriesId: String): HongguoWeb.SeriesDetail =
         withContext(Dispatchers.IO) { web.seriesDetail(seriesId) }
 
     // ---- 播放 ----
-    suspend fun playUrl(vid: String): HongguoPlay.PlayUrl = withContext(Dispatchers.IO) {
+    /**
+     * @param transport 传输通道：真机/模拟器传 WebView 通道（Chromium TLS 指纹，
+     * OkHttp 会被播放接口空响应拒）；JVM 单测传 null 走 OkHttp（预期空响应，验证签名用）。
+     */
+    suspend fun playUrl(
+        vid: String,
+        transport: ((url: String, headers: Map<String, String>, body: ByteArray) -> String)? = null
+    ): HongguoPlay.PlayUrl = withContext(Dispatchers.IO) {
         var result: HongguoPlay.PlayUrl? = null
         for (attempt in 0 until 2) {
-            if (withIdentity { id -> result = play.playUrl(vid, id) }) break
+            if (withIdentity { id -> result = play.playUrl(vid, id, transport = transport) }) break
         }
         result ?: throw IllegalStateException("红果播放地址解析失败")
     }

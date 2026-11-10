@@ -10,9 +10,20 @@ import java.util.concurrent.TimeUnit
  * 红果网页端详情：hongguoduanju.com/detail?series_id=（免签名端点）。
  * 从 HTML 的 _ROUTER_DATA 抠出 seriesDetail（对照 Go 版 SeriesDetail/extractRouterData）。
  */
-internal class HongguoWeb(
+class HongguoWeb(
     private val webBase: String = "https://hongguoduanju.com"
 ) {
+
+    private companion object {
+        /** SSR 页须爬虫 UA（浏览器 UA 返回 stream 渲染版，无 _ROUTER_DATA）。 */
+        const val GOOGLEBOT_UA =
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+        /** 四板榜单网页路由（与 App 板块一一对应）。 */
+        val RANK_ROUTES = listOf(
+            "hot-drama", "hot-real-drama", "hot-comic-drama", "hot-ai-drama"
+        )
+    }
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -35,11 +46,62 @@ internal class HongguoWeb(
         val related: List<HongguoClient.Drama>
     )
 
+    /** 网页 SSR 榜单（免签名后备通道，fqnovel 域被风控时兜底；对照 Go Rank/extractRouterData）。 */
+    fun rankFromWeb(routeIndex: Int, page: Int): HongguoClient.RankPage {
+        val route = RANK_ROUTES[routeIndex.coerceIn(0, RANK_ROUTES.size - 1)]
+        val html = http.newCall(
+            Request.Builder()
+                .url("$webBase/rank/$route?page=${maxOf(page, 1)}")
+                .header("User-Agent", GOOGLEBOT_UA)
+                .header("Accept", "text/html")
+                .build()
+        ).execute().use { resp ->
+            if (!resp.isSuccessful) throw IllegalStateException("榜单页 HTTP ${resp.code}")
+            resp.body?.string().orEmpty()
+        }
+        val router = extractRouterData(html)
+        val content = findObjectByKeyDeep(router, "content")
+            ?: throw IllegalStateException("榜单页缺少 content")
+        val rows = content.optJSONArray("rankList") ?: org.json.JSONArray()
+        val items = ArrayList<HongguoClient.Drama>()
+        for (i in 0 until rows.length()) {
+            normalizeDrama(rows.opt(i))?.let { items.add(it) }
+        }
+        val pagination = content.optJSONObject("pagination")
+        val pageNum = pagination?.optInt("pageNum", 1) ?: 1
+        val totalPages = pagination?.optInt("totalPages", 1) ?: 1
+        return HongguoClient.RankPage(
+            items,
+            hasMore = pageNum < totalPages && items.isNotEmpty(),
+            nextOffset = pageNum + 1,
+            sessionId = ""
+        )
+    }
+
+    private fun findObjectByKeyDeep(root: JSONObject, key: String, depth: Int = 0): JSONObject? {
+        if (depth > 6) return null
+        root.optJSONObject(key)?.let { return it }
+        for (k in root.keys()) {
+            when (val child = root.opt(k)) {
+                is JSONObject -> findObjectByKeyDeep(child, key, depth + 1)?.let { return it }
+                is org.json.JSONArray ->
+                    for (i in 0 until child.length()) {
+                        (child.opt(i) as? JSONObject)
+                            ?.let { findObjectByKeyDeep(it, key, depth + 1) }
+                            ?.let { return it }
+                    }
+            }
+        }
+        return null
+    }
+
     fun seriesDetail(seriesId: String): SeriesDetail {
         require(seriesId.matches(Regex("\\d{1,30}"))) { "series_id 无效" }
         val req = Request.Builder()
             .url("$webBase/detail?series_id=$seriesId")
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+            // 浏览器 UA 会返回 stream 渲染版（无 _ROUTER_DATA，2026-11-09 实证）；
+            // Googlebot UA 返回 SSR 完整版（_ROUTER_DATA 含 seriesDetail/vid_list）
+            .header("User-Agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
             .header("Accept", "text/html")
             .build()
         val html = http.newCall(req).execute().use { resp ->

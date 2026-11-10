@@ -9,7 +9,7 @@ import java.util.zip.CRC32
  * 红果会话存储：独立 SharedPreferences 文件（hongguo_session），与 B 站
  * NetworkSessionStore / CookieManager 零共享——红果身份失效只影响红果模块。
  */
-internal class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
+class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("hongguo_session", Context.MODE_PRIVATE)
@@ -57,9 +57,52 @@ internal class HongguoSession(context: Context) : HongguoDeviceRegister.SessionV
             prefs.edit().putString(K_COOKIES, obj.toString()).apply()
         }
 
+    /** 注册响应下发的设备令牌（播放 query klink_egdi）。 */
+    override var klinkEgdi: String
+        get() = prefs.getString(K_KLINK, "") ?: ""
+        set(v) = prefs.edit().putString(K_KLINK, v).apply()
+
     val registered: Boolean
         get() = deviceId.isNotEmpty() && installId.isNotEmpty() &&
             deviceId != "0" && installId != "0"
+
+    // ---- 账号票据（登录态；退出仅清这些，设备身份保留） ----
+
+    var accountCookies: MutableMap<String, String>
+        get() {
+            val raw = prefs.getString(K_ACCOUNT_COOKIES, null) ?: return mutableMapOf()
+            return try {
+                val obj = JSONObject(raw)
+                mutableMapOf<String, String>().apply {
+                    for (key in obj.keys()) put(key, obj.getString(key))
+                }
+            } catch (_: Exception) {
+                mutableMapOf()
+            }
+        }
+        set(v) {
+            val obj = JSONObject()
+            for ((k, value) in v) obj.put(k, value)
+            prefs.edit().putString(K_ACCOUNT_COOKIES, obj.toString()).apply()
+        }
+
+    var profile: String?
+        get() = prefs.getString(K_PROFILE, null)
+        set(v) = prefs.edit().putString(K_PROFILE, v).apply()
+
+    var loginMethod: String
+        get() = prefs.getString(K_LOGIN_METHOD, "") ?: ""
+        set(v) = prefs.edit().putString(K_LOGIN_METHOD, v).apply()
+
+    val loggedIn: Boolean
+        get() = !accountCookies["sessionid"].isNullOrEmpty() || !accountCookies["sessionid_ss"].isNullOrEmpty()
+
+    /** 仅清账号票据（登出），设备身份保留。 */
+    fun clearAccount() {
+        prefs.edit()
+            .remove(K_ACCOUNT_COOKIES).remove(K_PROFILE).remove(K_LOGIN_METHOD)
+            .apply()
+    }
 
     /** 清除全部红果身份数据（设备身份+票据），设置页「清除红果数据」入口。 */
     fun clearAll() {
@@ -74,6 +117,10 @@ internal class HongguoSession(context: Context) : HongguoDeviceRegister.SessionV
         private const val K_CLIENT_UDID = "clientudid"
         private const val K_CREATED = "created"
         private const val K_COOKIES = "cookies"
+        private const val K_ACCOUNT_COOKIES = "account_cookies"
+        private const val K_PROFILE = "account_profile"
+        private const val K_LOGIN_METHOD = "login_method"
+        private const val K_KLINK = "klink_egdi"
     }
 }
 

@@ -18,21 +18,25 @@ import javax.crypto.spec.SecretKeySpec
  * 隔离约束：本类使用自建 OkHttpClient，不经过 B 站 NetworkManager；
  * 成功身份写入 HongguoSession（独立 SP）。
  */
-internal object HongguoDeviceRegister {
+object HongguoDeviceRegister {
 
-    private const val DEVICE_API = "https://log.snssdk.com"
+    private const val DEVICE_API = "https://log5-applog.fqnovel.com"
     private const val APP_VERSION = "7.3.5.32"
-    internal const val USER_AGENT =
-        "com.phoenix.read/73532 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)"
+
+    /** 注册 UA：动态真实环境 + 73532 版本（71332 也同源 HongguoEnv，仅版本号差异）。 */
+    internal val USER_AGENT: String by lazy {
+        "com.phoenix.read/73532 (Linux; U; Android ${HongguoEnv.osVersion}; zh_CN; " +
+            "${HongguoEnv.deviceType}; Build/${android.os.Build.ID ?: "V417IR"}; " +
+            "Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)"
+    }
     private val KDF_SALT = HongguoCrypto.hexToBytes(
         "4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58"
     )
 
     private val http: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
-            .build()
+        // 共享连接池单例：注册建立的 keep-alive 连接是播放会话载体
+        //（连接会话模型：号绑定注册连接，跨连接空响应——2026-11-10 Node D/E 双实证）
+        HongguoHttp.ok
     }
 
     fun ensureRegistered(session: HongguoSession) {
@@ -55,7 +59,11 @@ internal object HongguoDeviceRegister {
         val installId: String,
         val cdid: String,
         val openUdid: String,
-        val cookies: Map<String, String> = emptyMap()
+        val cookies: Map<String, String> = emptyMap(),
+        /** 注册响应下发的设备令牌（播放 query 首参，HGTV 实证必带）。 */
+        val klinkEgdi: String = "",
+        /** 注册完成时刻（「每号首请求」模型：号仅首次播放请求有效）。 */
+        val registeredAt: Long = System.currentTimeMillis()
     )
 
     /**
@@ -70,7 +78,7 @@ internal object HongguoDeviceRegister {
         val openUdid = HongguoCrypto.toHex(open)
         val holder = InMemorySession(cdid, uuidV4(rnd), openUdid)
         registerDevice(holder)
-        return Identity(holder.deviceId, holder.installId, cdid, openUdid, holder.cookies)
+        return Identity(holder.deviceId, holder.installId, cdid, openUdid, holder.cookies, holder.klinkEgdi)
     }
 
     /** 注册流程复用的最小会话视图（不依赖 Android Context）。 */
@@ -81,6 +89,7 @@ internal object HongguoDeviceRegister {
     ) : SessionView {
         override var deviceId: String = ""
         override var installId: String = ""
+        override var klinkEgdi: String = ""
         override var deviceCreated: Long = System.currentTimeMillis()
         override var cookies: MutableMap<String, String> = mutableMapOf()
     }
@@ -94,6 +103,7 @@ internal object HongguoDeviceRegister {
         var clientUdid: String
         var deviceCreated: Long
         var cookies: MutableMap<String, String>
+        var klinkEgdi: String
     }
 
     private fun uuidV4(rnd: SecureRandom): String {
@@ -145,52 +155,59 @@ internal object HongguoDeviceRegister {
     }
 
     private fun payload(session: SessionView, stamp: Long): ByteArray {
+        // 设备档案动态读真实环境（HongguoEnv）——注册环境必须与播放 query 环境同源一致
+        // （2026-11-10 实测定案：HGTV 全程如实上报当前设备，伪装档案必拒）
         val header = JSONObject()
         header.put("aid", 8662)
         header.put("access", "wifi")
-        header.put("app_version", APP_VERSION)
-        header.put("app_version_minor", "")
-        header.put("channel", "update_64")
-        header.put("device_brand", "Redmi")
-        header.put("device_manufacturer", "Redmi")
-        header.put("device_model", "25053RT47C")
+        header.put("app_version", "7.3.9.32")
+        header.put("app_version_minor", "7.3.9.32")
+        header.put("channel", HongguoEnv.CHANNEL)
+        header.put("device_brand", HongguoEnv.deviceBrand)
+        header.put("device_manufacturer", HongguoEnv.deviceBrand)
+        header.put("device_model", HongguoEnv.deviceType)
         header.put("device_category", "phone")
         header.put("device_platform", "android")
         header.put("os", "Android")
-        header.put("os_api", 36)
-        header.put("os_version", "16")
-        header.put("density_dpi", 520)
-        header.put("display_density", "xxxhdpi")
-        header.put("resolution", "2772x1280")
+        header.put("os_api", HongguoEnv.osApi.toInt())
+        header.put("os_version", HongguoEnv.osVersion)
+        header.put("density_dpi", HongguoEnv.dpi.toInt())
+        header.put("display_density", displayDensityTag(HongguoEnv.dpi.toInt()))
+        header.put("resolution", HongguoEnv.resolution.replace('*', 'x'))
         header.put("language", "zh")
         header.put("timezone", 8)
         header.put("tz_name", "Asia/Shanghai")
         header.put("tz_offset", 28800)
         header.put("region", "CN")
         header.put("package", "com.phoenix.read")
-        header.put("version_code", 73532)
-        header.put("manifest_version_code", 73532)
-        header.put("update_version_code", 73532)
+        header.put("version_code", 73932)
+        header.put("manifest_version_code", 73932)
+        header.put("update_version_code", 73932)
         header.put("apk_first_install_time", session.deviceCreated)
         header.put("cdid", session.cdid)
         header.put("clientudid", session.clientUdid)
         header.put("openudid", session.openUdid)
-        header.put("cpu_abi", "arm64-v8a")
-        header.put("display_name", "红果短剧")
-        header.put("sdk_version", "3.7.2")
+        header.put("cpu_abi", HongguoEnv.HOST_ABI)
+        header.put("display_name", "红果免费短剧")
+        header.put("sdk_version", "3.7.0-rc.34-fanqie-xiaoshuo")
         header.put("sdk_target_version", 29)
         header.put("sdk_flavor", "china")
         header.put("guest_mode", 0)
         header.put("is_system_app", 0)
         header.put("not_request_sender", 0)
         header.put("oaid_may_support", true)
+        header.put("mcc_mnc", "46000")
+        header.put("carrier", "CHINA MOBILE")
+        header.put("rom", HongguoEnv.romIncremental)
+        header.put("rom_version", HongguoEnv.romVersion)
+        header.put("sig_hash", "56a962410c494bbaf0b58dba20cae56f")
         header.put("ipv6_list", JSONArray0())
         header.put("sim_serial_number", JSONArray0())
         header.put("custom", JSONObject().apply {
             put("is_android_fold", 0)
             put("filter_warn", 0)
             put("web_ua", "")
-            put("is_android_pad", 0)
+            put("is_android_pad", 1)
             put("client_ipv4", "")
         })
         val root = JSONObject()
@@ -202,6 +219,14 @@ internal object HongguoDeviceRegister {
 
     private fun JSONArray0(): org.json.JSONArray = org.json.JSONArray()
 
+    private fun displayDensityTag(dpi: Int): String = when {
+        dpi >= 560 -> "xxxhdpi"
+        dpi >= 400 -> "xxhdpi"
+        dpi >= 300 -> "xhdpi"
+        dpi >= 200 -> "hdpi"
+        else -> "mdpi"
+    }
+
     private fun registerDevice(session: SessionView) {
         val stamp = System.currentTimeMillis()
         val nowSec = stamp / 1000
@@ -210,15 +235,16 @@ internal object HongguoDeviceRegister {
         val body = ttEncrypt(payload(session, stamp), seed)
 
         val q = TreeMap<String, String>()
+        // 注册 query 动态真实环境（与 payload/播放 query 同源，HongguoEnv）
         q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"
-        q["channel"] = "update_64"; q["device_brand"] = "Redmi"
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["dpi"] = "520"; q["language"] = "zh"
-        q["manifest_version_code"] = "73532"; q["os"] = "android"
-        q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
-        q["update_version_code"] = "73532"; q["version_code"] = "73532"
-        q["version_name"] = APP_VERSION
+        q["channel"] = HongguoEnv.CHANNEL; q["device_brand"] = HongguoEnv.deviceBrand
+        q["device_platform"] = "android"; q["device_type"] = HongguoEnv.deviceType
+        q["dpi"] = HongguoEnv.dpi; q["language"] = "zh"
+        q["manifest_version_code"] = "73932"; q["os"] = "android"
+        q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
+        q["resolution"] = HongguoEnv.resolution; q["ssmix"] = "a"
+        q["update_version_code"] = "73932"; q["version_code"] = "73932"
+        q["version_name"] = "7.3.9.32"
         q["cdid"] = session.cdid
         q["openudid"] = session.openUdid
         q["tt_data"] = "a"
@@ -275,8 +301,10 @@ internal object HongguoDeviceRegister {
             require(did.isNotEmpty() && iid.isNotEmpty() && did != "0" && iid != "0") {
                 "设备注册未返回有效身份"
             }
+            android.util.Log.d("Hongguo", "register resp keys=${obj.keys().asSequence().take(24).toList()} klink=${obj.optString("klink_egdi").take(20)}")
             session.deviceId = did
             session.installId = iid
+            session.klinkEgdi = obj.optString("klink_egdi")
             val cookies = session.cookies.toMutableMap()
             for (name in listOf("store-region", "store-region-src", "ttreq", "odin_tt")) {
                 resp.headers("Set-Cookie").firstOrNull { it.startsWith("$name=") }?.let { header ->

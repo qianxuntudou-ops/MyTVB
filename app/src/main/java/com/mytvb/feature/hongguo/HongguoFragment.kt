@@ -50,6 +50,20 @@ class HongguoFragment : Fragment() {
         setupTabsAndViewPager()
         setupSearchEntry()
         observeTabSelected()
+        // 搜索层显示时 BACK 先收层，不退出红果页
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (searchShown) {
+                        hideSearchOverlay()
+                    } else {
+                        isEnabled = false
+                        requireActivity().onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            }
+        )
     }
 
     private fun setupTabsAndViewPager() {
@@ -82,10 +96,34 @@ class HongguoFragment : Fragment() {
     }
 
     private fun setupSearchEntry() {
-        // P1 骨架：搜索入口占位，P2 接红果搜索（suggestion + search/tab 接口）
-        binding.buttonHongguoSearch.setOnClickListener {
-            AppToast.show(requireContext(), getString(R.string.hongguo_coming_soon))
+        binding.buttonHongguoSearch.setOnClickListener { showSearchOverlay() }
+    }
+
+    private var searchShown = false
+
+    /** 打开搜索覆盖层（懒添加 HongguoSearchPage），返回键收起回胶囊焦点。 */
+    private fun showSearchOverlay() {
+        if (searchShown) return
+        searchShown = true
+        binding.containerHongguoSearch.visibility = View.VISIBLE
+        if (childFragmentManager.findFragmentById(R.id.container_hongguo_search) == null) {
+            childFragmentManager.beginTransaction()
+                .add(R.id.container_hongguo_search, HongguoSearchPage.newInstance())
+                .commit()
         }
+    }
+
+    fun hideSearchOverlay() {
+        if (!searchShown) return
+        searchShown = false
+        binding.containerHongguoSearch.visibility = View.GONE
+        binding.buttonHongguoSearch.requestFocus()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        searchShown = false
+        _binding = null
     }
 
     private fun observeTabSelected() {
@@ -101,11 +139,6 @@ class HongguoFragment : Fragment() {
                 }
             }
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
     }
 
     companion object {

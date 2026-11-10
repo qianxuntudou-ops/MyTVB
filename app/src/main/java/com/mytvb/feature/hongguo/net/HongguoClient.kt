@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit
  *
  * 隔离约束：自建 OkHttpClient，禁复用 B 站 NetworkManager。
  */
-internal class HongguoClient(
+class HongguoClient(
     private val apiBase: String = "https://api5-normal-sinfonlineb.fqnovel.com"
 ) {
 
@@ -51,7 +51,20 @@ internal class HongguoClient(
         val seriesStatus: String
     )
 
+    data class SelectorItem(val id: String, val name: String)
+    data class SelectorRow(val type: String, val name: String, val items: List<SelectorItem>)
+
     data class CategoryPage(
+        val items: List<Drama>,
+        val hasMore: Boolean,
+        val nextOffset: Int,
+        val sessionId: String,
+        /** 首页（withPanel=true）时返回的筛选面板行；翻页为空。 */
+        val selectorRows: List<SelectorRow> = emptyList()
+    )
+
+    /** 榜单页（bookmall cell/change，对照 Node hongguo-app-catalog browseList rank 分支）。 */
+    data class RankPage(
         val items: List<Drama>,
         val hasMore: Boolean,
         val nextOffset: Int,
@@ -69,12 +82,14 @@ internal class HongguoClient(
      * 拉取分类/推荐流。
      * @param path /category/short-drama（推荐·真人）等
      * @param sort hot_score / online_time（/new/ 前缀路径默认 online_time）
+     * @param withPanel 首页 true：need_selector_panel=true + req_type=default，返回 selectorRows
      */
     fun category(
         path: String,
         offset: Int,
         sessionId: String,
-        filters: Map<String, String> = emptyMap()
+        filters: Map<String, String> = emptyMap(),
+        withPanel: Boolean = false
     ): CategoryPage {
         val (scene, genre) = specFor(path)
         val sort = if (path.startsWith("/new/")) "online_time" else "hot_score"
@@ -92,11 +107,11 @@ internal class HongguoClient(
             .put("filter_ids", "")
             .put("req_scene", scene)
             .put("offset", maxOf(offset, 0))
-            .put("need_selector_panel", false)
+            .put("need_selector_panel", withPanel)
             .put("limit", 15)
             .put("select_items", selectItems)
             .put("session_id", sessionId)
-            .put("req_type", "only_content")
+            .put("req_type", if (withPanel) "default" else "only_content")
             .put("client_req_type", 3)
         val payload = postSignedJson("/reading/distribution/category/landpage/v/", body)
         val data = payload.optJSONObject("data")
@@ -111,7 +126,174 @@ internal class HongguoClient(
         if (nextOffset == 0 && hasMore) {
             nextOffset = maxOf(offset, 0) + items.size
         }
-        return CategoryPage(items, hasMore, nextOffset, data.optString("session_id"))
+        return CategoryPage(
+            items, hasMore, nextOffset, data.optString("session_id"),
+            if (withPanel) parseSelectorRows(data.optJSONArray("selector_rows")) else emptyList()
+        )
+    }
+
+    /** 解析筛选面板行（对照 Go normalizeCategoryFilters；creation_status 行部分 scene 缺失时补齐）。 */
+    private fun parseSelectorRows(rows: JSONArray?): List<SelectorRow> {
+        rows ?: return emptyList()
+        val out = ArrayList<SelectorRow>()
+        val seenTypes = HashSet<String>()
+        for (i in 0 until rows.length()) {
+            val row = rows.optJSONObject(i) ?: continue
+            val type = row.optString("type")
+            if (type !in FILTER_KINDS || !seenTypes.add(type)) continue
+            val rawItems = row.optJSONArray("items") ?: continue
+            val items = ArrayList<SelectorItem>()
+            val seenIds = HashSet<String>()
+            for (j in 0 until rawItems.length()) {
+                val item = rawItems.optJSONObject(j) ?: continue
+                val id = item.optString("selector_item_id")
+                val name = item.optString("show_name")
+                if (id.isEmpty() || name.isEmpty() || !seenIds.add(id)) continue
+                items.add(SelectorItem(id, name))
+            }
+            if (items.isNotEmpty()) {
+                out.add(SelectorRow(type, row.optString("row_name").ifEmpty { kindLabel(type) }, items))
+            }
+        }
+        // 完结状态行部分 scene 不返回，硬编码补齐（对照 Go hongguo_client.go categorySelection）
+        if ("creation_status" !in seenTypes) {
+            out.add(
+                SelectorRow("creation_status", "状态", listOf(
+                    SelectorItem("creation_status_0", "已完结"),
+                    SelectorItem("creation_status_1", "连载中")
+                ))
+            )
+        }
+        return out
+    }
+
+    private fun kindLabel(type: String): String = when (type) {
+        "genre" -> "体裁"; "category_dim_theme" -> "题材"; "category_dim_role" -> "设定"
+        "category_dim_epoch" -> "背景"; "sort" -> "排序"; "gender" -> "受众"
+        "online_time" -> "时间"; "creation_status" -> "状态"; else -> type
+    }
+
+    // ---- 四板官方榜单（bookmall cell/change GET，同一签名链/匿名身份） ----
+
+    /** 板块 ID 表（对照 Node hongguo-app-catalog RANKS）。 */
+    val rankBoards: List<Pair<String, String>> = listOf(
+        "all" to "ranklist_hot_play_sc",            // 红果热播榜（全站）
+        "human" to "human_hot_play",                // 热门真人
+        "comic_series_rank" to "comic_series_hot_play", // 热门漫剧
+        "ai_playlet" to "ai_playlet_hot_play"       // 热门AI剧
+    )
+
+    fun rank(
+        boardIndex: Int,
+        offset: Int,
+        sessionId: String
+    ): RankPage {
+        val (selected, subSelected) = rankBoards[boardIndex.coerceIn(0, rankBoards.size - 1)]
+        val values = linkedMapOf(
+            "tab_type" to if (offset == 0) "26" else "18",
+            "client_req_type" to "2",
+            "client_template" to "2",
+            "background_selected_items" to "",
+            "category_id" to "0",
+            "limit" to "20",
+            "cell_sub_id" to "0",
+            "gender" to "2",
+            "cell_id" to "7470092475068071998",
+            "selected_items" to selected,
+            "sub_selected_items" to subSelected,
+            "panel_selected_items" to "",
+            "offset" to maxOf(offset, 0).toString(),
+            "session_id" to sessionId,
+            "filter_ids" to "",
+            "unlimited_selector_change_type" to "0"
+        )
+        val payload = getSignedJson("/reading/bookapi/bookmall/cell/change/v", values)
+        val data = payload.optJSONObject("data")
+            ?: throw IllegalStateException("榜单响应缺少 data")
+        val view = data.optJSONObject("cell_view")
+        val cellData = view?.optJSONArray("cell_data") ?: JSONArray()
+        val items = ArrayList<Drama>()
+        for (i in 0 until cellData.length()) {
+            val cell = cellData.optJSONObject(i) ?: continue
+            val videos = cell.optJSONArray("video_data") ?: continue
+            for (j in 0 until videos.length()) {
+                normalizeDrama(videos.opt(j))?.let { items.add(it) }
+            }
+        }
+        val hasMore = data.optBoolean("has_more", view?.optBoolean("has_more", false) ?: false)
+        var nextOffset = data.optInt("next_offset", view?.optInt("next_offset", 0) ?: 0)
+        if (nextOffset <= maxOf(offset, 0)) {
+            // 游标停滞保护（对照 Go stopStalledPage）
+            return RankPage(items, false, nextOffset, data.optString("session_id"))
+        }
+        return RankPage(items, hasMore, nextOffset, data.optString("session_id"))
+    }
+
+    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。 */
+    private fun getSignedJson(path: String, values: LinkedHashMap<String, String>): JSONObject {
+        var lastError: Exception? = null
+        for (attempt in 0 until 3) {
+            try {
+                return getOnce(path, values, randomId(), randomId())
+            } catch (e: EmptyResponseException) {
+                lastError = e
+                if (attempt == 2) break
+                Thread.sleep(100)
+            }
+        }
+        throw lastError ?: IllegalStateException("红果接口无响应")
+    }
+
+    private fun getOnce(
+        path: String, values: LinkedHashMap<String, String>,
+        deviceId: String, installId: String
+    ): JSONObject {
+        val nowSec = System.currentTimeMillis() / 1000
+        val q = TreeMap<String, String>()
+        q["ac"] = "wifi"; q["channel"] = "update_64"; q["aid"] = "8662"
+        q["app_name"] = "novelread"
+        q["device_id"] = deviceId
+        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
+        q["device_brand"] = "Redmi"; q["dpi"] = "520"; q["iid"] = installId
+        q["language"] = "zh"; q["manifest_version_code"] = "73532"
+        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
+        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
+        q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
+        q["pv_player"] = "73532"; q["compliance_status"] = "0"
+        q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"
+        q["is_android_pad_screen"] = "0"
+        q["ts"] = nowSec.toString()
+        q["update_version_code"] = "73532"; q["version_code"] = "73532"
+        q["version_name"] = "7.3.5.32"
+        q.putAll(values)
+
+        val signed = HongguoCrypto.signRequest(q, null, System.currentTimeMillis(), deviceId)
+        val req = Request.Builder()
+            .url("$apiBase$path?${signed.query}")
+            .get()
+            .header("User-Agent", HongguoDeviceRegister.USER_AGENT)
+            .header("Accept", "application/json")
+            .header("Accept-Encoding", "identity")
+            .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
+            .header("X-XS-From-Web", "0")
+            .header("Sdk-Version", "2")
+            .header("X-SS-DP", "8662")
+            .header("X-Tt-Store-Region", "cn")
+            .header("X-Tt-Store-Region-Src", "did")
+            .build()
+        http.newCall(req).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: ByteArray(0)
+            android.util.Log.d("Hongguo", "rank $path http=${resp.code} len=${bytes.size}")
+            if (!resp.isSuccessful) throw IllegalStateException("红果接口 HTTP ${resp.code}")
+            if (bytes.isEmpty()) throw EmptyResponseException()
+            val text = String(bytes, Charsets.UTF_8)
+            if (text.isBlank()) throw EmptyResponseException()
+            val payload = JSONObject(text)
+            if (payload.optString("code", "0") != "0") {
+                throw IllegalStateException("红果接口 code=${payload.optString("code")}")
+            }
+            return payload
+        }
     }
 
     // ---- 匿名签名 POST：一次性随机身份 + 空响应轮换重试（对照 postSignedJSON） ----
@@ -190,6 +372,10 @@ internal class HongguoClient(
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
+            android.util.Log.d(
+                "Hongguo", "feed $path http=${resp.code} len=${bytes.size} " +
+                    "tls=${resp.handshake?.tlsVersion} logid=${resp.header("x-tt-logid")}"
+            )
             if (HongguoClientDebug.enabled) {
                 println("HG-HTTP code=${resp.code} len=${bytes.size} logid=${resp.header("x-tt-logid")}")
                 if (bytes.isNotEmpty()) {
