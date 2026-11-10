@@ -12,17 +12,20 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
-import com.mytvb.core.ui.image.ImageLoader
-import com.mytvb.databinding.CellHongguoDramaBinding
+import com.mytvb.core.ui.base.adaptiveSpanCount
+import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
+import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
+import com.mytvb.core.ui.focus.tv.TvListFocusController
+import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.FragmentHongguoSearchBinding
+import com.mytvb.feature.hongguo.net.HongguoSearch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.mytvb.feature.hongguo.net.HongguoSearch
 
 /**
- * 红果搜索页：输入框（焦点呼出 IME）+ 联想词横排 + 结果网格（复用横版卡）。
+ * 红果搜索页：输入框（焦点呼出 IME）+ 联想词横排 + 结果网格（统一 B 站卡片）。
  * 数据走 HongguoSearch（search/tab 72232 + 无签名 suggestion）；返回键收起覆盖层。
  */
 class HongguoSearchPage : Fragment() {
@@ -31,7 +34,11 @@ class HongguoSearchPage : Fragment() {
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
     private val suggestAdapter = SuggestAdapter()
-    private val resultAdapter = ResultAdapter()
+    private val resultAdapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private var tvFocusController: TvListFocusController? = null
+
+    // 结果卡与推荐页同款竖版 4:5，列数同档
+    private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
     private var suggestJob: Job? = null
     private var searchJob: Job? = null
@@ -51,13 +58,43 @@ class HongguoSearchPage : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.recyclerHongguoSuggest.adapter = suggestAdapter
-        binding.recyclerHongguoResults.layoutManager = GridLayoutManager(requireContext(), 4)
+        binding.recyclerHongguoResults.layoutManager =
+            WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerHongguoResults.adapter = resultAdapter
+        binding.recyclerHongguoResults.itemAnimator = null
+        binding.recyclerHongguoResults.addItemDecoration(
+            GridSpacingItemDecoration(
+                spanCount,
+                resources.getDimensionPixelSize(R.dimen.px16),
+                false
+            )
+        )
+        resultAdapter.bindTopEdgeUp {
+            binding.editHongguoKeyword.requestFocus() || true
+        }
+        resultAdapter.setOnItemFocusListeners(
+            onFocused = { position ->
+                if (position >= resultAdapter.contentCount() - LOAD_MORE_THRESHOLD) {
+                    loadMore()
+                }
+            },
+            onFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            }
+        )
+        tvFocusController = TvListFocusController(
+            recyclerView = binding.recyclerHongguoResults,
+            adapter = resultAdapter,
+            strategy = GridTvFocusStrategy { spanCount },
+            canLoadMore = { hasMore },
+            loadMore = { loadMore() },
+            debugName = "hongguo_search"
+        )
         binding.recyclerHongguoResults.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0 || !hasMore || loading) return
                 val lm = rv.layoutManager as? GridLayoutManager ?: return
-                if (lm.findLastVisibleItemPosition() >= resultAdapter.itemCount - 8) {
+                if (lm.findLastVisibleItemPosition() >= resultAdapter.contentCount() - 8) {
                     loadMore()
                 }
             }
@@ -98,6 +135,10 @@ class HongguoSearchPage : Fragment() {
         binding.editHongguoKeyword.requestFocus()
     }
 
+    private fun openDetail(item: DramaUi) {
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+    }
+
     private fun doSearch(kwRaw: String) {
         val kw = kwRaw.trim()
         if (kw.isEmpty()) return
@@ -105,7 +146,8 @@ class HongguoSearchPage : Fragment() {
         cursor = null
         offset = 0
         hasMore = false
-        resultAdapter.submit(emptyList())
+        resultAdapter.clear()
+        resultAdapter.notifyDataSetChanged()
         binding.textHongguoSearchEmpty.visibility = View.GONE
         binding.progressHongguoSearch.visibility = View.VISIBLE
         val imm = requireContext().getSystemService(InputMethodManager::class.java)
@@ -117,9 +159,9 @@ class HongguoSearchPage : Fragment() {
                 cursor = page.cursor
                 hasMore = page.hasMore
                 offset = page.cursor?.nextOffset ?: page.items.size
-                resultAdapter.submit(page.items)
+                resultAdapter.setDataDeduplicated(page.items.map { it.toUi() })
                 binding.textHongguoSearchEmpty.visibility =
-                    if (page.items.isEmpty()) View.VISIBLE else View.GONE
+                    if (resultAdapter.contentCount() == 0) View.VISIBLE else View.GONE
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -139,8 +181,7 @@ class HongguoSearchPage : Fragment() {
                 cursor = page.cursor
                 hasMore = page.hasMore
                 offset = page.cursor?.nextOffset ?: (offset + page.items.size)
-                val merged = resultAdapter.currentList() + page.items
-                resultAdapter.submit(merged)
+                resultAdapter.addData(page.items.map { it.toUi() })
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -151,7 +192,24 @@ class HongguoSearchPage : Fragment() {
         }
     }
 
+    private fun HongguoSearch.SearchResult.toUi(): DramaUi = DramaUi(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        subtitle = listOf(
+            if (episodeCount > 0) "共${episodeCount}集" else null,
+            when {
+                playCount >= 10_000 -> "${playCount / 10000}万播放"
+                playCount > 0 -> "${playCount}播放"
+                else -> null
+            }
+        ).filterNotNull().joinToString(" · ")
+    )
+
     override fun onDestroyView() {
+        searchJob?.cancel()
+        tvFocusController?.release()
+        tvFocusController = null
         super.onDestroyView()
         _binding = null
     }
@@ -189,54 +247,9 @@ class HongguoSearchPage : Fragment() {
         }
     }
 
-    // ---- 结果网格（复用横版卡） ----
-    private inner class ResultAdapter : RecyclerView.Adapter<ResultAdapter.Holder>() {
-        private var list: List<HongguoSearch.SearchResult> = emptyList()
-
-        fun submit(newList: List<HongguoSearch.SearchResult>) {
-            list = newList
-            notifyDataSetChanged()
-        }
-
-        fun currentList(): List<HongguoSearch.SearchResult> = list
-
-        override fun getItemCount(): Int = list.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            val cell = CellHongguoDramaBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            return Holder(cell)
-        }
-
-        override fun onBindViewHolder(holder: Holder, position: Int) {
-            holder.bind(list[position])
-        }
-
-        inner class Holder(private val cell: CellHongguoDramaBinding) :
-            RecyclerView.ViewHolder(cell.root) {
-            fun bind(item: HongguoSearch.SearchResult) {
-                cell.textTitle.text = item.title
-                cell.textHeat.text = when {
-    item.playCount >= 10_000 -> "${item.playCount / 10000}万播放"
-    item.playCount > 0 -> "${item.playCount}播放"
-    else -> ""
-}
-                cell.textEpisodes.text = if (item.episodeCount > 0) "共${item.episodeCount}集" else ""
-                cell.textTags.text = item.intro.take(18)
-                cell.textBadgeSeason.visibility = View.GONE
-                ImageLoader.load(
-                    imageView = cell.imageCover,
-                    url = item.cover,
-                    placeholder = R.drawable.bg_cover_meta_gradient,
-                    error = R.drawable.bg_cover_meta_gradient
-                )
-                cell.root.setOnClickListener {
-                    HongguoDetailDialog.show(cell.root.context, repository, item.seriesId)
-                }
-            }
-        }
-    }
-
     companion object {
+        private const val LOAD_MORE_THRESHOLD = 4
+
         fun newInstance(): HongguoSearchPage = HongguoSearchPage()
     }
 }

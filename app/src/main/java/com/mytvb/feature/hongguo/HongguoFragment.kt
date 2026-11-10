@@ -18,6 +18,7 @@ import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoBinding
 import com.mytvb.ui.activity.MainActivity
 import com.mytvb.ui.fragment.main.MainNavigationViewModel
+import com.mytvb.ui.fragment.main.MainTabFocusTarget
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 
@@ -30,7 +31,7 @@ import kotlinx.coroutines.flow.collectLatest
  * - 设备身份/登录票据存红果独立 DataStore，与 B 站 NetworkSessionStore 零共享；
  *   红果会话失效只降级游客态，不发全局账号事件。
  */
-class HongguoFragment : Fragment() {
+class HongguoFragment : Fragment(), MainTabFocusTarget {
 
     private var _binding: FragmentHongguoBinding? = null
     private val binding get() = _binding!!
@@ -84,16 +85,26 @@ class HongguoFragment : Fragment() {
             tab.text = getString(PAGE_TITLES[position])
         }.attach()
 
-        // tab 焦点导航：UP/左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）
+        // tab 焦点导航：UP/左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）；
+        // DOWN 落当前页第一张卡片（不接则框架几何搜索把焦点送进侧栏/筛选行死循环）
         binding.tabLayout.enableDirectTabNavigation(
             onNavigateUp = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             },
+            onNavigateDown = { focusCurrentPageContent() },
             onEdgeLeft = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             }
         )
     }
+
+    /** 侧栏 RIGHT / tab DOWN 的统一入口：聚焦当前 ViewPager2 子页的第一张卡片。 */
+    private fun focusCurrentPageContent(): Boolean {
+        val page = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+        return (page as? HongguoPageFocus)?.focusFirstCard() == true
+    }
+
+    override fun focusEntryFromMainTab(): Boolean = focusCurrentPageContent()
 
     private fun setupSearchEntry() {
         binding.buttonHongguoSearch.setOnClickListener { showSearchOverlay() }
@@ -119,6 +130,9 @@ class HongguoFragment : Fragment() {
         binding.containerHongguoSearch.visibility = View.GONE
         binding.buttonHongguoSearch.requestFocus()
     }
+
+    /** 列表卡片 UP 边缘的落点：回顶部 tab 栏（HongguoFeedPage 经 parentFragment 调用）。 */
+    fun focusTopTab(): Boolean = binding.tabLayout.focusSelectedTab()
 
     override fun onDestroyView() {
         super.onDestroyView()

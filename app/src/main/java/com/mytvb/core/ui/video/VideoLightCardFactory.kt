@@ -174,6 +174,16 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private var showChargeBadge = false
     private var typeBadgeText: String = ""
     private var typeBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
+
+    /** 左上角标位（红果榜单排名「第 N 名」等），贴卡片左上边缘（flush）。 */
+    private var rankBadgeText: String = ""
+    private var rankBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
+
+    /** 右上角标链（贴角）：季数标签「第 N 季」最贴角，状态标签在其左。 */
+    private var seasonBadgeText: String = ""
+    private var seasonBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
+    private var statusBadgeText: String = ""
+    private var statusBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
     private var progressMax = 100
     private var progressValue = 0
     private var showProgress = false
@@ -239,17 +249,32 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         showInteractionBadge: Boolean = this.showInteractionBadge,
         showChargeBadge: Boolean = this.showChargeBadge,
         typeBadgeText: CharSequence? = this.typeBadgeText,
-        typeBadgeColor: Int = this.typeBadgeColor
+        typeBadgeColor: Int = this.typeBadgeColor,
+        rankBadgeText: CharSequence? = this.rankBadgeText,
+        rankBadgeColor: Int = this.rankBadgeColor,
+        seasonBadgeText: CharSequence? = this.seasonBadgeText,
+        seasonBadgeColor: Int = this.seasonBadgeColor,
+        statusBadgeText: CharSequence? = this.statusBadgeText,
+        statusBadgeColor: Int = this.statusBadgeColor
     ) {
         val nextPlayCount = playCountText?.toString().orEmpty()
         val nextDanmaku = danmakuText?.toString().orEmpty()
         val nextDuration = durationText?.toString().orEmpty()
         val nextTypeBadge = typeBadgeText?.toString().orEmpty()
+        val nextRankBadge = rankBadgeText?.toString().orEmpty()
+        val nextSeasonBadge = seasonBadgeText?.toString().orEmpty()
+        val nextStatusBadge = statusBadgeText?.toString().orEmpty()
         if (TextUtils.equals(this.playCountText, nextPlayCount) &&
             TextUtils.equals(this.danmakuText, nextDanmaku) &&
             TextUtils.equals(this.durationText, nextDuration) &&
             TextUtils.equals(this.typeBadgeText, nextTypeBadge) &&
             this.typeBadgeColor == typeBadgeColor &&
+            TextUtils.equals(this.rankBadgeText, nextRankBadge) &&
+            this.rankBadgeColor == rankBadgeColor &&
+            TextUtils.equals(this.seasonBadgeText, nextSeasonBadge) &&
+            this.seasonBadgeColor == seasonBadgeColor &&
+            TextUtils.equals(this.statusBadgeText, nextStatusBadge) &&
+            this.statusBadgeColor == statusBadgeColor &&
             this.showPlayCount == showPlayCount &&
             this.showDanmakuCount == showDanmakuCount &&
             this.showInteractionBadge == showInteractionBadge &&
@@ -262,6 +287,12 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         this.durationText = nextDuration
         this.typeBadgeText = nextTypeBadge
         this.typeBadgeColor = typeBadgeColor
+        this.rankBadgeText = nextRankBadge
+        this.rankBadgeColor = rankBadgeColor
+        this.seasonBadgeText = nextSeasonBadge
+        this.seasonBadgeColor = seasonBadgeColor
+        this.statusBadgeText = nextStatusBadge
+        this.statusBadgeColor = statusBadgeColor
         this.showPlayCount = showPlayCount
         this.showDanmakuCount = showDanmakuCount
         this.showInteractionBadge = showInteractionBadge
@@ -381,6 +412,18 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private fun drawBadges(canvas: Canvas) {
         var right = width - metrics.badgeEnd.toFloat()
         val top = metrics.badgeTop.toFloat()
+        // 左上 flush 角标（红果榜单排名/状态标签），贴卡片左上边缘
+        if (rankBadgeText.isNotBlank()) {
+            drawBadgeFlushLeft(canvas, rankBadgeText, rankBadgeColor)
+        }
+        // 右上 flush 角标链：季数贴角，状态标签在其左；typeBadge（B站历史/直播）保持浮层位不变
+        var flushRight = width.toFloat()
+        if (seasonBadgeText.isNotBlank()) {
+            flushRight = drawBadgeFlushRight(canvas, seasonBadgeText, flushRight, seasonBadgeColor) - metrics.badgeGap
+        }
+        if (statusBadgeText.isNotBlank()) {
+            drawBadgeFlushRight(canvas, statusBadgeText, flushRight, statusBadgeColor)
+        }
         if (showChargeBadge) {
             right = drawBadge(canvas, context.getString(R.string.core_badge_charge_exclusive), right, top, 0xFFF6A11B.toInt()) - metrics.badgeGap
         }
@@ -394,6 +437,49 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         }
     }
 
+    /** 左上贴角标签：左上/左下直角贴边，右侧两角圆角。 */
+    private fun drawBadgeFlushLeft(canvas: Canvas, text: String, color: Int) {
+        val fm = badgeTextPaint.fontMetrics
+        val textWidth = badgeTextPaint.measureText(text)
+        val w = textWidth + metrics.px8 * 2
+        val h = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
+        val r = metrics.badgeRadius.toFloat()
+        val path = Path()
+        path.moveTo(0f, 0f)
+        path.lineTo(w, 0f)
+        path.lineTo(w, h - r)
+        path.quadTo(w, h, w - r, h)
+        path.lineTo(r, h)
+        path.quadTo(0f, h, 0f, h - r)
+        path.close()
+        badgePaint.color = color
+        canvas.drawPath(path, badgePaint)
+        canvas.drawText(text, metrics.px8.toFloat(), metrics.px3.toFloat() - fm.top, badgeTextPaint)
+    }
+
+    /** 右上贴角标签：右上/右下直角贴边，左侧两角圆角；返回左边界（供链式排布）。 */
+    private fun drawBadgeFlushRight(canvas: Canvas, text: String, rightEdge: Float, color: Int): Float {
+        val fm = badgeTextPaint.fontMetrics
+        val textWidth = badgeTextPaint.measureText(text)
+        val w = textWidth + metrics.px8 * 2
+        val h = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
+        val left = rightEdge - w
+        val r = metrics.badgeRadius.toFloat()
+        val path = Path()
+        path.moveTo(left + r, 0f)
+        path.lineTo(rightEdge, 0f)
+        path.lineTo(rightEdge, h)
+        path.lineTo(left + r, h)
+        path.quadTo(left, h, left, h - r)
+        path.lineTo(left, r)
+        path.quadTo(left, 0f, left + r, 0f)
+        path.close()
+        badgePaint.color = color
+        canvas.drawPath(path, badgePaint)
+        canvas.drawText(text, left + metrics.px8, metrics.px3 - fm.top, badgeTextPaint)
+        return left
+    }
+
     private fun drawBadge(canvas: Canvas, text: String, right: Float, top: Float, color: Int): Float {
         val fm = badgeTextPaint.fontMetrics
         val textWidth = badgeTextPaint.measureText(text)
@@ -405,6 +491,19 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         canvas.drawRoundRect(badgeRect, metrics.badgeRadius.toFloat(), metrics.badgeRadius.toFloat(), badgePaint)
         canvas.drawText(text, left + metrics.px8, top + metrics.px3 - fm.top, badgeTextPaint)
         return left
+    }
+
+    /** 左上角标变体：锚定 [left] 从左往右画，返回右边界。 */
+    private fun drawBadgeLeft(canvas: Canvas, text: String, left: Float, top: Float, color: Int): Float {
+        val fm = badgeTextPaint.fontMetrics
+        val textWidth = badgeTextPaint.measureText(text)
+        val badgeWidth = textWidth + metrics.px8 * 2
+        val badgeHeight = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
+        badgeRect.set(left, top, left + badgeWidth, top + badgeHeight)
+        badgePaint.color = color
+        canvas.drawRoundRect(badgeRect, metrics.badgeRadius.toFloat(), metrics.badgeRadius.toFloat(), badgePaint)
+        canvas.drawText(text, left + metrics.px8, top + metrics.px3 - fm.top, badgeTextPaint)
+        return left + badgeWidth
     }
 
     fun bindProgress(max: Int, progress: Int, visible: Boolean) {

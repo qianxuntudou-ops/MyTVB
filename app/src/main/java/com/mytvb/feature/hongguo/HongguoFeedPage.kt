@@ -8,25 +8,39 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
-import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.base.AppToast
-import com.mytvb.databinding.CellHongguoDramaBinding
+import com.mytvb.core.ui.base.adaptiveSpanCount
+import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
+import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
+import com.mytvb.core.ui.focus.tv.TvListFocusController
+import com.mytvb.core.ui.image.ImageLoader
+import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.FragmentHongguoFeedBinding
+import com.mytvb.feature.hongguo.net.HongguoClient
+import com.mytvb.feature.hongguo.net.HongguoCoverUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 
 /**
- * 红果列表页：推荐/历史/收藏/榜单/分类共用。
- * @param mode feed=在线 landpage（推荐/分类）；history/favorite=本地记录；rank=feed 热度榜近似
+ * 红果列表页：推荐/历史/收藏/分类共用（榜单是独立横排行页不走本页）。
+ * @param mode feed=在线 landpage（推荐/分类）；history/favorite=本地记录
+ *
+ * 2026-11-10 卡片迁移：自绘 cell_hongguo_drama → 全 App 统一 B 站卡片
+ * （[HongguoDramaAdapter]，竖版 4:5，对齐 CCTV 片库网格观感）：
+ * 列数统一 [R.dimen] 6 列档（原 feed 4 列/历史 3 列），焦点链 TvListFocusController 收口。
  */
-class HongguoFeedPage : Fragment() {
+class HongguoFeedPage : Fragment(), HongguoPageFocus {
 
     private var _binding: FragmentHongguoFeedBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
-    private val adapter = DramaAdapter()
+    private val adapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private var tvFocusController: TvListFocusController? = null
+
+    // 竖版 4:5 卡片列数对齐 CCTV 片库（6 列/超宽 12 列）
+    private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
     private var loadJob: Job? = null
     private var offset = 0
@@ -36,7 +50,7 @@ class HongguoFeedPage : Fragment() {
 
     // ---- 筛选面板（selector_rows） ----
     private val filterAdapter = FilterChipAdapter()
-    private var selectorRows: List<com.mytvb.feature.hongguo.net.HongguoClient.SelectorRow> = emptyList()
+    private var selectorRows: List<HongguoClient.SelectorRow> = emptyList()
     private val selectedFilters = HashMap<String, String>()   // type -> selector_item_id
 
     override fun onCreateView(
@@ -50,9 +64,35 @@ class HongguoFeedPage : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         val mode = requireArguments().getString(ARG_MODE, MODE_FEED)
         val genre = requireArguments().getString(ARG_GENRE, "")
-        val span = if (mode == MODE_HISTORY || mode == MODE_FAVORITE) 3 else 4
-        binding.recyclerFeed.layoutManager = GridLayoutManager(requireContext(), span)
+        binding.recyclerFeed.layoutManager = WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerFeed.adapter = adapter
+        binding.recyclerFeed.itemAnimator = null
+        binding.recyclerFeed.addItemDecoration(
+            GridSpacingItemDecoration(
+                spanCount,
+                resources.getDimensionPixelSize(R.dimen.px16),
+                false
+            )
+        )
+        adapter.bindTopEdgeUp(::focusTopTab)
+        adapter.setOnItemFocusListeners(
+            onFocused = { position ->
+                if (position >= adapter.contentCount() - LOAD_MORE_THRESHOLD) {
+                    loadMore(mode, genre)
+                }
+            },
+            onFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            }
+        )
+        tvFocusController = TvListFocusController(
+            recyclerView = binding.recyclerFeed,
+            adapter = adapter,
+            strategy = GridTvFocusStrategy { spanCount },
+            canLoadMore = { hasMore },
+            loadMore = { loadMore(mode, genre) },
+            debugName = "hongguo_feed"
+        )
         binding.recyclerFilters.adapter = filterAdapter
         binding.recyclerFilters.layoutManager =
             androidx.recyclerview.widget.LinearLayoutManager(
@@ -62,7 +102,7 @@ class HongguoFeedPage : Fragment() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0 || !hasMore || loading) return
                 val lm = rv.layoutManager as? GridLayoutManager ?: return
-                if (lm.findLastVisibleItemPosition() >= adapter.itemCount - span * 2) {
+                if (lm.findLastVisibleItemPosition() >= adapter.itemCount - spanCount * 2) {
                     loadMore(mode, genre)
                 }
             }
@@ -70,26 +110,46 @@ class HongguoFeedPage : Fragment() {
         refresh(mode, genre)
     }
 
+    /** 列表 UP 边缘回红果页顶部 tab 栏（宿主 HongguoFragment）。 */
+    private fun focusTopTab(): Boolean {
+        val host = parentFragment as? HongguoFragment ?: return false
+        return host.focusTopTab()
+    }
+
+    /** 侧栏 RIGHT / tab DOWN 的入口：聚焦第一张卡片（TvListFocusController 统一走）。 */
+    override fun focusFirstCard(): Boolean {
+        if (!isAdded || view == null) return false
+        return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
+    }
+
+    private fun openDetail(item: DramaUi) {
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+    }
+
     private fun refresh(mode: String, genre: String) {
         offset = 0; sessionId = ""; hasMore = true
-        adapter.submit(null)
+        adapter.clear()
+        adapter.notifyDataSetChanged()
         load(mode, genre, withPanel = selectorRows.isEmpty())
     }
 
-    private fun loadMore(mode: String, genre: String) = load(mode, genre, withPanel = false)
+    private fun loadMore(mode: String, genre: String) {
+        if (loading || !hasMore) return
+        load(mode, genre, withPanel = false)
+    }
 
     private fun load(mode: String, genre: String, withPanel: Boolean) {
         when (mode) {
             MODE_HISTORY -> {
-                adapter.submit(repository.history().map { it.toUi() })
+                adapter.setDataDeduplicated(repository.history().map { it.toUi() })
                 hasMore = false
-                binding.textEmpty.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
+                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
                 return
             }
             MODE_FAVORITE -> {
-                adapter.submit(repository.favorites().map { it.toUi() })
+                adapter.setDataDeduplicated(repository.favorites().map { it.toUi() })
                 hasMore = false
-                binding.textEmpty.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
+                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
                 return
             }
         }
@@ -107,9 +167,8 @@ class HongguoFeedPage : Fragment() {
                 sessionId = page.sessionId
                 hasMore = page.hasMore
                 offset = if (page.nextOffset > 0) page.nextOffset else offset + page.items.size
-                val list = (adapter.currentList() ?: emptyList()) + page.items.map { it.toUi() }
-                adapter.submit(list)
-                binding.textEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                adapter.addData(page.items.map { it.toUi() })
+                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
                 if (page.selectorRows.isNotEmpty()) {
                     selectorRows = page.selectorRows
                     binding.recyclerFilters.visibility = View.VISIBLE
@@ -119,7 +178,7 @@ class HongguoFeedPage : Fragment() {
                 throw e
             } catch (e: Exception) {
                 AppToast.show(requireContext(), e.message ?: "加载失败")
-                binding.textEmpty.visibility = if (adapter.itemCount == 0) View.VISIBLE else View.GONE
+                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
             } finally {
                 loading = false
                 binding.progressLoading.visibility = View.GONE
@@ -128,7 +187,7 @@ class HongguoFeedPage : Fragment() {
     }
 
     /** 点选某维度选项：更新选中 → 重开会话（offset=0 + panel）。 */
-    private fun applyFilter(row: com.mytvb.feature.hongguo.net.HongguoClient.SelectorRow, itemId: String) {
+    private fun applyFilter(row: HongguoClient.SelectorRow, itemId: String) {
         if (itemId.isEmpty()) selectedFilters.remove(row.type)
         else selectedFilters[row.type] = itemId
         filterAdapter.notifyDataSetChanged()
@@ -150,7 +209,7 @@ class HongguoFeedPage : Fragment() {
         }
 
         inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
-            fun bind(row: com.mytvb.feature.hongguo.net.HongguoClient.SelectorRow) {
+            fun bind(row: HongguoClient.SelectorRow) {
                 val text = itemView as? android.widget.TextView ?: return
                 val selectedId = selectedFilters[row.type]
                 val selectedName = row.items.firstOrNull { it.id == selectedId }?.name
@@ -171,83 +230,45 @@ class HongguoFeedPage : Fragment() {
         }
     }
 
-    private fun com.mytvb.feature.hongguo.net.HongguoClient.Drama.toUi(): DramaUi = DramaUi(
-        seriesId = seriesId, title = title, cover = cover,
-        heat = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else "" },
-        episodes = if (episodeCount > 0) "共${episodeCount}集" else "",
-        tags = tags.joinToString(" · "),
-        episodeCount = episodeCount
+    private fun HongguoClient.Drama.toUi(): DramaUi = DramaUi(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        subtitle = listOf(
+            score.takeIf { it.isNotBlank() },
+            if (episodeCount > 0) "共${episodeCount}集" else null,
+            heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else null }
+        ).filterNotNull().joinToString(" · ")
     )
 
-    private fun HongguoRepository.WatchRecord.toUi(): DramaUi = DramaUi(
-        seriesId = seriesId, title = title, cover = cover,
-        heat = if (durationMs > 0) "${positionMs * 100 / durationMs}%" else "",
-        episodes = if (episodeCount > 0) {
-            if (episodeIndex >= episodeCount) "已看完" else "看到${episodeIndex}/${episodeCount}集"
-        } else "",
-        tags = "", episodeCount = episodeCount
-    )
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
+    private fun HongguoRepository.WatchRecord.toUi(): DramaUi {
+        val percent = if (durationMs > 0) (positionMs * 100 / durationMs).toInt() else 0
+        return DramaUi(
+            seriesId = seriesId,
+            title = title,
+            // 存量记录可能带着已过期的签名 URL，读出时统一改写救活
+            cover = HongguoCoverUrl.rewrite(cover),
+            subtitle = when {
+                episodeCount <= 0 -> ""
+                episodeIndex >= episodeCount -> "已看完"
+                else -> "看到${episodeIndex}/${episodeCount}集"
+            },
+            progressPercent = percent.coerceIn(0, 100)
+        )
     }
 
-    // ---- adapter ----
-    data class DramaUi(
-        val seriesId: String, val title: String, val cover: String,
-        val heat: String, val episodes: String, val tags: String, val episodeCount: Int
-    )
-
-    inner class DramaAdapter : RecyclerView.Adapter<DramaAdapter.Holder>() {
-        private var list: List<DramaUi> = emptyList()
-
-        fun submit(newList: List<DramaUi>?) {
-            list = newList ?: emptyList()
-            notifyDataSetChanged()
-        }
-
-        fun currentList(): List<DramaUi>? = list
-
-        override fun getItemCount(): Int = list.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            val binding = CellHongguoDramaBinding.inflate(
-                LayoutInflater.from(parent.context), parent, false
-            )
-            return Holder(binding)
-        }
-
-        override fun onBindViewHolder(holder: Holder, position: Int) {
-            val item = list[position]
-            holder.bind(item)
-        }
-
-        inner class Holder(private val cell: CellHongguoDramaBinding) :
-            RecyclerView.ViewHolder(cell.root) {
-
-            fun bind(item: DramaUi) {
-                cell.textTitle.text = item.title
-                cell.textHeat.text = item.heat
-                cell.textEpisodes.text = item.episodes
-                cell.textTags.text = item.tags
-                cell.textBadgeSeason.visibility = View.GONE
-                ImageLoader.load(
-                    imageView = cell.imageCover,
-                    url = item.cover,
-                    placeholder = R.drawable.bg_cover_meta_gradient,
-                    error = R.drawable.bg_cover_meta_gradient
-                )
-                cell.root.setOnClickListener {
-                    HongguoDetailDialog.show(cell.root.context, repository, item.seriesId)
-                }
-            }
-        }
+    override fun onDestroyView() {
+        loadJob?.cancel()
+        tvFocusController?.release()
+        tvFocusController = null
+        super.onDestroyView()
+        _binding = null
     }
 
     companion object {
         private const val ARG_MODE = "mode"
         private const val ARG_GENRE = "genre"
+        private const val LOAD_MORE_THRESHOLD = 4
         const val MODE_FEED = "feed"
         const val MODE_HISTORY = "history"
         const val MODE_FAVORITE = "favorite"

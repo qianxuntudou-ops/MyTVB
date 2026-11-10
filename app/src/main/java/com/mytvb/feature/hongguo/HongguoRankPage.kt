@@ -6,27 +6,36 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
-import com.mytvb.core.ui.image.ImageLoader
-import com.mytvb.databinding.CellHongguoRankBinding
+import com.mytvb.core.ui.base.adaptiveSpanCount
+import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
+import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
+import com.mytvb.core.ui.focus.tv.TvListFocusController
+import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.FragmentHongguoRankBinding
+import com.mytvb.feature.hongguo.net.HongguoClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
  * 红果四板官方榜单（bookmall cell/change）：热播榜/真人榜/漫剧榜/AI剧榜。
- * 子板 tab 切换重开会话；滚动加载；rank 行大卡排名号（金银铜高亮）。
+ * 子板 tab 切换重开会话；滚动加载。
+ * 2026-11-10 卡片迁移：横排行卡（cell_hongguo_rank）→ 统一竖版卡 + 排名角标
+ * （金银铜配色，角标走 coverMetaOverlay.typeBadge，与推荐页同款观感与焦点视觉）。
  */
-class HongguoRankPage : Fragment() {
+class HongguoRankPage : Fragment(), HongguoPageFocus {
 
     private var _binding: FragmentHongguoRankBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
-    private val adapter = RankAdapter()
+    private val adapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private var tvFocusController: TvListFocusController? = null
+
+    private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
     private var board = 0
     private var offset = 0
@@ -44,13 +53,38 @@ class HongguoRankPage : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.recyclerRank.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerRank.layoutManager = WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerRank.adapter = adapter
+        binding.recyclerRank.itemAnimator = null
+        binding.recyclerRank.addItemDecoration(
+            GridSpacingItemDecoration(
+                spanCount,
+                resources.getDimensionPixelSize(R.dimen.px16),
+                false
+            )
+        )
+        adapter.bindTopEdgeUp { focusTopTab() }
+        adapter.setOnItemFocusListeners(
+            onFocused = { position ->
+                if (position >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
+            },
+            onFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            }
+        )
+        tvFocusController = TvListFocusController(
+            recyclerView = binding.recyclerRank,
+            adapter = adapter,
+            strategy = GridTvFocusStrategy { spanCount },
+            canLoadMore = { hasMore },
+            loadMore = { load() },
+            debugName = "hongguo_rank"
+        )
         binding.recyclerRank.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0 || !hasMore || loading) return
-                val lm = rv.layoutManager as? LinearLayoutManager ?: return
-                if (lm.findLastVisibleItemPosition() >= adapter.itemCount - 4) load()
+                val lm = rv.layoutManager as? GridLayoutManager ?: return
+                if (lm.findLastVisibleItemPosition() >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
             }
         })
         binding.tabRankBoards.setOnCheckedChangeListener { _, checkedId ->
@@ -68,15 +102,29 @@ class HongguoRankPage : Fragment() {
         refresh()
     }
 
+    private fun focusTopTab(): Boolean {
+        val host = parentFragment as? HongguoFragment ?: return false
+        return host.focusTopTab()
+    }
+
+    override fun focusFirstCard(): Boolean {
+        if (!isAdded || view == null) return false
+        return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
+    }
+
+    private fun openDetail(item: DramaUi) {
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+    }
+
     private fun refresh() {
         offset = 0; sessionId = ""; hasMore = false
-        adapter.items = emptyList()
+        adapter.clear()
         adapter.notifyDataSetChanged()
-        binding.textRankEmpty.visibility = View.GONE
         load()
     }
 
     private fun load() {
+        if (loading) return
         loading = true
         binding.progressRank.visibility = View.VISIBLE
         loadJob?.cancel()
@@ -86,15 +134,15 @@ class HongguoRankPage : Fragment() {
                 sessionId = page.sessionId
                 hasMore = page.hasMore
                 offset = page.nextOffset
-                val list = adapter.items + page.items
-                adapter.items = list
-                adapter.notifyDataSetChanged()
-                binding.textRankEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                // 全局名次 = 已有条数 + 批次内偏移 + 1
+                val baseRank = adapter.contentCount()
+                adapter.addData(page.items.mapIndexed { index, drama ->
+                    drama.toUi(baseRank + index + 1)
+                })
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 AppToast.show(requireContext(), e.message ?: "榜单加载失败")
-                binding.textRankEmpty.visibility = if (adapter.items.isEmpty()) View.VISIBLE else View.GONE
             } finally {
                 loading = false
                 binding.progressRank.visibility = View.GONE
@@ -102,50 +150,30 @@ class HongguoRankPage : Fragment() {
         }
     }
 
+    private fun HongguoClient.Drama.toUi(rank: Int): DramaUi = DramaUi(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        // 卡片下方类型行（家庭 · 家庭温情 · 治愈…，榜单来自 category_schema），对齐红果官方榜单卡
+        subtitle = tags.joinToString(" · "),
+        rank = rank,
+        statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
+        heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
+        episodeCount = episodeCount,
+        seasonText = if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else ""
+    )
+
     override fun onDestroyView() {
+        loadJob?.cancel()
+        tvFocusController?.release()
+        tvFocusController = null
         super.onDestroyView()
         _binding = null
     }
 
-    inner class RankAdapter : RecyclerView.Adapter<RankAdapter.Holder>() {
-        var items: List<com.mytvb.feature.hongguo.net.HongguoClient.Drama> = emptyList()
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-            return Holder(
-                CellHongguoRankBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-            )
-        }
-
-        override fun onBindViewHolder(holder: Holder, position: Int) {
-            holder.bind(items[position], position + 1)
-        }
-
-        inner class Holder(private val cell: CellHongguoRankBinding) :
-            RecyclerView.ViewHolder(cell.root) {
-            fun bind(item: com.mytvb.feature.hongguo.net.HongguoClient.Drama, rank: Int) {
-                cell.textRank.text = "$rank"
-                cell.textRank.setTextColor(
-                    when (rank) {
-                        1 -> 0xFFFF5C1F.toInt()
-                        2 -> 0xFFC9A86A.toInt()
-                        3 -> 0xFF9AA8B8.toInt()
-                        else -> 0xFF9A9AA6.toInt()
-                    }
-                )
-                cell.textTitle.text = item.title
-                cell.textMeta.text = item.tags.joinToString(" · ")
-                cell.textHeat.text = item.heatText
-                ImageLoader.load(cell.imageCover, item.cover)
-                cell.root.setOnClickListener {
-                    HongguoDetailDialog.show(cell.root.context, repository, item.seriesId)
-                }
-            }
-        }
-    }
-
     companion object {
+        private const val LOAD_MORE_THRESHOLD = 4
+
         fun newInstance(): HongguoRankPage = HongguoRankPage()
     }
 }

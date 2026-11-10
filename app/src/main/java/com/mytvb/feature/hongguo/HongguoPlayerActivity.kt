@@ -35,6 +35,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
     private var seriesId = ""
     private var title = ""
+    private var cover = ""
     private var episodeIndex = 1
     private var episodeCount = 0
     private var resumeMs = 0L
@@ -50,6 +51,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         setContentView(binding.root)
         seriesId = intent.getStringExtra(EXTRA_SERIES_ID) ?: ""
         title = intent.getStringExtra(EXTRA_TITLE) ?: ""
+        cover = intent.getStringExtra(EXTRA_COVER) ?: ""
         episodeIndex = intent.getIntExtra(EXTRA_EPISODE, 1)
         episodeCount = intent.getIntExtra(EXTRA_EPISODE_COUNT, 0)
         resumeMs = intent.getLongExtra(EXTRA_RESUME_MS, 0L)
@@ -177,7 +179,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         if (seriesId.isEmpty()) return
         repository.saveProgress(
             HongguoRepository.WatchRecord(
-                seriesId, title, "", episodeIndex, episodeCount,
+                seriesId, title, cover, episodeIndex, episodeCount,
                 positionMs, durationMs(), System.currentTimeMillis()
             ),
             vid = currentVid.ifEmpty { seriesId }
@@ -277,6 +279,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
     companion object {
         private const val EXTRA_SERIES_ID = "hg_series_id"
         private const val EXTRA_TITLE = "hg_title"
+        private const val EXTRA_COVER = "hg_cover"
         private const val EXTRA_VID = "hg_vid"
         private const val EXTRA_EPISODE = "hg_episode"
         private const val EXTRA_EPISODE_COUNT = "hg_episode_count"
@@ -284,12 +287,14 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
         fun start(
             context: Context, seriesId: String, title: String,
-            vid: String, episode: Int, episodeCount: Int, resumeMs: Long
+            vid: String, episode: Int, episodeCount: Int, resumeMs: Long,
+            cover: String = ""
         ) {
             context.startActivity(
                 Intent(context, HongguoPlayerActivity::class.java).apply {
                     putExtra(EXTRA_SERIES_ID, seriesId)
                     putExtra(EXTRA_TITLE, title)
+                    putExtra(EXTRA_COVER, cover)
                     putExtra(EXTRA_VID, vid)
                     putExtra(EXTRA_EPISODE, episode)
                     putExtra(EXTRA_EPISODE_COUNT, episodeCount)

@@ -179,9 +179,11 @@ class HongguoSearch {
                 SearchResult(
                     seriesId = id,
                     title = title,
-                    cover = video.optString("cover").ifEmpty { video.optString("cover_url") }
-                        .ifEmpty { video.optString("series_cover") }
-                        .takeIf { it.startsWith("http") } ?: "",
+                    cover = HongguoCoverUrl.rewrite(
+                        video.optString("cover").ifEmpty { video.optString("cover_url") }
+                            .ifEmpty { video.optString("series_cover") }
+                            .takeIf { it.startsWith("http") } ?: ""
+                    ),
                     episodeCount = firstPositive(
                         video.optInt("episode_cnt", 0),
                         video.optInt("episode_count", 0),

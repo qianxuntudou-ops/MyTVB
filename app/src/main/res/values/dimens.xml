@@ -93,6 +93,7 @@
     <dimen name="px600">600dip</dimen>
     <dimen name="px615">615dip</dimen>
     <dimen name="px620">620dip</dimen>
+    <dimen name="px640">640dip</dimen>
     <dimen name="px650">650dip</dimen>
     <dimen name="px675">675dip</dimen>
     <dimen name="px700">700dip</dimen>

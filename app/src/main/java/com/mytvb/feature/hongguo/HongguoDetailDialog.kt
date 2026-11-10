@@ -99,7 +99,8 @@ class HongguoDetailDialog(
             ?.takeIf { it.episodeIndex == index }?.positionMs ?: 0L
         HongguoPlayerActivity.start(
             context, d.drama.seriesId, d.drama.title,
-            episode.videoId, index, d.episodes.size, resumeMs
+            episode.videoId, index, d.episodes.size, resumeMs,
+            cover = d.drama.cover
         )
     }
 

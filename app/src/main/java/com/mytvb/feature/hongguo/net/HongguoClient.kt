@@ -48,7 +48,9 @@ class HongguoClient(
         val seasonIndex: Int,
         val multiSeason: Boolean,
         val contentType: String,
-        val seriesStatus: String
+        val seriesStatus: String,
+        /** 榜单推荐位状态标签（爆剧/新剧…），来自 recommend_reason_list.tag_info。 */
+        val statusTag: String = ""
     )
 
     data class SelectorItem(val id: String, val name: String)
@@ -482,6 +484,43 @@ class HongguoClient(
                 }
             } ?: ""
         }
+        // 榜单形态（bookmall）字段降级：无 tags 数组时从 category_schema 提类型名（name 字段，
+        // "家庭 · 家庭温情 · 治愈…"）；热度在 secondary_info_list 按「热度」后缀筛（data_type 恒 1
+        // 不区分，同列表混有"39.2万次点赞/评分9.6"）；状态标签在 recommend_reason_list.tag_info
+        val tags = stringList(obj.optJSONArray("tags")).ifEmpty {
+            val schema = runCatching { JSONArray(obj.optString("category_schema")) }.getOrNull()
+            if (schema != null) {
+                val names = ArrayList<String>(schema.length())
+                for (i in 0 until schema.length()) {
+                    val name = schema.optJSONObject(i)?.optString("name").orEmpty()
+                    if (name.isNotEmpty()) names.add(name)
+                }
+                names
+            } else {
+                emptyList()
+            }
+        }
+        val heatTextResolved = obj.optString("heatText").ifEmpty {
+            val infos = obj.optJSONArray("secondary_info_list")
+            var resolved = ""
+            if (infos != null) {
+                for (i in 0 until infos.length()) {
+                    val content = infos.optJSONObject(i)?.optString("content").orEmpty()
+                    if (content.endsWith("热度")) {
+                        resolved = content.removeSuffix("热度")
+                        break
+                    }
+                }
+            }
+            resolved
+        }
+        val statusTag = runCatching {
+            obj.optJSONObject("recommend_reason_list")
+                ?.optJSONObject("tag_info")
+                ?.optString("text")
+                .orEmpty()
+        }.getOrDefault("")
+
         return Drama(
             seriesId = id,
             title = title,
@@ -491,8 +530,9 @@ class HongguoClient(
             playCount = obj.optLong("play_cnt", 0L),
             episodeCount = firstPositive(obj.optInt("episode_cnt", 0), obj.optInt("episode_total_cnt", 0)),
             vid = str("vid", "video_id"),
-            tags = stringList(obj.optJSONArray("tags")),
-            heatText = obj.optString("heatText"),
+            tags = tags,
+            heatText = heatTextResolved,
+            statusTag = statusTag,
             statusTags = stringList(obj.optJSONArray("statusTags")),
             seasonIndex = obj.optInt("season_index", 0),
             multiSeason = obj.optBoolean("is_multi_season", false),
