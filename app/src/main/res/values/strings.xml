@@ -112,6 +112,7 @@
     <string name="hongguo_send_code">发送验证码</string>
     <string name="hongguo_code_sent">验证码已发送</string>
     <string name="hongguo_sms_login">登录</string>
+    <string name="hongguo_mfa_sent">我已发送</string>
     <string name="hongguo_qr_wait_scan">等待扫码…</string>
     <string name="hongguo_qr_scanned">已扫码，请在手机确认</string>
     <string name="hongguo_qr_expired">二维码已过期</string>

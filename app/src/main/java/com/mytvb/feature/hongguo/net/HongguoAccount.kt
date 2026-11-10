@@ -188,7 +188,7 @@ class HongguoAccount(private val session: HongguoSession) {
         }
     }
 
-    /** 验证码登录：成功存票据返回资料。 */
+    /** 验证码登录：成功存票据返回资料；遇短信上行 MFA 抛 [MfaRequiredException]。 */
     fun smsLogin(phone: String, code: String): Profile {
         val mobile = normalizePhone(phone)
         if (!code.matches(Regex("\\d{4,8}"))) throw AccountException("验证码格式无效")
@@ -198,17 +198,141 @@ class HongguoAccount(private val session: HongguoSession) {
             "&passport_support_flow=captcha%2Cverify" +
             "&mix_mode=1"
         val payload = passportPost("/passport/mobile/sms_login/", form)
+        return finishSmsLogin(payload, mobile, code)
+    }
+
+    /**
+     * MFA 短信上行确认（对照 HGTV F0.O1.h：同接口重发，conf 键值展开回传 +
+     * passport_mfa_retry_tag=1；conf 缺 sms_code_key 时用 [extraCode] 补）。
+     * 用户用手机把 [MfaChallenge.smsContent] 发到 [MfaChallenge.channelMobile] 后调用。
+     * 响应仍是 MFA 挑战时抛新的 [MfaRequiredException]（服务端可能更新短信内容）。
+     */
+    fun smsLoginMfa(phone: String, code: String, challenge: MfaChallenge, extraCode: String = ""): Profile {
+        val mobile = normalizePhone(phone)
+        val form = LinkedHashMap<String, String>()
+        form["mobile"] = xor05Hex(mobile)
+        form["code"] = xor05Hex(code)
+        form["account_sdk_source"] = "app"
+        form["passport_support_flow"] = "captcha,verify"
+        form["mix_mode"] = "1"
+        var hasSmsCodeKey = false
+        try {
+            val conf = JSONObject(challenge.rawConf)
+            for (key in conf.keys()) {
+                val value = conf.optString(key)
+                if (value.isEmpty()) continue
+                form[key] = if (key == "sms_code_key") xor05Hex(value) else value
+                if (key == "sms_code_key") hasSmsCodeKey = true
+            }
+        } catch (_: Exception) {
+            // conf 损坏：按字段直拼兜底
+            if (challenge.smsCodeKey.isNotEmpty()) {
+                form["sms_code_key"] = xor05Hex(challenge.smsCodeKey)
+                hasSmsCodeKey = true
+            }
+            challenge.verifyTicket.takeIf { it.isNotEmpty() }?.let { form["verify_ticket"] = it }
+            challenge.encryptUid.takeIf { it.isNotEmpty() }?.let { form["encrypt_uid"] = it }
+        }
+        form["passport_mfa_retry_tag"] = "1"
+        if (!hasSmsCodeKey) form["sms_code_key"] = xor05Hex(extraCode)
+        val payload = passportPost(
+            "/passport/mobile/sms_login/",
+            form.entries.joinToString("&") { (k, v) ->
+                "$k=${java.net.URLEncoder.encode(v, "UTF-8")}"
+            }
+        )
+        return finishSmsLogin(payload, mobile, code)
+    }
+
+    /** sms_login 响应收口：MFA 挑战识别（O1.j 同款字段链）或完成登录。 */
+    private fun finishSmsLogin(payload: JSONObject, mobile: String, code: String): Profile {
         val data = payload.optJSONObject("data")
             ?: throw AccountException(payload.optString("message").ifEmpty { "登录失败" })
-        if (data.has("encrypt_uid") && data.optString("encrypt_uid").isNotEmpty()) {
-            throw AccountException("该账号需要短信上行二次验证，暂不支持", "MFA_REQUIRED")
-        }
+        parseMfaChallenge(payload, data)?.let { throw MfaRequiredException(it) }
         val uid = data.optString("user_id_str").ifEmpty { data.optString("user_id") }
         val name = data.optString("screen_name").ifEmpty { data.optString("name") }.ifEmpty { "红果用户" }
         val avatar = data.optString("avatar_url")
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
         if (sid.isEmpty()) throw AccountException("登录未取得会话票据")
         return saveAccount(uid, name, avatar, "phone")
+    }
+
+    /** MFA 短信上行挑战（passport verify_center 下发的 mobile_up_sms_verify）。 */
+    data class MfaChallenge(
+        val encryptUid: String,
+        val smsCodeKey: String,
+        val logId: String,
+        /** 用户发短信的目标号码。 */
+        val channelMobile: String,
+        /** 用户要发送的短信内容。 */
+        val smsContent: String,
+        val verifyTicket: String,
+        val mobileTicket: String,
+        val verifyScene: String,
+        /** conf 原文（确认时键值展开回传）。 */
+        val rawConf: String
+    )
+
+    class MfaRequiredException(val challenge: MfaChallenge) :
+        IllegalStateException("该账号需要短信上行二次验证")
+
+    /**
+     * 从 sms_login 响应解析 MFA 挑战（对照 O1.j：verify_center_secondary_decision_conf
+     * 对象/字符串双形态 + verify_ways 数组里 verify_way=mobile_up_sms_verify 兜底）。
+     * 非 MFA 响应返回 null。
+     */
+    private fun parseMfaChallenge(payload: JSONObject, data: JSONObject): MfaChallenge? {
+        fun confOf(obj: JSONObject?): JSONObject? {
+            if (obj == null) return null
+            obj.optJSONObject("verify_center_secondary_decision_conf")?.let { return it }
+            obj.optString("verify_center_secondary_decision_conf").takeIf { it.isNotEmpty() }?.let {
+                return try {
+                    JSONObject(it)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            return null
+        }
+
+        var conf = confOf(payload) ?: confOf(data) ?: confOf(payload.optJSONObject("verify_center"))
+        if (conf == null) {
+            // 兜底：verify_ways 数组
+            val ways = data.optJSONArray("verify_ways") ?: payload.optJSONArray("verify_ways")
+            if (ways != null) {
+                for (i in 0 until ways.length()) {
+                    val w = ways.optJSONObject(i) ?: continue
+                    if (w.optString("verify_way") == "mobile_up_sms_verify" &&
+                        w.optString("channel_mobile").isNotEmpty() &&
+                        w.optString("sms_content").isNotEmpty()
+                    ) {
+                        conf = w
+                        break
+                    }
+                }
+            }
+        }
+        if (conf == null) return null
+        if (conf.optString("subtype") != "mobile_up_sms_verify") return null
+        val channelMobile = conf.optString("channel_mobile")
+        val smsContent = conf.optString("sms_content")
+        if (channelMobile.isEmpty() || smsContent.isEmpty()) return null
+        val logId = conf.optString("log_id").ifEmpty {
+            conf.optJSONObject("event_params")?.optString("log_id").orEmpty()
+        }
+        return MfaChallenge(
+            encryptUid = conf.optString("encrypt_uid"),
+            smsCodeKey = conf.optString("sms_code_key"),
+            logId = logId,
+            channelMobile = channelMobile,
+            smsContent = smsContent,
+            verifyTicket = conf.optString("verify_ticket").ifEmpty { conf.optString("ticket") },
+            mobileTicket = conf.optString("mobile_ticket"),
+            verifyScene = conf.optString("verify_scene").ifEmpty {
+                conf.optString("passport_scene").ifEmpty { conf.optString("scene") }
+            },
+            rawConf = conf.toString()
+        )
     }
 
     // ---- 导入通道（cookieStore.xml / sessionid / cookie 串） ----

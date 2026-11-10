@@ -151,7 +151,11 @@ class HongguoLoginDialog(
             }
         }
         binding.buttonSmsLogin.setOnClickListener { doSmsLogin() }
+        binding.buttonMfaSent.setOnClickListener { doMfaConfirm() }
     }
+
+    /** 当前 MFA 短信上行挑战（遇二次验证时缓存，点「我已发送」用）。 */
+    private var mfaChallenge: HongguoAccount.MfaChallenge? = null
 
     private fun doSmsLogin() {
         val phone = binding.editPhone.text?.toString().orEmpty()
@@ -167,8 +171,45 @@ class HongguoLoginDialog(
                 AppToast.show(context, "登录成功")
                 onLoggedIn()
                 dismiss()
+            } catch (e: com.mytvb.feature.hongguo.net.HongguoAccount.MfaRequiredException) {
+                showMfa(e.challenge)
             } catch (e: Exception) {
                 AppToast.show(context, e.message ?: "登录失败")
+            } finally {
+                binding.progressLogin.visibility = View.GONE
+            }
+        }
+    }
+
+    /** MFA 短信上行指引（服务端下发号码+内容，用户拿自己手机发完后点「我已发送」）。 */
+    private fun showMfa(challenge: HongguoAccount.MfaChallenge) {
+        mfaChallenge = challenge
+        binding.textMfaTip.text =
+            "该账号需要短信上行验证：请用本机手机号编辑短信\n「${challenge.smsContent}」\n发送到 ${challenge.channelMobile}，发送后点击下方按钮"
+        binding.textMfaTip.visibility = View.VISIBLE
+        binding.buttonMfaSent.visibility = View.VISIBLE
+        binding.buttonMfaSent.requestFocus()
+        AppToast.show(context, "需要短信上行二次验证")
+    }
+
+    private fun doMfaConfirm() {
+        val challenge = mfaChallenge ?: return
+        val phone = binding.editPhone.text?.toString().orEmpty()
+        val code = binding.editSmsCode.text?.toString().orEmpty()
+        binding.progressLogin.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repository.account.smsLoginMfa(phone, code, challenge)
+                }
+                AppToast.show(context, "登录成功")
+                onLoggedIn()
+                dismiss()
+            } catch (e: com.mytvb.feature.hongguo.net.HongguoAccount.MfaRequiredException) {
+                // 服务端更新了短信内容（新挑战），刷新指引继续引导
+                showMfa(e.challenge)
+            } catch (e: Exception) {
+                AppToast.show(context, e.message ?: "验证失败")
             } finally {
                 binding.progressLogin.visibility = View.GONE
             }

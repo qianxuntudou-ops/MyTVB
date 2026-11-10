@@ -227,10 +227,13 @@ app/src/main/java/com/mytvb/feature/hongguo/
 
 ## 七、P3 待办（优先级序）
 
-1. MFA 短信上行验证（encrypt_uid/sms_code_key 流程，HongguoAccount.smsLogin 已识别并提示暂不支持）
-2. 竖屏剧播放形态（9:16 居中+两侧模糊垫底）——当前 RESIZE_MODE_FIT 已居中
-3. 弹幕/评论（明确不做）
-4. 预约列表 UI 入口（数据层 HongguoSync.subscribeList 已就位，缺页面接线）
+1. 竖屏剧播放形态（9:16 居中+两侧模糊垫底）——当前 RESIZE_MODE_FIT 已居中
+2. 弹幕/评论（明确不做）
+
+~~MFA 短信上行~~ **2026-11-10 夜已完成（对照 HGTV F0.O1.h/j 逐字段对齐）**：
+- 语义：服务端在 sms_login 响应下发 `channel_mobile`（目标号码）+`sms_content`（短信内容）等（verify_center_secondary_decision_conf 对象/字符串双形态+verify_ways 数组兜底），**App 只显示指引**，用户拿自己手机手动发送，点「我已发送」后同接口重发（conf 键值展开回传，sms_code_key 值过 XOR 0x05，+passport_mfa_retry_tag=1）；服务端经运营商确认上行短信后放行——App 全程不发短信。
+- 实现：`HongguoAccount.smsLogin` 遇 MFA 抛 `MfaRequiredException(challenge)`；`smsLoginMfa(phone, code, challenge)` 确认；`HongguoLoginDialog` 短信 tab 加 text_mfa_tip+button_mfa_sent（新挑战自动刷新指引）。
+- 验证：编译+16 单测全绿+装包零崩溃；**真实 MFA 触发链路无法实测**（需服务端对特定账号下发挑战），协议按 HGTV 反编译逐字段对齐。
 
 ~~账号云同步全量~~ **2026-11-10 夜已完成（对照 HGTV 账号模块逐接口对齐，HongguoSync.kt）**：
 - 业务接口（73932 档案+明文 JSON body+Cookie/x-tt-token 登录头，b.java h()/b1() 同构）：

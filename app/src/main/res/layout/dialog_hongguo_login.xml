@@ -147,6 +147,29 @@
                 android:layout_marginTop="@dimen/px30"
                 android:layout_width="wrap_content"
                 android:layout_height="@dimen/px70"/>
+
+            <!-- MFA 短信上行二次验证（服务端要求用户主动发短信验证） -->
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/text_mfa_tip"
+                android:textSize="@dimen/px24"
+                android:textColor="?android:attr/textColorPrimary"
+                android:gravity="center"
+                android:layout_marginTop="@dimen/px24"
+                android:visibility="gone"
+                android:layout_width="@dimen/px650"
+                android:layout_height="wrap_content"/>
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/button_mfa_sent"
+                android:text="@string/hongguo_mfa_sent"
+                android:textSize="@dimen/px24"
+                android:textColor="@color/white"
+                android:background="@drawable/hongguo_btn_play"
+                android:paddingStart="@dimen/px60"
+                android:paddingEnd="@dimen/px60"
+                android:layout_marginTop="@dimen/px16"
+                android:visibility="gone"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/px64"/>
         </LinearLayout>
 
         <!-- 导入 -->
