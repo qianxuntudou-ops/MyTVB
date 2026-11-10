@@ -6,6 +6,9 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -44,6 +47,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
     private var controlsVisible = true
     private var hideRunnable = Runnable { setControlsVisible(false) }
+    /** 双击 BACK 退出确认：与 B 站 PlayerActivity 同款（exitTime/exitInterval）。 */
+    private var exitTime = 0L
+    private val exitInterval = 2000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +64,60 @@ class HongguoPlayerActivity : AppCompatActivity() {
         binding.textTitle.text = "$title · 第${episodeIndex}集"
         binding.playerView.useController = false
         binding.playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+        setupExit()
         loadAndPlay()
+    }
+
+    /** 沉浸全屏：独立 Activity 不走 BaseActivity 全屏逻辑，状态栏须自行隐藏。 */
+    private fun enterImmersiveFullscreen() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // 焦点恢复时系统栏可能被系统重新带出，重新压回去
+        if (hasFocus) enterImmersiveFullscreen()
+    }
+
+    /** 退出按钮单击直接退出（对齐 B 站 button_back → onClose → finish）；BACK 双击确认。 */
+    private fun setupExit() {
+        binding.buttonExit.setOnClickListener {
+            bumpControls()
+            finish()
+        }
+        // 触屏点击画面 toggle 播放 UI（对齐 B 站点击显隐控制层；按钮自身点击被消费不冒泡）
+        binding.root.setOnClickListener {
+            if (controlsVisible) {
+                setControlsVisible(false)
+                android.os.Handler(mainLooper).removeCallbacks(hideRunnable)
+            } else {
+                bumpControls()
+            }
+        }
+        // 播放/暂停、快退/快进按钮（组件复用 B 站 PlayerControlButton，点击接全局按键同款逻辑）
+        binding.buttonPlay.setOnClickListener { togglePlayPause() }
+        binding.buttonRewind.setOnClickListener { seekBy(-10_000L) }
+        binding.buttonFastForward.setOnClickListener { seekBy(10_000L) }
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (controlsVisible) {
+                    // BACK 优先收播放 UI（对齐 B 站：控制条 → 双击确认退出）
+                    setControlsVisible(false)
+                    android.os.Handler(mainLooper).removeCallbacks(hideRunnable)
+                    return
+                }
+                if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                    finish()
+                } else {
+                    exitTime = System.currentTimeMillis()
+                    AppToast.show(applicationContext, R.string.activity_exit_player_hint)
+                }
+            }
+        })
     }
 
     /**
@@ -148,12 +207,44 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 }
             }
 
+            // 播放/暂停按钮图标跟随真实状态（对齐 B 站 updatePlayPauseButton）
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                binding.buttonPlay.setImageResource(
+                    if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                )
+                binding.buttonPlay.contentDescription = getString(
+                    if (isPlaying) R.string.pause else R.string.play
+                )
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 android.util.Log.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
                 AppToast.show(this@HongguoPlayerActivity, "播放出错：${error.errorCodeName}")
             }
         })
         startPositionWatcher()
+        bumpControls()
+    }
+
+    /** 播放/暂停切换（按钮与遥控 OK 键共用）。 */
+    private fun togglePlayPause() {
+        player?.let { if (it.isPlaying) it.pause() else it.play() }
+        bumpControls()
+    }
+
+    /** 快退/快进（按钮与遥控 LEFT/RIGHT 共用），到头钳 1s 片尾余量防误触连播。 */
+    private fun seekBy(deltaMs: Long) {
+        player?.let { p ->
+            val dur = durationMs()
+            val target = if (deltaMs < 0) {
+                (p.currentPosition + deltaMs).coerceAtLeast(0L)
+            } else if (dur > 0) {
+                (p.currentPosition + deltaMs).coerceAtMost(dur - 1_000L).coerceAtLeast(0L)
+            } else {
+                p.currentPosition + deltaMs
+            }
+            p.seekTo(target)
+        }
         bumpControls()
     }
 
@@ -240,18 +331,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 return true
             }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                player?.let { if (it.isPlaying) it.pause() else it.play() }
-                bumpControls()
+                togglePlayPause()
                 return true
             }
             KeyEvent.KEYCODE_DPAD_LEFT -> {
-                player?.seekTo((player?.currentPosition ?: 0L) - 10_000L)
-                bumpControls()
+                seekBy(-10_000L)
                 return true
             }
             KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                player?.seekTo((player?.currentPosition ?: 0L) + 10_000L)
-                bumpControls()
+                seekBy(10_000L)
                 return true
             }
         }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@color/black"
     android:keepScreenOn="true"
     android:layout_width="match_parent"
@@ -8,6 +9,7 @@
         android:id="@+id/player_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
+    <!-- 顶栏：退出 + 清晰度 + 时钟（组件与观感对齐 B 站 my_player_control_view 顶栏） -->
     <LinearLayout
         android:id="@+id/panel_top"
         android:orientation="horizontal"
@@ -19,59 +21,132 @@
         android:paddingBottom="@dimen/px16"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_title"
-            android:textSize="@dimen/px28"
-            android:textColor="@color/white"
-            android:singleLine="true"
+        <com.mytvb.feature.player.view.PlayerControlButton
+            android:id="@+id/button_exit"
+            android:background="@drawable/cell_background"
+            android:padding="@dimen/px18"
+            android:layout_width="@dimen/px80"
+            android:layout_height="@dimen/px80"
+            android:src="@drawable/ic_back"
+            android:contentDescription="@string/back"/>
+        <View
             android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content"/>
+            android:layout_height="@dimen/px1"/>
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_quality"
             android:textSize="@dimen/px22"
             android:textColor="#FFB28F"
-            android:layout_marginStart="@dimen/px20"
+            android:layout_marginEnd="@dimen/px20"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
+        <TextClock
+            android:textSize="@dimen/px50"
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            android:id="@+id/text_clock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:shadowColor="@color/black"
+            android:shadowRadius="7"/>
     </LinearLayout>
+    <!-- 底栏：标题 + 进度条 + 播放/暂停/快退/快进 + 时间（对齐 B 站 exo_bottom_bar 结构） -->
     <LinearLayout
         android:id="@+id/panel_bottom"
         android:orientation="vertical"
         android:layout_gravity="bottom"
-        android:background="@drawable/player_top_gradient"
+        android:background="@drawable/focus_background"
         android:paddingStart="@dimen/px30"
         android:paddingEnd="@dimen/px30"
         android:paddingTop="@dimen/px24"
-        android:paddingBottom="@dimen/px24"
+        android:paddingBottom="@dimen/px30"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
-        <androidx.media3.ui.DefaultTimeBar
-            android:id="@+id/time_bar"
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_title"
+            android:textSize="@dimen/px40"
+            android:textStyle="bold"
+            android:textColor="@color/white"
+            android:ellipsize="marquee"
+            android:singleLine="true"
+            android:shadowColor="@color/black"
+            android:shadowDx="1.5"
+            android:shadowDy="1.3"
+            android:shadowRadius="1.6"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"/>
+        <com.mytvb.feature.player.view.DefaultTimeBar
+            android:id="@+id/time_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/px5"
+            app:bar_height="@dimen/px6"
+            app:played_color="#E6FB7299"
+            app:unplayed_color="#40FFFFFF"
+            app:scrubber_drawable="@drawable/ic_progress_head"
+            app:scrubber_dragged_size="46dp"
+            app:scrubber_focus_peak_size="54dp"
+            app:scrubber_enabled_size="34dp"
+            app:touch_target_height="60dp"/>
         <LinearLayout
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="@dimen/px10"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/text_position"
-                android:textSize="@dimen/px22"
-                android:textColor="@color/white"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_play"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px32"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/ic_play"
+                android:contentDescription="@string/play_pause"/>
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_rewind"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px11"
+                android:layout_marginStart="@dimen/px10"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/ic_rewind"
+                android:contentDescription="@string/rewind"/>
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_fast_forward"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px11"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/ic_fast_forward"
+                android:contentDescription="@string/fast_forward"/>
             <View
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="@dimen/px1"/>
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/text_duration"
-                android:textSize="@dimen/px22"
-                android:textColor="@color/white"
+            <LinearLayout
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/px10"
+                android:paddingEnd="@dimen/px10"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content">
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_position"
+                    android:textSize="@dimen/px35"
+                    android:textColor="@color/exo_white"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:textSize="@dimen/px35"
+                    android:textColor="@color/exo_white_opacity_70"
+                    android:text="·"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_duration"
+                    android:textSize="@dimen/px35"
+                    android:textColor="@color/exo_white_opacity_70"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
     <ProgressBar
