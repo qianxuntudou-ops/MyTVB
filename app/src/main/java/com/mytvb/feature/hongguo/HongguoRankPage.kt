@@ -112,7 +112,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
     }
 
-    private fun openDetail(item: DramaUi) {
+    private fun openDetail(item: DramaUi, position: Int) {
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
     }
 

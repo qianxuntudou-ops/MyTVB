@@ -153,6 +153,8 @@ class HongguoDetailDialog(
             episode.videoId, index, d.episodes.size, resumeMs,
             cover = d.drama.cover
         )
+        // 跳播放即关弹窗：退出播放直接回列表（对齐 B 站播放返回行为，不再多按一次 BACK）
+        dismiss()
     }
 
     // ---- 选集分页 ----

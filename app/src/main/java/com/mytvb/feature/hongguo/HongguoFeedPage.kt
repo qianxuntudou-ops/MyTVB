@@ -48,6 +48,9 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private var hasMore = true
     private var loading = false
 
+    /** 打开详情时的卡片位置：播放器返回后焦点恢复的兜底（触摸模式无锚点可用）。 */
+    private var lastOpenedPosition = RecyclerView.NO_POSITION
+
     // ---- 筛选面板（selector_rows） ----
     private val filterAdapter = FilterChipAdapter()
     private var selectorRows: List<HongguoClient.SelectorRow> = emptyList()
@@ -122,7 +125,8 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
     }
 
-    private fun openDetail(item: DramaUi) {
+    private fun openDetail(item: DramaUi, position: Int) {
+        lastOpenedPosition = position
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
     }
 
@@ -257,8 +261,31 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         )
     }
 
+    override fun onPause() {
+        // 与各列表页同款：离开（切页签/进播放器）前捕获锚点，返回时恢复
+        tvFocusController?.captureCurrentAnchor()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val controller = tvFocusController ?: return
+        // 从播放器/弹窗返回：锚点恢复优先；触摸模式无锚点时退回打开详情时的卡片
+        controller.restoreFocusAfterReturn(
+            onFailed = {
+                if (lastOpenedPosition != RecyclerView.NO_POSITION &&
+                    controller.requestFocusPosition(lastOpenedPosition, allowOutsideFocus = true)
+                ) {
+                    return@restoreFocusAfterReturn
+                }
+                controller.ensureValidFocus("resume")
+            }
+        )
+    }
+
     override fun onDestroyView() {
         loadJob?.cancel()
+        lastOpenedPosition = RecyclerView.NO_POSITION
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()

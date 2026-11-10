@@ -42,7 +42,8 @@ data class DramaUi(
  * 文字层：标题单行（焦点长标题滚动由卡片工厂自带）+ 副标题行（无头像）。
  */
 class HongguoDramaAdapter(
-    private val onItemClick: (DramaUi) -> Unit
+    /** position 供页面记录来源卡片（播放器返回后焦点恢复兜底）。 */
+    private val onItemClick: (DramaUi, Int) -> Unit
 ) : BaseVideoAdapter<DramaUi, HongguoDramaAdapter.ViewHolder>() {
 
     override fun itemKey(item: DramaUi): String = item.seriesId
@@ -92,7 +93,7 @@ class HongguoDramaAdapter(
             views.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    getItem(position)?.let(onItemClick)
+                    getItem(position)?.let { onItemClick(it, position) }
                 }
             }
             views.root.onFocusChangeListener = View.OnFocusChangeListener { view, hasFocus ->

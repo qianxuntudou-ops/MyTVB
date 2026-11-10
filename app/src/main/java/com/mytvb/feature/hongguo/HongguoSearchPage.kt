@@ -271,7 +271,7 @@ class HongguoSearchPage : Fragment() {
         binding?.editHongguoKeyword?.requestFocus()
     }
 
-    private fun openDetail(item: DramaUi) {
+    private fun openDetail(item: DramaUi, position: Int) {
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
     }
 
