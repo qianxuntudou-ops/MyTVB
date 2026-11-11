@@ -370,11 +370,17 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 android.util.Log.d("Hongguo", "player state=$state")
                 binding.progressBuffering.visibility =
                     if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+                updatePauseBigIcon()
                 if (state == Player.STATE_READY) saveProgress(p.currentPosition)
                 if (state == Player.STATE_ENDED) {
                     saveProgress(durationMs())
                     playNext()
                 }
+            }
+
+            // 暂停/恢复第一时间联动右下角大图标（isPlaying 要等状态机确认，慢半拍）
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                updatePauseBigIcon()
             }
 
             // 播放/暂停按钮图标跟随真实状态（对齐 B 站 updatePlayPauseButton）
@@ -789,7 +795,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
     /** 播放/暂停切换（按钮与遥控 OK 键共用）。暂停时控制栏常驻（hideRunnable 守卫）。 */
     private fun togglePlayPause() {
-        player?.let { if (it.isPlaying) it.pause() else it.play() }
+        player?.let {
+            val willPause = it.isPlaying
+            if (willPause) it.pause() else it.play()
+            // 变暂停即把焦点收到播放键：暂停后控制栏常驻，播放键是常驻控制栏的操作起点
+            //（覆盖 OK 隐藏态呼出/进度条持焦/按钮 click 全部暂停路径；恢复播放不抢焦点）
+            if (willPause && binding.buttonPlay.visibility == View.VISIBLE) {
+                binding.buttonPlay.requestFocus()
+            }
+        }
         bumpControls()
     }
 
@@ -907,6 +921,17 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private fun updateAlwaysClock() {
         binding.textClockAlways.visibility =
             if (alwaysOnClock && !controlsVisible && !seekUiActive) View.VISIBLE else View.GONE
+        updatePauseBigIcon()
+    }
+
+    /** 暂停大图标：用户暂停 + 控制栏隐藏 + 非 seek 会话 + 非播完时右下角显示（对齐红果官方）。
+     * 用 playWhenReady 判定而非 isPlaying——BUFFERING 的 isPlaying=false 不是"停了"，不能亮图标。 */
+    private fun updatePauseBigIcon() {
+        val p = player
+        binding.imagePauseBig.visibility =
+            if (p != null && !p.playWhenReady && !seekUiActive && !controlsVisible &&
+                p.playbackState != Player.STATE_ENDED
+            ) View.VISIBLE else View.GONE
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

@@ -183,6 +183,18 @@
         android:shadowColor="@color/black"
         android:shadowRadius="7"
         android:visibility="gone"/>
+    <!-- 暂停大图标：暂停+控制栏隐藏时右下角定格提示（对齐红果官方；控制栏呼出/seek 会话期间隐藏） -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/image_pause_big"
+        android:src="@drawable/ic_pause"
+        android:alpha="0.75"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="@dimen/px40"
+        android:layout_marginBottom="@dimen/px40"
+        android:layout_width="@dimen/px120"
+        android:layout_height="@dimen/px120"
+        android:importantForAccessibility="no"
+        android:visibility="gone"/>
     <!-- 中央快进/快退提示（短按累积 Xs / 长按推进反馈，对齐 B 站 SeekOverlayView 文字提示） -->
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/text_seek_hint"
