@@ -1339,8 +1339,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             PlayerMediaCache.reset(requireContext())
             VideoPlayerViewModel.clearCachedPlayback()
             PlayerInstancePool.clearAttachedSource()
-            itemOf(KEY_CLEAR_CACHE)?.info = NumberUtils.formatBytes(getCurrentCacheSize())
-            refreshItem(KEY_CLEAR_CACHE)
+            // 上限是 App 缓存总配额：改档立即跨目录修剪（后台，避免主线程扫大目录）
+            updateScope.launch {
+                withContext(Dispatchers.IO) {
+                    com.mytvb.core.common.cache.GlobalCacheBudget.enforce(force = true)
+                }
+                if (!isAdded) return@launch
+                itemOf(KEY_CLEAR_CACHE)?.info = NumberUtils.formatBytes(getCurrentCacheSize())
+                refreshItem(KEY_CLEAR_CACHE)
+            }
         }
     }
 
@@ -1359,21 +1366,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             if (!isAdded) return@launch
             updateInfo(KEY_CODEC, text)
         }
-    }
-
-    private fun getFolderSize(folder: java.io.File): Long {
-        var size: Long = 0
-        val files = folder.listFiles()
-        if (files != null) {
-            for (file in files) {
-                size += if (file.isDirectory) {
-                    getFolderSize(file)
-                } else {
-                    file.length()
-                }
-            }
-        }
-        return size
     }
 
     private fun deleteDir(folder: java.io.File) {
@@ -1753,12 +1745,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     }
 
     private fun getCurrentCacheSize(): Long {
-        // 统计口径与"缓存限制"一致：只算受该设置管辖的目录
-        // （JSON 数据缓存 + 播放器媒体缓存 + 红果解密流落地）。图片/HTTP 缓存与升级包
-        // 不归这个设置管，不计入，避免显示值永远超限。
-        val mediaCacheDir = PlayerMediaCache.getCacheDir(requireContext())
-        return getFolderSize(FileCacheManager.cacheDir) + getFolderSize(mediaCacheDir) +
-            getFolderSize(com.mytvb.feature.hongguo.HongguoMediaCache.dir(requireContext()))
+        // 统计口径与"缓存限制"一致：只算受该设置管辖的受管缓存目录
+        // （JSON 数据缓存 + 播放器媒体缓存 + 红果解密流落地），走 GlobalCacheBudget
+        // 总账。图片/HTTP 缓存与升级包不归这个设置管，不计入，避免显示值永远超限。
+        com.mytvb.feature.hongguo.HongguoMediaCache.dir(requireContext())  // 防御注册
+        PlayerMediaCache.getCacheDir(requireContext())
+        return com.mytvb.core.common.cache.GlobalCacheBudget.totalBytes()
     }
 
     private fun showDmChoiceDialog(key: String, options: Array<String>) {

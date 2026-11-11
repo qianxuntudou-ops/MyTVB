@@ -3,6 +3,7 @@ package com.mytvb
 import android.app.Application
 import android.os.SystemClock
 import com.mytvb.core.common.cache.FileCacheManager
+import com.mytvb.core.common.cache.GlobalCacheBudget
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.core.common.settings.AppSettingsDataStore
@@ -188,6 +189,18 @@ class MyBLBLApplication : Application() {
 
     private fun initFileCache() {
         FileCacheManager.init()
+        // 冷启动兜底：三受管缓存目录（BBLLCache/播放器媒体缓存/红果解密流）注册进
+        // 全局总账并延迟收敛一次——写入侧触发点只在下次写入时生效，存量的
+        // 跨目录超限（如新增受管目录后的首次启动）靠这里压回上限内。
+        GlobalCacheBudget.register(com.mytvb.feature.hongguo.HongguoMediaCache.dir(this))
+        GlobalCacheBudget.register(com.mytvb.feature.player.cache.PlayerMediaCache.getCacheDir(this))
+        Thread {
+            Thread.sleep(5_000L)
+            GlobalCacheBudget.enforce()
+        }.apply {
+            isDaemon = true
+            name = "cache-budget-boot"
+        }.start()
     }
     
     private fun initKoin() {
