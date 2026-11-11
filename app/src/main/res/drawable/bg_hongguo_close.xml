@@ -1,20 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 登录弹窗右上关闭钮（设计稿 dlg-head .x）：描边圆角钮，聚焦=白描边。 -->
+<!-- 登录弹窗右上关闭钮（2026-11-11 B 站风格统一，对齐 bg_owner_dialog_outline_button）：
+     默认=白描边 px2 透明底；聚焦=整块 colorControlHighlight 提亮。圆角 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item android:state_focused="true">
         <shape android:shape="rectangle">
-            <solid android:color="@color/hongguo_card_face_focused"/>
-            <stroke android:width="@dimen/px3" android:color="@color/white"/>
-            <corners android:radius="@dimen/px8"/>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item>
         <shape android:shape="rectangle">
             <solid android:color="#00000000"/>
-            <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
-            <corners android:radius="@dimen/px8"/>
+            <stroke android:width="@dimen/px2" android:color="@color/white"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 </selector>

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果次行动按钮：描边+中性面，聚焦白描边+面提亮，禁用置灰（替代借用 B 站弹窗的 bg_owner_dialog_outline_button）。 -->
+<!-- 红果次行动按钮（2026-11-11 B 站风格统一，对齐 bg_owner_dialog_outline_button）：
+     默认=白描边 px2 透明底；聚焦=整块 colorControlHighlight 提亮；按下=colorPrimary；
+     禁用=置灰（倒计时中）。圆角 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
 
@@ -7,31 +9,29 @@
         <shape>
             <solid android:color="#131317"/>
             <stroke android:width="1dp" android:color="#2A2A31"/>
-            <corners android:radius="@dimen/px10"/>
-        </shape>
-    </item>
-
-    <item android:state_focused="true">
-        <shape>
-            <solid android:color="@color/hongguo_card_face_focused"/>
-            <stroke android:width="@dimen/px3" android:color="@color/white"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item android:state_pressed="true">
         <shape>
             <solid android:color="?attr/colorPrimary"/>
-            <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item>
         <shape>
-            <solid android:color="@color/hongguo_card_face"/>
-            <stroke android:width="1dp" android:color="#4A4A54"/>
-            <corners android:radius="@dimen/px10"/>
+            <solid android:color="@android:color/transparent"/>
+            <stroke android:width="@dimen/px2" android:color="@color/white"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 </selector>

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果统一 TV 分段控件态（2026-11-11 定案：替代 RadioButton/自绘页签四种形态）：
-     选中=主题强调色实底+深字；聚焦=白描边+面提亮；选中+聚焦叠加=实底上叠白描边；
-     禁用=置灰（倒计时/无权限）。 -->
+<!-- 红果统一 TV 分段控件态（2026-11-11 B 站风格统一：与 App 组件同语言）：
+     选中=主题强调色实底+深字；聚焦=整块 colorControlHighlight 提亮（同 button_common/
+     bg_hongguo_page_chip，弃白描边内衬）；选中+聚焦=实底保持；按下=colorPrimary；
+     禁用=置灰（倒计时/无权限）。圆角对齐 App 按钮主力档 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
 
@@ -9,38 +10,29 @@
         <shape>
             <solid android:color="#131317"/>
             <stroke android:width="1dp" android:color="#2A2A31"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
-    <!-- 选中 + 聚焦叠加：实底保持，白描边内衬 -->
-    <item android:state_focused="true" android:state_selected="true">
+    <!-- 选中（含聚焦叠加）：强调色实底保持，字色由代码控制 -->
+    <item android:state_selected="true">
         <shape>
             <solid android:color="?attr/colorAccent"/>
-            <stroke android:width="@dimen/px3" android:color="@color/white"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item android:state_pressed="true">
         <shape>
             <solid android:color="?attr/colorPrimary"/>
-            <corners android:radius="@dimen/px10"/>
-        </shape>
-    </item>
-
-    <item android:state_selected="true">
-        <shape>
-            <solid android:color="?attr/colorAccent"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item android:state_focused="true">
         <shape>
-            <solid android:color="@color/hongguo_card_face_focused"/>
-            <stroke android:width="@dimen/px3" android:color="@color/white"/>
-            <corners android:radius="@dimen/px10"/>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
@@ -48,7 +40,7 @@
         <shape>
             <solid android:color="@color/hongguo_card_face"/>
             <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
-            <corners android:radius="@dimen/px10"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 </selector>

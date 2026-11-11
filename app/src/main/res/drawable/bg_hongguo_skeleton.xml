@@ -2,5 +2,5 @@
 <!-- 首屏加载骨架灰块（封面位/标题条共用，配 alpha 呼吸动画）。 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/hongguo_skeleton_block"/>
-    <corners android:radius="@dimen/px10"/>
+    <corners android:radius="@dimen/px15"/>
 </shape>

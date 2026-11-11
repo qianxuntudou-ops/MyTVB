@@ -2,5 +2,5 @@
 <!-- 登录弹窗二维码白底卡片：圆角+内衬（替代裸白块）。 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/white"/>
-    <corners android:radius="@dimen/px10"/>
+    <corners android:radius="@dimen/px15"/>
 </shape>

@@ -1,21 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 我的页功能卡：中性深面+细描边，聚焦=白描边+面提亮（对齐设计稿功能卡）。 -->
+<!-- 我的页功能卡（2026-11-11 B 站风格统一）：中性深面+细描边；
+     聚焦=整块 colorControlHighlight 提亮（同 button_common，弃白描边内衬）。圆角 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
-
-    <item android:state_focused="true">
-        <shape>
-            <solid android:color="@color/hongguo_card_face_focused"/>
-            <stroke android:width="@dimen/px3" android:color="@color/white"/>
-            <corners android:radius="@dimen/px12"/>
-        </shape>
-    </item>
 
     <item android:state_pressed="true">
         <shape>
             <solid android:color="?attr/colorPrimary"/>
             <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
-            <corners android:radius="@dimen/px12"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
@@ -23,7 +24,7 @@
         <shape>
             <solid android:color="@color/hongguo_card_face"/>
             <stroke android:width="1dp" android:color="@color/hongguo_card_line"/>
-            <corners android:radius="@dimen/px12"/>
+            <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 </selector>
