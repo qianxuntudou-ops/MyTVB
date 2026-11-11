@@ -1747,11 +1747,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     }
 
     private fun getCurrentCacheSize(): Long {
-        // 统计口径与"缓存限制"一致：只算受该设置管辖的两个目录
-        // （JSON 数据缓存 + 播放器媒体缓存）。图片/HTTP 缓存与升级包
+        // 统计口径与"缓存限制"一致：只算受该设置管辖的目录
+        // （JSON 数据缓存 + 播放器媒体缓存 + 红果解密流落地）。图片/HTTP 缓存与升级包
         // 不归这个设置管，不计入，避免显示值永远超限。
         val mediaCacheDir = PlayerMediaCache.getCacheDir(requireContext())
-        return getFolderSize(FileCacheManager.cacheDir) + getFolderSize(mediaCacheDir)
+        return getFolderSize(FileCacheManager.cacheDir) + getFolderSize(mediaCacheDir) +
+            getFolderSize(com.mytvb.feature.hongguo.HongguoMediaCache.dir(requireContext()))
     }
 
     private fun showDmChoiceDialog(key: String, options: Array<String>) {

@@ -90,23 +90,59 @@ class HongguoRepository private constructor(context: Context) {
         }
     }
 
+    // ---- 内容缓存（首屏 TTL；进程内存级，翻页不缓存） ----
+    // 一进红果页 ViewPager2 全离屏会并发拉 6 个子页（推荐/分类×3/榜单/历史），
+    // 冷启动又全量重拉；榜单/分类内容变化频率低，首屏缓存 TTL 内秒显，过期才真请求。
+    private data class ContentEntry(val data: Any, val at: Long)
+
+    private val contentCache = HashMap<String, ContentEntry>()
+    private val contentCacheLock = Any()
+
+    /** 缓存时长：30 分钟。 */
+    private val contentTtlMs = 30L * 60_000L
+
+    /** 详情短缓存：5 分钟（同剧反复打开/逐集连播去重）。 */
+    private val DETAIL_TTL_MS = 5L * 60_000L
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> contentCacheGet(key: String, ttlMs: Long = contentTtlMs): T? = synchronized(contentCacheLock) {
+        val entry = contentCache[key] ?: return null
+        if (System.currentTimeMillis() - entry.at > ttlMs) {
+            contentCache.remove(key); return null
+        }
+        entry.data as? T
+    }
+
+    private fun contentCachePut(key: String, data: Any) = synchronized(contentCacheLock) {
+        contentCache[key] = ContentEntry(data, System.currentTimeMillis())
+    }
+
     // ---- feed ----
     suspend fun feed(
         path: String, offset: Int, sessionId: String,
         filters: Map<String, String> = emptyMap(), withPanel: Boolean = false
-    ): HongguoClient.CategoryPage =
-        withContext(Dispatchers.IO) { client.category(path, offset, sessionId, filters, withPanel) }
+    ): HongguoClient.CategoryPage {
+        // 仅首屏（offset=0 且带筛选面板）走缓存；翻页/换筛选会话照常请求
+        val cacheKey = if (offset == 0 && withPanel) "feed|$path|${filters.toSortedMap()}" else null
+        cacheKey?.let { contentCacheGet<HongguoClient.CategoryPage>(it)?.let { page -> return page } }
+        val page = withContext(Dispatchers.IO) { client.category(path, offset, sessionId, filters, withPanel) }
+        cacheKey?.let { contentCachePut(it, page) }
+        return page
+    }
 
     // ---- 榜单（四板；fqnovel 被风控时网页 SSR 兜底） ----
     suspend fun rank(boardIndex: Int, offset: Int, sessionId: String): HongguoClient.RankPage =
         withContext(Dispatchers.IO) {
+            // 仅首屏走缓存；App/网页兜底两条通道的成功结果同样入缓存
+            val cacheKey = if (offset == 0) "rank|$boardIndex" else null
+            cacheKey?.let { contentCacheGet<HongguoClient.RankPage>(it)?.let { page -> return@withContext page } }
             try {
                 client.rank(boardIndex, offset, sessionId)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 // App 通道空响应（模拟器传输层风控）→ 网页榜单兜底（offset 即页码）
                 web.rankFromWeb(boardIndex, if (offset <= 0) 1 else offset)
-            }
+            }.also { page -> cacheKey?.let { contentCachePut(it, page) } }
         }
 
     // ---- 搜索 ----
@@ -192,17 +228,34 @@ class HongguoRepository private constructor(context: Context) {
     fun accountMethod(): String = session.loginMethod
 
     // ---- 详情 ----
-    suspend fun detail(seriesId: String): HongguoWeb.SeriesDetail =
-        withContext(Dispatchers.IO) { web.seriesDetail(seriesId) }
+    // 短 TTL（5 分钟）：详情弹窗反复打开、播放器逐集连播（切集只为拿 episode vid）
+    // 都重复拉同一部剧；5 分钟短于追更感知周期，集数更新不受影响。
+    suspend fun detail(seriesId: String): HongguoWeb.SeriesDetail {
+        val cacheKey = "detail|$seriesId"
+        contentCacheGet<HongguoWeb.SeriesDetail>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
+        val d = withContext(Dispatchers.IO) { web.seriesDetail(seriesId) }
+        contentCachePut(cacheKey, d)
+        return d
+    }
 
     // ---- 播放 ----
     /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。 */
-    suspend fun playUrl(vid: String): HongguoPlay.PlayUrl = withContext(Dispatchers.IO) {
-        var result: HongguoPlay.PlayUrl? = null
-        for (attempt in 0 until 2) {
-            if (withIdentity { id -> result = play.playUrl(vid, id) }) break
+    suspend fun playUrl(vid: String, preferredPixels: Int = 0): HongguoPlay.PlayUrl =
+        withContext(Dispatchers.IO) {
+            var result: HongguoPlay.PlayUrl? = null
+            for (attempt in 0 until 2) {
+                if (withIdentity { id -> result = play.playUrl(vid, id, preferredPixels) }) break
+            }
+            result ?: throw IllegalStateException("红果播放地址解析失败")
         }
-        result ?: throw IllegalStateException("红果播放地址解析失败")
+
+    /**
+     * 设置页「红果短剧·默认画质」存储值 → 目标档位 pixels（"默认"=0 取最高，
+     * "1080P"→1080 等数字直提；无数字/未设置回落 0）。播放器起播与切集时读取。
+     */
+    fun defaultQualityPixels(): Int {
+        val stored = appSettings.getCachedString("hongguo_quality") ?: return 0
+        return Regex("\\d+").find(stored)?.value?.toIntOrNull() ?: 0
     }
 
     /**
