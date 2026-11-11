@@ -347,6 +347,10 @@
     <string name="setting_value_medium">中</string>
     <string name="setting_value_high">高</string>
     <string name="setting_value_unlimited">不限制</string>
+    <string name="setting_value_no_limit">不限</string>
+    <string name="setting_value_male">男頻</string>
+    <string name="setting_value_female">女頻</string>
+    <string name="setting_value_official_site">官網</string>
     <string name="setting_value_full_screen">全螢幕</string>
     <string name="setting_value_black">黑色</string>
     <string name="setting_value_white">白色</string>

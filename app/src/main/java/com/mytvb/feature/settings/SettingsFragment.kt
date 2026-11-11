@@ -114,6 +114,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
         // 红果账号/设备身份与 B 站完全隔离（独立 DataStore + 独立网络栈）
         private const val KEY_HONGGUO_ENTRY = "hongguo_entry"
+        // 红果推荐受众（存储值"不限/男频/女频"，默认不限；对照 HGTV recommendGender）：
+        // 推荐流首拉注入 gender 筛选面板，设置后下次进推荐生效
+        private const val KEY_HONGGUO_RECOMMEND_GENDER = "hongguo_recommend_gender"
+        // 红果搜索源（存储值"App/官网"，默认 App）：官网=hongguoduanju.com 免登录接口；
+        // App 源三次失败自动回退官网（HGTV 同款兜底）
+        private const val KEY_HONGGUO_SEARCH_SOURCE = "hongguo_search_source"
         // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
         // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
@@ -430,7 +436,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "开")
             )),
             SettingGroup(R.string.setting_group_hongguo, listOf(
-                stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关")
+                stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关"),
+                stored(KEY_HONGGUO_RECOMMEND_GENDER, R.string.hongguo_recommend_gender, "不限"),
+                stored(KEY_HONGGUO_SEARCH_SOURCE, R.string.hongguo_search_source, "App")
             ))
         )
 
@@ -780,6 +788,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 appSettings.putStringAsync(key, it)
                 (activity as? MainActivity)?.applyHongguoEntryVisibility()
             }
+            KEY_HONGGUO_RECOMMEND_GENDER -> showCommonChoiceDialog(key, arrayOf("不限", "男频", "女频"))
+            KEY_HONGGUO_SEARCH_SOURCE -> showCommonChoiceDialog(key, arrayOf("App", "官网"))
             KEY_X5_CORE -> startXdDownload()
             KEY_CAST_RECEIVE -> toggle(key) { newValue ->
                 // 投屏开关存 cast 自有 SP（不进 appSettings），并立即生效（拉起/停止服务）
@@ -1399,6 +1409,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_CCTV_NATIVE_VOD)
         applyStored(KEY_HONGGUO_ENTRY)
+        applyStored(KEY_HONGGUO_RECOMMEND_GENDER)
+        applyStored(KEY_HONGGUO_SEARCH_SOURCE)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)
         // 旧版本存储值兜底：不属于当前选项集时回落默认

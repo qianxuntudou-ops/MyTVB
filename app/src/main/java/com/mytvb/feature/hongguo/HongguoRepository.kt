@@ -110,11 +110,18 @@ class HongguoRepository private constructor(context: Context) {
         }
 
     // ---- 搜索 ----
-    /** 空响应轮换新注册身份重试。 */
+    /**
+     * 按设置分流（存储值 hongguo_search_source："App"/"官网"，默认 App）。
+     * 官网源直接走免登录分页接口（offset 即页码-1）；App 源空响应轮换新注册身份重试，
+     * 三次全败再自动回退官网一次（HGTV「App 搜索接口没有数据，已自动改用官网搜索」同款）。
+     */
     suspend fun search(
         keyword: String, offset: Int,
         cursor: HongguoSearch.SearchPage.Cursor?
     ): HongguoSearch.SearchPage = withContext(Dispatchers.IO) {
+        if (appSettings.getCachedString("hongguo_search_source") == "官网") {
+            return@withContext search.searchWeb(keyword, offset + 1)
+        }
         var current = identity()
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
@@ -127,7 +134,14 @@ class HongguoRepository private constructor(context: Context) {
                 Thread.sleep(120)
             }
         }
-        throw lastError ?: IllegalStateException("搜索接口无响应")
+        // App 源全败兜底：官网接口无身份要求，成功即接管本会话后续翻页
+        try {
+            search.searchWeb(keyword, offset + 1)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            throw lastError ?: IllegalStateException("搜索接口无响应")
+        }
     }
 
     suspend fun suggestions(keyword: String): List<String> =
@@ -189,6 +203,17 @@ class HongguoRepository private constructor(context: Context) {
             if (withIdentity { id -> result = play.playUrl(vid, id) }) break
         }
         result ?: throw IllegalStateException("红果播放地址解析失败")
+    }
+
+    /**
+     * 设置页「推荐受众」存储值（"不限"/"男频"/"女频"，默认不限；对照 HGTV recommendGender）。
+     * 推荐流首拉拿到 gender 筛选面板后按名字匹配注入，会话内手动改筛选以手动为准。
+     */
+    fun recommendGenderStored(): String =
+        appSettings.getCachedString("hongguo_recommend_gender") ?: "不限"
+
+    private val appSettings: com.mytvb.core.common.settings.AppSettingsDataStore by lazy {
+        org.koin.mp.KoinPlatform.getKoin().get()
     }
 
     // ---- 本地收藏 / 观看进度（独立 SP，与 B 站零共享） ----

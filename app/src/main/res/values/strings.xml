@@ -84,6 +84,8 @@
     <string name="setting_group_tv_vod">CCTV影视</string>
     <string name="setting_group_hongguo">红果短剧</string>
     <string name="hongguo_entry">红果短剧入口</string>
+    <string name="hongguo_recommend_gender">推荐受众</string>
+    <string name="hongguo_search_source">搜索源</string>
     <string name="hongguo_tab_recommend">推荐</string>
     <string name="hongguo_tab_history">历史</string>
     <string name="hongguo_tab_favorite">收藏</string>
@@ -575,6 +577,10 @@
     <string name="setting_value_medium">中</string>
     <string name="setting_value_high">高</string>
     <string name="setting_value_unlimited">不限制</string>
+    <string name="setting_value_no_limit">不限</string>
+    <string name="setting_value_male">男频</string>
+    <string name="setting_value_female">女频</string>
+    <string name="setting_value_official_site">官网</string>
     <string name="setting_value_full_screen">全屏</string>
     <string name="setting_value_black">黑色</string>
     <string name="setting_value_white">白色</string>

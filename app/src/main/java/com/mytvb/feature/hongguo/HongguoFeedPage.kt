@@ -56,6 +56,9 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private var selectorRows: List<HongguoClient.SelectorRow> = emptyList()
     private val selectedFilters = HashMap<String, String>()   // type -> selector_item_id
 
+    /** 推荐受众默认注入只做一次（面板拿到后注入并重开一次会话；用户手动选择不再覆盖）。 */
+    private var genderInjected = false
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
@@ -192,6 +195,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                     selectorRows = page.selectorRows
                     binding.recyclerFilters.visibility = View.VISIBLE
                     filterAdapter.notifyDataSetChanged()
+                    maybeInjectGenderFilter(mode, genre)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -211,6 +215,30 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         else selectedFilters[row.type] = itemId
         filterAdapter.notifyDataSetChanged()
         refresh(requireArguments().getString(ARG_MODE, MODE_FEED), requireArguments().getString(ARG_GENRE, ""))
+    }
+
+    /**
+     * 推荐受众设置注入（对照 HGTV recommendGender：设置改受众，下次进推荐生效）。
+     * gender 面板的 selector_item_id 由接口下发（"0"/"1"），按「男/女」字面匹配选项，
+     * 避免硬编码 id 语义漂移；匹配不到（面板缺失/改名）静默跳过不注入。
+     */
+    private fun maybeInjectGenderFilter(mode: String, genre: String) {
+        if (genderInjected || mode != MODE_FEED || selectedFilters.containsKey("gender")) {
+            genderInjected = true
+            return
+        }
+        val stored = repository.recommendGenderStored()
+        genderInjected = true
+        if (stored == "不限") return
+        val genderRow = selectorRows.firstOrNull { it.type == "gender" } ?: return
+        // 面板选项名以接口下发为准：先精确匹配设置文案，退化按「男/女」字面（兼容「男生/女生」等变体）
+        val want = if (stored == "男频") "男" else "女"
+        val matched = genderRow.items.firstOrNull { it.name == stored }
+            ?: genderRow.items.firstOrNull { it.name.contains(want) } ?: return
+        selectedFilters["gender"] = matched.id
+        filterAdapter.notifyDataSetChanged()
+        // 面板已就位，refresh 走 withPanel=false 只重拉内容
+        refresh(mode, genre)
     }
 
     // ---- 筛选 chip：每维度一枚，显示当前值，点击弹 ChoiceDialog ----

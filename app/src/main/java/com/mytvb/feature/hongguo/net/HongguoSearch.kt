@@ -132,6 +132,73 @@ class HongguoSearch {
         }
     }
 
+    /**
+     * 官网搜索（hongguoduanju.com/api/search/result，GET 免登录无签名；对照 HGTV F0.O 单页请求 + b.Y0 解析）。
+     * 结果略少但翻页稳定，作为搜索源可选值与 App 接口失败时的回退通道。
+     * @param page 物理页码 1..100（ HGTV 同款上限），[SearchPage.Cursor.nextOffset] 回传下一页码。
+     */
+    fun searchWeb(keyword: String, page: Int): SearchPage {
+        val kw = keyword.trim().take(80)
+        require(kw.isNotEmpty()) { "搜索词为空" }
+        val safePage = page.coerceIn(1, 100)
+        // 官网接口对空格/%7E 敏感：URLEncoder 的 + 与 ~ 的 %7E 编码都要还原（HGTV 同款改写）
+        val encoded = java.net.URLEncoder.encode(kw, "UTF-8")
+            .replace("+", "%20")
+            .replace("%7E", "~")
+        val url = "https://hongguoduanju.com/api/search/result?query=$encoded&page=$safePage"
+        http.newCall(
+            Request.Builder().url(url)
+                .header("User-Agent", HongguoDeviceRegister.USER_AGENT)
+                .header("Accept", "application/json")
+                .build()
+        ).execute().use { resp ->
+            val text = resp.body?.string().orEmpty()
+            android.util.Log.d("Hongguo", "searchWeb http=${resp.code} len=${text.length}")
+            if (!resp.isSuccessful) throw IllegalStateException("官网搜索 HTTP ${resp.code}")
+            if (text.isBlank()) throw EmptyResponseException()
+            val payload = JSONObject(text)
+            if (payload.has("code")) {
+                val code = payload.optString("code")
+                // invalid_query=词被拒（过短/纯符号）：按无结果处理，其余码视为接口异常
+                if (code == "invalid_query") return SearchPage(emptyList(), false, null)
+                throw IllegalStateException("官网搜索暂不可用（$code）")
+            }
+            val list = payload.optJSONArray("searchList")
+                ?: return SearchPage(emptyList(), false, null)
+            // 防爆量护栏（HGTV 以每页条数×3 为上限，异常大列表按空处理）
+            if (list.length() > 60) return SearchPage(emptyList(), false, null)
+            val seen = HashSet<String>()
+            val items = ArrayList<SearchResult>(list.length())
+            for (i in 0 until list.length()) {
+                val entry = list.optJSONObject(i) ?: continue
+                val video = entry.optJSONObject("video_data")?.takeIf { it.length() > 0 } ?: entry
+                val id = video.optString("series_id").ifEmpty { entry.optString("keyword") }
+                if (id.isEmpty() || !id.matches(Regex("\\d{1,30}")) || !seen.add(id)) continue
+                val title = stripTags(video.optString("series_title").ifEmpty { entry.optString("name") })
+                if (title.isEmpty()) continue
+                items.add(
+                    SearchResult(
+                        seriesId = id,
+                        title = title,
+                        cover = HongguoCoverUrl.rewrite(
+                            video.optString("series_cover").takeIf { it.startsWith("http") } ?: ""
+                        ),
+                        episodeCount = video.optInt("episode_cnt", 0),
+                        intro = stripTags(video.optString("series_intro")),
+                        playCount = 0L
+                    )
+                )
+            }
+            val totalPages = payload.optInt("totalPages", 1).coerceIn(1, 100)
+            val hasMore = items.isNotEmpty() &&
+                payload.optBoolean("hasMore", safePage < totalPages) &&
+                safePage < totalPages
+            // 官网游标只带页码（nextOffset=下一页码），与 App 源的条数偏移互不混用
+            val cursor = if (hasMore) SearchPage.Cursor("", "", safePage + 1) else null
+            return SearchPage(items, hasMore, cursor)
+        }
+    }
+
     class EmptyResponseException : IllegalStateException("search empty body")
 
     /** 解析 + 去重 + 相关性过滤（对照 hongguo-app-search.js parseSearch + search-relevance.js）。 */
