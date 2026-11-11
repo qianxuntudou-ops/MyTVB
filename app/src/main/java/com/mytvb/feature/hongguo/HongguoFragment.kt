@@ -136,7 +136,21 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         }
     }
 
-    override fun focusEntryFromMainTab(): Boolean = focusCurrentPageContent()
+    /** 触摸模式盲恢复等外部焦点入口：覆盖层打开时焦点归覆盖层，不落到被盖住的货架底下。 */
+    override fun focusEntryFromMainTab(): Boolean = when {
+        searchShown -> {
+            val page = childFragmentManager
+                .findFragmentById(R.id.container_hongguo_search) as? HongguoSearchPage
+            page?.requestInputFocus()
+            page != null
+        }
+        shelfShown -> {
+            val page = childFragmentManager
+                .findFragmentById(R.id.container_hongguo_shelf) as? HongguoPageFocus
+            page?.focusFirstCard() == true
+        }
+        else -> focusCurrentPageContent()
+    }
 
     private fun setupSearchEntry() {
         binding.buttonHongguoSearch.setOnClickListener { showSearchOverlay() }

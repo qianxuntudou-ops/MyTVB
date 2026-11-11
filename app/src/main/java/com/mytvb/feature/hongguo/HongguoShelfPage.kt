@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
  * BACK 收层并还原功能卡焦点。无触底加载/锚点需求，不接 TvListFocusController，
  * 焦点滚动走 RecyclerView 框架自动滚动。
  */
-class HongguoShelfPage : Fragment() {
+class HongguoShelfPage : Fragment(), HongguoPageFocus {
 
     private var _binding: FragmentHongguoShelfBinding? = null
     private val binding get() = _binding!!
@@ -39,6 +39,13 @@ class HongguoShelfPage : Fragment() {
     }
 
     private var source = Source.WATCH_LATER
+
+    /** 外部焦点入口（触摸模式盲恢复等）：空态/未显示时不接焦点，落位复用开层聚焦逻辑。 */
+    override fun focusFirstCard(): Boolean {
+        if (_binding == null || adapter.itemCount == 0 || !binding.root.isShown) return false
+        val vh = binding.recyclerShelf.findViewHolderForAdapterPosition(0) ?: return false
+        return vh.itemView.requestFocus()
+    }
 
     /** 货架数据源：标题与拉取逻辑一一对应。 */
     enum class Source(val titleRes: Int) {
