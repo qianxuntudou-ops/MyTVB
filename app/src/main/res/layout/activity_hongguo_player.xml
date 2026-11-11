@@ -25,6 +25,9 @@
             android:id="@+id/button_exit"
             android:background="@drawable/cell_background"
             android:padding="@dimen/px18"
+            android:focusable="true"
+            android:clickable="true"
+            android:nextFocusDown="@id/time_bar"
             android:layout_width="@dimen/px80"
             android:layout_height="@dimen/px80"
             android:src="@drawable/ic_back"
@@ -37,7 +40,12 @@
             android:id="@+id/text_quality"
             android:textSize="@dimen/px22"
             android:textColor="#FFB28F"
-            android:layout_marginEnd="@dimen/px20"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:paddingStart="@dimen/px12"
+            android:paddingEnd="@dimen/px12"
+            android:paddingTop="@dimen/px8"
+            android:paddingBottom="@dimen/px8"
+            android:layout_marginEnd="@dimen/px8"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
         <TextClock
@@ -77,6 +85,7 @@
             android:layout_height="wrap_content"/>
         <com.mytvb.feature.player.view.DefaultTimeBar
             android:id="@+id/time_bar"
+            android:nextFocusDown="@+id/button_play"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/px5"
@@ -97,14 +106,22 @@
                 android:id="@+id/button_play"
                 android:background="@drawable/cell_background"
                 android:padding="@dimen/px32"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
                 android:layout_width="@dimen/px113"
                 android:layout_height="@dimen/px113"
                 android:src="@drawable/ic_play"
-                android:contentDescription="@string/play_pause"/>
+                android:contentDescription="@string/play_pause">
+                <requestFocus/>
+            </com.mytvb.feature.player.view.PlayerControlButton>
             <com.mytvb.feature.player.view.PlayerControlButton
                 android:id="@+id/button_rewind"
                 android:background="@drawable/cell_background"
                 android:padding="@dimen/px11"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
                 android:layout_marginStart="@dimen/px10"
                 android:layout_width="@dimen/px113"
                 android:layout_height="@dimen/px113"
@@ -114,6 +131,9 @@
                 android:id="@+id/button_fast_forward"
                 android:background="@drawable/cell_background"
                 android:padding="@dimen/px11"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
                 android:layout_width="@dimen/px113"
                 android:layout_height="@dimen/px113"
                 android:src="@drawable/ic_fast_forward"
@@ -149,6 +169,32 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+    <!-- 常驻时钟：「时间常驻显示」开关打开时，控制栏隐藏期间右上角显示（B站 setAlwaysOnClock 同款） -->
+    <TextClock
+        android:id="@+id/text_clock_always"
+        android:textSize="@dimen/px50"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="@dimen/px16"
+        android:layout_marginEnd="@dimen/px30"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:shadowColor="@color/black"
+        android:shadowRadius="7"
+        android:visibility="gone"/>
+    <!-- 中央快进/快退提示（短按累积 Xs / 长按推进反馈，对齐 B 站 SeekOverlayView 文字提示） -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_seek_hint"
+        android:textSize="@dimen/px40"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:shadowColor="@color/black"
+        android:shadowRadius="5"
+        android:layout_gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
     <ProgressBar
         android:id="@+id/progress_buffering"
         android:layout_gravity="center"

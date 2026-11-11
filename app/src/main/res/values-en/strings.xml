@@ -340,6 +340,7 @@
 
     <!-- ===== Settings value display mapping (stored values stay Chinese, display layer only) ===== -->
     <string name="setting_value_auto">Auto</string>
+    <string name="setting_value_default">Default</string>
     <string name="setting_value_low">Low</string>
     <string name="setting_value_medium">Medium</string>
     <string name="setting_value_high">High</string>

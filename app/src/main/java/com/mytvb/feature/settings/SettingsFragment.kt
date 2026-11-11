@@ -120,6 +120,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // 红果搜索源（存储值"App/官网"，默认 App）：官网=hongguoduanju.com 免登录接口；
         // App 源三次失败自动回退官网（HGTV 同款兜底）
         private const val KEY_HONGGUO_SEARCH_SOURCE = "hongguo_search_source"
+        // 红果默认画质（存储值"默认/1080P/720P/540P/480P"，默认"默认"= 最高档；
+        // 数字档位就近匹配，播放 UI 可按集临时切换不受此默认限制）
+        private const val KEY_HONGGUO_QUALITY = "hongguo_quality"
         // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
         // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
@@ -438,7 +441,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_hongguo, listOf(
                 stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关"),
                 stored(KEY_HONGGUO_RECOMMEND_GENDER, R.string.hongguo_recommend_gender, "不限"),
-                stored(KEY_HONGGUO_SEARCH_SOURCE, R.string.hongguo_search_source, "App")
+                stored(KEY_HONGGUO_SEARCH_SOURCE, R.string.hongguo_search_source, "App"),
+                stored(KEY_HONGGUO_QUALITY, R.string.hongguo_quality, "默认")
             ))
         )
 
@@ -790,6 +794,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
             KEY_HONGGUO_RECOMMEND_GENDER -> showCommonChoiceDialog(key, arrayOf("不限", "男频", "女频"))
             KEY_HONGGUO_SEARCH_SOURCE -> showCommonChoiceDialog(key, arrayOf("App", "官网"))
+            KEY_HONGGUO_QUALITY -> showCommonChoiceDialog(key, arrayOf("默认", "1080P", "720P", "540P", "480P"))
             KEY_X5_CORE -> startXdDownload()
             KEY_CAST_RECEIVE -> toggle(key) { newValue ->
                 // 投屏开关存 cast 自有 SP（不进 appSettings），并立即生效（拉起/停止服务）
@@ -1411,6 +1416,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_HONGGUO_ENTRY)
         applyStored(KEY_HONGGUO_RECOMMEND_GENDER)
         applyStored(KEY_HONGGUO_SEARCH_SOURCE)
+        applyStored(KEY_HONGGUO_QUALITY)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)
         // 旧版本存储值兜底：不属于当前选项集时回落默认

@@ -40,7 +40,11 @@ class HongguoPlay(
         val width: Int,
         val height: Int,
         val durationSec: Long,
-        val vid: String
+        val vid: String,
+        /** 当前所选档位（竖屏取 min(width,height)，无尺寸信息时 0）。 */
+        val pixels: Int = 0,
+        /** 本集全部可用档位（兼容编码候选，pixels 降序去重）；空 = 片源未带尺寸信息。 */
+        val availableQualities: List<Int> = emptyList()
     )
 
     class PlayException(message: String, val code: String) : IllegalStateException(message)
@@ -48,10 +52,13 @@ class HongguoPlay(
     /**
      * @param identity 真注册设备身份（multi_video_model 校验设备真实性，
      * 匿名随机 id 会被空响应拒绝）。可用 [HongguoDeviceRegister.registerFresh] 获取后持久化复用。
+     * @param preferredPixels 目标画质档位（竖屏剧取 min(width,height)，如 1080/720/540/480）；
+     * 0 = 默认取最高档。目标档缺失时就近取不超目标的最高档，全超目标取最低档。
      */
     fun playUrl(
         vid: String,
         identity: HongguoDeviceRegister.Identity,
+        preferredPixels: Int = 0,
     ): PlayUrl {
         require(vid.matches(Regex("\\d{1,30}"))) { "分集编号无效" }
         // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932；body 带其扩展字段）
@@ -85,7 +92,7 @@ class HongguoPlay(
             identity
         )
         return try {
-            parseEntry(vid, entry)
+            parseEntry(vid, entry, preferredPixels)
         } catch (e: PlayException) {
             if (e.code != "UNSUPPORTED_BYTEVC2") throw e
             // 2026-11-10：服务端对新转码剧集仅下发 ByteVC2（内容维度必现，换号无效）。
@@ -95,7 +102,7 @@ class HongguoPlay(
             val retry = runCatching {
                 fetchM1Entry(vid, m1ModelBody(vid, 3), identity, allowRotate = false)
             }.getOrElse { throw e }
-            parseEntry(vid, retry)
+            parseEntry(vid, retry, preferredPixels)
         }
     }
 
@@ -420,7 +427,7 @@ class HongguoPlay(
     }
 
     // ---- entry 解析：video_model 内联或 fallback_api 二跳（对照 parseEntryPlayInfo） ----
-    private fun parseEntry(vid: String, entry: JSONObject): PlayUrl {
+    private fun parseEntry(vid: String, entry: JSONObject, preferredPixels: Int = 0): PlayUrl {
         var model = entry.optJSONObject("video_model")
         if (model == null) {
             val modelStr = entry.optString("video_model")
@@ -524,7 +531,23 @@ class HongguoPlay(
             }
             throw PlayException("本集暂未提供兼容的 H.264/HEVC 片源", "MISSING_MODEL")
         }
-        val best = rows.first()
+        // 按目标档位选候选（Candidate 是本函数局部类，匹配逻辑收在函数内）：
+        // preferred<=0 或候选全无尺寸信息 = 默认取最高档（rows.first）；
+        // 有目标时取「不超过目标的最高档」，全超目标取最低档（就近降级），
+        // 同档内保持编码兼容优先（rows 已按编码兼容优先、像素降序排好）。
+        fun pickByPreference(preferred: Int): Candidate {
+            if (preferred <= 0) return rows.first()
+            val withPixels = rows.filter { it.pixels > 0 }
+            if (withPixels.isEmpty()) return rows.first()
+            val target = withPixels.filter { it.pixels <= preferred }.maxByOrNull { it.pixels }
+                ?: withPixels.minByOrNull { it.pixels }!!
+            return rows.first { it.pixels == target.pixels }
+        }
+        val best = pickByPreference(preferredPixels)
+        // 本集全部可用档位（兼容编码候选，降序去重）供播放 UI 画质弹窗展示
+        val availableQualities = candidates
+            .filter { it.codecRank < (if (hasCompatible) 2 else 3) && it.pixels > 0 }
+            .map { it.pixels }.distinct().sortedDescending()
         val spade = best.obj.optString("spade_a").ifEmpty {
             best.obj.optJSONObject("encrypt_info")?.optString("spade_a") ?: ""
         }
@@ -550,7 +573,8 @@ class HongguoPlay(
                 val checked = checkedUrl(media)
                 android.util.Log.d(
                     TAG, "play picked codec=${best.codec} quality=${best.quality} " +
-                        "${best.width}x${best.height} encrypted=${contentKey != null} host=${java.net.URI(checked).host}"
+                        "${best.width}x${best.height} encrypted=${contentKey != null} host=${java.net.URI(checked).host}" +
+                        " preferred=$preferredPixels available=$availableQualities"
                 )
                 return PlayUrl(
                     url = checked,
@@ -564,7 +588,9 @@ class HongguoPlay(
                     width = best.width,
                     height = best.height,
                     durationSec = model.optLong("video_duration", info.optLong("video_duration", 0L)),
-                    vid = vid
+                    vid = vid,
+                    pixels = best.pixels,
+                    availableQualities = availableQualities
                 )
             } catch (_: Exception) {
                 // 尝试下一候选 URL
