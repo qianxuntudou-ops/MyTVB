@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果空态组件（2026-11-11 公用件）：图标 + 一句话 + 重试钮，替代灰字 + 裸 ProgressBar。
+     文案/重试回调由宿主页面接线（text_empty_msg / button_empty_retry）。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="@dimen/px40"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/image_empty"
+        android:src="@drawable/ic_hongguo_empty"
+        app:tint="@color/grey"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:layout_width="@dimen/px60"
+        android:layout_height="@dimen/px60"/>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_empty_msg"
+        android:text="@string/hongguo_empty"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/grey"
+        android:layout_marginTop="@dimen/px16"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/button_empty_retry"
+        android:text="@string/hongguo_retry"
+        android:textSize="@dimen/px24"
+        android:textColor="@color/hongguo_btn_text"
+        android:background="@drawable/bg_hongguo_btn_outline"
+        android:paddingStart="@dimen/px40"
+        android:paddingEnd="@dimen/px40"
+        android:layout_marginTop="@dimen/px20"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/px56"/>
+</LinearLayout>

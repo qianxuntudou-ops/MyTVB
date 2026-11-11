@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 我的页功能卡（2026-11-11 重设计）：图标+标题+数量徽标 / 最近 3 张封面小海报（带进度条）/
+     最近一条说明；未登录时显示虚线占位框。四入口（稍后再看/我的预约/本机收藏/观看历史）共用，
+     数据由 HongguoMinePage 填充。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:background="@drawable/bg_hongguo_fn_card"
+    android:focusable="true"
+    android:clickable="true"
+    android:paddingStart="@dimen/px22"
+    android:paddingTop="@dimen/px18"
+    android:paddingEnd="@dimen/px22"
+    android:paddingBottom="@dimen/px16"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/icon_fn"
+            android:layout_width="@dimen/px30"
+            android:layout_height="@dimen/px30"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_fn_title"
+            android:textSize="@dimen/px26"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textStyle="bold"
+            android:layout_marginStart="@dimen/px10"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_fn_count"
+            android:textSize="@dimen/px20"
+            android:textColor="@color/hongguo_on_accent"
+            android:background="@drawable/bg_hongguo_fn_count"
+            android:paddingStart="@dimen/px14"
+            android:paddingEnd="@dimen/px14"
+            android:layout_marginStart="@dimen/px10"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/row_fn_covers"
+        android:orientation="horizontal"
+        android:layout_marginTop="@dimen/px12"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/cover_fn_0"
+            android:scaleType="centerCrop"
+            android:layout_marginEnd="@dimen/px10"
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px70"/>
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/cover_fn_1"
+            android:scaleType="centerCrop"
+            android:layout_marginEnd="@dimen/px10"
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px70"/>
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/cover_fn_2"
+            android:scaleType="centerCrop"
+            android:layout_marginEnd="@dimen/px10"
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px70"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_fn_more"
+            android:textSize="@dimen/px26"
+            android:textColor="@color/grey"
+            android:gravity="center"
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px70"/>
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_fn_sub"
+        android:textSize="@dimen/px20"
+        android:textColor="@color/grey"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:layout_marginTop="@dimen/px10"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <!-- 未登录虚线占位（云端类入口） -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_fn_empty_login"
+        android:text="@string/hongguo_fn_empty_login"
+        android:textSize="@dimen/px20"
+        android:textColor="@color/grey"
+        android:gravity="center"
+        android:background="@drawable/bg_hongguo_fn_empty"
+        android:layout_marginTop="@dimen/px12"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/px70"/>
+</LinearLayout>

@@ -78,4 +78,12 @@
         android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
+
+    <!-- 封面货架覆盖层（2026-11-11 重设计）：我的页四入口进入，返回键收起 -->
+    <FrameLayout
+        android:id="@+id/container_hongguo_shelf"
+        android:background="?android:attr/windowBackground"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

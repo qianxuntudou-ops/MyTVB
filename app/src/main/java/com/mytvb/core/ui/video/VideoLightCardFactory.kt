@@ -175,9 +175,12 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private var typeBadgeText: String = ""
     private var typeBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
 
-    /** 左上角标位（红果榜单排名「第 N 名」等），贴卡片左上边缘（flush）。 */
+    /** 左上角标位（红果榜单排名等），贴卡片左上边缘（flush）。 */
     private var rankBadgeText: String = ""
     private var rankBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
+
+    /** 左上角标文字色（金银铜浅底配深字；默认白字兼容 B 站历史/直播路径）。 */
+    private var rankBadgeTextColor: Int = Color.WHITE
 
     /** 右上角标链（贴角）：季数标签「第 N 季」最贴角，状态标签在其左。 */
     private var seasonBadgeText: String = ""
@@ -252,6 +255,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         typeBadgeColor: Int = this.typeBadgeColor,
         rankBadgeText: CharSequence? = this.rankBadgeText,
         rankBadgeColor: Int = this.rankBadgeColor,
+        rankBadgeTextColor: Int = this.rankBadgeTextColor,
         seasonBadgeText: CharSequence? = this.seasonBadgeText,
         seasonBadgeColor: Int = this.seasonBadgeColor,
         statusBadgeText: CharSequence? = this.statusBadgeText,
@@ -271,6 +275,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
             this.typeBadgeColor == typeBadgeColor &&
             TextUtils.equals(this.rankBadgeText, nextRankBadge) &&
             this.rankBadgeColor == rankBadgeColor &&
+            this.rankBadgeTextColor == rankBadgeTextColor &&
             TextUtils.equals(this.seasonBadgeText, nextSeasonBadge) &&
             this.seasonBadgeColor == seasonBadgeColor &&
             TextUtils.equals(this.statusBadgeText, nextStatusBadge) &&
@@ -289,6 +294,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         this.typeBadgeColor = typeBadgeColor
         this.rankBadgeText = nextRankBadge
         this.rankBadgeColor = rankBadgeColor
+        this.rankBadgeTextColor = rankBadgeTextColor
         this.seasonBadgeText = nextSeasonBadge
         this.seasonBadgeColor = seasonBadgeColor
         this.statusBadgeText = nextStatusBadge
@@ -414,7 +420,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         val top = metrics.badgeTop.toFloat()
         // 左上 flush 角标（红果榜单排名/状态标签），贴卡片左上边缘
         if (rankBadgeText.isNotBlank()) {
-            drawBadgeFlushLeft(canvas, rankBadgeText, rankBadgeColor)
+            drawBadgeFlushLeft(canvas, rankBadgeText, rankBadgeColor, rankBadgeTextColor)
         }
         // 右上 flush 角标链：季数贴角，状态标签在其左；typeBadge（B站历史/直播）保持浮层位不变
         var flushRight = width.toFloat()
@@ -437,8 +443,8 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         }
     }
 
-    /** 左上贴角标签：左上/左下直角贴边，右侧两角圆角。 */
-    private fun drawBadgeFlushLeft(canvas: Canvas, text: String, color: Int) {
+    /** 左上贴角标签：左上/左下直角贴边，右侧两角圆角；[textColor] 支持浅底深字。 */
+    private fun drawBadgeFlushLeft(canvas: Canvas, text: String, color: Int, textColor: Int = Color.WHITE) {
         val fm = badgeTextPaint.fontMetrics
         val textWidth = badgeTextPaint.measureText(text)
         val w = textWidth + metrics.px8 * 2
@@ -455,7 +461,10 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         path.close()
         badgePaint.color = color
         canvas.drawPath(path, badgePaint)
+        // 右上角标链共用 badgeTextPaint，画完必须恢复白字防污染
+        badgeTextPaint.color = textColor
         canvas.drawText(text, metrics.px8.toFloat(), metrics.px3.toFloat() - fm.top, badgeTextPaint)
+        badgeTextPaint.color = Color.WHITE
     }
 
     /** 右上贴角标签：右上/右下直角贴边，左侧两角圆角；返回左边界（供链式排布）。 */

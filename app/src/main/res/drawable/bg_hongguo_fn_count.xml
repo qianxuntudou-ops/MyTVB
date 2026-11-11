@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 我的页功能卡数量徽标底：主题强调色实底胶囊（配 hongguo_on_accent 深字，随全局主题漂移）。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="?attr/colorAccent"/>
+    <corners android:radius="@dimen/px14"/>
+</shape>

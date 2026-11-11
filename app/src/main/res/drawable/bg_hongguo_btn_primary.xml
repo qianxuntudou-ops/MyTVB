@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果主行动按钮：主题强调色实底+深字，聚焦白描边内衬，禁用置灰（替代硬编码橙 hongguo_btn_play）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+
+    <item android:state_enabled="false">
+        <shape>
+            <solid android:color="#131317"/>
+            <stroke android:width="1dp" android:color="#2A2A31"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorAccent"/>
+            <stroke android:width="@dimen/px3" android:color="@color/white"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+
+    <item>
+        <shape>
+            <solid android:color="?attr/colorAccent"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+</selector>

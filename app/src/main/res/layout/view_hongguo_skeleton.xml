@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 首屏加载骨架（2026-11-11 公用件）：3 张竖版卡灰块位，宿主接 alpha 呼吸动画，替代裸 ProgressBar。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/skeleton_root"
+    android:gravity="center"
+    android:padding="@dimen/px30"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <View
+                android:background="@drawable/bg_hongguo_skeleton"
+                android:layout_marginEnd="@dimen/px16"
+                android:layout_width="@dimen/px135"
+                android:layout_height="@dimen/px170"/>
+            <View
+                android:background="@drawable/bg_hongguo_skeleton"
+                android:layout_marginEnd="@dimen/px16"
+                android:layout_width="@dimen/px135"
+                android:layout_height="@dimen/px170"/>
+            <View
+                android:background="@drawable/bg_hongguo_skeleton"
+                android:layout_width="@dimen/px135"
+                android:layout_height="@dimen/px170"/>
+        </LinearLayout>
+
+        <View
+            android:background="@drawable/bg_hongguo_skeleton"
+            android:layout_marginTop="@dimen/px12"
+            android:layout_width="@dimen/px135"
+            android:layout_height="@dimen/px24"/>
+        <View
+            android:background="@drawable/bg_hongguo_skeleton"
+            android:layout_marginTop="@dimen/px8"
+            android:layout_width="@dimen/px76"
+            android:layout_height="@dimen/px18"/>
+    </LinearLayout>
+</LinearLayout>

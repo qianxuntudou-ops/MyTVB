@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果两态按钮文字色：主钮=强调底深字；次钮=白字；禁用=灰（配合 bg_hongguo_btn_primary/outline）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:color="@color/grey"/>
+    <item android:color="@color/white"/>
+</selector>

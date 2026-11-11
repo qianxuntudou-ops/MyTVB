@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30px"
+    android:height="30px"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <!-- 本机收藏（心形）：白色 fill，风格对齐 watch_later/ic_history -->
+    <path
+        android:fillColor="#fff"
+        android:pathData="M64,28C57,17.5 44.5,12.5 33.5,16.5C20.5,21.2 13,34.5 13,47.5C13,63.8 23.5,78.5 35.5,90.5C47.5,102.5 60,111 64,113C68,111 80.5,102.5 92.5,90.5C104.5,78.5 115,63.8 115,47.5C115,34.5 107.5,21.2 94.5,16.5C83.5,12.5 71,17.5 64,28ZM64,44.5C70,34 79,29.5 87.5,32.6C95.6,35.6 101,43.6 101,52.5C101,64.6 92.7,76.4 82,87.1C74.1,95 66.3,101 64,103C61.7,101 53.9,95 46,87.1C35.3,76.4 27,64.6 27,52.5C27,43.6 32.4,35.6 40.5,32.6C49,29.5 58,34 64,44.5Z"/>
+</vector>

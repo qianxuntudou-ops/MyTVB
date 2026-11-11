@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MFA 短信上行指引提示卡：主题强调色 15% 浅底（layer-list item alpha，API23+），聚焦白描边。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+
+    <item android:state_focused="true">
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="@color/hongguo_card_face"/>
+                    <stroke android:width="@dimen/px3" android:color="@color/white"/>
+                    <corners android:radius="@dimen/px10"/>
+                </shape>
+            </item>
+            <item android:alpha="0.15">
+                <shape>
+                    <solid android:color="?attr/colorAccent"/>
+                    <corners android:radius="@dimen/px10"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+    <item>
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="@color/hongguo_card_face"/>
+                    <corners android:radius="@dimen/px10"/>
+                </shape>
+            </item>
+            <item android:alpha="0.15">
+                <shape>
+                    <solid android:color="?attr/colorAccent"/>
+                    <corners android:radius="@dimen/px10"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

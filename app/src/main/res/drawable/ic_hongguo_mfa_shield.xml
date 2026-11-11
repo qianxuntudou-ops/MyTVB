@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="26px"
+    android:height="26px"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- MFA 指引提示卡盾形图标（描边风） -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#fff"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M12,3L19,6L19,11C19,15.4 16,19.4 12,21C8,19.4 5,15.4 5,11L5,6Z"/>
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#fff"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M9,12L11,14L15,10"/>
+</vector>

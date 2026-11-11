@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果登录弹窗虚线粘贴框（2026-11-11 对齐设计稿 03·C paste-box）：
+     暗底（同输入框）+ 虚线描边；聚焦=白虚线（同 chip 聚焦白描边口径）。
+     描边 2dp 色 #5A5A64——1dp/#3A3A44 在弹窗暗底上断续不可见（用户反馈「没有边框」），
+     加暗底强化框存在感。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#0D0D10"/>
+            <stroke
+                android:width="@dimen/px2"
+                android:color="@color/white"
+                android:dashWidth="@dimen/px6"
+                android:dashGap="@dimen/px5"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D0D10"/>
+            <stroke
+                android:width="@dimen/px2"
+                android:color="#5A5A64"
+                android:dashWidth="@dimen/px6"
+                android:dashGap="@dimen/px5"/>
+            <corners android:radius="@dimen/px10"/>
+        </shape>
+    </item>
+</selector>

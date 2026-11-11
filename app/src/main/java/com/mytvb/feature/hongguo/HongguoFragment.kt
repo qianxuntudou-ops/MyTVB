@@ -51,19 +51,21 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         setupTabsAndViewPager()
         setupSearchEntry()
         observeTabSelected()
-        // 搜索层显示时 BACK 先收层，不退出红果页
+        // 搜索层/货架层显示时 BACK 先收层，不退出红果页
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
             object : androidx.activity.OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (searchShown) {
-                        hideSearchOverlay()
-                    } else {
-                        // 转发给 Activity 前先短暂停用自己，转发完必须恢复，
-                        // 否则回调永久失效，之后搜索层的 BACK 会穿透到退出链
-                        isEnabled = false
-                        requireActivity().onBackPressedDispatcher.onBackPressed()
-                        isEnabled = true
+                    when {
+                        searchShown -> hideSearchOverlay()
+                        shelfShown -> hideShelfOverlay()
+                        else -> {
+                            // 转发给 Activity 前先短暂停用自己，转发完必须恢复，
+                            // 否则回调永久失效，之后搜索层的 BACK 会穿透到退出链
+                            isEnabled = false
+                            requireActivity().onBackPressedDispatcher.onBackPressed()
+                            isEnabled = true
+                        }
                     }
                 }
             }
@@ -166,12 +168,42 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         binding.buttonHongguoSearch.requestFocus()
     }
 
+    // ---- 封面货架覆盖层（我的页四入口共用）----
+
+    private var shelfShown = false
+
+    /** 打开货架覆盖层（懒添加 HongguoShelfPage；复用实例时换数据源）。 */
+    fun showShelfOverlay(source: HongguoShelfPage.Source) {
+        if (shelfShown) return
+        shelfShown = true
+        binding.containerHongguoShelf.visibility = View.VISIBLE
+        val existing = childFragmentManager
+            .findFragmentById(R.id.container_hongguo_shelf) as? HongguoShelfPage
+        if (existing == null) {
+            childFragmentManager.beginTransaction()
+                .add(R.id.container_hongguo_shelf, HongguoShelfPage.newInstance(source))
+                .commitNowAllowingStateLoss()
+        } else {
+            existing.reopen(source)
+        }
+    }
+
+    fun hideShelfOverlay() {
+        if (!shelfShown) return
+        shelfShown = false
+        binding.containerHongguoShelf.visibility = View.GONE
+        // 焦点还原到我的页功能卡（focusFirstCard：已登录=稍后再看卡，未登录=登录钮）
+        val minePage = childFragmentManager.findFragmentByTag("f5") as? HongguoPageFocus
+        if (minePage?.focusFirstCard() != true) binding.tabLayout.focusSelectedTab()
+    }
+
     /** 列表卡片 UP 边缘的落点：回顶部 tab 栏（HongguoFeedPage 经 parentFragment 调用）。 */
     fun focusTopTab(): Boolean = binding.tabLayout.focusSelectedTab()
 
     override fun onDestroyView() {
         super.onDestroyView()
         searchShown = false
+        shelfShown = false
         _binding = null
     }
 

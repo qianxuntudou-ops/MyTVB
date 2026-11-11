@@ -1,5 +1,6 @@
 package com.mytvb.feature.hongguo
 
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -23,9 +24,11 @@ import kotlinx.coroutines.launch
 
 /**
  * 红果四板官方榜单（bookmall cell/change）：热播榜/真人榜/漫剧榜/AI剧榜。
- * 子板 tab 切换重开会话；滚动加载。
- * 2026-11-10 卡片迁移：横排行卡（cell_hongguo_rank）→ 统一竖版卡 + 排名角标
- * （金银铜配色，角标走 coverMetaOverlay.typeBadge，与推荐页同款观感与焦点视觉）。
+ * 子板切换重开会话；滚动/焦点触底加载。
+ * 2026-11-10 卡片迁移：横排行卡 → 统一竖版卡 + 排名角标。
+ * 2026-11-11 重设计：四板 RadioButton → 统一分段控件 [HongguoSegmentedTabs]；
+ * 前三名金银铜徽章（colors_hongguo 独立语义色）；首屏骨架替代裸 ProgressBar，
+ * 空态组件（图标+文案+重试）替代灰字；右侧榜单说明行。
  */
 class HongguoRankPage : Fragment(), HongguoPageFocus {
 
@@ -34,6 +37,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     private val repository by lazy { HongguoRepository.get(requireContext()) }
     private val adapter = HongguoDramaAdapter(onItemClick = ::openDetail)
     private var tvFocusController: TvListFocusController? = null
+    private var skeletonAnimator: ValueAnimator? = null
 
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
@@ -87,18 +91,21 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 if (lm.findLastVisibleItemPosition() >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
             }
         })
-        binding.tabRankBoards.setOnCheckedChangeListener { _, checkedId ->
-            val index = when (checkedId) {
-                R.id.radio_rank_real -> 1
-                R.id.radio_rank_comic -> 2
-                R.id.radio_rank_ai -> 3
-                else -> 0
-            }
+        // 四板统一分段控件：选中=主题强调色实底，聚焦=白描边（bg_hongguo_segment_tab）
+        binding.segmentRankBoards.setup(
+            titles = listOf(
+                getString(R.string.hongguo_rank_hot),
+                getString(R.string.hongguo_rank_real),
+                getString(R.string.hongguo_rank_comic),
+                getString(R.string.hongguo_rank_ai)
+            )
+        ) { index ->
             if (index != board) {
                 board = index
                 refresh()
             }
         }
+        binding.emptyRank.buttonEmptyRetry.setOnClickListener { refresh() }
         refresh()
     }
 
@@ -126,7 +133,8 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     private fun load() {
         if (loading) return
         loading = true
-        binding.progressRank.visibility = View.VISIBLE
+        // 首屏骨架（呼吸动画），翻页静默
+        if (adapter.contentCount() == 0) showSkeleton(true)
         loadJob?.cancel()
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
@@ -145,9 +153,34 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 AppToast.show(requireContext(), e.message ?: "榜单加载失败")
             } finally {
                 loading = false
-                binding.progressRank.visibility = View.GONE
+                showSkeleton(false)
+                syncEmptyState()
             }
         }
+    }
+
+    /** 骨架显隐 + alpha 呼吸动画（0.35↔1 循环）。 */
+    private fun showSkeleton(show: Boolean) {
+        binding.skeletonRank.root.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            if (skeletonAnimator == null) {
+                skeletonAnimator = ValueAnimator.ofFloat(0.35f, 1f).apply {
+                    duration = 900
+                    repeatCount = ValueAnimator.INFINITE
+                    repeatMode = ValueAnimator.REVERSE
+                    addUpdateListener { binding.skeletonRank.root.alpha = it.animatedValue as Float }
+                }
+            }
+            skeletonAnimator?.start()
+        } else {
+            skeletonAnimator?.cancel()
+            binding.skeletonRank.root.alpha = 1f
+        }
+    }
+
+    private fun syncEmptyState() {
+        val empty = !loading && adapter.contentCount() == 0
+        binding.emptyRank.root.visibility = if (empty) View.VISIBLE else View.GONE
     }
 
     private fun HongguoClient.Drama.toUi(rank: Int): DramaUi = DramaUi(
@@ -165,6 +198,8 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
 
     override fun onDestroyView() {
         loadJob?.cancel()
+        skeletonAnimator?.cancel()
+        skeletonAnimator = null
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()

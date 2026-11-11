@@ -1,230 +1,288 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果登录弹窗（TV 化）：顶部三页签（选中紫实底/聚焦高亮块）+ 三通道面板。
-     焦点链：页签 DOWN 落当前面板首控件；面板 UP 回页签；BACK 关弹窗（IME 先收）。 -->
+<!-- 红果登录弹窗（2026-11-11 重设计·对齐设计稿 03/03·B/03·C）：
+     标题行=「登录红果账号」+右上关闭钮；三页签=统一分段控件 HongguoSegmentedTabs；
+     输入框=暗底实线描边 bg_hongguo_input（聚焦白描边；勿复用 bg_search_input——
+     其非聚焦描边 dividerColor 在弹窗暗底上不可见）；导入=158 高虚线粘贴框；
+     扫码=左白底二维码卡+右侧说明列；按钮两态（主行动=强调色实底/次行动=描边钮/
+     倒计时置灰）；底部隐私说明行。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
-    android:paddingStart="@dimen/px40"
-    android:paddingTop="@dimen/px36"
-    android:paddingEnd="@dimen/px40"
-    android:paddingBottom="@dimen/px40"
+    android:background="@drawable/dialog_background"
+    android:paddingStart="@dimen/px30"
+    android:paddingTop="@dimen/px26"
+    android:paddingEnd="@dimen/px30"
+    android:paddingBottom="@dimen/px22"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <!-- 页签行（RadioGroup→TV 页签钮，ID 保留兼容代码） -->
+    <!-- 标题行 + 关闭钮（dlg-head） -->
     <LinearLayout
-        android:id="@+id/tab_login_channel"
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/radio_login_qr"
-            android:text="@string/hongguo_login_qr"
-            android:textSize="@dimen/px26"
-            android:background="@drawable/bg_hongguo_login_tab"
-            android:focusable="true"
-            android:clickable="true"
-            android:gravity="center"
-            android:layout_width="0dp"
+            android:text="@string/hongguo_login"
+            android:textSize="@dimen/px30"
+            android:textStyle="bold"
+            android:textColor="@color/textColor"
             android:layout_weight="1"
-            android:layout_height="@dimen/px64"/>
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"/>
 
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/radio_login_sms"
-            android:text="@string/hongguo_login_sms"
-            android:textSize="@dimen/px26"
-            android:background="@drawable/bg_hongguo_login_tab"
-            android:focusable="true"
-            android:clickable="true"
-            android:gravity="center"
-            android:layout_marginStart="@dimen/px16"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="@dimen/px64"/>
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/radio_login_import"
-            android:text="@string/hongguo_login_import"
-            android:textSize="@dimen/px26"
-            android:background="@drawable/bg_hongguo_login_tab"
-            android:focusable="true"
-            android:clickable="true"
-            android:gravity="center"
-            android:layout_marginStart="@dimen/px16"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="@dimen/px64"/>
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_login_close"
+            android:src="@drawable/ic_close"
+            android:tint="#8F8F98"
+            android:background="@drawable/bg_hongguo_close"
+            android:padding="@dimen/px10"
+            android:contentDescription="@string/hongguo_back"
+            android:layout_width="@dimen/px44"
+            android:layout_height="@dimen/px44"/>
     </LinearLayout>
+
+    <com.mytvb.feature.hongguo.HongguoSegmentedTabs
+        android:id="@+id/segment_login_channel"
+        android:layout_marginTop="@dimen/px20"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
 
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/px30">
+        android:layout_marginTop="@dimen/px22">
 
-        <!-- 扫码 -->
+        <!-- 扫码：左二维码白卡 + 右说明列（qr-panel） -->
         <LinearLayout
             android:id="@+id/panel_qr"
-            android:orientation="vertical"
-            android:gravity="center_horizontal"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/image_qr"
-                android:background="@color/white"
+                android:background="@drawable/bg_hongguo_qr_card"
                 android:padding="@dimen/px10"
-                android:layout_width="@dimen/px330"
-                android:layout_height="@dimen/px330"/>
+                android:layout_width="@dimen/px197"
+                android:layout_height="@dimen/px197"/>
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/text_qr_status"
-                android:text="@string/hongguo_qr_wait_scan"
-                android:textSize="@dimen/px26"
-                android:textColor="@color/grey"
-                android:layout_marginTop="@dimen/px20"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_marginStart="@dimen/px30"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content">
 
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/button_qr_refresh"
-                android:text="@string/hongguo_qr_refresh"
-                android:textSize="@dimen/px24"
-                android:textColor="@color/textColor"
-                android:background="@drawable/bg_owner_dialog_outline_button"
-                android:paddingStart="@dimen/px40"
-                android:paddingEnd="@dimen/px40"
-                android:layout_marginTop="@dimen/px16"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/px60"/>
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_qr_status"
+                    android:text="@string/hongguo_qr_wait_scan"
+                    android:textSize="@dimen/px26"
+                    android:textColor="@color/textColor"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_qr_ttl"
+                    android:text="@string/hongguo_qr_ttl"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/grey"
+                    android:layout_marginTop="@dimen/px8"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/button_qr_refresh"
+                    android:text="@string/hongguo_qr_refresh"
+                    android:textSize="@dimen/px24"
+                    android:textColor="@color/hongguo_btn_text"
+                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:paddingStart="@dimen/px26"
+                    android:paddingEnd="@dimen/px26"
+                    android:layout_marginTop="@dimen/px20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/px56"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- 短信 -->
+        <!-- 短信：label 定宽行式（in-row）+ 倒计时描边钮 + MFA 提示卡 -->
         <LinearLayout
             android:id="@+id/panel_sms"
             android:orientation="vertical"
-            android:gravity="center_horizontal"
             android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
-            <androidx.appcompat.widget.AppCompatEditText
-                android:id="@+id/edit_phone"
-                android:background="@drawable/bg_search_input"
-                android:focusable="true"
-                android:singleLine="true"
-                android:inputType="phone"
-                android:hint="@string/hongguo_phone_hint"
-                android:textSize="@dimen/px28"
-                android:textColorHint="@color/grey"
-                android:paddingStart="@dimen/px24"
-                android:paddingEnd="@dimen/px24"
-                android:layout_width="@dimen/px600"
-                android:layout_height="@dimen/px70"/>
+            <LinearLayout
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:text="@string/hongguo_label_phone"
+                    android:textSize="@dimen/px24"
+                    android:textColor="@color/grey"
+                    android:layout_width="@dimen/px96"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatEditText
+                    android:id="@+id/edit_phone"
+                    android:background="@drawable/bg_hongguo_input"
+                    android:focusable="true"
+                    android:singleLine="true"
+                    android:inputType="phone"
+                    android:hint="@string/hongguo_phone_hint"
+                    android:textSize="@dimen/px24"
+                    android:textColorHint="@color/grey"
+                    android:paddingStart="@dimen/px20"
+                    android:paddingEnd="@dimen/px20"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="@dimen/px56"/>
+            </LinearLayout>
 
             <LinearLayout
                 android:orientation="horizontal"
-                android:layout_marginTop="@dimen/px20"
                 android:gravity="center_vertical"
-                android:layout_width="@dimen/px600"
+                android:layout_marginTop="@dimen/px8"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:text="@string/hongguo_label_code"
+                    android:textSize="@dimen/px24"
+                    android:textColor="@color/grey"
+                    android:layout_width="@dimen/px96"
+                    android:layout_height="wrap_content"/>
 
                 <androidx.appcompat.widget.AppCompatEditText
                     android:id="@+id/edit_sms_code"
-                    android:background="@drawable/bg_search_input"
+                    android:background="@drawable/bg_hongguo_input"
                     android:focusable="true"
                     android:singleLine="true"
                     android:inputType="number"
                     android:hint="@string/hongguo_code_hint"
-                    android:textSize="@dimen/px28"
+                    android:textSize="@dimen/px24"
                     android:textColorHint="@color/grey"
-                    android:paddingStart="@dimen/px24"
-                    android:paddingEnd="@dimen/px24"
+                    android:paddingStart="@dimen/px20"
+                    android:paddingEnd="@dimen/px20"
                     android:layout_width="0dp"
                     android:layout_weight="1"
-                    android:layout_height="@dimen/px70"/>
+                    android:layout_height="@dimen/px56"/>
 
                 <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/button_send_code"
                     android:text="@string/hongguo_send_code"
-                    android:textSize="@dimen/px24"
-                    android:textColor="@color/textColor"
-                    android:background="@drawable/bg_owner_dialog_outline_button"
-                    android:paddingStart="@dimen/px24"
-                    android:paddingEnd="@dimen/px24"
-                    android:layout_marginStart="@dimen/px16"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/hongguo_btn_text"
+                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:paddingStart="@dimen/px20"
+                    android:paddingEnd="@dimen/px20"
+                    android:layout_marginStart="@dimen/px10"
                     android:layout_width="wrap_content"
-                    android:layout_height="@dimen/px70"/>
+                    android:layout_height="@dimen/px56"/>
+            </LinearLayout>
+
+            <!-- MFA 短信上行指引：浅底提示卡，无 MFA 时不渲染（登录钮上移） -->
+            <LinearLayout
+                android:id="@+id/card_mfa"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_hongguo_mfa_card"
+                android:paddingStart="@dimen/px14"
+                android:paddingEnd="@dimen/px14"
+                android:layout_marginTop="@dimen/px8"
+                android:visibility="gone"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/px72">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:src="@drawable/ic_hongguo_mfa_shield"
+                    app:tint="?attr/colorAccent"
+                    xmlns:app="http://schemas.android.com/apk/res-auto"
+                    android:layout_width="@dimen/px28"
+                    android:layout_height="@dimen/px28"/>
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_mfa_tip"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/textColor"
+                    android:layout_marginStart="@dimen/px12"
+                    android:layout_weight="1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/button_mfa_sent"
+                    android:text="@string/hongguo_mfa_sent"
+                    android:textSize="@dimen/px24"
+                    android:textColor="@color/hongguo_primary_btn_text"
+                    android:background="@drawable/bg_hongguo_btn_primary"
+                    android:paddingStart="@dimen/px22"
+                    android:paddingEnd="@dimen/px22"
+                    android:layout_marginStart="@dimen/px12"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/px48"/>
             </LinearLayout>
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/button_sms_login"
                 android:text="@string/hongguo_sms_login"
                 android:textSize="@dimen/px26"
-                android:textColor="@color/white"
-                android:background="@drawable/hongguo_btn_play"
-                android:paddingStart="@dimen/px80"
-                android:paddingEnd="@dimen/px80"
-                android:layout_marginTop="@dimen/px30"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/px70"/>
-
-            <!-- MFA 短信上行二次验证（服务端要求用户主动发短信验证） -->
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/text_mfa_tip"
-                android:textSize="@dimen/px24"
-                android:textColor="?android:attr/textColorPrimary"
-                android:gravity="center"
-                android:layout_marginTop="@dimen/px24"
-                android:visibility="gone"
-                android:layout_width="@dimen/px650"
-                android:layout_height="wrap_content"/>
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/button_mfa_sent"
-                android:text="@string/hongguo_mfa_sent"
-                android:textSize="@dimen/px24"
-                android:textColor="@color/white"
-                android:background="@drawable/hongguo_btn_play"
-                android:paddingStart="@dimen/px60"
-                android:paddingEnd="@dimen/px60"
-                android:layout_marginTop="@dimen/px16"
-                android:visibility="gone"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/px64"/>
+                android:textColor="@color/hongguo_primary_btn_text"
+                android:background="@drawable/bg_hongguo_btn_primary"
+                android:layout_marginTop="@dimen/px8"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/px56"/>
         </LinearLayout>
 
-        <!-- 导入 -->
+        <!-- 导入：通栏虚线粘贴框（paste-box）+ 格式说明行 + 主行动钮 -->
         <LinearLayout
             android:id="@+id/panel_import"
             android:orientation="vertical"
-            android:gravity="center_horizontal"
             android:visibility="gone"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
             <androidx.appcompat.widget.AppCompatEditText
                 android:id="@+id/edit_import"
-                android:background="@drawable/bg_search_input"
+                android:background="@drawable/bg_hongguo_paste_box"
+                android:layerType="software"
                 android:focusable="true"
-                android:singleLine="true"
+                android:inputType="textMultiLine"
                 android:hint="@string/hongguo_login_import_hint"
-                android:textSize="@dimen/px26"
+                android:fontFamily="monospace"
+                android:textSize="@dimen/px20"
+                android:textColor="@color/textColor"
                 android:textColorHint="@color/grey"
-                android:paddingStart="@dimen/px24"
-                android:paddingEnd="@dimen/px24"
-                android:layout_width="@dimen/px700"
-                android:layout_height="@dimen/px70"/>
+                android:gravity="top"
+                android:paddingStart="@dimen/px18"
+                android:paddingTop="@dimen/px12"
+                android:paddingEnd="@dimen/px18"
+                android:paddingBottom="@dimen/px12"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/px158"/>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/text_import_note"
+                android:text="@string/hongguo_login_import_note"
+                android:textSize="@dimen/px20"
+                android:textColor="@color/grey"
+                android:layout_marginTop="@dimen/px10"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/button_import"
                 android:text="@string/hongguo_login_import"
                 android:textSize="@dimen/px26"
-                android:textColor="@color/white"
-                android:background="@drawable/hongguo_btn_play"
-                android:paddingStart="@dimen/px80"
-                android:paddingEnd="@dimen/px80"
-                android:layout_marginTop="@dimen/px30"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/px70"/>
+                android:textColor="@color/hongguo_primary_btn_text"
+                android:background="@drawable/bg_hongguo_btn_primary"
+                android:layout_marginTop="@dimen/px10"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/px56"/>
         </LinearLayout>
 
         <ProgressBar
@@ -234,4 +292,14 @@
             android:layout_width="@dimen/px60"
             android:layout_height="@dimen/px60"/>
     </FrameLayout>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_login_privacy"
+        android:text="@string/hongguo_login_privacy"
+        android:textSize="@dimen/px20"
+        android:textColor="@color/grey"
+        android:gravity="center"
+        android:layout_marginTop="@dimen/px14"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
 </LinearLayout>

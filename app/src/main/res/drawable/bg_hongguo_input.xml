@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果登录弹窗输入框（2026-11-11 对齐设计稿 03·B in-field）：
+     暗底 + 实线描边；聚焦=白描边（同 chip 聚焦口径）。
+     勿复用 bg_search_input：其非聚焦描边是 dividerColor，在弹窗暗底上不可见。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#0D0D10"/>
+            <stroke android:width="@dimen/px3" android:color="@color/white"/>
+            <corners android:radius="@dimen/px8"/>
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D0D10"/>
+            <stroke android:width="1dp" android:color="#3A3A44"/>
+            <corners android:radius="@dimen/px8"/>
+        </shape>
+    </item>
+</selector>

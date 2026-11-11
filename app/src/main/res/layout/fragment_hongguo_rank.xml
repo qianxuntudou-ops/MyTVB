@@ -1,50 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 红果榜单页（2026-11-11 重设计）：四板换统一分段控件（HongguoSegmentedTabs，
+     替代原生 RadioButton）+ 右侧说明行；网格/骨架/空态三态互斥。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <RadioGroup
-        android:id="@+id/tab_rank_boards"
+    <LinearLayout
         android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:paddingStart="@dimen/px30"
         android:paddingEnd="@dimen/px30"
         android:paddingTop="@dimen/px16"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <androidx.appcompat.widget.AppCompatRadioButton
-            android:id="@+id/radio_rank_hot"
-            android:text="@string/hongguo_rank_hot"
-            android:textSize="@dimen/px26"
-            android:layout_marginEnd="@dimen/px30"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:checked="true"/>
-
-        <androidx.appcompat.widget.AppCompatRadioButton
-            android:id="@+id/radio_rank_real"
-            android:text="@string/hongguo_rank_real"
-            android:textSize="@dimen/px26"
-            android:layout_marginEnd="@dimen/px30"
-            android:layout_width="wrap_content"
+        <com.mytvb.feature.hongguo.HongguoSegmentedTabs
+            android:id="@+id/segment_rank_boards"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"/>
 
-        <androidx.appcompat.widget.AppCompatRadioButton
-            android:id="@+id/radio_rank_comic"
-            android:text="@string/hongguo_rank_comic"
-            android:textSize="@dimen/px26"
-            android:layout_marginEnd="@dimen/px30"
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_rank_note"
+            android:text="@string/hongguo_rank_note"
+            android:textSize="@dimen/px20"
+            android:textColor="@color/grey"
+            android:layout_marginStart="@dimen/px24"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
-
-        <androidx.appcompat.widget.AppCompatRadioButton
-            android:id="@+id/radio_rank_ai"
-            android:text="@string/hongguo_rank_ai"
-            android:textSize="@dimen/px26"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-    </RadioGroup>
+    </LinearLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -58,21 +43,19 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
 
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_rank_empty"
-            android:text="@string/hongguo_empty"
-            android:textSize="@dimen/px30"
-            android:textColor="@color/grey"
-            android:layout_gravity="center"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"/>
+        <include
+            android:id="@+id/skeleton_rank"
+            layout="@layout/view_hongguo_skeleton"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
 
-        <ProgressBar
-            android:id="@+id/progress_rank"
+        <include
+            android:id="@+id/empty_rank"
+            layout="@layout/view_hongguo_empty"
             android:layout_gravity="center"
-            android:layout_width="@dimen/px50"
-            android:layout_height="@dimen/px50"
-            android:visibility="gone"/>
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
     </FrameLayout>
 </LinearLayout>

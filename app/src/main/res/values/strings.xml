@@ -86,6 +86,9 @@
     <string name="hongguo_entry">红果短剧入口</string>
     <string name="hongguo_recommend_gender">推荐受众</string>
     <string name="hongguo_search_source">搜索源</string>
+    <string name="hongguo_quality">默认画质</string>
+    <string name="hongguo_quality_pick">切换画质</string>
+    <string name="hongguo_quality_single">当前剧集仅提供 %1$s 画质</string>
     <string name="hongguo_tab_recommend">推荐</string>
     <string name="hongguo_tab_history">历史</string>
     <string name="hongguo_tab_favorite">收藏</string>
@@ -117,8 +120,10 @@
     <string name="hongguo_login_sms">短信登录</string>
     <string name="hongguo_login_import">导入账号</string>
     <string name="hongguo_login_import_hint">粘贴官方 App 的 cookieStore.xml 全文，或一个 sessionid</string>
+    <string name="hongguo_label_phone">手机号</string>
+    <string name="hongguo_label_code">验证码</string>
     <string name="hongguo_phone_hint">请输入手机号</string>
-    <string name="hongguo_code_hint">验证码</string>
+    <string name="hongguo_code_hint">6 位验证码</string>
     <string name="hongguo_send_code">发送验证码</string>
     <string name="hongguo_code_sent">验证码已发送</string>
     <string name="hongguo_sms_login">登录</string>
@@ -135,6 +140,30 @@
     <string name="hongguo_filter_all">全部</string>
     <string name="hongguo_search_no_result">没有找到相关短剧</string>
     <string name="hongguo_search_retry">换个词试试</string>
+    <!-- 2026-11-11 重设计第一波（榜单/登录/我的页/货架） -->
+    <string name="hongguo_rank_note">基于热度综合排序 · 每日更新</string>
+    <string name="hongguo_retry">重试</string>
+    <string name="hongguo_back">返回</string>
+    <string name="hongguo_cloud_sync_on">云同步已开启</string>
+    <string name="hongguo_mine_stats">本机收藏 %1$d 部 · 历史 %2$d 条</string>
+    <string name="hongguo_login_sync_hint">登录后同步云端数据</string>
+    <string name="hongguo_fn_empty_login">登录后展示</string>
+    <string name="hongguo_fn_empty_local">仍可查看本机记录</string>
+    <string name="hongguo_fn_sub_recent">最近：%1$s</string>
+    <string name="hongguo_fn_sub_last">上次看到：%1$s</string>
+    <string name="hongguo_fn_sub_sync">与账号云同步中</string>
+    <string name="hongguo_fn_sub_online_done">已上线：%1$s</string>
+    <string name="hongguo_fn_sub_online_wait">待上线：%1$s</string>
+    <string name="hongguo_seen_episode">看到 %1$d/%2$d 集</string>
+    <string name="hongguo_seen_done">已看完</string>
+    <string name="hongguo_shelf_count">共 %1$d 条</string>
+    <string name="hongguo_subscribe_online_at">%1$s 上线</string>
+    <string name="hongguo_subscribe_pending">上线时间待定</string>
+    <string name="hongguo_login_privacy">登录后收藏与观看记录将与账号同步；不登录也可正常观看，记录仅保存在本机</string>
+    <string name="hongguo_resend_code">重新发送 %1$d 秒</string>
+    <string name="hongguo_mfa_tip">需要短信上行验证：请编辑短信「%1$s」发送到 %2$s，完成后点击右侧按钮</string>
+    <string name="hongguo_login_import_note">支持三种输入：cookieStore.xml 导出 · 32 位 token hex · 原始 cookie 串</string>
+    <string name="hongguo_qr_ttl">二维码 60 秒有效 · 过期自动刷新</string>
     <string name="hongguo_play_encrypted">本集为加密流</string>
     <string name="hongguo_play_bytevc2">本集仅提供 ByteVC2 编码，暂不支持</string>
     <string name="setting_group_teen_time">时间限制</string>
@@ -573,6 +602,7 @@
 
     <!-- ===== 多语言：设置项存储值显示映射（存储值保持中文字面量，仅显示层翻译） ===== -->
     <string name="setting_value_auto">自动</string>
+    <string name="setting_value_default">默认</string>
     <string name="setting_value_low">低</string>
     <string name="setting_value_medium">中</string>
     <string name="setting_value_high">高</string>

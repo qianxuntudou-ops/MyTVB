@@ -22,9 +22,9 @@ data class DramaUi(
     val subtitle: String = "",
     /** 封面观看进度（0-100），>0 时画进度条。 */
     val progressPercent: Int = 0,
-    /** 榜单排名（>0 时左上角标「第 N 名」，橙底白字）；无排名时左上显示 [statusTag]。 */
+    /** 榜单排名（>0 时左上纯数字徽章：前三名★+金银铜，第 4 起主题色）；无排名时左上显示 [statusTag]。 */
     val rank: Int = 0,
-    /** 状态标签（爆剧/新剧…），左上角标位，rank 优先。 */
+    /** 状态标签（爆剧/新剧…），rank=0 时占左上；rank>0 时仅「新剧」保留在右上（上新提示）。 */
     val statusTag: String = "",
     /** 封面底部左侧热度（如「965万」，压渐变白字）。 */
     val heatText: String = "",
@@ -43,7 +43,9 @@ data class DramaUi(
  */
 class HongguoDramaAdapter(
     /** position 供页面记录来源卡片（播放器返回后焦点恢复兜底）。 */
-    private val onItemClick: (DramaUi, Int) -> Unit
+    private val onItemClick: (DramaUi, Int) -> Unit,
+    /** 固定卡宽（px）：网格页留空由 LayoutManager 均分；货架页横滑单行必须给定（卡根默认 MATCH_PARENT，横向列表会撑满整屏宽）。 */
+    private val itemWidthPx: Int? = null
 ) : BaseVideoAdapter<DramaUi, HongguoDramaAdapter.ViewHolder>() {
 
     override fun itemKey(item: DramaUi): String = item.seriesId
@@ -73,6 +75,11 @@ class HongguoDramaAdapter(
                 parent = parent,
                 source = "HongguoDramaAdapter.light",
                 coverRatio = VideoCardCoverRatio.POSTER_4_5
+            )
+        }
+        itemWidthPx?.let { width ->
+            views.root.layoutParams = ViewGroup.LayoutParams(
+                width, ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
         return ViewHolder(views)
@@ -127,20 +134,34 @@ class HongguoDramaAdapter(
             val hasCoverMeta = item.rank > 0 || item.statusTag.isNotBlank() ||
                 item.heatText.isNotBlank() || item.episodeCount > 0 || item.seasonText.isNotBlank()
             if (hasCoverMeta) {
-                // 对齐红果官方卡：左上 flush 角标板——排名（橙底白字）优先，无排名显状态标签
-                // （爆剧红橙/新剧绿/其他紫）；右上 flush 角标链——状态标签在其左、季数贴角；
-                // 底部左热度、右共 N 集（压渐变白字）
-                val (leftText, leftColor) = if (item.rank > 0) {
-                    "第${item.rank}名" to 0xFFFF5C1F.toInt()
+                // 槽位口径（2026-11-11 重设计定案①③）：左上=名次/状态二选一，右上=季/更新，
+                // 底部左热度右集数（去「共」字）。名次徽章纯数字保障与右上角标并列不超卡宽；
+                // 前三名金银铜浅底深字（独立语义色），第 4 名起主题强调色底深字。
+                // 状态标（爆剧/漫剧紫）让位给名次徽章：榜单卡右上仅保留「新剧」（上新提示语义），
+                // 其余状态只用于非榜单场景（rank=0 的 feed/搜索/我的页）。
+                val ctx = views.root.context
+                val accent = com.google.android.material.color.MaterialColors.getColor(
+                    views.root, androidx.appcompat.R.attr.colorAccent
+                )
+                val gold = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_gold)
+                val silver = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_silver)
+                val bronze = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_bronze)
+                val (leftText, leftColor, leftTextColor) = if (item.rank > 0) {
+                    when (item.rank) {
+                        1 -> Triple("★1", gold, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_gold))
+                        2 -> Triple("★2", silver, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_silver))
+                        3 -> Triple("★3", bronze, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_bronze))
+                        else -> Triple(item.rank.toString(), accent, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_on_accent))
+                    }
                 } else {
                     when (item.statusTag) {
-                        "爆剧" -> item.statusTag to 0xFFFF4D26.toInt()
-                        "新剧" -> item.statusTag to 0xFF3FA45B.toInt()
-                        "" -> "" to 0x66000000.toInt()
-                        else -> item.statusTag to 0xFF6A5AE0.toInt()
+                        "爆剧" -> Triple(item.statusTag, 0xFFFF4D26.toInt(), android.graphics.Color.WHITE)
+                        "新剧" -> Triple(item.statusTag, 0xFF3FA45B.toInt(), android.graphics.Color.WHITE)
+                        "" -> Triple("", 0x66000000.toInt(), android.graphics.Color.WHITE)
+                        else -> Triple(item.statusTag, 0xFF6A5AE0.toInt(), android.graphics.Color.WHITE)
                     }
                 }
-                val statusTaken = item.rank > 0
+                val rightStatus = if (item.rank > 0 && item.statusTag == "新剧") item.statusTag else ""
                 views.coverMetaOverlay.visibility = View.VISIBLE
                 views.coverMetaOverlay.bind(
                     playCountText = item.heatText,
@@ -148,17 +169,14 @@ class HongguoDramaAdapter(
                     showDanmakuCount = false,
                     showInteractionBadge = false,
                     showChargeBadge = false,
-                    durationText = if (item.episodeCount > 0) "共${item.episodeCount}集" else "",
+                    durationText = if (item.episodeCount > 0) "${item.episodeCount}集" else "",
                     rankBadgeText = leftText,
                     rankBadgeColor = leftColor,
+                    rankBadgeTextColor = leftTextColor,
                     seasonBadgeText = item.seasonText,
                     seasonBadgeColor = 0x66000000.toInt(),
-                    statusBadgeText = if (statusTaken) item.statusTag else "",
-                    statusBadgeColor = when (item.statusTag) {
-                        "爆剧" -> 0xFFFF4D26.toInt()
-                        "新剧" -> 0xFF3FA45B.toInt()
-                        else -> 0x66000000.toInt()
-                    }
+                    statusBadgeText = rightStatus,
+                    statusBadgeColor = if (rightStatus == "新剧") 0xFF3FA45B.toInt() else 0x66000000.toInt()
                 )
             } else {
                 views.coverMetaOverlay.visibility = View.GONE
