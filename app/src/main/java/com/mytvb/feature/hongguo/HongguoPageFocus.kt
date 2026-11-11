@@ -6,4 +6,10 @@ package com.mytvb.feature.hongguo
  */
 interface HongguoPageFocus {
     fun focusFirstCard(): Boolean
+
+    /**
+     * 卡片 UP 的中间层落点：筛选 chip 行/榜单分段/分类子档 tab 等二级 tab。
+     * 无二级 tab 的页（历史/收藏/我的）用默认 false，卡片 UP 直接回顶部一级 tab。
+     */
+    fun focusSecondaryTab(): Boolean = false
 }

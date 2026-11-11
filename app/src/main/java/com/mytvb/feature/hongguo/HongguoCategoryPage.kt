@@ -9,7 +9,10 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import com.mytvb.core.ui.tab.enableTouchNavigation
+import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoCategoryBinding
+import com.mytvb.ui.activity.MainActivity
 
 /** 红果分类页：全部/漫剧/AI剧 三子档（landpage genre 切换）。 */
 class HongguoCategoryPage : Fragment(), HongguoPageFocus {
@@ -30,13 +33,42 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
         binding.viewPager.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount(): Int = genres.size
             override fun createFragment(position: Int): Fragment =
-                HongguoFeedPage.newInstance(HongguoFeedPage.MODE_FEED, genres[position].second)
+                HongguoFeedPage.newInstance(HongguoFeedPage.MODE_FEED, genres[position].second).apply {
+                    // 子档页卡片/筛选行 UP 的顶部落点=本页子档 tab（非宿主一级 tab）
+                    topEdgeExit = { focusGenreTab() }
+                }
         }
         binding.viewPager.isUserInputEnabled = false
         TabLayoutMediator(binding.tabGenre, binding.viewPager) { tab, position ->
             tab.text = genres[position].first
         }.attach()
+        // 子档 tab 焦点导航：UP 回红果一级 tab、DOWN 落当前子档第一张卡、LEFT 到侧栏
+        // （用 enableTouchNavigation：OK 键瞬切+滑入，与一级 tab 同款；再关掉触摸滑动）
+        binding.tabGenre.enableTouchNavigation(
+            viewPager = binding.viewPager,
+            onNavigateUp = ::focusHostTopTab,
+            onNavigateDown = { focusFirstCard() },
+            onNavigateLeft = { (activity as? MainActivity)?.focusSidebarCurrentTab() == true },
+            // 右边缘无去处，吞键停住（放行会被 FocusFinder 几何搜索送到不可预期位置）
+            onNavigateRight = { true }
+        )
+        binding.viewPager.isUserInputEnabled = false
     }
+
+    /** 子档 tab（二级）：卡片/筛选行 UP 的顶部落点。 */
+    private fun focusGenreTab(): Boolean {
+        val b = _binding ?: return false
+        return b.tabGenre.focusSelectedTab()
+    }
+
+    /** 子档 tab UP 的逃逸：宿主红果一级 tab。 */
+    private fun focusHostTopTab(): Boolean {
+        val host = parentFragment as? HongguoFragment ?: return false
+        return host.focusTopTab()
+    }
+
+    /** 一级 tab DOWN / 卡片 UP 的二级 tab 落点：分类子档 tab。 */
+    override fun focusSecondaryTab(): Boolean = focusGenreTab()
 
     /** 侧栏 RIGHT / 红果 tab DOWN 的落点：当前子档第一张卡片。 */
     override fun focusFirstCard(): Boolean {

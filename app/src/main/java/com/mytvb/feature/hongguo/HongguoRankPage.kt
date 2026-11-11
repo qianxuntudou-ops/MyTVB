@@ -67,7 +67,10 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 false
             )
         )
-        adapter.bindTopEdgeUp { focusTopTab() }
+        // 卡片第一行 UP 先回二级分段 tab，再 UP 才回一级 tab（无卡时可聚焦态直接走 focusTopTab）
+        adapter.bindTopEdgeUp {
+            binding.segmentRankBoards.focusSelectedTab() || focusTopTab()
+        }
         adapter.setOnItemFocusListeners(
             onFocused = { position ->
                 if (position >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
@@ -106,7 +109,18 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             }
         }
         binding.emptyRank.buttonEmptyRetry.setOnClickListener { refresh() }
+        // 分段控件竖向逃逸：UP 回一级 tab、DOWN 落第一张卡
+        binding.segmentRankBoards.bindVerticalNavigation(
+            onNavigateUp = ::focusTopTab,
+            onNavigateDown = { focusFirstCard() }
+        )
         refresh()
+    }
+
+    /** 外部/卡片 UP 的二级 tab 落点：榜单四板分段控件。 */
+    override fun focusSecondaryTab(): Boolean {
+        if (_binding == null) return false
+        return binding.segmentRankBoards.focusSelectedTab()
     }
 
     private fun focusTopTab(): Boolean {

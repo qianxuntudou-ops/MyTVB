@@ -51,6 +51,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     /** 打开详情时的卡片位置：播放器返回后焦点恢复的兜底（触摸模式无锚点可用）。 */
     private var lastOpenedPosition = RecyclerView.NO_POSITION
 
+    /**
+     * 卡片/筛选行 UP 越过本页二级 tab（筛选行）后的顶部落点钩子：
+     * 独立页（推荐/历史/收藏）默认 null=宿主红果一级 tab；分类页子档注入"回分类子档 tab"。
+     */
+    var topEdgeExit: (() -> Boolean)? = null
+
     // ---- 筛选面板（selector_rows） ----
     private val filterAdapter = FilterChipAdapter()
     private var selectorRows: List<HongguoClient.SelectorRow> = emptyList()
@@ -80,7 +86,8 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 false
             )
         )
-        adapter.bindTopEdgeUp(::focusTopTab)
+        // 卡片第一行 UP：筛选行可见先回筛选行（二级 tab），再 UP 经 topEdgeExit 回顶部 tab
+        adapter.bindTopEdgeUp { focusAboveContent() }
         adapter.setOnItemFocusListeners(
             onFocused = { position ->
                 if (position >= adapter.contentCount() - LOAD_MORE_THRESHOLD) {
@@ -122,6 +129,22 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         return host.focusTopTab()
     }
 
+    /** 卡片第一行 UP 的落点：筛选行可见先回筛选行（二级 tab），否则顶部 tab。 */
+    private fun focusAboveContent(): Boolean {
+        if (focusSecondaryTab()) return true
+        return topEdgeExit?.invoke() ?: focusTopTab()
+    }
+
+    /** 二级 tab 落点：筛选 chip 行（仅在线 feed 有 selector_rows 时可见）。 */
+    override fun focusSecondaryTab(): Boolean {
+        if (_binding == null || binding.recyclerFilters.visibility != View.VISIBLE) return false
+        // 优先回用户当前选中的筛选维度 chip，无选中维度落第一枚
+        val selectedPos = selectorRows.indexOfFirst { selectedFilters.containsKey(it.type) }
+        val holder = binding.recyclerFilters
+            .findViewHolderForAdapterPosition(if (selectedPos >= 0) selectedPos else 0)
+        return holder?.itemView?.requestFocus() == true
+    }
+
     /** 侧栏 RIGHT / tab DOWN 的入口：聚焦第一张卡片（TvListFocusController 统一走）。 */
     override fun focusFirstCard(): Boolean {
         if (!isAdded || view == null) return false
@@ -131,6 +154,17 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private fun openDetail(item: DramaUi, position: Int) {
         lastOpenedPosition = position
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+    }
+
+    /** 焦点是否落在 tab 行（一级页签 TabLayout / 分类子档 tab / 榜单分段控件）。 */
+    private fun isFocusInsideTabBar(): Boolean {
+        var cur = view?.rootView?.findFocus() ?: return false
+        while (true) {
+            if (cur is com.google.android.material.tabs.TabLayout || cur is HongguoSegmentedTabs) {
+                return true
+            }
+            cur = cur.parent as? View ?: return false
+        }
     }
 
     private fun refresh(mode: String, genre: String) {
@@ -263,6 +297,19 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                     ?: getString(R.string.hongguo_filter_all)
                 text.text = "${row.name}·$selectedName"
                 text.isSelected = selectedId != null
+                // 筛选 chip 竖向逃逸：UP 直接回顶部 tab（topEdgeExit 分流分类页子档），
+                // DOWN 落第一张卡；左右走横向列表框架自然导航
+                text.setOnKeyListener { _, keyCode, event ->
+                    if (event.action != android.view.KeyEvent.ACTION_DOWN) {
+                        return@setOnKeyListener false
+                    }
+                    when (keyCode) {
+                        android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                            topEdgeExit?.invoke() ?: focusTopTab()
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstCard()
+                        else -> false
+                    }
+                }
                 text.setOnClickListener {
                     val names = listOf(getString(R.string.hongguo_filter_all)) + row.items.map { it.name }
                     val current = if (selectedId == null) 0
@@ -313,6 +360,11 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     override fun onResume() {
         super.onResume()
         val controller = tvFocusController ?: return
+        // ViewPager2 换页同样触发 onResume：此时焦点属 tab 行（用户正在 tab 上切页），
+        // 而 restoreFocusAfterReturn 会把焦点从 tab 强拉回锚点卡片、随后又被 TabLayout
+        // 的切页校正抢回——正是「切 tab 焦点先闪到卡片再回 tab」的根源。
+        // 焦点在 tab 行时跳过恢复，恢复逻辑只服务播放器/弹窗返回场景。
+        if (isFocusInsideTabBar()) return
         // 从播放器/弹窗返回：锚点恢复优先；触摸模式无锚点时退回打开详情时的卡片
         controller.restoreFocusAfterReturn(
             onFailed = {
