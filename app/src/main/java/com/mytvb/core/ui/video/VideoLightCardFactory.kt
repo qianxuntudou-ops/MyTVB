@@ -443,14 +443,15 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         val textWidth = badgeTextPaint.measureText(text)
         val w = textWidth + metrics.px8 * 2
         val h = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
-        val r = metrics.badgeRadius.toFloat()
+        // 对角圆角设计：左上圆（对齐封面圆角，盖在封面上不突出直角）+ 右下圆；右上/左下直角贴边
+        val r = metrics.badgeFlushRadius.toFloat().coerceAtMost(h / 2f)
         val path = Path()
-        path.moveTo(0f, 0f)
+        path.moveTo(0f, r)
+        path.quadTo(0f, 0f, r, 0f)
         path.lineTo(w, 0f)
         path.lineTo(w, h - r)
         path.quadTo(w, h, w - r, h)
-        path.lineTo(r, h)
-        path.quadTo(0f, h, 0f, h - r)
+        path.lineTo(0f, h)
         path.close()
         badgePaint.color = color
         canvas.drawPath(path, badgePaint)
@@ -464,19 +465,20 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         val w = textWidth + metrics.px8 * 2
         val h = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
         val left = rightEdge - w
-        val r = metrics.badgeRadius.toFloat()
+        // 对角圆角镜像：右上圆（对齐封面）+ 左下圆；左上/右下直角贴边
+        val r = metrics.badgeFlushRadius.toFloat().coerceAtMost(h / 2f)
         val path = Path()
-        path.moveTo(left + r, 0f)
-        path.lineTo(rightEdge, 0f)
-        path.lineTo(rightEdge, h)
-        path.lineTo(left + r, h)
-        path.quadTo(left, h, left, h - r)
-        path.lineTo(left, r)
-        path.quadTo(left, 0f, left + r, 0f)
+        path.moveTo(0f, 0f)
+        path.lineTo(w - r, 0f)
+        path.quadTo(w, 0f, w, r)
+        path.lineTo(w, h)
+        path.lineTo(r, h)
+        path.quadTo(0f, h, 0f, h - r)
         path.close()
+        path.offset(left, 0f)
         badgePaint.color = color
         canvas.drawPath(path, badgePaint)
-        canvas.drawText(text, left + metrics.px8, metrics.px3 - fm.top, badgeTextPaint)
+        canvas.drawText(text, left + metrics.px8, metrics.px3.toFloat() - fm.top, badgeTextPaint)
         return left
     }
 
@@ -1371,6 +1373,8 @@ internal class LightCardMetrics private constructor(context: Context) {
     val badgeEnd = dimen(context, R.dimen.px10)
     val badgeGap = dimen(context, R.dimen.px10)
     val badgeRadius = dimen(context, R.dimen.px5)
+    /** flush 贴角标签的对角圆角，与封面圆角同档（px15）。 */
+    val badgeFlushRadius = dimen(context, R.dimen.px15)
     val px3 = dimen(context, R.dimen.px3)
     val px4 = dimen(context, R.dimen.px4)
     val px8 = dimen(context, R.dimen.px8)
