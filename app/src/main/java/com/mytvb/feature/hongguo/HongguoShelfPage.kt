@@ -6,10 +6,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
+import com.mytvb.core.ui.base.adaptiveSpanCount
+import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
+import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.FragmentHongguoShelfBinding
 import com.mytvb.feature.hongguo.net.HongguoSync
 import kotlinx.coroutines.CancellationException
@@ -19,8 +21,9 @@ import kotlinx.coroutines.withContext
 
 /**
  * 红果封面货架页（2026-11-11 重设计）：我的页四入口共用，替代纯文字 ChoiceDialog。
- * 单行横滑货架 + 统一竖版卡（HongguoDramaAdapter）：稍后再看/历史带「看到 x/y 集」
- * 进度条；预约带上线时间；OK 打开详情弹窗。宿主 HongguoFragment 以全屏覆盖层承载，
+ * 网格货架 + 统一竖版卡（HongguoDramaAdapter，列数同 HongguoFeedPage 6 列档，
+ * 卡宽由网格均分与正常列表页一致）：稍后再看/历史带「看到 x/y 集」进度条；
+ * 预约带上线时间；OK 打开详情弹窗。宿主 HongguoFragment 以全屏覆盖层承载，
  * BACK 收层并还原功能卡焦点。无触底加载/锚点需求，不接 TvListFocusController，
  * 焦点滚动走 RecyclerView 框架自动滚动。
  */
@@ -30,13 +33,9 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
 
-    // 横滑单行：卡根默认 MATCH_PARENT 会撑满整屏宽，必须给定卡宽（px135，间距 px16）
-    private val adapter by lazy {
-        HongguoDramaAdapter(
-            onItemClick = ::openDetail,
-            itemWidthPx = resources.getDimensionPixelSize(R.dimen.px135)
-        )
-    }
+    // 网格列数对齐正常列表页（HongguoFeedPage 同款 6 列/超宽 12 列），卡宽不固定
+    private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
+    private val adapter by lazy { HongguoDramaAdapter(onItemClick = ::openDetail) }
 
     private var source = Source.WATCH_LATER
 
@@ -64,22 +63,18 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.recyclerShelf.layoutManager =
-            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        binding.recyclerShelf.layoutManager = WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerShelf.adapter = adapter
         binding.recyclerShelf.itemAnimator = null
-        val gap = resources.getDimensionPixelSize(R.dimen.px16)
-        binding.recyclerShelf.addItemDecoration(object : RecyclerView.ItemDecoration() {
-            override fun getItemOffsets(
-                outRect: android.graphics.Rect,
-                view: View,
-                parent: RecyclerView,
-                state: RecyclerView.State
-            ) {
-                outRect.right = gap
-            }
-        })
-        adapter.bindTopEdgeUp { focusTopTab() }
+        binding.recyclerShelf.addItemDecoration(
+            GridSpacingItemDecoration(
+                spanCount,
+                resources.getDimensionPixelSize(R.dimen.px16),
+                false
+            )
+        )
+        // 第一行 UP 回标题行返回钮：覆盖层全屏不透明，焦点去被盖住的顶部 tab 会「焦点消失」
+        adapter.bindTopEdgeUp { binding.buttonShelfBack.requestFocus() }
         adapter.setOnItemFocusListeners(onFocused = { }, onFocusedWithView = { _, _ -> })
         binding.buttonShelfBack.setOnClickListener { host()?.hideShelfOverlay() }
         source = Source.values().getOrElse(
@@ -96,8 +91,6 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     }
 
     private fun host(): HongguoFragment? = parentFragment as? HongguoFragment
-
-    private fun focusTopTab(): Boolean = host()?.focusTopTab() == true
 
     private fun openDetail(item: DramaUi, position: Int) {
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
