@@ -106,6 +106,10 @@ object PlayerInstancePool {
 
     private fun sourceKey(bvid: String?, cid: Long): String = "${bvid.orEmpty()}#$cid"
 
+    /** [诊断] issue#112：当前挂载源身份（bvid#cid），供切集链路日志核对串台。 */
+    @Synchronized
+    fun attachedSourceKeyDescription(): String = attachedSourceKey ?: "none"
+
     @Synchronized
     fun prewarm(context: Context) {
         prewarmCodecSupport()
