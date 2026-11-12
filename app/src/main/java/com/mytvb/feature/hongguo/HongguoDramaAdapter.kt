@@ -146,14 +146,15 @@ class HongguoDramaAdapter(
                 val gold = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_gold)
                 val silver = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_silver)
                 val bronze = androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_rank_bronze)
-                val (leftText, leftColor, leftTextColor) = if (item.rank > 0) {
-                    when (item.rank) {
-                        1 -> Triple("★1", gold, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_gold))
-                        2 -> Triple("★2", silver, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_silver))
-                        3 -> Triple("★3", bronze, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_bronze))
-                        else -> Triple(item.rank.toString(), accent, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_on_accent))
-                    }
-                } else {
+                    val (leftText, leftColor, leftTextColor) = if (item.rank > 0) {
+                        when (item.rank) {
+                            1 -> Triple("★1", gold, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_gold))
+                            2 -> Triple("★2", silver, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_silver))
+                            3 -> Triple("★3", bronze, androidx.core.content.ContextCompat.getColor(ctx, R.color.hongguo_badge_text_bronze))
+                            // 第 4 名起主题色实底白字（对齐主钮白字惯例；深字对比不足已废弃）
+                            else -> Triple(item.rank.toString(), accent, android.graphics.Color.WHITE)
+                        }
+                    } else {
                     when (item.statusTag) {
                         "爆剧" -> Triple(item.statusTag, 0xFFFF4D26.toInt(), android.graphics.Color.WHITE)
                         "新剧" -> Triple(item.statusTag, 0xFF3FA45B.toInt(), android.graphics.Color.WHITE)

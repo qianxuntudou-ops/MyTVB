@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 我的页功能卡未登录虚线占位框。 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@android:color/transparent"/>
-    <stroke android:width="1dp" android:color="@color/hongguo_card_line"
-        android:dashWidth="@dimen/px6" android:dashGap="@dimen/px6"/>
-    <corners android:radius="@dimen/px15"/>
-</shape>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果我的页横滑 lane（2026-11-12 重构）：标题行（名称+数量灰字+「更多」描边钮，
+     无图标——靠标题字号定层级）+ 横向竖版卡列表（HongguoDramaAdapter）。
+     lane 无数据时列表隐藏、显示灰字暂无行（App 空态语言，无框）。
+     四入口（稍后再看/我的预约/收藏/历史）共用。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_marginBottom="@dimen/px24"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- 无图标：靠标题字号定层级（对齐 App lane header 语言，避免多风格小图标混排） -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_lane_title"
+            android:textSize="@dimen/px30"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_lane_count"
+            android:textSize="@dimen/px20"
+            android:textColor="@color/grey"
+            android:layout_marginStart="@dimen/px12"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <!-- 「更多」进货架网格页（HongguoShelfPage）；描边钮语言同账号行次要操作 -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/button_lane_more"
+            android:text="@string/more"
+            android:textSize="@dimen/px20"
+            android:textColor="@color/hongguo_btn_text"
+            android:background="@drawable/bg_hongguo_btn_outline"
+            android:gravity="center"
+            android:focusable="true"
+            android:clickable="true"
+            android:paddingStart="@dimen/px20"
+            android:paddingEnd="@dimen/px20"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/px44"/>
+    </LinearLayout>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_lane_empty"
+        android:text="@string/hongguo_empty"
+        android:textSize="@dimen/px20"
+        android:textColor="@color/grey"
+        android:layout_marginTop="@dimen/px10"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_lane"
+        android:layout_marginTop="@dimen/px14"
+        android:orientation="horizontal"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+</LinearLayout>

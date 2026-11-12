@@ -141,19 +141,13 @@
     <string name="hongguo_search_no_result">没有找到相关短剧</string>
     <string name="hongguo_search_retry">换个词试试</string>
     <!-- 2026-11-11 重设计第一波（榜单/登录/我的页/货架） -->
-    <string name="hongguo_rank_note">基于热度综合排序 · 每日更新</string>
     <string name="hongguo_retry">重试</string>
     <string name="hongguo_back">返回</string>
     <string name="hongguo_cloud_sync_on">云同步已开启</string>
     <string name="hongguo_mine_stats">本机收藏 %1$d 部 · 历史 %2$d 条</string>
+    <string name="hongguo_lane_count_series">共 %1$d 部</string>
+    <string name="hongguo_mine_empty_guest">登录红果账号后可同步稍后再看与预约，收藏与历史保留本机记录</string>
     <string name="hongguo_login_sync_hint">登录后同步云端数据</string>
-    <string name="hongguo_fn_empty_login">登录后展示</string>
-    <string name="hongguo_fn_empty_local">仍可查看本机记录</string>
-    <string name="hongguo_fn_sub_recent">最近：%1$s</string>
-    <string name="hongguo_fn_sub_last">上次看到：%1$s</string>
-    <string name="hongguo_fn_sub_sync">与账号云同步中</string>
-    <string name="hongguo_fn_sub_online_done">已上线：%1$s</string>
-    <string name="hongguo_fn_sub_online_wait">待上线：%1$s</string>
     <string name="hongguo_seen_episode">看到 %1$d/%2$d 集</string>
     <string name="hongguo_seen_done">已看完</string>
     <string name="hongguo_shelf_count">共 %1$d 条</string>

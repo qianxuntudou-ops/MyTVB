@@ -17,9 +17,9 @@ import com.mytvb.R
  * 红果统一 TV 分段控件（2026-11-11 重设计定案：榜单四板/登录三页签/分类子 tab 一套形态；
  * 2026-11-11 晚 B 站风格统一：聚焦/圆角语言对齐 App 组件）。
  *
- * 形态：高 px56、圆角 px15、字 px26；选中=主题强调色实底+深字，聚焦=整块
- * colorControlHighlight 提亮+白字（同 button_common 与 tab 统一提亮惯例，
- * 全部走 bg_hongguo_segment_tab selector，不硬编码色）。
+ * 形态：高 px56、圆角 px15、字 px26；选中=主题强调色实底+白字（对齐 App 主钮
+ * 白字惯例），聚焦=整块 colorControlHighlight 提亮+白字（同 button_common 与
+ * tab 统一提亮惯例，全部走 bg_hongguo_segment_tab selector，不硬编码色）。
  * 焦点：子项 focusable，遥控左右在子项间自然移动；点击/OK 切换并回调。
  */
 class HongguoSegmentedTabs @JvmOverloads constructor(
@@ -67,7 +67,7 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
                 onFocusChangeListener = OnFocusChangeListener { v, hasFocus ->
                     v as AppCompatTextView
                     if (hasFocus && !v.isSelected) v.setTextColor(Color.WHITE)
-                    else if (!hasFocus) v.setTextColor(if (v.isSelected) onAccentColor() else greyColor())
+                    else if (!hasFocus) v.setTextColor(if (v.isSelected) Color.WHITE else greyColor())
                 }
             }
             addView(tab)
@@ -110,12 +110,13 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
     fun select(index: Int, fireCallback: Boolean = false) {
         val changed = index != selectedIndex
         selectedIndex = index.coerceIn(0, tabs.size - 1)
-        val onAccent = context.getColor(R.color.hongguo_on_accent)
+        val white = Color.WHITE
         val grey = context.getColor(R.color.grey)
         tabs.forEachIndexed { i, tab ->
             val selected = i == selectedIndex
             tab.isSelected = selected
-            tab.setTextColor(if (selected) onAccent else grey)
+            // 选中=accent 实底白字（对齐 App 主钮白字惯例，深字 #14051F 对比不足已废弃）
+            tab.setTextColor(if (selected) white else grey)
             tab.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
         }
         if (fireCallback && changed && !suppressCallback) onSelected?.invoke(selectedIndex)
@@ -124,8 +125,6 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
     fun selectedIndex(): Int = selectedIndex
 
     fun tabAt(index: Int): View? = tabs.getOrNull(index)
-
-    private fun onAccentColor(): Int = context.getColor(R.color.hongguo_on_accent)
 
     private fun greyColor(): Int = context.getColor(R.color.grey)
 

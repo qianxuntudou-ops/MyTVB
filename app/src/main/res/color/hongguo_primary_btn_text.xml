@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果主行动按钮文字色：强调底上深字（紫/粉/蓝主题通用），禁用灰。 -->
+<!-- 红果主行动按钮文字色：强调底白字（对齐 App 主钮惯例 bg_follow_btn_follow=实底+白字；
+     accent 跟随全局主题后为饱和紫，深字 #14051F 对比不足已废弃），禁用灰。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_enabled="false" android:color="@color/grey"/>
-    <item android:color="@color/hongguo_on_accent"/>
+    <item android:color="@color/white"/>
 </selector>

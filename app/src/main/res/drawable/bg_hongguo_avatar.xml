@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果我的页账号行头像圆底（2026-11-12 重构）：默认图标态的圆形衬底，
+     与功能卡中性深面同色；网络头像态由代码清掉 background 直显方图。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/hongguo_card_face"/>
+</shape>

@@ -38,11 +38,11 @@ class HongguoLoginDialog(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DialogHongguoLoginBinding.inflate(LayoutInflater.from(context))
-        // 设计稿 840×452（池内近值 px860）；高度按内容自适应——MFA 提示卡出现时窗口
-        // 随之长高，避免固定高裁内容（短信面板 MFA 态内容高约 px530）
+        // 弹窗加宽（用户反馈二维码/输入框看不清）：px860→px1000（池内值），二维码同步 px197→px280；
+        // 高度按内容自适应——MFA 提示卡出现时窗口随之长高，避免固定高裁内容
         DialogWindowFit.overlay(
             this, binding.root,
-            context.resources.getDimensionPixelSize(R.dimen.px860),
+            context.resources.getDimensionPixelSize(R.dimen.px1000),
             tag = "hongguoLogin"
         )
         binding.buttonLoginClose.setOnClickListener { dismiss() }

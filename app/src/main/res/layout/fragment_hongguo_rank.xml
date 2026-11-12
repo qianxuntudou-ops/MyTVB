@@ -1,35 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果榜单页（2026-11-11 重设计）：四板换统一分段控件（HongguoSegmentedTabs，
-     替代原生 RadioButton）+ 右侧说明行；网格/骨架/空态三态互斥。 -->
+<!-- 红果榜单页（2026-11-12 二次重构）：四板档位改 App 一贯 TabLayout 文字+accent
+     下划线（同分类子档 tab 模板，弃全宽等分块状分段），宽度随文字自适应；
+     说明行删除。网格/骨架/空态三态互斥。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="@dimen/px30"
-        android:paddingEnd="@dimen/px30"
-        android:paddingTop="@dimen/px16"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
-        <com.mytvb.feature.hongguo.HongguoSegmentedTabs
-            android:id="@+id/segment_rank_boards"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"/>
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/text_rank_note"
-            android:text="@string/hongguo_rank_note"
-            android:textSize="@dimen/px20"
-            android:textColor="@color/grey"
-            android:layout_marginStart="@dimen/px24"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-    </LinearLayout>
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_rank_boards"
+        android:focusable="false"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/px70"
+        android:layout_marginStart="@dimen/px20"
+        android:layout_marginTop="@dimen/px10"
+        app:tabBackground="@android:color/transparent"
+        app:tabIndicator="@drawable/underline"
+        app:tabIndicatorColor="?attr/colorAccent"
+        app:tabIndicatorFullWidth="false"
+        app:tabIndicatorHeight="@dimen/px8"
+        app:tabMode="scrollable"
+        app:tabRippleColor="@android:color/transparent"
+        app:tabSelectedTextColor="?android:attr/textColorPrimary"
+        app:tabTextAppearance="@style/TopPageTabText"/>
 
     <FrameLayout
         android:layout_width="match_parent"

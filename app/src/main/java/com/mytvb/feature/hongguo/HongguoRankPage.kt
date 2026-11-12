@@ -9,6 +9,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.tabs.TabLayout
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.adaptiveSpanCount
@@ -16,8 +17,11 @@ import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
 import com.mytvb.core.ui.focus.tv.TvListFocusController
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
+import com.mytvb.core.ui.tab.enableDirectTabNavigation
+import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoRankBinding
 import com.mytvb.feature.hongguo.net.HongguoClient
+import com.mytvb.ui.activity.MainActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -26,9 +30,10 @@ import kotlinx.coroutines.launch
  * 红果四板官方榜单（bookmall cell/change）：热播榜/真人榜/漫剧榜/AI剧榜。
  * 子板切换重开会话；滚动/焦点触底加载。
  * 2026-11-10 卡片迁移：横排行卡 → 统一竖版卡 + 排名角标。
- * 2026-11-11 重设计：四板 RadioButton → 统一分段控件 [HongguoSegmentedTabs]；
- * 前三名金银铜徽章（colors_hongguo 独立语义色）；首屏骨架替代裸 ProgressBar，
- * 空态组件（图标+文案+重试）替代灰字；右侧榜单说明行。
+ * 2026-11-11 重设计：前三名金银铜徽章（colors_hongguo 独立语义色）；首屏骨架替代裸
+ * ProgressBar，空态组件（图标+文案+重试）替代灰字。
+ * 2026-11-12 二次重构：四板 RadioButton/分段控件 → App 一贯 TabLayout 文字+accent
+ * 下划线（同分类子档 tab，enableDirectTabNavigation 接线），说明行删除。
  */
 class HongguoRankPage : Fragment(), HongguoPageFocus {
 
@@ -67,9 +72,9 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 false
             )
         )
-        // 卡片第一行 UP 先回二级分段 tab，再 UP 才回一级 tab（无卡时可聚焦态直接走 focusTopTab）
+        // 卡片第一行 UP 先回二级档位 tab，再 UP 才回一级 tab（无卡时可聚焦态直接走 focusTopTab）
         adapter.bindTopEdgeUp {
-            binding.segmentRankBoards.focusSelectedTab() || focusTopTab()
+            binding.tabRankBoards.focusSelectedTab() || focusTopTab()
         }
         adapter.setOnItemFocusListeners(
             onFocused = { position ->
@@ -94,33 +99,41 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 if (lm.findLastVisibleItemPosition() >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
             }
         })
-        // 四板统一分段控件：选中=主题强调色实底，聚焦=白描边（bg_hongguo_segment_tab）
-        binding.segmentRankBoards.setup(
-            titles = listOf(
-                getString(R.string.hongguo_rank_hot),
-                getString(R.string.hongguo_rank_real),
-                getString(R.string.hongguo_rank_comic),
-                getString(R.string.hongguo_rank_ai)
-            )
-        ) { index ->
-            if (index != board) {
-                board = index
-                refresh()
+        // 四板档位：App 一贯 TabLayout 文字+accent 下划线（同分类子档 tab），OK 点击切换
+        listOf(
+            getString(R.string.hongguo_rank_hot),
+            getString(R.string.hongguo_rank_real),
+            getString(R.string.hongguo_rank_comic),
+            getString(R.string.hongguo_rank_ai)
+        ).forEach { binding.tabRankBoards.addTab(binding.tabRankBoards.newTab().setText(it)) }
+        binding.tabRankBoards.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                if (tab.position != board) {
+                    board = tab.position
+                    refresh()
+                }
             }
-        }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
+        binding.tabRankBoards.getTabAt(0)?.select()
         binding.emptyRank.buttonEmptyRetry.setOnClickListener { refresh() }
-        // 分段控件竖向逃逸：UP 回一级 tab、DOWN 落第一张卡
-        binding.segmentRankBoards.bindVerticalNavigation(
+        // 二级 tab 焦点导航：UP 回一级 tab、DOWN 落第一张卡、首端 LEFT 去侧栏、末端 RIGHT 吞键
+        binding.tabRankBoards.enableDirectTabNavigation(
+            onNavigateDown = { focusFirstCard() },
             onNavigateUp = ::focusTopTab,
-            onNavigateDown = { focusFirstCard() }
+            onEdgeLeft = { (activity as? MainActivity)?.focusSidebarCurrentTab() == true },
+            onEdgeRight = { true }
         )
         refresh()
     }
 
-    /** 外部/卡片 UP 的二级 tab 落点：榜单四板分段控件。 */
+    /** 外部/卡片 UP 的二级 tab 落点：榜单四板档位 tab。 */
     override fun focusSecondaryTab(): Boolean {
         if (_binding == null) return false
-        return binding.segmentRankBoards.focusSelectedTab()
+        return binding.tabRankBoards.focusSelectedTab()
     }
 
     private fun focusTopTab(): Boolean {

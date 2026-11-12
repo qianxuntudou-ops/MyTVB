@@ -34,12 +34,12 @@
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_login_close"
             android:src="@drawable/ic_close"
-            android:tint="#8F8F98"
+            android:tint="@color/textColor"
             android:background="@drawable/bg_hongguo_close"
-            android:padding="@dimen/px10"
+            android:padding="@dimen/px14"
             android:contentDescription="@string/hongguo_back"
-            android:layout_width="@dimen/px44"
-            android:layout_height="@dimen/px44"/>
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px56"/>
     </LinearLayout>
 
     <com.mytvb.feature.hongguo.HongguoSegmentedTabs
@@ -64,9 +64,9 @@
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/image_qr"
                 android:background="@drawable/bg_hongguo_qr_card"
-                android:padding="@dimen/px10"
-                android:layout_width="@dimen/px197"
-                android:layout_height="@dimen/px197"/>
+                android:padding="@dimen/px14"
+                android:layout_width="@dimen/px280"
+                android:layout_height="@dimen/px280"/>
 
             <LinearLayout
                 android:orientation="vertical"

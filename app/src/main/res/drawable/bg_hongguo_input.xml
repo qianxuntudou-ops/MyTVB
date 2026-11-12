@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果登录弹窗输入框（2026-11-11 B 站风格统一，语义对齐 bg_search_input）：
-     聚焦=主题强调色描边（B 站聚焦语言），非聚焦=#3A3A44 实线描边
-     （比 bg_search_input 的 dividerColor 亮一档——弹窗暗底上必须可见，勿直接复用）。
+<!-- 红果登录弹窗输入框（2026-11-12 描边提亮：#3A3A44 在弹窗暗底上不可见被用户否决）：
+     聚焦=主题强调色描边（全 App 聚焦语言），非聚焦=#5A5A64 实线描边（与粘贴框
+     bg_hongguo_paste_box 虚线同亮度，底色同为 buttonBackgroundColor 统一）。
      圆角对齐全 App 输入框 px22。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -14,9 +14,9 @@
     </item>
 
     <item>
-        <shape android:shape="rectangle">
+        <shape>
             <solid android:color="?attr/buttonBackgroundColor"/>
-            <stroke android:width="@dimen/px2" android:color="#3A3A44"/>
+            <stroke android:width="@dimen/px2" android:color="#5A5A64"/>
             <corners android:radius="@dimen/px22"/>
         </shape>
     </item>

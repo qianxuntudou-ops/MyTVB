@@ -11,7 +11,6 @@
     <color name="hongguo_badge_text_silver">#1C2024</color>
     <color name="hongguo_badge_text_bronze">#241305</color>
     <!-- 强调色实底上的深色字（紫/粉/蓝三主题通用） -->
-    <color name="hongguo_on_accent">#14051F</color>
     <!-- 状态标（爆剧/新剧）与标签紫 -->
     <color name="hongguo_boom">#FF4D26</color>
     <color name="hongguo_new">#3FA45B</color>

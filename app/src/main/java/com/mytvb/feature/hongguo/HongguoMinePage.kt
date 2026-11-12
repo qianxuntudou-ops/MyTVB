@@ -1,35 +1,50 @@
 package com.mytvb.feature.hongguo
 
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.image.ImageLoader
-import com.mytvb.databinding.CellHongguoFnCardBinding
+import com.mytvb.databinding.CellHongguoLaneBinding
 import com.mytvb.databinding.FragmentHongguoMineBinding
 import com.mytvb.feature.hongguo.net.HongguoSync
+import com.mytvb.ui.activity.MainActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 红果「我的」页（2026-11-11 重设计）：左账号卡 + 右 2×2 功能卡区。
- * 功能卡=稍后再看/我的预约/本机收藏/观看历史，数量徽标+最近 3 张封面小海报+说明行，
- * 点击进封面货架（HongguoFragment.showShelfOverlay），替代原纯文字 ChoiceDialog。
- * 未登录态：主按钮「登录红果账号」，云端类卡虚线占位引导登录，本机类卡点击仍可用。
+ * 红果「我的」页（2026-11-12 二次重构：未登录=整页居中登录引导（大头像+权益文案+
+ * 主钮，单一焦点单一 CTA）；已登录=hero 头部（大头像/昵称/红果号/同步与统计/
+ * 退出+清除描边钮）+ 稍后再看/我的预约横滑 lane（HongguoDramaAdapter 竖版卡，
+ * 点卡片开详情弹窗、「更多」进货架网格页）。收藏/历史有独立顶部 tab 不在此重复
+ * （lane 视图保留作「红果页显示历史/收藏」开关关闭时的并入位）。
  * 红果账号与 B 站完全隔离（票据在 hongguo_session，登出只清红果票据保留设备身份）。
  */
 class HongguoMinePage : Fragment(), HongguoPageFocus {
 
+    /** 一条入口 lane：cell 视图 + 独立 adapter + 对应货架页数据源。 */
+    private class Lane(
+        val cell: CellHongguoLaneBinding,
+        val adapter: HongguoDramaAdapter,
+        val source: HongguoShelfPage.Source,
+        /** 数量单位：true=「共 N 部」，false=「共 N 条」（历史）。 */
+        val countInSeries: Boolean
+    )
+
     private var _binding: FragmentHongguoMineBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
+    private val lanes = mutableListOf<Lane>()
     private var loggedIn = false
     private var subscribeItems: List<HongguoSync.SubscribeItem> = emptyList()
 
@@ -53,24 +68,28 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             refreshLoginState()
             AppToast.show(requireContext(), "已清除本机红果数据")
         }
-        // 功能卡点击：云端类（稍后再看/预约）未登录引导登录；本机类（收藏/历史）未登录仍可用
-        binding.fnWatchLater.root.setOnClickListener {
-            if (loggedIn) openShelf(HongguoShelfPage.Source.WATCH_LATER) else showLoginDialog()
+        // 账号区按钮 LEFT 逃逸：居中/右上布局的左侧同一水平 beam 内无可聚焦 view，
+        // FocusFinder 几何搜索找不到目标会原地不动（用户实测 LEFT 失灵、UP/DOWN 反而能走），
+        // 显式接侧栏当前 tab（内容区左缘→侧栏，全 App 惯例同款）
+        val leftToSidebar = View.OnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
+                (activity as? MainActivity)?.focusSidebarCurrentTab() == true
+            } else false
         }
-        binding.fnSubscribe.root.setOnClickListener {
-            if (loggedIn) openShelf(HongguoShelfPage.Source.SUBSCRIBE) else showLoginDialog()
-        }
-        binding.fnFavorite.root.setOnClickListener { openShelf(HongguoShelfPage.Source.FAVORITE) }
-        binding.fnHistory.root.setOnClickListener { openShelf(HongguoShelfPage.Source.HISTORY) }
+        binding.buttonLogin.setOnKeyListener(leftToSidebar)
+        binding.buttonLogout.setOnKeyListener(leftToSidebar)
+        binding.buttonClear.setOnKeyListener(leftToSidebar)
+        setupLanes()
         refreshLoginState()
     }
 
-    /** 侧栏 RIGHT / 顶部 tab DOWN 的落点：未登录→登录按钮，已登录→稍后再看卡。 */
+    /** 侧栏 RIGHT / 顶部 tab DOWN 的落点：未登录→登录按钮，已登录→第一可见 lane 首卡（空 lane 落「更多」钮）。 */
     override fun focusFirstCard(): Boolean {
         if (!isAdded || view == null) return false
-        val target =
-            if (binding.buttonLogin.isVisible) binding.buttonLogin else binding.fnWatchLater.root
-        return target.requestFocus()
+        if (binding.buttonLogin.isVisible) return binding.buttonLogin.requestFocus()
+        val lane = lanes.firstOrNull { it.cell.root.isVisible } ?: return false
+        val vh = lane.cell.rvLane.findViewHolderForAdapterPosition(0)
+        return vh?.itemView?.requestFocus() == true || lane.cell.buttonLaneMore.requestFocus()
     }
 
     private fun showLoginDialog() {
@@ -82,6 +101,32 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         host.showShelfOverlay(source)
     }
 
+    private fun setupLanes() {
+        lanes.clear()
+        fun newAdapter() = HongguoDramaAdapter(
+            onItemClick = { item, _ ->
+                HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+            },
+            // 横向单行卡根默认 MATCH_PARENT 会撑满整屏宽，必须给定实际像素（Fragment 属性初始化无 resources，走方法内）
+            itemWidthPx = resources.getDimensionPixelSize(R.dimen.px135)
+        )
+        lanes += Lane(binding.laneWatchLater, newAdapter(), HongguoShelfPage.Source.WATCH_LATER, true)
+        lanes += Lane(binding.laneSubscribe, newAdapter(), HongguoShelfPage.Source.SUBSCRIBE, true)
+        lanes += Lane(binding.laneFavorite, newAdapter(), HongguoShelfPage.Source.FAVORITE, true)
+        lanes += Lane(binding.laneHistory, newAdapter(), HongguoShelfPage.Source.HISTORY, false)
+        lanes[0].cell.textLaneTitle.setText(R.string.hongguo_watch_later)
+        lanes[1].cell.textLaneTitle.setText(R.string.hongguo_my_subscribe)
+        lanes[2].cell.textLaneTitle.setText(R.string.hongguo_tab_favorite)
+        lanes[3].cell.textLaneTitle.setText(R.string.hongguo_tab_history)
+        lanes.forEach { lane ->
+            lane.cell.rvLane.layoutManager =
+                LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
+            lane.cell.rvLane.adapter = lane.adapter
+            lane.cell.rvLane.itemAnimator = null
+            lane.cell.buttonLaneMore.setOnClickListener { openShelf(lane.source) }
+        }
+    }
+
     private fun refreshLoginState() {
         val profile = repository.account.storedProfile()
         loggedIn = profile != null
@@ -90,131 +135,84 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             repository.favorites().size,
             repository.history().size
         )
+        // 两态整页切换：未登录只留居中登录引导（账号行隐藏）；已登录=hero 头部+lane
+        binding.rowAccount.isVisible = loggedIn
+        binding.emptyGuest.isVisible = !loggedIn
         if (profile != null) {
             binding.textNickname.text = profile.name.ifEmpty { "红果用户" }
             binding.textUid.text = "红果号：${profile.uid}"
-            binding.textUid.isVisible = true
-            binding.textStats.text = stats
-            binding.textSync.setText(R.string.hongguo_cloud_sync_on)
-            binding.rowSync.isVisible = true
-            binding.buttonLogin.isVisible = false
+            binding.textStats.text = getString(R.string.hongguo_cloud_sync_on) + " · " + stats
+            binding.dotSync.isVisible = true
             binding.groupAccountActions.isVisible = true
             // 启动登录态校验+token 滚动（HGTV H0/g.c() scene=boot 同款；失败静默）
             lifecycleScope.launch {
                 runCatching { withContext(Dispatchers.IO) { repository.sync.bootVerify() } }
             }
-            if (profile.avatar.startsWith("http")) {
-                binding.imageAvatar.imageTintList = null
-                ImageLoader.load(
-                    imageView = binding.imageAvatar,
-                    url = profile.avatar,
-                    placeholder = R.drawable.ic_hongguo,
-                    error = R.drawable.ic_hongguo
-                )
-            } else {
-                // 无头像：恢复默认图标+主题色染色（清掉上次网络图残留的 tint=null）
-                binding.imageAvatar.setImageResource(R.drawable.ic_hongguo)
-                binding.imageAvatar.imageTintList = android.content.res.ColorStateList.valueOf(
-                    com.google.android.material.color.MaterialColors.getColor(
-                        binding.imageAvatar, androidx.appcompat.R.attr.colorAccent
-                    )
-                )
-            }
-            bindLocalCards()
+            applyAvatar(profile.avatar.takeIf { it.startsWith("http") })
             fetchSubscribe()
         } else {
-            binding.textNickname.setText(R.string.hongguo_not_logged_in)
-            binding.textUid.setText(R.string.hongguo_login_sync_hint)
-            binding.textUid.isVisible = true
-            binding.textStats.text = stats
-            binding.rowSync.isVisible = false
-            binding.buttonLogin.isVisible = true
-            binding.groupAccountActions.isVisible = false
+            subscribeItems = emptyList()
+        }
+        refreshLanes()
+    }
+
+    /** 默认图标=圆形衬底+主题色染色；网络头像=清衬底直显方图（沿用旧版非圆行为）。 */
+    private fun applyAvatar(url: String?) {
+        if (url != null) {
+            binding.imageAvatar.background = null
+            binding.imageAvatar.setPadding(0, 0, 0, 0)
+            binding.imageAvatar.imageTintList = null
+            ImageLoader.load(
+                imageView = binding.imageAvatar,
+                url = url,
+                placeholder = R.drawable.ic_hongguo,
+                error = R.drawable.ic_hongguo
+            )
+        } else {
+            binding.imageAvatar.setBackgroundResource(R.drawable.bg_hongguo_avatar)
+            val pad = resources.getDimensionPixelSize(R.dimen.px16)
+            binding.imageAvatar.setPadding(pad, pad, pad, pad)
             binding.imageAvatar.setImageResource(R.drawable.ic_hongguo)
-            bindCardsLoggedOut()
+            binding.imageAvatar.imageTintList = android.content.res.ColorStateList.valueOf(
+                com.google.android.material.color.MaterialColors.getColor(
+                    binding.imageAvatar, androidx.appcompat.R.attr.colorAccent
+                )
+            )
         }
     }
 
-    // ---- 功能卡 ----
-
-    /** 已登录：四卡填真实数据（预约异步补充）。 */
-    private fun bindLocalCards() {
-        val watchLater = repository.watchLater()
-        val favorites = repository.favorites()
-        val history = repository.history()
-        val recentWatchLater = watchLater.firstOrNull()
-        bindCard(
-            binding.fnWatchLater,
-            titleRes = R.string.hongguo_watch_later,
-            iconRes = R.drawable.watch_later,
-            count = watchLater.size,
-            records = watchLater,
-            subText = recentWatchLater?.let {
-                getString(R.string.hongguo_fn_sub_recent, it.title)
-            } ?: getString(R.string.hongguo_watch_later_empty),
-            emptyPlaceholder = false
-        )
-        bindSubscribeCard()
-        bindCard(
-            binding.fnFavorite,
-            titleRes = R.string.hongguo_tab_favorite,
-            iconRes = R.drawable.ic_hongguo_fn_heart,
-            count = favorites.size,
-            records = favorites,
-            subText = getString(R.string.hongguo_fn_sub_sync),
-            emptyPlaceholder = false
-        )
-        val lastHistory = history.firstOrNull()
-        bindCard(
-            binding.fnHistory,
-            titleRes = R.string.hongguo_tab_history,
-            iconRes = R.drawable.ic_history,
-            count = history.size,
-            records = history,
-            subText = lastHistory?.let {
-                getString(R.string.hongguo_fn_sub_last, it.title)
-            } ?: getString(R.string.hongguo_empty),
-            emptyPlaceholder = false
-        )
+    /**
+     * 正文 lane 填充：已登录四条恒显示（空 lane=灰字暂无行，App 空态语言）；
+     * 未登录云端类隐藏、本机类仅有本机数据时显示，全部为空时显示居中空态。
+     */
+    private fun refreshLanes() {
+        bindLane(lanes[0], loggedIn, repository.watchLater().map { it.toDramaUi() })
+        bindLane(lanes[1], loggedIn, subscribeItems.map { it.toDramaUi() })
+        // 收藏/历史已有独立顶部 tab（六 tab），我的页不重复铺；lane 视图保留作
+        // 「红果页显示历史/收藏」开关（三定案②，待第三波设置项）关闭=四 tab 模式的并入位
+        bindLane(lanes[2], false, emptyList())
+        bindLane(lanes[3], false, emptyList())
+        // 卡片 UP 不拦截（isAtTopEdge 只认竖版列表，横向 lane 全 App 统一走框架几何导航：
+        // 卡→「更多」钮→账号行/顶部 tab，与首页横滑 lane 行为一致）
     }
 
-    /** 未登录：云端类卡虚线占位「登录后展示」；本机类卡占位「仍可查看本机记录」（点击可用）。 */
-    private fun bindCardsLoggedOut() {
-        bindCard(
-            binding.fnWatchLater, R.string.hongguo_watch_later, R.drawable.watch_later,
-            count = null, records = emptyList(), subText = "", emptyPlaceholder = true
+    private fun bindLane(lane: Lane, visible: Boolean, items: List<DramaUi>) {
+        lane.cell.root.isVisible = visible
+        lane.adapter.clear()
+        if (!visible) return
+        val empty = items.isEmpty()
+        lane.cell.textLaneCount.isVisible = !empty
+        lane.cell.textLaneEmpty.isVisible = empty
+        lane.cell.rvLane.isVisible = !empty
+        if (empty) return
+        lane.cell.textLaneCount.text = getString(
+            if (lane.countInSeries) R.string.hongguo_lane_count_series else R.string.hongguo_shelf_count,
+            items.size
         )
-        bindCard(
-            binding.fnSubscribe, R.string.hongguo_my_subscribe, R.drawable.ic_hongguo_fn_bell,
-            count = null, records = emptyList(), subText = "", emptyPlaceholder = true
-        )
-        bindCard(
-            binding.fnFavorite, R.string.hongguo_tab_favorite, R.drawable.ic_hongguo_fn_heart,
-            count = null, records = emptyList(), subText = "", emptyPlaceholder = true,
-            placeholderTextRes = R.string.hongguo_fn_empty_local
-        )
-        bindCard(
-            binding.fnHistory, R.string.hongguo_tab_history, R.drawable.ic_history,
-            count = null, records = emptyList(), subText = "", emptyPlaceholder = true,
-            placeholderTextRes = R.string.hongguo_fn_empty_local
-        )
+        lane.adapter.addData(items)
     }
 
-    /** 我的预约卡（登录态，云端异步拉取）。 */
-    private fun bindSubscribeCard() {
-        val card = binding.fnSubscribe
-        card.textFnTitle.setText(R.string.hongguo_my_subscribe)
-        card.iconFn.setImageResource(R.drawable.ic_hongguo_fn_bell)
-        card.textFnCount.text = subscribeItems.size.toString()
-        val first = subscribeItems.firstOrNull()
-        card.textFnSub.text = when {
-            first == null -> getString(R.string.hongguo_empty)
-            first.isOnline -> getString(R.string.hongguo_fn_sub_online_done, first.title)
-            else -> getString(R.string.hongguo_fn_sub_online_wait, first.title)
-        }
-        fillCovers(card, subscribeItems.map { MiniItem(it.seriesId, it.cover) })
-    }
-
+    /** 我的预约 lane（登录态，云端异步拉取；只刷新本 lane，避免整场刷新闪动 lane 卡焦点）。 */
     private fun fetchSubscribe() {
         lifecycleScope.launch {
             subscribeItems = try {
@@ -226,64 +224,44 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
                 emptyList()
             }
             if (_binding == null || !loggedIn) return@launch
-            bindSubscribeCard()
+            bindLane(lanes[1], true, subscribeItems.map { it.toDramaUi() })
         }
     }
 
-    private fun bindCard(
-        card: CellHongguoFnCardBinding,
-        titleRes: Int,
-        iconRes: Int,
-        count: Int?,
-        records: List<HongguoRepository.WatchRecord>,
-        subText: String,
-        emptyPlaceholder: Boolean,
-        placeholderTextRes: Int = R.string.hongguo_fn_empty_login
-    ) {
-        card.textFnTitle.setText(titleRes)
-        card.iconFn.setImageResource(iconRes)
-        card.iconFn.imageTintList = null
-        if (count != null) {
-            card.textFnCount.text = count.toString()
-            card.textFnCount.isVisible = true
-        } else {
-            card.textFnCount.isVisible = false
+    // ---- 卡片数据映射（与 HongguoShelfPage 同口径） ----
+
+    private fun HongguoRepository.WatchRecord.toDramaUi(): DramaUi {
+        val seen = episodeIndex + 1
+        val done = episodeCount in 1..seen
+        val pct = when {
+            done -> 100
+            durationMs > 0 -> ((positionMs * 100) / durationMs).toInt().coerceIn(1, 99)
+            else -> 0
         }
-        card.textFnEmptyLogin.setText(placeholderTextRes)
-        card.textFnEmptyLogin.isVisible = emptyPlaceholder
-        card.rowFnCovers.isVisible = !emptyPlaceholder
-        card.textFnSub.isVisible = !emptyPlaceholder
-        if (emptyPlaceholder) return
-        card.textFnSub.text = subText
-        fillCovers(card, records.map { MiniItem(it.seriesId, it.cover) })
+        return DramaUi(
+            seriesId = seriesId,
+            title = title,
+            cover = cover,
+            subtitle = if (done) getString(R.string.hongguo_seen_done)
+            else getString(R.string.hongguo_seen_episode, seen, episodeCount),
+            progressPercent = pct
+        )
     }
 
-    /** 最近 3 张封面 + 「+N」溢出位；点小海报直达详情弹窗。 */
-    private fun fillCovers(card: CellHongguoFnCardBinding, items: List<MiniItem>) {
-        val views = listOf(card.coverFn0, card.coverFn1, card.coverFn2)
-        views.forEachIndexed { index, imageView ->
-            val item = items.getOrNull(index)
-            if (item == null || item.cover.isBlank()) {
-                imageView.setImageResource(R.drawable.default_video)
-                imageView.setOnClickListener(null)
-                return@forEachIndexed
-            }
-            ImageLoader.loadSeriesCover(
-                imageView = imageView,
-                url = item.cover,
-                placeholder = R.drawable.default_video,
-                error = R.drawable.default_video
-            )
-            imageView.setOnClickListener {
-                HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
-            }
-        }
-        val more = items.size - views.size
-        card.textFnMore.text = if (more > 0) "+$more" else ""
-    }
+    private fun HongguoSync.SubscribeItem.toDramaUi(): DramaUi = DramaUi(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        subtitle = if (onlineTimeSec > 0)
+            getString(R.string.hongguo_subscribe_online_at, formatOnlineTime(onlineTimeSec))
+        else
+            getString(R.string.hongguo_subscribe_pending)
+    )
 
-    /** 功能卡 mini 封面条目（seriesId 供点海报直达详情）。 */
-    private data class MiniItem(val seriesId: String, val cover: String)
+    private fun formatOnlineTime(sec: Long): String {
+        val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.CHINA)
+        return fmt.format(java.util.Date(sec * 1000))
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()

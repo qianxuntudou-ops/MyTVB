@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果统一 TV 分段控件态（2026-11-11 B 站风格统一：与 App 组件同语言）：
-     选中=主题强调色实底+深字；聚焦=整块 colorControlHighlight 提亮（同 button_common/
-     bg_hongguo_page_chip，弃白描边内衬）；选中+聚焦=实底保持；按下=colorPrimary；
-     禁用=置灰（倒计时/无权限）。圆角对齐 App 按钮主力档 px15。 -->
+<!-- 红果统一 TV 分段控件态（2026-11-12 选中色对齐侧栏）：
+     选中=?attr/tabBarHighlight（侧栏当前 tab 同款强调 attr，弃 colorAccent——浅紫底白字
+     对比不足被用户否决）；聚焦=整块 colorControlHighlight 半透明主题色提亮（全 App 统一
+     聚焦语言）；按下=colorPrimary；禁用=置灰。圆角 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
 
@@ -14,10 +14,10 @@
         </shape>
     </item>
 
-    <!-- 选中（含聚焦叠加）：强调色实底保持，字色由代码控制 -->
+    <!-- 选中（含聚焦叠加）：侧栏选中同款强调色，字色由代码控制（白） -->
     <item android:state_selected="true">
         <shape>
-            <solid android:color="?attr/colorAccent"/>
+            <solid android:color="?attr/tabBarHighlight"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>

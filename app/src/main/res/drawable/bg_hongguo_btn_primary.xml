@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果主行动按钮（2026-11-11 B 站风格统一）：主题强调色实底+深字；聚焦/按下=深一档
-     colorPrimary（button_common 同款实底语言，弃白描边内衬）；禁用置灰。圆角 px15。 -->
+<!-- 红果主行动按钮（2026-11-12 三态完全对齐 button_common/侧栏标准）：
+     默认=buttonBackgroundColor 中性灰底+白字（常态不抢色，accent 浅紫底白字对比不足
+     被用户否决）；按下=colorPrimary 变色；聚焦=整块 colorControlHighlight 半透明
+     主题色提亮（全 App 统一聚焦语言）；禁用置灰。圆角 px15。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
 
@@ -21,15 +23,16 @@
 
     <item android:state_focused="true">
         <shape>
-            <solid android:color="?attr/colorPrimary"/>
+            <solid android:color="?attr/colorControlHighlight"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 
     <item>
         <shape>
-            <solid android:color="?attr/colorAccent"/>
+            <solid android:color="?attr/buttonBackgroundColor"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
 </selector>
+
