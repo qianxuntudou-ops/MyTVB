@@ -42,6 +42,13 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
         TabLayoutMediator(binding.tabGenre, binding.viewPager) { tab, position ->
             tab.text = genres[position].first
         }.attach()
+        // 子档离屏页焦点域管理（与一级六页同款，见 HongguoPagerFocus）：
+        // 不关的话离屏子档的筛选 chip/卡片/页根都参与几何搜索，当前子档芯片
+        // 边缘按键焦点会被屏外控件截走（用户实测：ScaledTextView→屏外 RecyclerView）
+        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) = syncFocus()
+        })
+        binding.viewPager.post { syncFocus() }
         // 子档 tab 焦点导航：UP 回红果一级 tab、DOWN 落当前子档第一张卡、LEFT 到侧栏
         // （用 enableTouchNavigation：OK 键瞬切+滑入，与一级 tab 同款；再关掉触摸滑动）
         binding.tabGenre.enableTouchNavigation(
@@ -59,6 +66,13 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
     private fun focusGenreTab(): Boolean {
         val b = _binding ?: return false
         return b.tabGenre.focusSelectedTab()
+    }
+
+    private val pageRootWasFocusable = HashMap<Int, Boolean>()
+
+    private fun syncFocus() {
+        val b = _binding ?: return
+        syncViewPagerPageFocus(childFragmentManager, b.viewPager, GENRE_COUNT, pageRootWasFocusable)
     }
 
     /** 子档 tab UP 的逃逸：宿主红果一级 tab。 */
@@ -83,6 +97,7 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
     }
 
     companion object {
+        private const val GENRE_COUNT = 3
         fun newInstance(): HongguoCategoryPage = HongguoCategoryPage()
     }
 }

@@ -24,6 +24,7 @@
         <shape>
             <solid android:color="?attr/colorControlHighlight"/>
             <corners android:radius="@dimen/px15"/>
+            <stroke android:width="@dimen/px4" android:color="@color/white"/>
         </shape>
     </item>
 

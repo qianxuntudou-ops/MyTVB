@@ -5,10 +5,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.material.tabs.TabLayoutMediator
 import com.mytvb.R
@@ -17,10 +13,7 @@ import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoBinding
 import com.mytvb.ui.activity.MainActivity
-import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
 
 /**
  * 红果短剧主页面：六页签（推荐/历史/收藏/榜单/分类/我的）+ 右上搜索入口。
@@ -35,7 +28,6 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
 
     private var _binding: FragmentHongguoBinding? = null
     private val binding get() = _binding!!
-    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -50,7 +42,6 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         super.onViewCreated(view, savedInstanceState)
         setupTabsAndViewPager()
         setupSearchEntry()
-        observeTabSelected()
         // 搜索层/货架层显示时 BACK 先收层，不退出红果页
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
@@ -126,14 +117,12 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         return (page as? HongguoPageFocus)?.focusFirstCard() == true
     }
 
-    /** 只允许当前页可聚焦（离屏页 BLOCK；切换时必须恢复当前页防死锁）。 */
+    /** 离屏页根容器的原 focusable 状态（恢复按原值，见 HongguoPagerFocus）。 */
+    private val pageRootWasFocusable = HashMap<Int, Boolean>()
+
+    /** 只允许当前页可聚焦（离屏页 BLOCK+根不可聚焦，详见 HongguoPagerFocus）。 */
     private fun syncPageFocusability(current: Int) {
-        for (i in 0 until PAGE_TITLES.size) {
-            val page = childFragmentManager.findFragmentByTag("f$i") ?: continue
-            val pageView = page.view as? ViewGroup ?: continue
-            pageView.descendantFocusability =
-                if (i == current) ViewGroup.FOCUS_AFTER_DESCENDANTS else ViewGroup.FOCUS_BLOCK_DESCENDANTS
-        }
+        syncViewPagerPageFocus(childFragmentManager, binding.viewPager, PAGE_TITLES.size, pageRootWasFocusable)
     }
 
     /** 触摸模式盲恢复等外部焦点入口：覆盖层打开时焦点归覆盖层，不落到被盖住的货架底下。 */
@@ -163,6 +152,12 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         if (searchShown) return
         searchShown = true
         binding.containerHongguoSearch.visibility = View.VISIBLE
+        // 焦点钳制：FocusFinder 几何搜索不看遮挡，列表边缘按键（chips 最右 RIGHT、
+        // 榜单尾行 DOWN）会逃进被覆盖层盖住的 tab/胶囊/页面卡片，表现为焦点消失；
+        // 打开期间屏蔽底层全部可聚焦内容（同 syncPageFocusability 离屏页 BLOCK 思路）
+        binding.tabLayout.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+        binding.buttonHongguoSearch.isFocusable = false
+        binding.viewPager.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS)
         val existing = childFragmentManager
             .findFragmentById(R.id.container_hongguo_search) as? HongguoSearchPage
         if (existing == null) {
@@ -179,6 +174,12 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         if (!searchShown) return
         searchShown = false
         binding.containerHongguoSearch.visibility = View.GONE
+        // 恢复底层焦点能力（顺序：先恢复再收焦，胶囊要先可聚焦才能接住焦点；
+        // viewPager 自身的 BLOCK 必须先清，syncPageFocusability 只管各页 Fragment view）
+        binding.buttonHongguoSearch.isFocusable = true
+        binding.tabLayout.descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
+        binding.viewPager.descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
+        syncPageFocusability(binding.viewPager.currentItem)
         binding.buttonHongguoSearch.requestFocus()
     }
 
@@ -221,24 +222,8 @@ class HongguoFragment : Fragment(), MainTabFocusTarget {
         _binding = null
     }
 
-    private fun observeTabSelected() {
-        // 侧栏从其他主 tab 切回红果时，焦点回顶部 tab（对齐 CCTV 影视行为）
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                mainNavigationViewModel.events.collectLatest { event ->
-                    if (event is MainNavigationViewModel.Event.MainTabSelected &&
-                        event.index == TAB_INDEX
-                    ) {
-                        binding.tabLayout.focusSelectedTab()
-                    }
-                }
-            }
-        }
-    }
-
     companion object {
         // 侧栏固定序：0推荐/1分类/2动态/3直播/4CCTV直播/5CCTV影视/6红果/7我的/8搜索
-        private const val TAB_INDEX = 6
 
         private val PAGE_TITLES = intArrayOf(
             R.string.hongguo_tab_recommend,

@@ -81,15 +81,27 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         binding.buttonClear.setOnKeyListener(leftToSidebar)
         setupLanes()
         refreshLoginState()
+        // ScrollView 根与 lane RV 自身不可聚焦：ScrollView 构造器 initScrollView 会
+        // setFocusable(true)（XML 覆盖不了，必须代码设），DOWN 放行后它们以全页
+        // 几何赢过一切子项——首次 DOWN 焦点"消失"（落在无高亮的容器上）的根因
+        binding.root.isFocusable = false
     }
 
     /** 侧栏 RIGHT / 顶部 tab DOWN 的落点：未登录→登录按钮，已登录→第一可见 lane 首卡（空 lane 落「更多」钮）。 */
     override fun focusFirstCard(): Boolean {
         if (!isAdded || view == null) return false
         if (binding.buttonLogin.isVisible) return binding.buttonLogin.requestFocus()
-        val lane = lanes.firstOrNull { it.cell.root.isVisible } ?: return false
+        binding.root.isFocusable = false
+        val lane = lanes.firstOrNull { it.cell.root.isVisible }
+        if (lane == null) {
+            // lane 全空：落账号区按钮，别返回 false 放行（放行=框架几何乱跳）
+            return binding.buttonLogout.requestFocus() || binding.buttonClear.requestFocus()
+        }
+        lane.cell.rvLane.isFocusable = false
         val vh = lane.cell.rvLane.findViewHolderForAdapterPosition(0)
-        return vh?.itemView?.requestFocus() == true || lane.cell.buttonLaneMore.requestFocus()
+        return vh?.itemView?.requestFocus() == true ||
+            lane.cell.rvLane.getChildAt(0)?.requestFocus() == true ||
+            lane.cell.buttonLaneMore.requestFocus()
     }
 
     private fun showLoginDialog() {

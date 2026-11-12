@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.mytvb.core.ui.focus.tv.FocusClampLinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 输入行：主 APP 搜索框同款（bg_search_input 容器+图标），聚焦紫描边 -->
+    <!-- 输入行：主 APP 搜索框同款（bg_search_input 容器+图标），聚焦紫描边；左端退出钮收层 -->
     <LinearLayout
         android:orientation="horizontal"
         android:gravity="center_vertical"
@@ -14,6 +14,17 @@
         android:paddingTop="@dimen/px24"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_hongguo_search_exit"
+            android:src="@drawable/ic_hongguo_back"
+            app:tint="@color/textColor"
+            android:background="@drawable/bg_hongguo_btn_outline"
+            android:padding="@dimen/px10"
+            android:contentDescription="@string/hongguo_back"
+            android:layout_marginEnd="@dimen/px20"
+            android:layout_width="@dimen/px76"
+            android:layout_height="@dimen/px76"/>
 
         <LinearLayout
             android:id="@+id/layout_hongguo_search_input"
@@ -265,4 +276,4 @@
                 android:visibility="gone"/>
         </FrameLayout>
     </FrameLayout>
-</LinearLayout>
+</com.mytvb.core.ui.focus.tv.FocusClampLinearLayout>

@@ -111,6 +111,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             androidx.recyclerview.widget.LinearLayoutManager(
                 requireContext(), androidx.recyclerview.widget.RecyclerView.HORIZONTAL, false
             )
+        // RV 自身不可聚焦：RecyclerView 构造器自带 focusable=true，但它拿焦无高亮
+        // （视觉=焦点消失）。筛选 chip 竖向逃逸失败放行时，几何搜索里 RV 自身以
+        // 最近距离赢过一切子项（实测 chip DOWN→recycler_feed 自身），必须除名。
+        // 全部入口都显式落子项（TvListFocusController/chip 绑定），无人依赖 RV 自身。
+        binding.recyclerFeed.isFocusable = false
+        binding.recyclerFilters.isFocusable = false
         binding.recyclerFeed.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0 || !hasMore || loading) return
@@ -298,15 +304,22 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 text.text = "${row.name}·$selectedName"
                 text.isSelected = selectedId != null
                 // 筛选 chip 竖向逃逸：UP 直接回顶部 tab（topEdgeExit 分流分类页子档），
-                // DOWN 落第一张卡；左右走横向列表框架自然导航
+                // DOWN 落第一张卡；左右走横向列表框架自然导航。
+                // 竖向恒吞：落点失败时（数据未就绪等）放行会被几何搜索送去
+                // RV 自身/侧栏（满高侧栏零距离陷阱同族），宁可停住等下次按键
                 text.setOnKeyListener { _, keyCode, event ->
                     if (event.action != android.view.KeyEvent.ACTION_DOWN) {
                         return@setOnKeyListener false
                     }
                     when (keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> {
                             topEdgeExit?.invoke() ?: focusTopTab()
-                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> focusFirstCard()
+                            true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            focusFirstCard()
+                            true
+                        }
                         else -> false
                     }
                 }

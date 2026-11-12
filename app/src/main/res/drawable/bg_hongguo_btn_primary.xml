@@ -25,6 +25,9 @@
         <shape>
             <solid android:color="?attr/colorControlHighlight"/>
             <corners android:radius="@dimen/px15"/>
+            <!-- 白描边：纯提亮在中性灰底上视觉太弱（我的页 tab DOWN 落登录钮
+                 被感知为"焦点消失"），TV 焦点必须一眼可见 -->
+            <stroke android:width="@dimen/px4" android:color="@color/white"/>
         </shape>
     </item>
 

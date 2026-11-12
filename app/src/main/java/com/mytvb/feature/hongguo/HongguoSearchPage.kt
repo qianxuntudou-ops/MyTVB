@@ -13,6 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
@@ -48,8 +49,14 @@ class HongguoSearchPage : Fragment() {
     // 结果卡与推荐页同款竖版 4:5，列数同档
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
-    private val historyAdapter = WordChipAdapter(onClick = { doSearch(it.title) })
-    private val guessAdapter = WordChipAdapter(onClick = ::onDiscoveryClick)
+    private val historyAdapter = WordChipAdapter(
+        currentRecyclerId = R.id.recycler_hongguo_history,
+        onClick = { doSearch(it.title) }
+    )
+    private val guessAdapter = WordChipAdapter(
+        currentRecyclerId = R.id.recycler_hongguo_guess,
+        onClick = ::onDiscoveryClick
+    )
     private val shortBoardAdapter = HotBoardAdapter(onClick = ::openDiscoveryDetail)
     private val comicBoardAdapter = HotBoardAdapter(onClick = ::openDiscoveryDetail)
     private val suggestAdapter = SuggestRowAdapter(onClick = { doSearch(it.title) })
@@ -90,9 +97,17 @@ class HongguoSearchPage : Fragment() {
         binding.recyclerHongguoGuess.adapter = guessAdapter
         binding.recyclerHongguoBoardShort.adapter = shortBoardAdapter
         binding.recyclerHongguoBoardComic.adapter = comicBoardAdapter
+        // RV 自身不可聚焦（同 HongguoFeedPage：构造器默认 focusable，拿焦无高亮，
+        // 榜单行 RIGHT 放行时邻列 RV 自身会以更近距离赢过首行）
+        binding.recyclerHongguoHistory.isFocusable = false
+        binding.recyclerHongguoGuess.isFocusable = false
+        binding.recyclerHongguoBoardShort.isFocusable = false
+        binding.recyclerHongguoBoardComic.isFocusable = false
         binding.buttonHongguoHistoryClear.setOnClickListener {
             repository.clearSearchHistory()
             renderHistory()
+            // 清除按钮随历史区一起 GONE，不主动归还焦点会被清焦兜底拉去侧栏
+            binding.editHongguoKeyword.requestFocus()
         }
     }
 
@@ -139,7 +154,10 @@ class HongguoSearchPage : Fragment() {
                 historyAdapter.itemCount > 0 -> R.id.recycler_hongguo_history
             binding.sectionHongguoGuess.isVisible &&
                 guessAdapter.itemCount > 0 -> R.id.recycler_hongguo_guess
-            binding.sectionHongguoBoard.isVisible -> R.id.recycler_hongguo_board_short
+            // 空榜列整列 GONE（上游常只下发一个榜），必须挑可见的那列，
+            // 恒指 board_short 会在"只有漫画榜"时指向 GONE 目标必失败
+            binding.boardColShort.isVisible -> R.id.recycler_hongguo_board_short
+            binding.boardColComic.isVisible -> R.id.recycler_hongguo_board_comic
             else -> View.NO_ID
         }
         if (mode == Mode.DISCOVER) syncInputDownTarget()
@@ -149,6 +167,7 @@ class HongguoSearchPage : Fragment() {
 
     private fun setupSuggest() {
         binding.recyclerHongguoSuggest.adapter = suggestAdapter
+        binding.recyclerHongguoSuggest.isFocusable = false
     }
 
     // ---- 结果态（原有链路） ----
@@ -157,6 +176,7 @@ class HongguoSearchPage : Fragment() {
         binding.recyclerHongguoResults.layoutManager =
             WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerHongguoResults.adapter = resultAdapter
+        binding.recyclerHongguoResults.isFocusable = false
         binding.recyclerHongguoResults.itemAnimator = null
         binding.recyclerHongguoResults.addItemDecoration(
             GridSpacingItemDecoration(
@@ -205,20 +225,41 @@ class HongguoSearchPage : Fragment() {
             if (hasFocus) imm?.showSoftInput(binding.editHongguoKeyword, 0)
             else imm?.hideSoftInputFromWindow(binding.editHongguoKeyword.windowToken, 0)
         }
-        // RIGHT 落「搜索」按钮（放行框架会几何逃逸到被覆盖的 tab 行）
+        // RIGHT 落「搜索」按钮（放行框架会几何逃逸到被覆盖的 tab 行）；
+        // LEFT 落「退出」按钮——放行会被 EditText 当光标左移吞掉（TV 上光标
+        // 移动无意义，方向键是导航语义，对齐主搜索页 DPAD_LEFT 显式落点）；
+        // DOWN 显式落焦：EditText 会吞 SOURCE_KEYBOARD 来源的方向键
+        // （TextView.doKeyDown 防键盘用户方向键跑焦；MuMu 键盘/adb 注入正是此来源），
+        // nextFocusDownId 在这些设备上永远不会被框架执行，必须像主搜索页一样自己落
         binding.editHongguoKeyword.setOnKeyListener { _, keyCode, event ->
-            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
-                event.action == KeyEvent.ACTION_DOWN &&
-                (binding.buttonHongguoSearchGo.requestFocus() || true)
+            if (event.action == KeyEvent.ACTION_DOWN && keyCode in 19..22) {
+                AppLog.d(
+                    "HgSearch",
+                    "input onKey code=$keyCode source=${event.source} inTouchMode=${binding.root.isInTouchMode}"
+                )
+            }
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT ->
+                    binding.buttonHongguoSearchExit.requestFocus() || true
+                KeyEvent.KEYCODE_DPAD_RIGHT ->
+                    binding.buttonHongguoSearchGo.requestFocus() || true
+                KeyEvent.KEYCODE_DPAD_DOWN -> focusInputDownTarget()
+                else -> false
+            }
         }
         binding.editHongguoKeyword.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                doSearch(binding.editHongguoKeyword.text.toString())
+                doSearch(currentKeyword())
                 true
             } else false
         }
         binding.buttonHongguoSearchGo.setOnClickListener {
-            doSearch(binding.editHongguoKeyword.text.toString())
+            doSearch(currentKeyword())
+        }
+        // 左端退出钮：收起搜索覆盖层（等价 BACK 收层），焦点还原由宿主处理
+        binding.buttonHongguoSearchExit.setOnClickListener {
+            (parentFragment as? HongguoFragment)?.hideSearchOverlay()
         }
         // 输入停顿 400ms 拉联想；清空恒回发现态（结果态下改词/清空也要能回发现页）
         binding.editHongguoKeyword.doOnTextChanged { text ->
@@ -264,6 +305,38 @@ class HongguoSearchPage : Fragment() {
         }
         binding.editHongguoKeyword.nextFocusDownId = target
         binding.buttonHongguoSearchGo.nextFocusDownId = target
+        binding.buttonHongguoSearchExit.nextFocusDownId = target
+    }
+
+    /** 输入框 DOWN 的显式落焦：焦点直接进目标列表第一项（遥控走 nextFocusDownId 时
+     *  焦点会先落在 RecyclerView 自身再由 AFTER_DESCENDANTS 转发，无高亮反馈）。
+     *  候选链逐区尝试（可见且有子项），全部落空时吞键返回 true——放行框架会被
+     *  EditText 吞掉 SOURCE_KEYBOARD 方向键（MuMu 键盘/adb 注入即此来源），
+     *  与其无效不如保持焦点，数据到位后下一次 DOWN 即可落焦。 */
+    private fun focusInputDownTarget(): Boolean {
+        val candidates = when (mode) {
+            Mode.DISCOVER -> listOf(
+                binding.recyclerHongguoHistory,
+                binding.recyclerHongguoGuess,
+                binding.recyclerHongguoBoardShort,
+                binding.recyclerHongguoBoardComic
+            )
+            Mode.SUGGEST -> listOf(binding.recyclerHongguoSuggest)
+            Mode.RESULT -> listOf(binding.recyclerHongguoResults)
+        }.filter { it.isShown && it.childCount > 0 }
+        for (target in candidates) {
+            if (target.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus() == true ||
+                target.getChildAt(0)?.requestFocus() == true
+            ) {
+                AppLog.d("HgSearch", "downTarget id=${target.id} children=${target.childCount} result=true")
+                return true
+            }
+        }
+        AppLog.d(
+            "HgSearch",
+            "downTarget mode=$mode empty=true children=${candidates.joinToString { "${it.id}:${it.childCount}" }}"
+        )
+        return true
     }
 
     /** 宿主重新打开覆盖层时归还输入框焦点（复用实例时 onViewCreated 不会重跑）。 */
@@ -286,6 +359,13 @@ class HongguoSearchPage : Fragment() {
             return
         }
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+    }
+
+    /** 当前搜索词：输入为空回退灰色推荐词（hint），官方同款——空输入点搜索直接搜推荐词。 */
+    private fun currentKeyword(): String {
+        val typed = binding.editHongguoKeyword.text?.toString()?.trim().orEmpty()
+        if (typed.isNotEmpty()) return typed
+        return binding.editHongguoKeyword.hint?.toString()?.trim().orEmpty()
     }
 
     private fun doSearch(kwRaw: String) {
@@ -370,18 +450,46 @@ class HongguoSearchPage : Fragment() {
         _binding = null
     }
 
-    /** 首行 UP 回输入框的小工具：发现区/联想行共用（网格结果走 TvListFocusController）。 */
-    private fun View.bindTopUpToInput(position: Int) {
+    /** 首行 UP 回输入框；DOWN 显式接管（发现区/联想行共用）：
+     *  框架 FocusFinder 评分里，左侧栏按钮纵向铺满全高、总有按钮贴着焦点底边
+     *  (纵向距离 0)，beam 规则对垂直方向优势有限，放行 DOWN 必被侧栏以零距离
+     *  抢走——只能像输入框一样显式落焦。 */
+    private fun View.bindSectionEdgeKeys(position: Int, onDown: () -> Boolean) {
         setOnKeyListener { _, keyCode, event ->
-            keyCode == KeyEvent.KEYCODE_DPAD_UP &&
-                event.action == KeyEvent.ACTION_DOWN &&
-                position == 0 &&
-                (binding.editHongguoKeyword.requestFocus() || true)
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP ->
+                    position == 0 && (binding.editHongguoKeyword.requestFocus() || true)
+                KeyEvent.KEYCODE_DPAD_DOWN -> onDown()
+                else -> false
+            }
         }
+    }
+
+    /** id 顺序表中 currentId 之后的第一个可见非空区，落其首行。 */
+    private fun focusSectionBelow(currentId: Int): Boolean {
+        val order = listOf(
+            R.id.recycler_hongguo_history,
+            R.id.recycler_hongguo_guess,
+            R.id.recycler_hongguo_board_short,
+            R.id.recycler_hongguo_board_comic
+        )
+        val start = order.indexOf(currentId)
+        if (start < 0) return false
+        for (id in order.subList(start + 1, order.size)) {
+            val rv = binding.root.findViewById<RecyclerView>(id)
+            // isShown：自身+全部祖先可见（isVisible 不查祖先，GONE 的 section
+            // 里 RV flag 仍 VISIBLE，会混进候选链把焦点送上不可见 child）
+            if (rv != null && rv.isShown && rv.childCount > 0) {
+                if (rv.getChildAt(0).requestFocus()) return true
+            }
+        }
+        return false
     }
 
     // ---- 词 chip（历史/猜你想搜横排；复用筛选 chip 同款 cell） ----
     private inner class WordChipAdapter(
+        private val currentRecyclerId: Int,
         private val onClick: (HongguoClient.DiscoveryItem) -> Unit
     ) : RecyclerView.Adapter<WordChipAdapter.Holder>() {
         private var list: List<HongguoClient.DiscoveryItem> = emptyList()
@@ -391,7 +499,7 @@ class HongguoSearchPage : Fragment() {
             notifyDataSetChanged()
         }
 
-        override fun getItemCount(): Int = list.size
+        override fun getItemCount() = list.size
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
             val view = LayoutInflater.from(parent.context)
@@ -408,7 +516,10 @@ class HongguoSearchPage : Fragment() {
                 val text = itemView as? android.widget.TextView ?: return
                 text.text = item.title
                 text.setOnClickListener { onClick(item) }
-                text.bindTopUpToInput(position)
+                text.bindSectionEdgeKeys(position) {
+                    focusSectionBelow(currentRecyclerId)
+                    true // 恒吞：无下一区时放行会被侧栏以零距离抢走
+                }
             }
         }
     }
@@ -452,7 +563,8 @@ class HongguoSearchPage : Fragment() {
                 tip.text = item.tip
                 tip.isVisible = item.tip.isNotBlank()
                 itemView.setOnClickListener { onClick(item) }
-                itemView.bindTopUpToInput(position)
+                // 非尾行 DOWN 放行给 RV 内部导航；尾行吞（放行必逃侧栏）
+                itemView.bindSectionEdgeKeys(position) { position >= itemCount - 1 }
             }
         }
     }
@@ -482,7 +594,7 @@ class HongguoSearchPage : Fragment() {
             holder.itemView.setOnClickListener {
                 onClick(HongguoClient.DiscoveryItem(title = word))
             }
-            holder.itemView.bindTopUpToInput(position)
+            holder.itemView.bindSectionEdgeKeys(position) { position >= itemCount - 1 }
         }
 
         inner class Holder(view: View) : RecyclerView.ViewHolder(view) {
