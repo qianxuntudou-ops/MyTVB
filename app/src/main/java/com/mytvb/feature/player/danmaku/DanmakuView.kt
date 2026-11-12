@@ -543,6 +543,9 @@ class DanmakuView @JvmOverloads constructor(
 
     /** 自适应帧率评估（主线程，onDraw 驱动每 3s 一窗）。规则见字段注释。 */
     private fun evaluateAdaptiveFpsWindow(frames: Int, deltaMs: Long, nowUpMs: Long) {
+        // 降频逻辑已屏蔽：评估短路，adaptiveHalfFps 恒 false，
+        // invalidateDanmakuAreaOnAnimation 的时间闸门随之永不生效（恒 60fps）。
+        if (!ADAPTIVE_HALF_FPS_ENABLED) return
         val fps = if (deltaMs > 0L) frames * 1000f / deltaMs.toFloat() else 0f
         if (!adaptiveHalfFps) {
             if (nowUpMs < adaptiveNoEnterBeforeMs) return
@@ -752,5 +755,8 @@ class DanmakuView @JvmOverloads constructor(
 
         private const val STOP_WHEN_IDLE_MS = 700L
         private const val PERF_LOG_INTERVAL_MS = 3_000L
+
+        /** 自适应降半频总开关。false=屏蔽降频逻辑（恒 60fps），置 true 可整体恢复。 */
+        private const val ADAPTIVE_HALF_FPS_ENABLED = false
     }
 }
