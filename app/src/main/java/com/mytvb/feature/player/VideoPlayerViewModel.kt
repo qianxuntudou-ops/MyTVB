@@ -3334,6 +3334,10 @@ class VideoPlayerViewModel(
     fun handlePlaybackStall(positionMs: Long, stalledMs: Long): Boolean =
         fallbackController.handlePlaybackStall(positionMs, stalledMs)
 
+    /** 网络性卡顿救援（issue#114）：只换 CDN 不降画质。 */
+    fun handleNetworkStall(positionMs: Long, stalledMs: Long): Boolean =
+        fallbackController.handleNetworkStall(positionMs, stalledMs)
+
     /**
      * 双宿主 onPlaybackStateChanged 的 CDN 健康分回流：
      * READY 首次记成功(+25)；BUFFERING 只记播放中途的 rebuffer(-55)——

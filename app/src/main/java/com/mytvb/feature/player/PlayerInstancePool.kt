@@ -55,13 +55,18 @@ object PlayerInstancePool {
     private const val WIFI_MIN_BUFFER_MS = 12_000
     private const val WIFI_MAX_BUFFER_MS = 40_000
     private const val WIFI_BUFFER_FOR_PLAYBACK_MS = 1_000
-    private const val WIFI_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000
+    // rebuffer 恢复水位（issue#114）：3s 太抠——下载速度低于码率一半时，攒 3s 播 3s 又断粮，
+    // 形成"卡 2 秒播几秒再卡"的循环，循环周期=水位大小。10s 让波动型吞吐（均值够、瞬时不够）
+    // 被直接吸收；长期入不敷出的场景由网络卡顿救援（PlaybackFallbackController.handleNetworkStall）
+    // 换 CDN 兜底，不会干等攒水位。须 ≤ MIN_BUFFER_MS(12s)。
+    private const val WIFI_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 10_000
 
     // 移动数据下的缓冲参数：更保守，减少卡顿
     private const val CELLULAR_MIN_BUFFER_MS = 16_000
     private const val CELLULAR_MAX_BUFFER_MS = 50_000
     private const val CELLULAR_BUFFER_FOR_PLAYBACK_MS = 1_500
-    private const val CELLULAR_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_500
+    // 同 WiFi 档（issue#114）：蜂窝 30Mbps 级出口下 3.5s 水位同样撑不起高码率流。
+    private const val CELLULAR_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 10_000
 
     private val mainHandler = Handler(Looper.getMainLooper())
 

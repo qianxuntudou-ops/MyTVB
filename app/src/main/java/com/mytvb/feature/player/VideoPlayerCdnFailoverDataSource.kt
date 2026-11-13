@@ -87,6 +87,38 @@ internal class VideoPlayerCdnFailoverDataSource(
     private var upstream: DataSource? = null
     private val transferListeners = ArrayList<TransferListener>(2)
 
+    // ===== 吞吐计量（issue#114）=====
+    // 每 5s 结算一次增量速率上报 CdnLatencyProfile：排序沉底喂不饱高码率流的 host。
+    // 打点而非只在 close 结算——durl 直链整段视频一个长 open，中途换线决策等不到 close。
+    private var throughputWindowBytes = 0L
+    private var throughputWindowStartedAtMs = 0L
+
+    private companion object {
+        private const val THROUGHPUT_SAMPLE_INTERVAL_MS = 5_000L
+        // 窗口内至少 256KB 才上报：避免 BUFFERING 尾段"只读了几十 KB"的窗口把速率记成 0.0xMB/s
+        private const val THROUGHPUT_MIN_SAMPLE_BYTES = 256 * 1024L
+    }
+
+    private fun reportThroughputSample(force: Boolean) {
+        val source = upstream ?: return
+        val nowMs = SystemClock.elapsedRealtime()
+        val windowMs = nowMs - throughputWindowStartedAtMs
+        if (windowMs <= 0L) return
+        if (windowMs < THROUGHPUT_SAMPLE_INTERVAL_MS && !force) return
+        if (throughputWindowBytes < THROUGHPUT_MIN_SAMPLE_BYTES) {
+            // 数据量太小不代表稳态速率，丢弃本窗口重新累计（不污染画像）
+            throughputWindowBytes = 0L
+            throughputWindowStartedAtMs = nowMs
+            return
+        }
+        val hostUrl = source.uri?.toString()
+        if (hostUrl != null) {
+            CdnLatencyProfile.recordThroughput(hostUrl, throughputWindowBytes * 1000L / windowMs)
+        }
+        throughputWindowBytes = 0L
+        throughputWindowStartedAtMs = nowMs
+    }
+
     override fun addTransferListener(transferListener: TransferListener) {
         transferListeners += transferListener
         upstream?.addTransferListener(transferListener)
@@ -125,6 +157,8 @@ internal class VideoPlayerCdnFailoverDataSource(
                 val openedLength = upstreamSource.open(candidateSpec)
                 upstream = upstreamSource
                 state.markPreferred(index)
+                throughputWindowBytes = 0L
+                throughputWindowStartedAtMs = SystemClock.elapsedRealtime()
                 // 采集 TTFB 到延迟画像：open 成功 = 该 CDN 在当前网络下确实可达。
                 // 数据沉淀进 CdnLatencyProfile（进程级单例），跨视频复用，让后续播放的
                 // sortUrlsByLatency 能把实测快的 host 排到 candidates 前面。
@@ -156,7 +190,12 @@ internal class VideoPlayerCdnFailoverDataSource(
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         val activeUpstream = upstream ?: throw IllegalStateException("read() before open()")
-        return activeUpstream.read(buffer, offset, length)
+        val bytesRead = activeUpstream.read(buffer, offset, length)
+        if (bytesRead > 0) {
+            throughputWindowBytes += bytesRead
+            reportThroughputSample(force = false)
+        }
+        return bytesRead
     }
 
     override fun getUri(): Uri? = upstream?.uri
@@ -166,6 +205,9 @@ internal class VideoPlayerCdnFailoverDataSource(
     }
 
     private fun closeQuietly() {
+        if (upstream != null && throughputWindowBytes > 0L) {
+            reportThroughputSample(force = true)
+        }
         runCatching { upstream?.close() }
         upstream = null
     }
