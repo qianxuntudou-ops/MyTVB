@@ -201,7 +201,10 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 loadJob?.cancel()
                 loadJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
-                        binding.progressLoading.visibility = View.VISIBLE
+                        // 本地记录已秒显，云端合并静默进行；仅本地也空时给中央圈反馈
+                        if (adapter.contentCount() == 0) {
+                            binding.progressLoading.visibility = View.VISIBLE
+                        }
                         val merged = repository.mergedHistory()
                         adapter.setDataDeduplicated(merged.map { it.toUi() })
                         binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
@@ -226,7 +229,11 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             else -> "/category/short-drama"
         }
         loading = true
-        binding.progressLoading.visibility = View.VISIBLE
+        // 加载更多静默追加（对齐 B 站列表 BaseListFragment 行为），
+        // 中央圈只在首屏/筛选刷新（列表为空）时出现，下滑途中不再盖屏
+        if (adapter.contentCount() == 0) {
+            binding.progressLoading.visibility = View.VISIBLE
+        }
         loadJob?.cancel()
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
