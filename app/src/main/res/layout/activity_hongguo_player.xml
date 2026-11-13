@@ -115,8 +115,47 @@
                 android:contentDescription="@string/play_pause">
                 <requestFocus/>
             </com.mytvb.feature.player.view.PlayerControlButton>
+            <!-- 画质/选集/倍速：各开右侧竖版面板（HongguoRightPanelDialog） -->
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_quality"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px11"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
+                android:layout_marginStart="@dimen/px10"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/ic_player_setting"
+                android:contentDescription="@string/video_quality"/>
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_episodes"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px11"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
+                android:layout_marginStart="@dimen/px10"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/ic_list"
+                android:contentDescription="@string/choose_episode"/>
+            <com.mytvb.feature.player.view.PlayerControlButton
+                android:id="@+id/button_speed"
+                android:background="@drawable/cell_background"
+                android:padding="@dimen/px11"
+                android:focusable="true"
+                android:clickable="true"
+                android:nextFocusUp="@id/time_bar"
+                android:layout_marginStart="@dimen/px10"
+                android:layout_width="@dimen/px113"
+                android:layout_height="@dimen/px113"
+                android:src="@drawable/exo_ic_speed"
+                android:contentDescription="@string/playSpeed"/>
+            <!-- 快退/快进按钮已按需求隐藏（遥控左右键与触摸滑动可完成快进快退） -->
             <com.mytvb.feature.player.view.PlayerControlButton
                 android:id="@+id/button_rewind"
+                android:visibility="gone"
                 android:background="@drawable/cell_background"
                 android:padding="@dimen/px11"
                 android:focusable="true"
@@ -129,6 +168,7 @@
                 android:contentDescription="@string/rewind"/>
             <com.mytvb.feature.player.view.PlayerControlButton
                 android:id="@+id/button_fast_forward"
+                android:visibility="gone"
                 android:background="@drawable/cell_background"
                 android:padding="@dimen/px11"
                 android:focusable="true"
@@ -183,16 +223,16 @@
         android:shadowColor="@color/black"
         android:shadowRadius="7"
         android:visibility="gone"/>
-    <!-- 暂停大图标：暂停+控制栏隐藏时右下角定格提示（对齐红果官方；控制栏呼出/seek 会话期间隐藏） -->
+    <!-- 暂停大图标：暂停+控制栏隐藏时右下角定格提示（尺寸/边距/透明度全套对齐 B 站 image_pause_indicator） -->
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/image_pause_big"
-        android:src="@drawable/ic_pause"
-        android:alpha="0.75"
+        android:src="@drawable/ic_pause_new"
+        android:alpha="0.9"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="@dimen/px40"
-        android:layout_marginBottom="@dimen/px40"
-        android:layout_width="@dimen/px120"
-        android:layout_height="@dimen/px120"
+        android:layout_marginEnd="@dimen/px90"
+        android:layout_marginBottom="@dimen/px169"
+        android:layout_width="@dimen/px135"
+        android:layout_height="@dimen/px135"
         android:importantForAccessibility="no"
         android:visibility="gone"/>
     <!-- 中央快进/快退提示（短按累积 Xs / 长按推进反馈，对齐 B 站 SeekOverlayView 文字提示） -->

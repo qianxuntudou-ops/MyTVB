@@ -6,7 +6,9 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -14,13 +16,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.TimeBar
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
 import com.mytvb.feature.player.settings.PlayerSettingsStore
+import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,9 +42,13 @@ import kotlinx.coroutines.withContext
  *   暂停时控制栏常驻且焦点落播放/暂停按钮
  * - 快进：左右键短按累积 ±10s（450ms 无操作合并提交）、长按冻结画面 + tick 连续推进
  *   （步长按片长自适应，恒定 10s 走完全片）+ 松手立即提交；焦点在进度条时同一状态机
+ * - 触摸快进（对齐 B 站双路径）：屏幕水平滑动 = 瞬时条+预览浮窗实时预览、松手提交
+ *   （滑满一屏 = 100% 时长）；进度条触摸拖动走同一 seek 会话，拖动不冻结画面
  * - 快进预览图：本地解密 MP4 用 MediaMetadataRetriever 取帧，浮窗跟随进度条滑块；
  *   未加密远程直链集降级为纯时间提示
  * - OK 键分流：短按播放/暂停，长按（≥500ms）画质弹窗；控制栏隐藏态短按同时呼出控制栏
+ * - 右侧竖版面板（HongguoRightPanelDialog，右缘滑入贴满高度）：画质/选集（纯数字网格）/倍速，
+ *   打开即聚焦当前项、关面板焦点回来源按钮、面板期间控制栏不隐藏；倍速会话级（切集保持）
  */
 class HongguoPlayerActivity : AppCompatActivity() {
 
@@ -56,6 +65,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var episodeIndex = 1
     private var episodeCount = 0
     private var resumeMs = 0L
+    /** 会话级倍速（起播取设置页默认倍速；切集/切画质后由 startPlayer 重新应用）。 */
+    private var speed = 1.0f
+    /** 当前打开的右侧面板（画质/选集/倍速）：hideRunnable 守卫与 dismiss 回焦用。 */
+    private var rightPanel: HongguoRightPanelDialog? = null
     /** 当前集视频 id（云端进度上传 item_id）。 */
     private var currentVid = ""
     /** 当前集播放信息（画质弹窗数据源：可用档位 + 正播档位）。 */
@@ -68,9 +81,17 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var okKeyTaken = false
 
     private var controlsVisible = true
-    private var hideRunnable = Runnable {
+    private var hideRunnable: Runnable = Runnable { onControlsHideTick() }
+
+    /** 控制栏 4s 超时隐藏：暂停时常驻；右侧面板打开期间续期不隐藏。 */
+    private fun onControlsHideTick() {
         // 暂停时控制栏常驻（B 站 shouldShowControllerIndefinitely：!playWhenReady 不自动隐藏）
-        if (player?.isPlaying != true) return@Runnable
+        if (player?.isPlaying != true) return
+        // 右侧面板打开期间控制栏不隐藏，关面板时 bumpControls 重排计时
+        if (rightPanel?.isShowing == true) {
+            android.os.Handler(mainLooper).postDelayed(hideRunnable, 500L)
+            return
+        }
         hideControls()
     }
     /** 双击 BACK 退出确认：与 B 站 PlayerActivity 同款（exitTime/exitInterval）。 */
@@ -110,6 +131,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private val trackBounds = Rect()
     private val hostLoc = IntArray(2)
 
+    // ==================== 触摸滑动快进（对齐 B 站 handleSwipeSeekTouch） ====================
+    // 构造期 base context 尚未 attach，直接 ViewConfiguration.get(this) 会 NPE，须 lazy
+    private val touchSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop }
+    private var isSwipeSeeking = false
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private var swipeStartMs = 0L
+    private var swipeTargetMs = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityHongguoPlayerBinding.inflate(layoutInflater)
@@ -120,11 +150,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
         episodeIndex = intent.getIntExtra(EXTRA_EPISODE, 1)
         episodeCount = intent.getIntExtra(EXTRA_EPISODE_COUNT, 0)
         resumeMs = intent.getLongExtra(EXTRA_RESUME_MS, 0L)
-        alwaysOnClock = PlayerSettingsStore.load(this).showAlwaysOnClock
+        PlayerSettingsStore.load(this).let {
+            alwaysOnClock = it.showAlwaysOnClock
+            speed = it.defaultPlaybackSpeed
+        }
         binding.textTitle.text = "$title · 第${episodeIndex}集"
         binding.playerView.useController = false
         binding.playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
         setupSeekPreview()
+        setupTimebarScrub()
         setupExit()
         loadAndPlay()
     }
@@ -171,10 +205,12 @@ class HongguoPlayerActivity : AppCompatActivity() {
             }
             if (controlsVisible) hideControls() else showControls(focusPlayPause = true)
         }
-        // 播放/暂停、快退/快进按钮（组件复用 B 站 PlayerControlButton，点击接全局按键同款逻辑）
+        // 播放/暂停按钮（组件复用 B 站 PlayerControlButton，点击接全局按键同款逻辑）
         binding.buttonPlay.setOnClickListener { togglePlayPause() }
-        binding.buttonRewind.setOnClickListener { rewindOrForwardBy(-10_000L) }
-        binding.buttonFastForward.setOnClickListener { rewindOrForwardBy(10_000L) }
+        // 画质/选集/倍速：各开右侧竖版面板
+        binding.buttonQuality.setOnClickListener { showQualityDialog() }
+        binding.buttonEpisodes.setOnClickListener { showEpisodePanel() }
+        binding.buttonSpeed.setOnClickListener { showSpeedPanel() }
         // 顶栏画质文本=画质弹窗入口（触屏；遥控走长按 OK / MENU 键，见 onKeyDown）
         binding.textQuality.setOnClickListener {
             bumpControls()
@@ -203,61 +239,13 @@ class HongguoPlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * 加密流（CENC）落地：下载整集 MP4 → AES-128-CTR 逐样本解密+moov 重建 → 本地文件。
-     * 未加密直接返回原 URL。Node 同款方案（hongguo.js decryptMp4Buffer，单集约 30MB）。
+     * 播放地址 → 可播 URI：加密流（CENC）整集下载+解密落地，未加密直链原样返回。
+     * 实现平移至 Repository（起播/切集/后台预下载共用，含同集在途下载去重）。
      */
-    private fun resolvePlayable(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl): String {
-        val keyHex = play.contentKeyHex ?: return play.url
-        val key = com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(keyHex)
-        val cacheDir = com.mytvb.feature.hongguo.HongguoMediaCache.dir(this)
-        // 缓存文件名带画质档（同集不同档各自落地，避免切画质误命中旧档流）
-        val outFile = java.io.File(cacheDir, cachedFileName(play))
-        if (outFile.isFile && outFile.length() > 0) return android.net.Uri.fromFile(outFile).toString()
-        android.util.Log.d("Hongguo", "cenc download start ${play.vid} q=${play.pixels}")
-        val http = okhttp3.OkHttpClient.Builder()
-            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-        val bytes = http.newCall(
-            okhttp3.Request.Builder().url(play.url)
-                .header("User-Agent", "com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR)")
-                .header("Range", "bytes=0-")
-                .build()
-        ).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("片源下载 HTTP ${resp.code}")
-            resp.body?.bytes() ?: throw IllegalStateException("片源下载为空")
-        }
-        android.util.Log.d("Hongguo", "cenc downloaded ${bytes.size}B, decrypting")
-        val plain = com.mytvb.feature.hongguo.net.HongguoMp4Decrypt.decryptMp4Buffer(bytes, key)
-        java.io.File(cacheDir, "${play.vid}.tmp").let { tmp ->
-            tmp.writeBytes(plain)
-            if (!tmp.renameTo(outFile)) {
-                tmp.copyTo(outFile, overwrite = true)
-                tmp.delete()
-            }
-        }
-        android.util.Log.d("Hongguo", "cenc decrypted ${plain.size}B -> ${outFile.name}")
-        // 落地后按「缓存限制」设置修剪旧集（LRU），防无限堆积
-        com.mytvb.feature.hongguo.HongguoMediaCache.enforceLimit(this)
-        return android.net.Uri.fromFile(outFile).toString()
-    }
+    private suspend fun resolvePlayable(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl): String =
+        repository.resolvePlayableFile(play)
 
-    /** CENC 缓存文件名：同集按画质档区分（vid@1080.mp4；无档位信息回落 vid.mp4 兼容旧缓存）。 */
-    private fun cachedFileName(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl): String =
-        if (play.pixels > 0) "${play.vid}@${play.pixels}.mp4" else "${play.vid}.mp4"
-
-    /** 切画质成功后清理同集其它档位的落地缓存（单档约 30MB，防止逐档堆积）。 */
-    private fun cleanupQualityCache(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl) {
-        val keep = cachedFileName(play)
-        com.mytvb.feature.hongguo.HongguoMediaCache.dir(this).listFiles()?.forEach { f ->
-            val name = f.name
-            if (name != keep && name.startsWith("${play.vid}") &&
-                (name == "${play.vid}.mp4" || name.matches(Regex("${play.vid}@\\d+\\.mp4")))
-            ) f.delete()
-        }
-    }
-
-    /** 本集画质弹窗：列实际下发档位（降序），当前档高亮；无档位/仅一档时提示后不弹。 */
+    /** 本集画质面板（右侧竖版）：列实际下发档位（降序），当前档高亮；无档位/仅一档时提示后不弹。 */
     private fun showQualityDialog() {
         val play = currentPlay ?: return
         val options = play.availableQualities
@@ -267,15 +255,60 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
         val labels = options.map { "${it}P" }
         val selectedIndex = options.indexOf(play.pixels).takeIf { it >= 0 } ?: 0
-        com.mytvb.core.ui.base.ChoiceDialog.show(
-            this,
-            getString(R.string.hongguo_quality_pick),
-            labels,
-            selectedIndex
+        val panel = HongguoRightPanelDialog.show(
+            this, getString(R.string.hongguo_quality_pick), labels, selectedIndex
         ) { index ->
+            rightPanel?.dismiss()
             val target = options.getOrNull(index) ?: return@show
-            if (target == play.pixels) return@show
-            switchQuality(target)
+            if (target != play.pixels) switchQuality(target)
+        }
+        registerPanel(panel, binding.buttonQuality)
+    }
+
+    /** 选集面板（右侧竖版纯数字网格）：当前集高亮，点击切集（选当前集仅关面板）。 */
+    private fun showEpisodePanel() {
+        if (episodeCount <= 0) {
+            AppToast.show(this, "暂无选集信息")
+            return
+        }
+        val labels = (1..episodeCount).map { it.toString() }
+        val panel = HongguoRightPanelDialog.show(
+            this, getString(R.string.choose_episode), labels, episodeIndex - 1, spanCount = 6
+        ) { index ->
+            rightPanel?.dismiss()
+            val target = index + 1
+            if (target != episodeIndex) switchEpisode(target)
+        }
+        registerPanel(panel, binding.buttonEpisodes)
+    }
+
+    /** 倍速面板（右侧竖版）：档位与 B 站同源（PlaybackSpeedPolicy），当前档高亮；选中即时生效。 */
+    private fun showSpeedPanel() {
+        val options = PlaybackSpeedPolicy.DEFAULT_PLAYBACK_SPEED_OPTIONS
+        val arrayLabels = resources.getStringArray(R.array.exo_controls_playback_speeds)
+        val labels = if (arrayLabels.size == options.size) arrayLabels.toList()
+        else options.map { if (it == it.toInt().toFloat()) "${it.toInt()}x" else "${it}x" }
+        val selectedIndex = options.indexOfFirst { kotlin.math.abs(it - speed) < 0.01f }
+            .takeIf { it >= 0 } ?: options.indexOfFirst { it == 1.0f }.coerceAtLeast(0)
+        val panel = HongguoRightPanelDialog.show(
+            this, getString(R.string.playSpeed), labels, selectedIndex
+        ) { index ->
+            rightPanel?.dismiss()
+            options.getOrNull(index)?.let { picked ->
+                speed = picked
+                player?.playbackParameters = PlaybackParameters(speed)
+            }
+        }
+        registerPanel(panel, binding.buttonSpeed)
+    }
+
+    /** 面板登记：dismiss 后焦点回来源按钮 + 控制栏重置 4s 计时（面板期间 hideRunnable 守卫不隐藏）。 */
+    private fun registerPanel(panel: HongguoRightPanelDialog, sourceButton: View) {
+        rightPanel = panel
+        panel.setOnDismissListener {
+            if (rightPanel === panel) rightPanel = null
+            bumpControls()
+            binding.root.post { sourceButton.requestFocus() }
         }
     }
 
@@ -289,11 +322,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
             try {
                 val play = resolvePlayUrl(currentVid, pixels)
                 binding.progressBuffering.visibility = View.VISIBLE
-                val playable = withContext(Dispatchers.IO) { resolvePlayable(play) }
+                val playable = resolvePlayable(play)
                 binding.progressBuffering.visibility = View.GONE
                 currentPlay = play
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
-                cleanupQualityCache(play)
+                repository.cleanupOtherQualityCaches(play)
                 resumeMs = resumePos
                 bindThumbs(play)
                 startPlayer(playable)
@@ -350,7 +383,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
                 android.util.Log.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
                 binding.progressBuffering.visibility = View.VISIBLE
-                val playable = withContext(Dispatchers.IO) { resolvePlayable(play) }
+                val playable = resolvePlayable(play)
                 binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
@@ -368,7 +401,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    private fun startPlayer(url: String) {
+    /** [revealControls]=false 为切集路径：控制栏保持隐藏态不呼出（UP/DOWN 切集/播完连播不弹 UI）。 */
+    private fun startPlayer(url: String, revealControls: Boolean = true) {
         player?.release()
         val p = ExoPlayer.Builder(this).build()
         player = p
@@ -377,6 +411,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
         p.prepare()
         if (resumeMs > 0) p.seekTo(resumeMs)
         p.playWhenReady = true
+        // 切集/切画质重建 player 后保持会话倍速（B 站换视频速度不重置）
+        p.playbackParameters = PlaybackParameters(speed)
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 android.util.Log.d("Hongguo", "player state=$state")
@@ -411,7 +447,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             }
         })
         startPositionWatcher()
-        bumpControls()
+        if (revealControls) bumpControls()
     }
 
     // ==================== 按键路由（对齐 MyPlayerView.dispatchKeyEvent 模型） ====================
@@ -569,8 +605,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
             binding.panelTop.visibility = View.GONE
             binding.textTitle.visibility = View.INVISIBLE
             binding.buttonPlay.visibility = View.INVISIBLE
-            binding.buttonRewind.visibility = View.INVISIBLE
-            binding.buttonFastForward.visibility = View.INVISIBLE
             binding.panelBottom.visibility = View.VISIBLE
             binding.timeBar.requestFocus()
         }
@@ -664,10 +698,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
         holdStartMs = 0L
         tapBaseMs = 0L
         tapDeltaMs = 0L
+        val wasInstantBar = !seekFromTimebar // 瞬时条会话（控制栏隐藏态按键/触摸滑动）才立即收
         seekFromTimebar = false
         seekPreview?.hideNow()
         hideSeekHint()
-        if (!controlsVisible && binding.panelBottom.visibility == View.VISIBLE) {
+        if (wasInstantBar && binding.panelBottom.visibility == View.VISIBLE) {
             exitSeekUi() // 瞬时条立即收（B 站取消路径 exitSeekProgressOnly 同款）
         }
         updateAlwaysClock()
@@ -703,8 +738,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private fun exitSeekUi() {
         binding.textTitle.visibility = View.VISIBLE
         binding.buttonPlay.visibility = View.VISIBLE
-        binding.buttonRewind.visibility = View.VISIBLE
-        binding.buttonFastForward.visibility = View.VISIBLE
         binding.panelTop.visibility = View.GONE
         binding.panelBottom.visibility = View.GONE
         controlsVisible = false
@@ -767,19 +800,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private fun hideSeekHint() {
         lastHintSeconds = Int.MIN_VALUE
         binding.textSeekHint.visibility = View.GONE
-    }
-
-    /** 控制栏快退/快进按钮：立即 ±10s 提交 + 预览闪现（B 站 dispatchRewind/FastForward 形态）。 */
-    private fun rewindOrForwardBy(deltaMs: Long) {
-        val p = player ?: return
-        val dur = durationMs()
-        if (dur <= 0L) return
-        val target = (p.currentPosition + deltaMs).coerceIn(0L, seekUpperBoundMs(dur))
-        p.seekTo(target)
-        renderSeekPreview(target, dur)
-        seekPreview?.hideAfter(500L)
-        hideSeekHint()
-        bumpControls()
     }
 
     private fun cancelPendingHoldStart() {
@@ -877,11 +897,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 binding.textTitle.text = "$title · 第${episodeIndex}集"
                 val play = resolvePlayUrl(episode.videoId).also { currentPlay = it }
                 binding.progressBuffering.visibility = View.VISIBLE
-                val playable = withContext(Dispatchers.IO) { resolvePlayable(play) }
+                val playable = resolvePlayable(play)
                 binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
-                startPlayer(playable)
+                startPlayer(playable, revealControls = false)
                 preloadFollowingEpisodes()
             } catch (e: CancellationException) {
                 throw e
@@ -924,8 +944,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
             // 从瞬时条恢复时还原底栏完整元素
             binding.textTitle.visibility = View.VISIBLE
             binding.buttonPlay.visibility = View.VISIBLE
-            binding.buttonRewind.visibility = View.VISIBLE
-            binding.buttonFastForward.visibility = View.VISIBLE
         }
         updateAlwaysClock()
     }
@@ -937,14 +955,107 @@ class HongguoPlayerActivity : AppCompatActivity() {
         updatePauseBigIcon()
     }
 
-    /** 暂停大图标：用户暂停 + 控制栏隐藏 + 非 seek 会话 + 非播完时右下角显示（对齐红果官方）。
-     * 用 playWhenReady 判定而非 isPlaying——BUFFERING 的 isPlaying=false 不是"停了"，不能亮图标。 */
+    /** 暂停大图标：用户暂停（playWhenReady=false 且 READY）即显示，与控制栏并存叠加（对齐 B 站
+     * updatePauseIndicator，无 controlsVisible 条件——红果暂停时控制栏常驻，旧条件会把图标永远压住）。
+     * 布局中位于底部控制栏之后，z 序天然在上层。用 playWhenReady 判定而非 isPlaying——
+     * BUFFERING 的 isPlaying=false 不是"停了"，不能亮图标。 */
     private fun updatePauseBigIcon() {
         val p = player
         binding.imagePauseBig.visibility =
-            if (p != null && !p.playWhenReady && !seekUiActive && !controlsVisible &&
-                p.playbackState != Player.STATE_ENDED
+            if (p != null && !p.playWhenReady && p.playbackState == Player.STATE_READY
             ) View.VISIBLE else View.GONE
+    }
+
+    // ==================== 触摸 seek（对齐 B 站双路径） ====================
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // 滑动会话进行中优先接管（含从按钮起滑被拦截的流）；否则检测水平滑动起会话
+        if (handleSwipeSeekTouch(event)) return true
+        return super.dispatchTouchEvent(event)
+    }
+
+    /** 屏幕水平滑动快进（B 站 MyPlayerView.handleSwipeSeekTouch 同款）：
+     * 超过 touchSlop 且水平为主的拖动 → 瞬时条+预览浮窗跟随实时预览，松手提交、取消回退。
+     * 滑动期间画面不冻结（与 B 站一致），交由现有 seek 会话状态机统一渲染。 */
+    private fun handleSwipeSeekTouch(event: MotionEvent): Boolean {
+        val p = player ?: return false
+        val dur = p.duration.coerceAtLeast(0L)
+        if (dur <= 0L || !p.isCurrentMediaItemSeekable) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeDownX = event.x
+                swipeDownY = event.y
+                swipeStartMs = p.currentPosition.coerceAtLeast(0L)
+                swipeTargetMs = swipeStartMs
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.x - swipeDownX
+                val dy = event.y - swipeDownY
+                if (!isSwipeSeeking) {
+                    val horizontal = kotlin.math.abs(dx) > touchSlop &&
+                        kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.2f
+                    if (!horizontal) return false
+                    isSwipeSeeking = true
+                    cancelExitSeekUi()
+                    seekUiActive = true
+                    seekFromTimebar = false // 瞬时条形态（B 站 enterSeekProgressOnly）
+                    seekAnchorMs = swipeStartMs
+                    enterSeekUi()
+                }
+                swipeTargetMs = (swipeStartMs + computeSwipeDeltaMs(dx, dur))
+                    .coerceIn(0L, seekUpperBoundMs(dur))
+                renderSeekPreview(swipeTargetMs, dur)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (!isSwipeSeeking) return false
+                isSwipeSeeking = false
+                if (event.actionMasked == MotionEvent.ACTION_UP) {
+                    p.seekTo(swipeTargetMs)
+                    finishSeekUi()
+                } else {
+                    cancelSeekSession()
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    /** 滑满一整屏宽 = 100% 时长，滑动比例即时长比例（B 站 computeSwipeSeekDeltaMs 同款手感）。 */
+    private fun computeSwipeDeltaMs(deltaX: Float, durationMs: Long): Long {
+        val widthPx = binding.root.width.coerceAtLeast(1).toFloat()
+        val ratio = (deltaX / widthPx).coerceIn(-1f, 1f)
+        return (durationMs * ratio).toLong()
+    }
+
+    /** 进度条触摸拖动（B 站 MyPlayerControlView OnScrubListener 同款）：拖动不冻结画面，
+     * 实时预览（浮窗+时间），松手提交走 finishSeekUi 完整控制栏路径收尾。 */
+    private fun setupTimebarScrub() {
+        binding.timeBar.addListener(object : TimeBar.OnScrubListener {
+            override fun onScrubStart(timeBar: TimeBar, position: Long) {
+                cancelExitSeekUi()
+                seekUiActive = true
+                seekFromTimebar = true // 控制栏显示态拖动，完整控制栏保持
+                seekAnchorMs = player?.currentPosition ?: 0L
+            }
+
+            override fun onScrubMove(timeBar: TimeBar, position: Long) {
+                val dur = durationMs()
+                if (dur > 0L) renderSeekPreview(position.coerceIn(0L, seekUpperBoundMs(dur)), dur)
+            }
+
+            override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
+                val p = player
+                if (!canceled && p != null && p.duration > 0L) {
+                    // duration 暂不可用（切集窗口期）时放弃提交，防 seekTo(0) 凭空跳回片头
+                    p.seekTo(position.coerceIn(0L, seekUpperBoundMs(p.duration)))
+                    finishSeekUi()
+                } else {
+                    cancelSeekSession()
+                }
+            }
+        })
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

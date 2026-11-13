@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 右侧面板选项行：单列模式=左对齐长文本+勾选图标；网格模式（选集）=居中纯数字，勾选图标隐藏、当前项靠 selected 底色高亮 -->
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/click_view"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/px100"
+    android:background="@drawable/cell_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/px30"
+    android:paddingEnd="@dimen/px30">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:singleLine="true"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        tools:text="1080P" />
+
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/icon_check"
+        android:layout_width="@dimen/px40"
+        android:layout_height="@dimen/px40"
+        android:layout_marginStart="@dimen/px16"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_check"
+        android:visibility="invisible"
+        tools:visibility="visible" />
+</androidx.appcompat.widget.LinearLayoutCompat>
