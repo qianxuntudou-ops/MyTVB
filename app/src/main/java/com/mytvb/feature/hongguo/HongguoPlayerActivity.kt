@@ -48,7 +48,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private var progressJob: Job? = null
     private var seekPreview: HongguoSeekPreviewView? = null
-    private var frameExtractor: HongguoFrameExtractor? = null
+    private var thumbProvider: HongguoThumbProvider? = null
 
     private var seriesId = ""
     private var title = ""
@@ -137,7 +137,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         val heightPx = resources.getDimensionPixelSize(R.dimen.px225)
         binding.root.addView(preview, FrameLayout.LayoutParams(widthPx, heightPx))
         seekPreview = preview
-        frameExtractor = HongguoFrameExtractor(widthPx) { _, bitmap ->
+        thumbProvider = HongguoThumbProvider(widthPx) { _, bitmap ->
             preview.setBitmap(bitmap)
         }
     }
@@ -295,7 +295,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 cleanupQualityCache(play)
                 resumeMs = resumePos
-                bindFrameExtractor(play, playable)
+                bindThumbs(play)
                 startPlayer(playable)
                 resumeMs = 0L
             } catch (e: CancellationException) {
@@ -318,12 +318,23 @@ class HongguoPlayerActivity : AppCompatActivity() {
     ): com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl =
         repository.playUrl(vid, preferredPixels)
 
-    /** 加密集有本地解密文件 → 取帧器可用；未加密远程直链不 bind（预览降级纯时间提示）。 */
-    private fun bindFrameExtractor(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl, playable: String) {
-        if (play.contentKeyHex != null && playable.startsWith("file://")) {
-            // Uri.fromFile 会把文件名里的 @ 编码成 %40，须取 Uri.path 解码后的真实路径
-            val path = android.net.Uri.parse(playable).path ?: return
-            frameExtractor?.bindAsync(path)
+    /** 本集官方雪碧图（big_thumbs）绑定；未下发/解码失败 = 预览降级纯时间提示。 */
+    private fun bindThumbs(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl) {
+        thumbProvider?.bind(play.bigThumbs)
+    }
+
+    /** 起播/切集成功后预取后续集播放地址（官方 preload/v1 批量；地址缓存见 Repository）。 */
+    private fun preloadFollowingEpisodes() {
+        if (seriesId.isEmpty()) return
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val episodes = repository.detail(seriesId).episodes
+                // episodeIndex 为 1-based：下一集 = getOrNull(episodeIndex)
+                val vids = listOf(episodeIndex, episodeIndex + 1)
+                    .mapNotNull { episodes.getOrNull(it) }
+                    .map { it.videoId }
+                repository.preloadNextEpisodes(vids)
+            }
         }
     }
 
@@ -342,8 +353,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 val playable = withContext(Dispatchers.IO) { resolvePlayable(play) }
                 binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
-                bindFrameExtractor(play, playable)
+                bindThumbs(play)
                 startPlayer(playable)
+                preloadFollowingEpisodes()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -740,7 +752,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         binding.root.getLocationInWindow(hostLoc)
         trackBounds.offset(-hostLoc[0], -hostLoc[1])
         preview.show(targetMs, durationMs, trackBounds)
-        frameExtractor?.request(targetMs)
+        thumbProvider?.request(targetMs)
     }
 
     /** 中央快进/快退提示：秒数变化才刷文本（长按 tick 40ms 一次不能每拍都重排）。 */
@@ -868,8 +880,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 val playable = withContext(Dispatchers.IO) { resolvePlayable(play) }
                 binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
-                bindFrameExtractor(play, playable)
+                bindThumbs(play)
                 startPlayer(playable)
+                preloadFollowingEpisodes()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -956,7 +969,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         cancelTapCommit()
         cancelExitSeekUi()
         android.os.Handler(mainLooper).removeCallbacks(hideRunnable)
-        frameExtractor?.release()
+        thumbProvider?.release()
         player?.release()
         player = null
     }

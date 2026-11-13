@@ -44,8 +44,33 @@ class HongguoPlay(
         /** 当前所选档位（竖屏取 min(width,height)，无尺寸信息时 0）。 */
         val pixels: Int = 0,
         /** 本集全部可用档位（兼容编码候选，pixels 降序去重）；空 = 片源未带尺寸信息。 */
-        val availableQualities: List<Int> = emptyList()
+        val availableQualities: List<Int> = emptyList(),
+        /** 官方进度条雪碧图（player/v1 big_thumbs，HEIC 网格）；null = 本集未下发，不启用预览图。 */
+        val bigThumbs: BigThumbs? = null
     )
+
+    /**
+     * 官方进度预览雪碧图（video_model.big_thumbs，2026-11-13 官方抓包实锤）：
+     * HEIC 容器整图（实测 2400×1360 ≈ 278KB，签名 URL 约 6h 有效，图床模板转换 403 锁死），
+     * 按 [intervalSec] 每秒一格铺 [xLen] 列网格，格子尺寸 [cellWidth]×[cellHeight]
+     * （横屏剧 240×136 / 竖屏剧 136×240，按字段取勿假设方向）。
+     */
+    data class BigThumbs(
+        val imageUrl: String,
+        val cellWidth: Int,
+        val cellHeight: Int,
+        val xLen: Int,
+        val intervalSec: Int,
+        val frameCount: Int
+    ) {
+        /** 官方格位公式：idx = 秒/interval，钳到 img_num-1（img_num 缺失时钳 0）。
+         *  除法结果在 Long 域钳界后再转 Int（防极端 positionMs 溢出回绕成负）。 */
+        fun cellIndexFor(positionMs: Long): Int {
+            val maxIdx = if (frameCount > 0) frameCount - 1 else 0
+            val raw = positionMs.coerceAtLeast(0L) / 1000L / intervalSec
+            return raw.coerceAtMost(maxIdx.toLong()).toInt()
+        }
+    }
 
     class PlayException(message: String, val code: String) : IllegalStateException(message)
 
@@ -61,25 +86,10 @@ class HongguoPlay(
         preferredPixels: Int = 0,
     ): PlayUrl {
         require(vid.matches(Regex("\\d{1,30}"))) { "分集编号无效" }
-        // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932；body 带其扩展字段）
+        // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932）；body 带其扩展字段
         // video_platform=3（HGTV T1 默认）：1024 会请求到 ByteVC2 自研编码，
         // 3 请求通用 h264/hevc（2026-11-10 实测 7703473857562151961 修复）
-        val hgtvBody = JSONObject()
-            .put(
-                "biz_param", JSONObject()
-                    .put("detail_page_version", 0)
-                    .put("device_level", 3)
-                    .put("disable_digg_stat", false)
-                    .put("disable_video_relate_book", false)
-                    .put("need_all_video_definition", true)
-                    .put("need_mp4_align", false)
-                    .put("use_os_player", false)
-                    .put("use_server_dns", true)
-                    .put("use_server_dns_scene", "cold_start_stage")
-                    .put("video_platform", 3)
-            )
-            .put("dr_scene", "player")
-            .put("mixed_video_id_map", JSONObject().put("1004", org.json.JSONArray().put(vid)))
+        val hgtvBody = playbackBody("player", listOf(vid))
         // 端点策略（2026-11-10 实测定案）：主=player/v1（73932 档案，大部分剧）；
         // player/v1 对部分内容报 code=100001 参数错误 → fetchModelEntry 内置
         // L1-M1 兜底（sinfonlineb multi/v1 + 71332 档案，编码直接下发 hevc/h264）。
@@ -104,6 +114,73 @@ class HongguoPlay(
             }.getOrElse { throw e }
             parseEntry(vid, retry, preferredPixels)
         }
+    }
+
+    /** player/v1 与 preload/v1 共用 body（官方抓包逐字段同构，仅 dr_scene 不同）。 */
+    private fun playbackBody(drScene: String, vids: List<String>): ByteArray = JSONObject()
+        .put(
+            "biz_param", JSONObject()
+                .put("detail_page_version", 0)
+                .put("device_level", 3)
+                .put("disable_digg_stat", false)
+                .put("disable_video_relate_book", false)
+                .put("need_all_video_definition", true)
+                .put("need_mp4_align", false)
+                .put("use_os_player", false)
+                .put("use_server_dns", true)
+                .put("use_server_dns_scene", "cold_start_stage")
+                .put("video_platform", 3)
+        )
+        .put("dr_scene", drScene)
+        .put(
+            "mixed_video_id_map",
+            JSONObject().put("1004", org.json.JSONArray().put(vids[0]).also { arr ->
+                for (i in 1 until vids.size) arr.put(vids[i])
+            })
+        )
+        .toString().toByteArray(Charsets.UTF_8)
+
+    /**
+     * 批量地址预取（官方 `multi_video_model/preload/v1`，dr_scene="preload"）：
+     * 一次请求带多集 vid（官方 App 在播放页/剧场页即批量预取，2026-11-13 抓包 14 次）。
+     * 响应 data 按 vid 分 key、每集 entry 与 player/v1 同构（parseEntry 直接复用）。
+     * 尽力而为语义：任一集解析失败只跳过该集，不整体抛；全部失败抛给调用方记日志。
+     * 地址有效期约 6h，调用方缓存 TTL 须留余量（Repository 5h）。
+     */
+    fun preloadEntries(
+        vids: List<String>,
+        identity: HongguoDeviceRegister.Identity,
+        preferredPixels: Int = 0
+    ): Map<String, PlayUrl> {
+        require(vids.isNotEmpty()) { "预取分集为空" }
+        vids.forEach { require(it.matches(Regex("\\d{1,30}"))) { "分集编号无效" } }
+        val body = playbackBody("preload", vids)
+        var lastError: Exception? = null
+        for (round in 0 until 2) {
+            val host = PLAY_HOSTS[round % PLAY_HOSTS.size]
+            try {
+                val payload = postVideoModel(
+                    "/novel/player/multi_video_model/preload/v1", body, identity, hostOverride = host
+                )
+                val code = payload.optInt("Code", payload.optInt("code", 0))
+                if (code != 0) {
+                    throw PlayException("预取接口 code=$code", "BUSINESS_REJECTED")
+                }
+                val data = payload.optJSONObject("data") ?: JSONObject()
+                val out = LinkedHashMap<String, PlayUrl>()
+                for (vid in vids) {
+                    val entry = data.optJSONObject(vid) ?: continue
+                    runCatching { out[vid] = parseEntry(vid, entry, preferredPixels) }
+                }
+                if (out.isNotEmpty()) return out
+                lastError = PlayException("预取接口未返回任何分集", "MISSING_MODEL")
+            } catch (e: EmptyBodyException) {
+                lastError = e
+            } catch (e: PlayException) {
+                lastError = e
+            }
+        }
+        throw lastError ?: EmptyBodyException()
     }
 
     /** K-M1 body（multi/v1，Node playbackRequest 验证版）。video_platform：1024 会
@@ -544,6 +621,30 @@ class HongguoPlay(
             return rows.first { it.pixels == target.pixels }
         }
         val best = pickByPreference(preferredPixels)
+        // 进度条雪碧图（big_thumbs 与 video_list 平级，恒在 video_model 层；多条取格子最大者）
+        val bigThumbs = model.optJSONArray("big_thumbs")?.let { arr ->
+            (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }
+                .maxByOrNull { it.optInt("img_x_size", 0) }
+                ?.let { t ->
+                    val u = t.optString("img_url").ifEmpty {
+                        t.optJSONArray("img_urls")?.optString(0) ?: ""
+                    }
+                    val cellW = t.optInt("img_x_size", 0)
+                    val cellH = t.optInt("img_y_size", 0)
+                    val xLen = t.optInt("img_x_len", 0)
+                    val interval = t.optInt("interval", 0)
+                    if (u.isNotEmpty() && cellW > 0 && cellH > 0 && xLen > 0 && interval > 0) {
+                        BigThumbs(
+                            imageUrl = u,
+                            cellWidth = cellW,
+                            cellHeight = cellH,
+                            xLen = xLen,
+                            intervalSec = interval,
+                            frameCount = t.optInt("img_num", 0)
+                        )
+                    } else null
+                }
+        }
         // 本集全部可用档位（兼容编码候选，降序去重）供播放 UI 画质弹窗展示
         val availableQualities = candidates
             .filter { it.codecRank < (if (hasCompatible) 2 else 3) && it.pixels > 0 }
@@ -590,7 +691,8 @@ class HongguoPlay(
                     durationSec = model.optLong("video_duration", info.optLong("video_duration", 0L)),
                     vid = vid,
                     pixels = best.pixels,
-                    availableQualities = availableQualities
+                    availableQualities = availableQualities,
+                    bigThumbs = bigThumbs
                 )
             } catch (_: Exception) {
                 // 尝试下一候选 URL

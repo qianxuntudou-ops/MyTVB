@@ -3,11 +3,6 @@ package com.mytvb.feature.hongguo
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
-import android.media.MediaMetadataRetriever
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import android.util.LruCache
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -16,17 +11,13 @@ import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.appcompat.widget.AppCompatTextView
 import com.mytvb.R
-import java.util.concurrent.Executors
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 红果快进预览：跟随进度条滑块的帧预览浮窗 + 本地取帧器。
+ * 红果快进预览：跟随进度条滑块的帧预览浮窗。
  *
- * blbl 用 videoShot 雪碧图接口做预览图（TimelineThumbPreviewView），红果没有这个
- * 数据源——但加密集（CENC spade）本来就在本地解密落地完整 MP4（HongguoPlayerActivity
- * 的 resolvePlayable），用 MediaMetadataRetriever 直接取目标位置关键帧即可；
- * 未加密远程直链集无本地文件，不 bind 取帧器，浮窗降级为纯时间提示。
+ * 数据源 = player/v1 响应内联的官方雪碧图 `big_thumbs`（HEIC 网格，2026-11-13 官方
+ * 抓包实锤；旧「红果没有这个数据源」判断错误，本地取帧器已删），取格器见
+ * [HongguoThumbProvider]。本集未下发 / 解码失败 = 不启用预览图，浮窗降级纯时间提示。
  */
 
 /**
@@ -125,120 +116,5 @@ internal class HongguoSeekPreviewView(context: Context) : FrameLayout(context) {
     private fun formatMs(ms: Long): String {
         val s = ms / 1000
         return "%02d:%02d".format(s / 60, s % 60)
-    }
-}
-
-/**
- * 本地 MP4 关键帧取帧器（MediaMetadataRetriever）：
- * 单线程串行 + 「只追最新位置」（堆队任务读最新量化槽位，完成回调只出最新位置帧）
- * + 1s 槽位量化 + 缩略图 LRU。切集/销毁用代际号作废在途任务。
- */
-internal class HongguoFrameExtractor(
-    private val thumbWidthPx: Int,
-    private val onFrameReady: (quantizedMs: Long, bitmap: Bitmap?) -> Unit
-) {
-    private val main = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor { r ->
-        Thread(r).apply {
-            isDaemon = true
-            name = "hg-frame"
-        }
-    }
-    private val lru = LruCache<Long, Bitmap>(LRU_FRAMES)
-    @Volatile private var retriever: MediaMetadataRetriever? = null
-    @Volatile private var generation = 0
-    @Volatile private var available = false
-    @Volatile private var latestQuantizedMs = -1L
-    private val pending = AtomicBoolean(false)
-
-    /** 绑定本地解密文件（异步：setDataSource 要解析文件头）。失败后保持降级形态。 */
-    fun bindAsync(localFilePath: String) {
-        val gen = ++generation
-        latestQuantizedMs = -1L
-        executor.execute {
-            retriever?.release()
-            retriever = null
-            available = false
-            lru.evictAll()
-            if (gen != generation) return@execute
-            try {
-                val r = MediaMetadataRetriever()
-                r.setDataSource(localFilePath)
-                if (gen != generation) {
-                    r.release()
-                    return@execute
-                }
-                retriever = r
-                available = true
-                Log.d("Hongguo", "frame extractor bound")
-            } catch (e: Exception) {
-                Log.w("Hongguo", "frame extractor bind failed", e)
-            }
-        }
-    }
-
-    /** 请求目标位置帧；未绑定（远程直链集）为空操作，浮窗保持纯时间提示。 */
-    fun request(positionMs: Long) {
-        if (!available) return
-        val quantized = (positionMs.coerceAtLeast(0L) / QUANTIZE_MS) * QUANTIZE_MS
-        latestQuantizedMs = quantized
-        lru.get(quantized)?.let { deliver(quantized, it) }
-        if (pending.getAndSet(true)) return
-        try {
-            executor.execute {
-                pending.set(false)
-                val target = latestQuantizedMs
-                val r = retriever
-                if (target < 0 || r == null || !available) return@execute
-                lru.get(target)?.let { deliver(target, it); return@execute }
-                val bitmap = try {
-                    r.getFrameAtTime(target * 1000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        ?.let { scaleDown(it) }
-                } catch (e: Exception) {
-                    Log.w("Hongguo", "getFrameAtTime failed at $target", e)
-                    null
-                }
-                if (bitmap == null) {
-                    Log.w("Hongguo", "getFrameAtTime null at $target")
-                    return@execute
-                }
-                lru.put(target, bitmap)
-                deliver(target, bitmap)
-            }
-        } catch (_: RejectedExecutionException) {
-            pending.set(false)
-        }
-    }
-
-    fun release() {
-        generation++
-        available = false
-        try {
-            executor.execute {
-                retriever?.release()
-                retriever = null
-            }
-            executor.shutdown()
-        } catch (_: RejectedExecutionException) {
-        }
-    }
-
-    /** 帧与槽位成对回调（任务执行期间最新槽位可能已变，恒以取帧时的 target 为准）。 */
-    private fun deliver(target: Long, bitmap: Bitmap) {
-        main.post { onFrameReady(target, bitmap) }
-    }
-
-    private fun scaleDown(src: Bitmap): Bitmap {
-        if (src.width <= thumbWidthPx) return src
-        val height = (src.height.toLong() * thumbWidthPx / src.width).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(src, thumbWidthPx, height, true)
-    }
-
-    companion object {
-        /** 预览帧按 1s 槽位量化，长按 tick 40ms 一次 request 只在跨秒时真正取帧。 */
-        private const val QUANTIZE_MS = 1000L
-
-        /** 缩略图（~px225 宽）单张约 0.2MB，16 张覆盖长按快进的来回活动集。 */
-        private const val LRU_FRAMES = 16
     }
 }

@@ -239,15 +239,68 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     // ---- 播放 ----
-    /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。 */
+
+    /**
+     * 播放地址预取缓存（官方 preload/v1 批量预取的落点）：条目 = PlayUrl 纯字符串
+     * 轻量对象（每条 <1KB），内存驻留可忽略。URL 有效期约 6h → TTL 5h 留余量，
+     * 过期/未命中走实时解析（player/v1 主链路）。
+     */
+    private val playUrlCacheLock = Any()
+    private val playUrlCache = HashMap<String, HongguoPlay.PlayUrl>()
+    private val playUrlCacheAt = HashMap<String, Long>()
+
+    private fun takeCachedPlayUrl(key: String): HongguoPlay.PlayUrl? = synchronized(playUrlCacheLock) {
+        val cached = playUrlCache[key] ?: return null
+        if (System.currentTimeMillis() - (playUrlCacheAt[key] ?: 0L) > PLAY_URL_TTL_MS) {
+            playUrlCache.remove(key); playUrlCacheAt.remove(key)
+            return null
+        }
+        return cached
+    }
+
+    private fun cachePlayUrl(key: String, value: HongguoPlay.PlayUrl) = synchronized(playUrlCacheLock) {
+        playUrlCache[key] = value
+        playUrlCacheAt[key] = System.currentTimeMillis()
+    }
+
+    /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。
+     *  预取命中直接返回，未命中走 player/v1 实时解析并回填缓存。 */
     suspend fun playUrl(vid: String, preferredPixels: Int = 0): HongguoPlay.PlayUrl =
         withContext(Dispatchers.IO) {
+            val key = "$vid@$preferredPixels"
+            takeCachedPlayUrl(key)?.let {
+                android.util.Log.d("Hongguo", "playUrl cache hit vid=$vid q=$preferredPixels")
+                return@withContext it
+            }
             var result: HongguoPlay.PlayUrl? = null
             for (attempt in 0 until 2) {
                 if (withIdentity { id -> result = play.playUrl(vid, id, preferredPixels) }) break
             }
-            result ?: throw IllegalStateException("红果播放地址解析失败")
+            result?.also { cachePlayUrl(key, it) }
+                ?: throw IllegalStateException("红果播放地址解析失败")
         }
+
+    /**
+     * 后台批量预取后续集播放地址（官方 preload/v1，dr_scene="preload"）。
+     * 起播成功后由播放器调用（当前集+1 起 2 集）；档位与切集同源
+     * （[defaultQualityPixels]，键不同档位不互通）；失败静默，切集实时解析兜底。
+     */
+    fun preloadNextEpisodes(vids: List<String>) {
+        val pixels = defaultQualityPixels()
+        val pending = vids.filter { it.isNotEmpty() && takeCachedPlayUrl("$it@$pixels") == null }
+        if (pending.isEmpty()) return
+        android.util.Log.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
+        cloudScope.launch {
+            withIdentity { id ->
+                runCatching { play.preloadEntries(pending, id, pixels) }
+                    .onSuccess { entries ->
+                        entries.forEach { (vid, url) -> cachePlayUrl("$vid@$pixels", url) }
+                        android.util.Log.d("Hongguo", "preload episodes ok ${entries.keys}")
+                    }
+                    .onFailure { android.util.Log.w("Hongguo", "preload episodes fail: ${it.message}") }
+            }
+        }
+    }
 
     /**
      * 设置页「红果短剧·默认画质」存储值 → 目标档位 pixels（"默认"=0 取最高，
@@ -464,6 +517,9 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     companion object {
+        /** 预取地址有效期约 6h（x-expires），缓存 5h 留余量防过期 URL 起播 403。 */
+        private const val PLAY_URL_TTL_MS = 5L * 60 * 60 * 1000
+
         @Volatile
         private var instance: HongguoRepository? = null
 
