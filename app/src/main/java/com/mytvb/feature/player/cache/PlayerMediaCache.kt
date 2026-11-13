@@ -137,6 +137,7 @@ object PlayerMediaCache {
     /** 播放器媒体缓存目录，供设置页按"受控缓存"口径统计大小，也是本类唯一目录来源。 */
     fun getCacheDir(context: Context): File {
         return File(context.applicationContext.cacheDir, CACHE_DIR_NAME)
+            .also { com.mytvb.core.common.cache.GlobalCacheBudget.register(it) }
     }
 
     @Synchronized
@@ -197,6 +198,11 @@ object PlayerMediaCache {
             cacheDirectory,
             LeastRecentlyUsedCacheEvictor(resolveMaxCacheBytes()),
             StandaloneDatabaseProvider(context)
-        ).also { simpleCache = it }
+        ).also {
+            simpleCache = it
+            // 起播建缓存层时收敛一次全局总配额（写分片过程中由 SimpleCache 自身
+            // evictor 压单目录上限，跨目录总账由 GlobalCacheBudget 兜底）
+            com.mytvb.core.common.cache.GlobalCacheBudget.kick()
+        }
     }
 }

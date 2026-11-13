@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果次行动按钮（2026-11-11 B 站风格统一，对齐 bg_owner_dialog_outline_button）：
+     默认=白描边 px2 透明底；聚焦=整块 colorControlHighlight 提亮；按下=colorPrimary；
+     禁用=置灰（倒计时中）。圆角 px15。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+
+    <item android:state_enabled="false">
+        <shape>
+            <solid android:color="#131317"/>
+            <stroke android:width="1dp" android:color="#2A2A31"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+            <stroke android:width="@dimen/px4" android:color="@color/white"/>
+        </shape>
+    </item>
+
+    <item>
+        <shape>
+            <solid android:color="@android:color/transparent"/>
+            <stroke android:width="@dimen/px2" android:color="@color/white"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>

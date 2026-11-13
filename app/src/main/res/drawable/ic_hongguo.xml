@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="150px"
+    android:height="150px"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- 果实：圆心(512,620) 半径330 -->
+    <path
+        android:fillColor="#ffffffff"
+        android:pathData="M512,290 A330,330 0 1,0 512,950 A330,330 0 1,0 512,290 Z" />
+    <!-- 果柄：自果实顶部向上微弯 -->
+    <path
+        android:fillColor="#ffffffff"
+        android:pathData="M490,318 C478,252 500,204 546,168 L582,198 C548,232 532,268 540,318 Z" />
+    <!-- 叶子：柄顶右侧展开 -->
+    <path
+        android:fillColor="#ffffffff"
+        android:pathData="M556,182 C614,110 730,100 792,148 C766,226 654,248 572,206 C564,202 558,192 556,182 Z" />
+</vector>

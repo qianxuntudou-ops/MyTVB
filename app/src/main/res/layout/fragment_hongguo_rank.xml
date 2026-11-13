@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果榜单页（2026-11-12 二次重构）：四板档位改 App 一贯 TabLayout 文字+accent
+     下划线（同分类子档 tab 模板，弃全宽等分块状分段），宽度随文字自适应；
+     说明行删除。网格/骨架/空态三态互斥。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tab_rank_boards"
+        android:focusable="false"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/px70"
+        android:layout_marginStart="@dimen/px20"
+        android:layout_marginTop="@dimen/px10"
+        app:tabBackground="@android:color/transparent"
+        app:tabIndicator="@drawable/underline"
+        app:tabIndicatorColor="?attr/colorAccent"
+        app:tabIndicatorFullWidth="false"
+        app:tabIndicatorHeight="@dimen/px8"
+        app:tabMode="scrollable"
+        app:tabRippleColor="@android:color/transparent"
+        app:tabSelectedTextColor="?android:attr/textColorPrimary"
+        app:tabTextAppearance="@style/TopPageTabText"/>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_rank"
+            android:padding="@dimen/px20"
+            android:clipToPadding="false"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <include
+            android:id="@+id/skeleton_rank"
+            layout="@layout/view_hongguo_skeleton"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <include
+            android:id="@+id/empty_rank"
+            layout="@layout/view_hongguo_empty"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </FrameLayout>
+</LinearLayout>

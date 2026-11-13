@@ -225,6 +225,9 @@ class VideoPlayerFragment : Fragment() {
         },
         onHeartbeatTick = {
             viewModel.reportPlaybackHeartbeat()
+        },
+        onNetworkStalled = { positionMs, stalledMs ->
+            recoverFromNetworkStall(positionMs, stalledMs)
         }
     )
 
@@ -1457,12 +1460,39 @@ class VideoPlayerFragment : Fragment() {
             viewModel.setLoading(true)
             playerView.pauseDanmaku()
             progressCoordinator.restart()
+            // 停摆重建同样清网络窗口：解码停摆掉 BUFFERING 也被网络监控记了事件，脏数据留着会误触发
+            progressCoordinator.clearNetworkStallStats()
             return
         }
         val snapshotPosition = currentPlayer.currentPosition
         currentPlayer.seekTo(snapshotPosition.coerceAtLeast(0L))
         playerView.syncDanmakuPosition(snapshotPosition, forceSeek = true)
         progressCoordinator.restart()
+    }
+
+    /**
+     * 网络性卡顿救援入口（issue#114）：高频短 rebuffer 循环 / 长时间 BUFFERING 无恢复。
+     * 与 [recoverFromPlaybackStall] 的分工：那条链管画面停摆（含 seek nudge 兜底），
+     * 本链管网络断粮——只换 CDN 不降画质（用户约束），未接管时不做 seek nudge
+     * （网络型卡顿 seek 无益，白闪一次加载圈）。
+     */
+    private fun recoverFromNetworkStall(positionMs: Long, stalledMs: Long) {
+        val currentPlayer = player ?: return
+        if (!currentPlayer.playWhenReady) {
+            return
+        }
+        AppLog.w(
+            TAG,
+            "network stall detected: position=$positionMs, stalledMs=$stalledMs, " +
+                "state=${currentPlayer.playbackState.toPlaybackStateName()}, " +
+                "bufferedPosition=${currentPlayer.bufferedPosition}, isLoading=${currentPlayer.isLoading}"
+        )
+        if (viewModel.handleNetworkStall(positionMs, stalledMs)) {
+            viewModel.setLoading(true)
+            playerView.pauseDanmaku()
+            progressCoordinator.restart()
+            progressCoordinator.clearNetworkStallStats()
+        }
     }
 
     private fun Int.toPlaybackStateName(): String {

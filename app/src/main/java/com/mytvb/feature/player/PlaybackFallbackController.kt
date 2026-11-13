@@ -121,6 +121,10 @@ internal class PlaybackFallbackController(
         private const val TAG = "VideoPlayerViewModel"
         private const val MAX_FALLBACK_ATTEMPTS = 8
         private const val MAX_PLAYINFO_REFRESH_RETRY = 2
+        // 网络性卡顿救援上限（issue#114）：候选就 2~4 个，超过说明换谁都救不了
+        // （多半是出口带宽瓶颈），由 ProgressCoordinator 的 20s 冷却+60s 窗口自然平息。
+        // 不与 [MAX_FALLBACK_ATTEMPTS] 共池：网络救援不该挤占错误链的重建配额。
+        private const val MAX_NETWORK_RESCUE_PER_VIDEO = 4
     }
 
     /** 播放错误分类（原 VM 内私有 enum，随 classifyPlaybackError 迁入）。 */
@@ -137,6 +141,8 @@ internal class PlaybackFallbackController(
     private var lastPlaybackPositionMs: Long = 0L
     /** 已触发过降档重建的锁定画质，防止同档失败后反复重建。 */
     private val qualityStepdownAttemptedIds = linkedSetOf<Int>()
+    /** 本视频已触发的网络性卡顿救援次数。 */
+    private var networkRescueCount: Int = 0
 
     // ===== 公开 API（供 ViewModel 调用） =====
 
@@ -216,6 +222,88 @@ internal class PlaybackFallbackController(
     }
 
     /**
+     * 网络性卡顿救援入口（issue#114）：ProgressCoordinator 三判据（频次/累计/单次超时）
+     * 触发后到达这里。症状 = "卡 2 秒播几秒再卡" 的吞吐不足循环。
+     *
+     * 与 [handlePlaybackStall] 的关键差异：
+     * 1. **只换 CDN 不降画质**（用户约束）——不碰 [trySwitchToAvc]/[tryLowerQualityRebuild]，
+     *    网络问题换编码也救不了，降画质越权；
+     * 2. DASH 走同档重建换线：[tryDispatchDashPlaybackAttempt] 的签名去重会挡住同 route
+     *    重派，但换线恰恰需要同 route 重建——penalize 沉底当前 host 后
+     *    createMediaSourceWithCdnState 重排 candidates，重建即换 host。
+     * 计数由 [networkRescueCount] 独立管（不占 [MAX_FALLBACK_ATTEMPTS]），耗尽即停等冷却。
+     */
+    fun handleNetworkStall(positionMs: Long, stalledMs: Long): Boolean {
+        lastPlaybackPositionMs = positionMs.coerceAtLeast(0L)
+        // 双记账（只记 hasOpened 的 state，未用过的流不背锅——同 handlePlaybackStall 教训）：
+        // 健康分 BUFFERING 事件（有 30s 节流）+ TTFB 惩罚。DataSource 层的实测吞吐沉底
+        // 是主惩戒——它才是"喂不饱"的直接证据，坏事件计数口径压不住零报错的烂吞吐节点。
+        context.cdnStates.filter { it.hasOpened() }.forEach { state ->
+            state.currentHostUrl()?.let {
+                CdnHealthProfile.recordEvent(it, CdnHealthProfile.CdnHealthEvent.BUFFERING)
+            }
+            state.penalizeCurrentHost()
+        }
+        if (networkRescueCount >= MAX_NETWORK_RESCUE_PER_VIDEO) {
+            AppLog.i(TAG, "network rescue exhausted count=$networkRescueCount, wait for cooldown window")
+            return false
+        }
+        networkRescueCount += 1
+        val dashSession = context.dashSession
+        return if (dashSession != null && context.useDashPlayback) {
+            rebuildDashRouteForNetworkRescue(positionMs, stalledMs) ||
+                tryRefreshPlayInfo(reason = "network_stall_${stalledMs}ms_refresh")
+        } else {
+            tryNextCdnInCurrentCodec(positionMs, reason = "network_stall_${stalledMs}ms") ||
+                tryRefreshPlayInfo(reason = "network_stall_${stalledMs}ms_refresh")
+        }
+    }
+
+    /**
+     * DASH 同档重建换线：与 [tryDispatchDashPlaybackAttempt] 的区别——跳过签名去重与
+     * fallbackAttemptCount 计数（网络救援有自己的 [networkRescueCount] 配额），fallbackRouteIndex
+     * 保持不动（同 codec 同画质，只换 CDN host）。
+     */
+    private fun rebuildDashRouteForNetworkRescue(positionMs: Long, stalledMs: Long): Boolean {
+        val session = context.dashSession ?: return false
+        val routePlan = session.routePlan ?: return false
+        val routeIndex = session.fallbackRouteIndex
+        val route = routePlan.routes.getOrNull(routeIndex) ?: return false
+        return try {
+            AppLog.i(
+                TAG,
+                "fallback:dash reason=network_stall_${stalledMs}ms route=$routeIndex " +
+                    "codec=${route.codec} rebuild=rotate_cdn"
+            )
+            val sourceWithState = dashMediaSourceFactory.createMediaSourceWithCdnState(route)
+            context.setSelectedCodec(route.codec)
+            context.onCdnStatesUpdated(sourceWithState.cdnFailoverStates)
+            context.onDashSessionUpdated(session.copy(
+                currentRoute = route,
+                actualCodec = route.codec
+            ))
+            context.clearError()
+            context.emitPlaybackRequest(VmPlaybackRequest(
+                mediaSource = sourceWithState.mediaSource,
+                aid = context.currentAid,
+                bvid = context.currentBvid,
+                cid = context.currentCid,
+                seekPositionMs = positionMs,
+                playWhenReady = true,
+                replaceInPlace = true,
+                durationMs = route.durationMs,
+                playbackIntentId = context.activePlaybackIntentId,
+                startupTraceId = context.startupTraceId,
+                startupTraceStartElapsedMs = context.startupTraceStartElapsedMs
+            ))
+            true
+        } catch (error: Exception) {
+            AppLog.e(TAG, "network rescue dash rebuild failed: ${error.message}", error)
+            false
+        }
+    }
+
+    /**
      * 首帧看门狗超时入口：起播阶段长期未出首帧。stall 检测只覆盖 READY 之后的卡顿，
      * 起播 BUFFERING 卡死原本要等 read 超时（约 15s）才走 onPlayerError 错误链，
      * 此处把救援提前到 2.5s。对当前 host 记 FIRST_FRAME_TIMEOUT 后立即换线：
@@ -240,6 +328,7 @@ internal class PlaybackFallbackController(
     fun reset() {
         resetAttemptState()
         qualityStepdownAttemptedIds.clear()
+        networkRescueCount = 0
     }
 
     /**

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果「我的」页（2026-11-12 二次重构，设计原则：单一 CTA/引导信息集中/层级靠字号
+     与留白，弃旧两栏面板卡片与虚线占位框）。两态分离：
+     · 未登录=整页只留居中登录引导（px120 圆底头像+「未登录」+权益文案+accent 主钮），
+       账号行隐藏，单一视觉焦点单一 CTA；
+     · 已登录=hero 头部（px100 圆底头像+昵称 px36+红果号/同步/统计灰字行+退出与清除
+       描边钮右端对齐）+ 稍后再看/我的预约横滑 lane 直铺（cell_hongguo_lane，点卡片
+       详情弹窗、「更多」进货架网格）；收藏/历史有独立顶部 tab 不在此重复（lane 视图
+       保留作「红果页显示历史/收藏」开关关闭=四 tab 模式的并入位）。 -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:scrollbars="none"
+    android:fillViewport="true"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:paddingStart="@dimen/px30"
+        android:paddingTop="@dimen/px20"
+        android:paddingEnd="@dimen/px30"
+        android:paddingBottom="@dimen/px24"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <!-- 已登录 hero 头部 -->
+        <LinearLayout
+            android:id="@+id/row_account"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/image_avatar"
+                android:background="@drawable/bg_hongguo_avatar"
+                android:padding="@dimen/px22"
+                android:src="@drawable/ic_hongguo"
+                app:tint="?attr/colorAccent"
+                android:layout_width="@dimen/px100"
+                android:layout_height="@dimen/px100"/>
+
+            <LinearLayout
+                android:orientation="vertical"
+                android:layout_marginStart="@dimen/px20"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_nickname"
+                    android:text="@string/hongguo_not_logged_in"
+                    android:textSize="@dimen/px36"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_uid"
+                    android:text="@string/hongguo_login_sync_hint"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/grey"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:layout_marginTop="@dimen/px6"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"/>
+
+                <LinearLayout
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="@dimen/px6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content">
+
+                    <View
+                        android:id="@+id/dot_sync"
+                        android:background="@drawable/dot_hongguo_sync"
+                        android:visibility="gone"
+                        android:layout_width="@dimen/px9"
+                        android:layout_height="@dimen/px9"/>
+
+                    <androidx.appcompat.widget.AppCompatTextView
+                        android:id="@+id/text_stats"
+                        android:textSize="@dimen/px20"
+                        android:textColor="@color/grey"
+                        android:layout_marginStart="@dimen/px8"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"/>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 危险项（登出/清数据）描边小钮，与身份信息右端对齐 -->
+            <LinearLayout
+                android:id="@+id/group_account_actions"
+                android:orientation="horizontal"
+                android:visibility="gone"
+                android:layout_marginStart="@dimen/px16"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/button_logout"
+                    android:text="@string/hongguo_logout"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/hongguo_btn_text"
+                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:paddingStart="@dimen/px20"
+                    android:paddingEnd="@dimen/px20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/px44"/>
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/button_clear"
+                    android:text="@string/hongguo_clear_local"
+                    android:textSize="@dimen/px20"
+                    android:textColor="@color/hongguo_btn_text"
+                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:layout_marginStart="@dimen/px12"
+                    android:paddingStart="@dimen/px20"
+                    android:paddingEnd="@dimen/px20"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/px44"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 已登录正文：横滑 lane 直铺 -->
+        <LinearLayout
+            android:id="@+id/lane_container"
+            android:orientation="vertical"
+            android:layout_marginTop="@dimen/px30"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <include
+                android:id="@+id/lane_watch_later"
+                layout="@layout/cell_hongguo_lane"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+
+            <include
+                android:id="@+id/lane_subscribe"
+                layout="@layout/cell_hongguo_lane"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+
+            <include
+                android:id="@+id/lane_favorite"
+                layout="@layout/cell_hongguo_lane"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+
+            <include
+                android:id="@+id/lane_history"
+                layout="@layout/cell_hongguo_lane"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+        <!-- 未登录：整页居中登录引导（单一焦点+单一 CTA） -->
+        <LinearLayout
+            android:id="@+id/empty_guest"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/image_avatar_guest"
+                android:background="@drawable/bg_hongguo_avatar"
+                android:padding="@dimen/px28"
+                android:src="@drawable/ic_hongguo"
+                app:tint="?attr/colorAccent"
+                android:layout_width="@dimen/px120"
+                android:layout_height="@dimen/px120"/>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/hongguo_not_logged_in"
+                android:textSize="@dimen/px36"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textStyle="bold"
+                android:layout_marginTop="@dimen/px20"/>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/hongguo_mine_empty_guest"
+                android:textSize="@dimen/px24"
+                android:textColor="@color/grey"
+                android:layout_marginTop="@dimen/px12"/>
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/button_login"
+                android:text="@string/hongguo_login"
+                android:textSize="@dimen/px28"
+                android:textColor="@color/hongguo_primary_btn_text"
+                android:background="@drawable/bg_hongguo_btn_primary"
+                android:paddingStart="@dimen/px40"
+                android:paddingEnd="@dimen/px40"
+                android:layout_marginTop="@dimen/px36"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/px70"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

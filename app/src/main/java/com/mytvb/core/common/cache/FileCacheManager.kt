@@ -44,6 +44,7 @@ object FileCacheManager {
     fun init() {
         if (initialized) return
         initialized = true
+        GlobalCacheBudget.register(cacheDir)
         Thread {
             scanCacheDir()
             trimToLimit()
@@ -85,6 +86,8 @@ object FileCacheManager {
             val json = gson.toJson(data)
             val bytes = json.toByteArray(Charsets.UTF_8)
             writeFile(key, bytes)
+            // 单目录 trimToLimit 已在 registerFile 跑过；这里是全局总配额兜底
+            GlobalCacheBudget.kick()
         } catch (e: Exception) {
             AppLog.e("FileCacheManager", "put failed: key=$key", e)
         }
@@ -259,6 +262,22 @@ object FileCacheManager {
                 }
                 totalSize.addAndGet(-evicted)
             }
+        }
+    }
+
+    /**
+     * 账本归位：GlobalCacheBudget 跨目录淘汰可能删掉本目录文件，但被删文件
+     * 的记账条目还在表里占账面（totalSize 虚高会驱使后续淘汰多删真实文件）。
+     * 全局修剪后调用：移除幽灵条目并按磁盘实况重算 totalSize。
+     */
+    fun resync() {
+        init()
+        synchronized(fileMap) {
+            val iterator = fileMap.entries.iterator()
+            while (iterator.hasNext()) {
+                if (!iterator.next().key.exists()) iterator.remove()
+            }
+            totalSize.set(fileMap.keys.sumOf { it.length() })
         }
     }
 

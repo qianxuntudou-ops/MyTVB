@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果封面货架页（2026-11-11 重设计）：我的页四入口（稍后再看/我的预约/本机收藏/观看历史）
+     共用，替代原纯文字 ChoiceDialog。标题行（返回钮+标题+数量）+ 网格封面货架
+     （统一竖版卡，稍后再看带「看到 x/y 集」进度）+ 空态。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/px30"
+        android:paddingTop="@dimen/px16"
+        android:paddingEnd="@dimen/px30"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/button_shelf_back"
+            android:src="@drawable/ic_hongguo_back"
+            app:tint="@color/textColor"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:background="@drawable/bg_hongguo_btn_outline"
+            android:padding="@dimen/px10"
+            android:contentDescription="@string/hongguo_back"
+            android:layout_width="@dimen/px56"
+            android:layout_height="@dimen/px56"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_shelf_title"
+            android:textSize="@dimen/px30"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textStyle="bold"
+            android:layout_marginStart="@dimen/px16"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_shelf_count"
+            android:textSize="@dimen/px20"
+            android:textColor="@color/grey"
+            android:layout_marginStart="@dimen/px14"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_shelf"
+            android:paddingStart="@dimen/px30"
+            android:paddingTop="@dimen/px14"
+            android:paddingEnd="@dimen/px30"
+            android:paddingBottom="@dimen/px16"
+            android:clipToPadding="false"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <include
+            android:id="@+id/empty_shelf"
+            layout="@layout/view_hongguo_empty"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </FrameLayout>
+</LinearLayout>

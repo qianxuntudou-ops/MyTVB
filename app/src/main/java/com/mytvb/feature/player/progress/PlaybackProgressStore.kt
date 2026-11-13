@@ -65,11 +65,15 @@ object PlaybackProgressStore {
         editor.apply()
     }
 
-    /** cid>0 时先查精确键，miss 则回落 bvid 兜底键；无进度返回 0。 */
+    /**
+     * cid>0 时只查精确键，miss 即无进度返回 0；cid=0（UP 空间等拿不到 cid 的入口）用 bvid 兜底键。
+     * 精确键 miss 不得回落兜底键：多P稿件所有分P共用 bvid，savePath 会把最后观看分P的进度
+     * 写进兜底键，回落会把旧分P进度串给从未看过的分P（issue#112：切集起播跳到上一集位置）。
+     */
     fun getPosition(bvid: String, cid: Long = 0L): Long {
         if (bvid.isBlank()) return 0L
         if (cid > 0) {
-            memoryCache[exactKey(bvid, cid)]?.let { return it.positionMs }
+            return memoryCache[exactKey(bvid, cid)]?.positionMs ?: 0L
         }
         return memoryCache[bvid]?.positionMs ?: 0L
     }

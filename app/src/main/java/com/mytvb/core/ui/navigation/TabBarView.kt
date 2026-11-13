@@ -27,6 +27,7 @@ class TabBarView @JvmOverloads constructor(
     private val buttonLive: AppCompatImageView
     private val buttonCctvLive: AppCompatImageView
     private val buttonCctvVod: AppCompatImageView
+    private val buttonHongguo: AppCompatImageView
     private val buttonMe: AppCompatImageView
     private val buttonSetting: AppCompatImageView
     private val imageAvatar: AvatarBadgeView
@@ -48,6 +49,7 @@ class TabBarView @JvmOverloads constructor(
         buttonLive = view.findViewById(R.id.button_live)
         buttonCctvLive = view.findViewById(R.id.button_cctv_live)
         buttonCctvVod = view.findViewById(R.id.button_cctv_vod)
+        buttonHongguo = view.findViewById(R.id.button_hongguo)
         buttonMe = view.findViewById(R.id.button_me)
         buttonSetting = view.findViewById(R.id.button_setting)
         imageAvatar = view.findViewById(R.id.image_avatar)
@@ -67,6 +69,7 @@ class TabBarView @JvmOverloads constructor(
             buttonLive,
             buttonCctvLive,
             buttonCctvVod,
+            buttonHongguo,
             buttonMe,
             buttonSearch
         ))
@@ -90,7 +93,7 @@ class TabBarView @JvmOverloads constructor(
         // 视觉顺序自上而下（搜索按钮在侧栏最顶部，不属于底部组）
         val bottomButtons = listOf(
             buttonHome, buttonCategory, buttonDynamic, buttonLive,
-            buttonCctvLive, buttonCctvVod, buttonMe
+            buttonCctvLive, buttonCctvVod, buttonHongguo, buttonMe
         )
         bottomButtons.forEach { it.nextFocusDownId = View.NO_ID }
         val lastVisible = bottomButtons.lastOrNull { it.visibility == VISIBLE }
@@ -174,7 +177,8 @@ class TabBarView @JvmOverloads constructor(
         if (index == 3 && buttonLive.visibility == GONE) return
         if (index == 4 && buttonCctvLive.visibility == GONE) return
         if (index == 5 && buttonCctvVod.visibility == GONE) return
-        if (index == 6 && buttonMe.visibility == GONE) return
+        if (index == 6 && buttonHongguo.visibility == GONE) return
+        if (index == 7 && buttonMe.visibility == GONE) return
         if (currentSelectedIndex == index) {
             if (index == searchIndex) {
                 onTabClickListener?.onSearchClick()
@@ -224,6 +228,15 @@ class TabBarView @JvmOverloads constructor(
 
     fun isCctvVodButtonVisible(): Boolean {
         return buttonCctvVod.visibility == VISIBLE
+    }
+
+    fun setHongguoButtonVisible(visible: Boolean) {
+        buttonHongguo.visibility = if (visible) VISIBLE else GONE
+        updateSideFocusChain()
+    }
+
+    fun isHongguoButtonVisible(): Boolean {
+        return buttonHongguo.visibility == VISIBLE
     }
 
     fun setCategoryButtonVisible(visible: Boolean) {
@@ -302,6 +315,7 @@ class TabBarView @JvmOverloads constructor(
             add(buttonLive)
             add(buttonCctvLive)
             add(buttonCctvVod)
+            add(buttonHongguo)
             add(buttonMe)
             add(imageAvatar)
             add(buttonSetting)

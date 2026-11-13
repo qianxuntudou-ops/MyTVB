@@ -111,6 +111,18 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
+        // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
+        // 红果账号/设备身份与 B 站完全隔离（独立 DataStore + 独立网络栈）
+        private const val KEY_HONGGUO_ENTRY = "hongguo_entry"
+        // 红果推荐受众（存储值"不限/男频/女频"，默认不限；对照 HGTV recommendGender）：
+        // 推荐流首拉注入 gender 筛选面板，设置后下次进推荐生效
+        private const val KEY_HONGGUO_RECOMMEND_GENDER = "hongguo_recommend_gender"
+        // 红果搜索源（存储值"App/官网"，默认 App）：官网=hongguoduanju.com 免登录接口；
+        // App 源三次失败自动回退官网（HGTV 同款兜底）
+        private const val KEY_HONGGUO_SEARCH_SOURCE = "hongguo_search_source"
+        // 红果默认画质（存储值"默认/1080P/720P/540P/480P"，默认"默认"= 最高档；
+        // 数字档位就近匹配，播放 UI 可按集临时切换不受此默认限制）
+        private const val KEY_HONGGUO_QUALITY = "hongguo_quality"
         // CCTV直播极速模式开关（issue#106 阶段二，显示名「直播极速模式」）：
         // vdn 直调+H5e 原生解密+ExoPlayer，关闭后回退 WebView 自构 HTML 老路径（X5 内核即在该路径生效）。默认开。
         private const val KEY_CCTV_NATIVE_LIVE = "cctv_native_live"
@@ -425,6 +437,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_tv_vod, listOf(
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
                 stored(KEY_CCTV_NATIVE_VOD, R.string.cctv_native_vod, "开")
+            )),
+            SettingGroup(R.string.setting_group_hongguo, listOf(
+                stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关"),
+                stored(KEY_HONGGUO_RECOMMEND_GENDER, R.string.hongguo_recommend_gender, "不限"),
+                stored(KEY_HONGGUO_SEARCH_SOURCE, R.string.hongguo_search_source, "App"),
+                stored(KEY_HONGGUO_QUALITY, R.string.hongguo_quality, "默认")
             ))
         )
 
@@ -769,6 +787,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 (activity as? MainActivity)?.applyCctvVodEntryVisibility()
             }
             KEY_CCTV_NATIVE_VOD -> toggle(key)
+            // —— 红果短剧 ——
+            KEY_HONGGUO_ENTRY -> toggle(key) {
+                appSettings.putStringAsync(key, it)
+                (activity as? MainActivity)?.applyHongguoEntryVisibility()
+            }
+            KEY_HONGGUO_RECOMMEND_GENDER -> showCommonChoiceDialog(key, arrayOf("不限", "男频", "女频"))
+            KEY_HONGGUO_SEARCH_SOURCE -> showCommonChoiceDialog(key, arrayOf("App", "官网"))
+            KEY_HONGGUO_QUALITY -> showCommonChoiceDialog(key, arrayOf("默认", "1080P", "720P", "540P", "480P"))
             KEY_X5_CORE -> startXdDownload()
             KEY_CAST_RECEIVE -> toggle(key) { newValue ->
                 // 投屏开关存 cast 自有 SP（不进 appSettings），并立即生效（拉起/停止服务）
@@ -1313,8 +1339,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             PlayerMediaCache.reset(requireContext())
             VideoPlayerViewModel.clearCachedPlayback()
             PlayerInstancePool.clearAttachedSource()
-            itemOf(KEY_CLEAR_CACHE)?.info = NumberUtils.formatBytes(getCurrentCacheSize())
-            refreshItem(KEY_CLEAR_CACHE)
+            // 上限是 App 缓存总配额：改档立即跨目录修剪（后台，避免主线程扫大目录）
+            updateScope.launch {
+                withContext(Dispatchers.IO) {
+                    com.mytvb.core.common.cache.GlobalCacheBudget.enforce(force = true)
+                }
+                if (!isAdded) return@launch
+                itemOf(KEY_CLEAR_CACHE)?.info = NumberUtils.formatBytes(getCurrentCacheSize())
+                refreshItem(KEY_CLEAR_CACHE)
+            }
         }
     }
 
@@ -1333,21 +1366,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             if (!isAdded) return@launch
             updateInfo(KEY_CODEC, text)
         }
-    }
-
-    private fun getFolderSize(folder: java.io.File): Long {
-        var size: Long = 0
-        val files = folder.listFiles()
-        if (files != null) {
-            for (file in files) {
-                size += if (file.isDirectory) {
-                    getFolderSize(file)
-                } else {
-                    file.length()
-                }
-            }
-        }
-        return size
     }
 
     private fun deleteDir(folder: java.io.File) {
@@ -1387,6 +1405,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_CCTV_NATIVE_LIVE)
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_CCTV_NATIVE_VOD)
+        applyStored(KEY_HONGGUO_ENTRY)
+        applyStored(KEY_HONGGUO_RECOMMEND_GENDER)
+        applyStored(KEY_HONGGUO_SEARCH_SOURCE)
+        applyStored(KEY_HONGGUO_QUALITY)
         applyStored(KEY_HOME_FEED_SOURCE)
         applyStored(KEY_HOT_FEED_SOURCE)
         // 旧版本存储值兜底：不属于当前选项集时回落默认
@@ -1723,11 +1745,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     }
 
     private fun getCurrentCacheSize(): Long {
-        // 统计口径与"缓存限制"一致：只算受该设置管辖的两个目录
-        // （JSON 数据缓存 + 播放器媒体缓存）。图片/HTTP 缓存与升级包
-        // 不归这个设置管，不计入，避免显示值永远超限。
-        val mediaCacheDir = PlayerMediaCache.getCacheDir(requireContext())
-        return getFolderSize(FileCacheManager.cacheDir) + getFolderSize(mediaCacheDir)
+        // 统计口径与"缓存限制"一致：只算受该设置管辖的受管缓存目录
+        // （JSON 数据缓存 + 播放器媒体缓存 + 红果解密流落地），走 GlobalCacheBudget
+        // 总账。图片/HTTP 缓存与升级包不归这个设置管，不计入，避免显示值永远超限。
+        com.mytvb.feature.hongguo.HongguoMediaCache.dir(requireContext())  // 防御注册
+        PlayerMediaCache.getCacheDir(requireContext())
+        return com.mytvb.core.common.cache.GlobalCacheBudget.totalBytes()
     }
 
     private fun showDmChoiceDialog(key: String, options: Array<String>) {

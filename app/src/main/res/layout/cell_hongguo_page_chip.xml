@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果详情选集分页 chip（1-20 / 21-40 …）：选中白底黑字（官方详情同款），
+     聚焦高亮块，默认暗底。 -->
+<androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/text_hongguo_page_chip"
+    android:background="@drawable/bg_hongguo_page_chip"
+    android:focusable="true"
+    android:clickable="true"
+    android:gravity="center"
+    android:textSize="@dimen/px24"
+    android:paddingStart="@dimen/px28"
+    android:paddingEnd="@dimen/px28"
+    android:layout_marginEnd="@dimen/px16"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/px60"/>

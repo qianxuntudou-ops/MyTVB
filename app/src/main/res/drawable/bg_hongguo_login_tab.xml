@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果登录弹窗页签：默认透明底灰字，选中紫实底白字（全 App 选中惯例），
+     聚焦 colorControlHighlight 高亮块（全 App 聚焦统一口径）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="?attr/buttonBackgroundColor"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>

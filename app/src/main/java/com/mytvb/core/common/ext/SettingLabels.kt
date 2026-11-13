@@ -23,6 +23,13 @@ private fun settingLabelRes(stored: String): Int = when (stored) {
     "中" -> R.string.setting_value_medium
     "高" -> R.string.setting_value_high
     "自动" -> R.string.setting_value_auto
+    // 红果默认画质（数字档位 1080P 等语言无关串原样返回）
+    "默认" -> R.string.setting_value_default
+    // 红果推荐受众 / 搜索源（"App" 语言无关串原样返回）
+    "不限" -> R.string.setting_value_no_limit
+    "男频" -> R.string.setting_value_male
+    "女频" -> R.string.setting_value_female
+    "官网" -> R.string.setting_value_official_site
     "不限制" -> R.string.setting_value_unlimited
     "全屏" -> R.string.setting_value_full_screen
     // 主题（存储值兼作 toLegacyTheme 的映射键）

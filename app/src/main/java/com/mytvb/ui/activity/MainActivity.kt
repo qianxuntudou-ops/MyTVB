@@ -78,6 +78,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val viewRef: WeakReference<View>
     )
 
+    /** 最近一次触摸按下时刻（uptimeMillis），触摸模式盲恢复判定用（见 recoverFocus…）。 */
+    private var lastTouchDownAt = 0L
+
     /**
      * 触屏点输入框以外区域收起系统输入法，且这次点击不派发（用户约定：
      * 键盘弹出时第一次点击专门用于收键盘，不触发任何功能——点热搜不搜索、
@@ -87,6 +90,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.action == MotionEvent.ACTION_DOWN) {
+            lastTouchDownAt = SystemClock.uptimeMillis()
             val focused = currentFocus
             if (focused is EditText && isImeVisible()) {
                 val location = IntArray(2)
@@ -116,11 +120,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val SETTINGS_OVERLAY_EXIT_ANIM_MS = 275L
         private const val CCTV_TAB_INDEX = 4
         private const val CCTV_VOD_TAB_INDEX = 5
-        private const val ME_TAB_INDEX = 6
-        private const val SEARCH_TAB_INDEX = 7
+        private const val HONGGUO_TAB_INDEX = 6
+        private const val ME_TAB_INDEX = 7
+        private const val SEARCH_TAB_INDEX = 8
         private const val HOME_TAB_INDEX = 0
         private const val STARTUP_TAG = "AppStartup"
         private const val TEEN_REST_DIAG_TAG = "TeenRestDiag"
+        // 触摸后多久内的「无焦点→侧栏」焦点变化算触摸模式盲恢复（见 recoverFocus…）
+        private const val TOUCH_BLIND_RECOVERY_WINDOW_MS = 4000L
         // 播放器等独立 Activity 长按菜单「视频详情」直达：宿主容器不可达时带参拉起主页
         private const val EXTRA_DETAIL_AID = "extra_detail_aid"
         private const val EXTRA_DETAIL_BVID = "extra_detail_bvid"
@@ -160,7 +167,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     // tab 顺序固定（与 fragmentFactories 一一对应）：
-    // 0 推荐 / 1 分类 / 2 动态 / 3 直播 / 4 CCTV直播 / 5 CCTV影视 / 6 我的 / 7 搜索。
+    // 0 推荐 / 1 分类 / 2 动态 / 3 直播 / 4 CCTV直播 / 5 CCTV影视 / 6 红果短剧 / 7 我的 / 8 搜索。
     // 用 lazy factory 让非首屏 tab 真正点中时再构造，省去 1.1s 的 onCreate 大段时间。
     private val fragmentFactories: List<() -> Fragment> = listOf(
         { HomeFragment.newInstance() },
@@ -169,6 +176,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         { LiveFragment.newInstance() },
         { CctvLiveFragment.newInstance() },
         { CctvVodFragment.newInstance() },
+        { com.mytvb.feature.hongguo.HongguoFragment.newInstance() },
         { MeFragment.newInstance() },
         { SearchNewFragment.newInstance() }
     )
@@ -312,6 +320,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                     "new=${new?.javaClass?.simpleName}#${new?.id} " +
                     "inTabBar=${new?.let { isInsideTabBar(it) } ?: false}"
             )
+            recoverFocusAfterTouchModeBlindRestore(old, new)
         }
         NetworkRecoveryMonitor.start(this) {
             appEventHub.dispatch(AppEventHub.Event.NetworkRecovered)
@@ -321,6 +330,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         applyLiveEntryVisibility()
         applyCctvLiveEntryVisibility()
         applyCctvVodEntryVisibility()
+        applyHongguoEntryVisibility()
         applyMeEntryVisibility()
         AppLog.i(STARTUP_TAG, "STARTUP MainActivity.initView elapsed=${SystemClock.elapsedRealtime() - t0}ms")
     }
@@ -490,6 +500,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
     }
 
+    /** 红果短剧入口开关（默认关）：开启后侧栏出现红果按钮，与 B 站会话完全隔离。 */
+    fun applyHongguoEntryVisibility() {
+        val entry = appSettings.getCachedString("hongguo_entry", "关") ?: "关"
+        val show = entry == "开"
+        binding.myTabView.setHongguoButtonVisible(show)
+        if (!show && currentFragmentIndex == HONGGUO_TAB_INDEX) {
+            binding.myTabView.selectTab(0)
+        }
+    }
+
     /**
      * 「首页个人页签」开关（默认开）：开启时隐藏侧栏「我的」入口，历史/稍后观看/
      * 收藏并入首页 tab；关闭时完全恢复。设置页切换后即时调用，冷启动由 initView 重放。
@@ -520,6 +540,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (index == 3 && !binding.myTabView.isLiveButtonVisible()) return
         if (index == CCTV_TAB_INDEX && !binding.myTabView.isCctvLiveButtonVisible()) return
         if (index == CCTV_VOD_TAB_INDEX && !binding.myTabView.isCctvVodButtonVisible()) return
+        if (index == HONGGUO_TAB_INDEX && !binding.myTabView.isHongguoButtonVisible()) return
         if (index == ME_TAB_INDEX && !binding.myTabView.isMeButtonVisible()) return
         if (currentFragmentIndex == index) return
 
@@ -555,6 +576,29 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             current = current.parent as? View
         }
         return false
+    }
+
+    /**
+     * 触摸模式盲恢复纠偏：鼠标/触摸点击会让窗口进入触摸模式并被系统清空焦点；下一次方向键
+     * 被 ViewRootImpl.checkForLeavingTouchModeAndConsume 直接消费（用于退出触摸模式，不派发
+     * 到 Activity），焦点由系统从 DecorView 盲找「第一个可聚焦 view」恢复——实测落到侧栏
+     * 按钮，脱离当前页内容区（红果/CCTV影视等均复现）。这里识别「无焦点 → 侧栏 + 近期有
+     * 触摸」的盲恢复特征，把焦点送回当前页内容入口（focusEntryFromMainTab）。纯遥控路径
+     * 无触摸时间戳，永不触发，行为不变。
+     */
+    private fun recoverFocusAfterTouchModeBlindRestore(oldFocus: View?, newFocus: View?) {
+        if (newFocus == null || !isInsideTabBar(newFocus)) return
+        // 盲恢复的 old 有两种形态：null（touch 进入时焦点彻底清空）或 RecyclerView
+        //（FOCUS_AFTER_DESCENDANTS 容器临时持焦，失焦后焦点先落容器）。正常遥控导航到
+        // 侧栏的 old 是具体卡片/按钮（ImageView、卡片 layout），不会是这两者。
+        if (oldFocus != null && oldFocus !is RecyclerView) return
+        val sinceTouchMs = SystemClock.uptimeMillis() - lastTouchDownAt
+        if (sinceTouchMs < 0 || sinceTouchMs > TOUCH_BLIND_RECOVERY_WINDOW_MS) return
+        // 仅主 tab 在最上层时干预：详情页/设置等 overlay 打开时交还系统默认行为
+        val top = supportFragmentManager.fragments.asReversed().firstOrNull { it.isVisible }
+        if (top == null || top.tag != "fragment_$currentFragmentIndex") return
+        AppLog.d("FocusTrace", "touch-mode blind restore corrected -> focusCurrentMainContent")
+        focusCurrentMainContent(anchorView = null)
     }
 
     override fun onTabSelected(index: Int) {

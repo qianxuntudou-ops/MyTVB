@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果短剧模块独立语义色（2026-11-11 重设计定案①）：
+     强调位一律走主题引用（?attr/colorAccent 等），仅榜单语义色固定不变。 -->
+<resources>
+    <!-- 榜单前三名徽章（金/银/铜） -->
+    <color name="hongguo_rank_gold">#FFC53D</color>
+    <color name="hongguo_rank_silver">#C0C7D1</color>
+    <color name="hongguo_rank_bronze">#E09B62</color>
+    <!-- 徽章深色字（浅底上保证可读） -->
+    <color name="hongguo_badge_text_gold">#241A00</color>
+    <color name="hongguo_badge_text_silver">#1C2024</color>
+    <color name="hongguo_badge_text_bronze">#241305</color>
+    <!-- 强调色实底上的深色字（紫/粉/蓝三主题通用） -->
+    <!-- 状态标（爆剧/新剧）与标签紫 -->
+    <color name="hongguo_boom">#FF4D26</color>
+    <color name="hongguo_new">#3FA45B</color>
+    <color name="hongguo_tag_purple">#6A5AE0</color>
+    <!-- 功能卡/骨架中性面（不随主题） -->
+    <color name="hongguo_card_face">#141418</color>
+    <color name="hongguo_card_face_focused">#1C1C22</color>
+    <color name="hongguo_card_line">#2A2A31</color>
+    <color name="hongguo_skeleton_block">#1E1E26</color>
+</resources>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果主行动按钮（2026-11-12 三态完全对齐 button_common/侧栏标准）：
+     默认=buttonBackgroundColor 中性灰底+白字（常态不抢色，accent 浅紫底白字对比不足
+     被用户否决）；按下=colorPrimary 变色；聚焦=整块 colorControlHighlight 半透明
+     主题色提亮（全 App 统一聚焦语言）；禁用置灰。圆角 px15。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+
+    <item android:state_enabled="false">
+        <shape>
+            <solid android:color="#131317"/>
+            <stroke android:width="1dp" android:color="#2A2A31"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+            <!-- 白描边：纯提亮在中性灰底上视觉太弱（我的页 tab DOWN 落登录钮
+                 被感知为"焦点消失"），TV 焦点必须一眼可见 -->
+            <stroke android:width="@dimen/px4" android:color="@color/white"/>
+        </shape>
+    </item>
+
+    <item>
+        <shape>
+            <solid android:color="?attr/buttonBackgroundColor"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>
+

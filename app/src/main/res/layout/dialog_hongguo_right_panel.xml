@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果播放页右侧面板容器（画质/选集/倍速共用）：贴右撑满，左侧圆角（dialog_background_right_panel） -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background_right_panel"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px35"
+        android:layout_marginEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px20"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_options"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:paddingStart="@dimen/px18"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px18"
+        android:paddingBottom="@dimen/px18" />
+
+    <!-- 数字网格（选集）：一次性构建的 ScrollView，不经 RecyclerView 回收/异步布局 -->
+    <ScrollView
+        android:id="@+id/scroll_grid"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/px18"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px18"
+        android:paddingBottom="@dimen/px18"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/grid_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:baselineAligned="false"
+            android:orientation="vertical" />
+    </ScrollView>
+</LinearLayout>

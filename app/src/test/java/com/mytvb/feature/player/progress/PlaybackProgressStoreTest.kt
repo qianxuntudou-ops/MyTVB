@@ -79,6 +79,18 @@ class PlaybackProgressStoreTest {
     }
 
     @Test
+    fun unwatchedPageDoesNotInheritFallbackProgress() {
+        // issue#112：P1 播到 300s（未看完）后切 P2，P2 精确键 miss 时不得经 bvid 兜底键
+        // 继承 P1 进度（多P共用 bvid，兜底键存的是最后观看分P的位置）
+        PlaybackProgressStore.savePosition("BV1multi", 1L, 300_000L, 600_000L)
+
+        assertEquals(300_000L, PlaybackProgressStore.getPosition("BV1multi", 1L))
+        assertEquals(0L, PlaybackProgressStore.getPosition("BV1multi", 2L))
+        // cid=0 的显示入口（UP 空间卡片）仍走兜底键
+        assertEquals(300_000L, PlaybackProgressStore.getPosition("BV1multi"))
+    }
+
+    @Test
     fun reloadFromPrefsRestoresProgress() {
         PlaybackProgressStore.savePosition("BV1reload", 1L, 66_000L, 600_000L)
 

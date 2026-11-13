@@ -340,10 +340,15 @@
 
     <!-- ===== Settings value display mapping (stored values stay Chinese, display layer only) ===== -->
     <string name="setting_value_auto">Auto</string>
+    <string name="setting_value_default">Default</string>
     <string name="setting_value_low">Low</string>
     <string name="setting_value_medium">Medium</string>
     <string name="setting_value_high">High</string>
     <string name="setting_value_unlimited">Unlimited</string>
+    <string name="setting_value_no_limit">All</string>
+    <string name="setting_value_male">Male</string>
+    <string name="setting_value_female">Female</string>
+    <string name="setting_value_official_site">Website</string>
     <string name="setting_value_full_screen">Fullscreen</string>
     <string name="setting_value_black">Black</string>
     <string name="setting_value_white">White</string>

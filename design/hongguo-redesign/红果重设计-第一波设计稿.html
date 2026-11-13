@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>红果短剧 TV · UI 重设计 · 第一波设计稿</title>
+<style>
+/* ============ 工作台（文档部分）============ */
+:root{
+  --bg-work:#101013; --panel:#151519; --line:#26262c; --line-soft:#1e1e24;
+  --ink:#e9e9ee; --ink-dim:#9a9aa4; --ink-faint:#6d6d78;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
+  --sans:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;
+  /* ---- TV 主题引用（示例值 = DarkTheme，实现时全部走 ?attr / 资源）---- */
+  --accent:#bb86fc;            /* ?attr/colorAccent */
+  --accent-15:rgba(187,134,252,.15);
+  --accent-40:rgba(187,134,252,.40);
+  --page:#050505;              /* backgroundColor */
+  --card:#141418;              /* 卡片面（主题面） */
+  --card-hi:#1c1c22;           /* 聚焦面 */
+  --tv-line:#2a2a31;
+  --t1:#ffffff; --t2:#c9c9cf; --t3:#8f8f98;
+  --gold:#FFC53D; --silver:#C0C7D1; --bronze:#E09B62;
+  --boom:#FF4D26; --newg:#3FA45B; --tagp:#6A5AE0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-work);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.65;padding:48px 40px 80px}
+.wrap{max-width:1330px;margin:0 auto}
+h1{font-size:30px;font-weight:700;letter-spacing:.5px}
+.meta{margin-top:10px;color:var(--ink-dim);font-size:13.5px}
+.meta b{color:var(--ink);font-weight:600}
+.meta code{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.chips{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:3px;padding:7px 12px;font-size:13px;color:var(--ink-dim)}
+.chip b{color:var(--ink);font-weight:600}
+.chip i{font-style:normal;color:var(--accent)}
+.rule{height:1px;background:var(--line);margin:34px 0 0}
+section{margin-top:46px}
+.sec-head{display:flex;align-items:baseline;gap:14px}
+.sec-head .no{font-family:var(--mono);font-size:13px;color:var(--accent)}
+.sec-head h2{font-size:21px;font-weight:700}
+.sec-head .tag{font-size:12.5px;color:var(--ink-faint)}
+.board{margin-top:16px;display:flex;gap:22px;align-items:flex-start}
+/* ============ TV 画布 ============ */
+.screen{width:960px;height:540px;flex:none;background:var(--page);position:relative;
+  overflow:hidden;border-radius:4px;outline:1px solid var(--line);
+  font-family:var(--sans);color:var(--t1)}
+.notes{flex:1;min-width:230px;max-width:320px}
+.notes h3{font-size:13px;color:var(--ink);font-weight:600;margin-bottom:10px;
+  letter-spacing:1px}
+.notes ul{list-style:none}
+.notes li{position:relative;padding:7px 0 7px 16px;border-bottom:1px solid var(--line-soft);
+  font-size:12.5px;color:var(--ink-dim);line-height:1.55}
+.notes li::before{content:"";position:absolute;left:0;top:14px;width:7px;height:7px;
+  border-radius:1px;background:var(--accent)}
+.notes li.plain::before{background:var(--line)}
+.notes code{font-family:var(--mono);font-size:11px;color:var(--ink)}
+/* 画布内通用 */
+.tabbar{position:absolute;left:0;top:25px;right:0;height:80px;display:flex;align-items:center;
+  padding:0 30px;gap:6px}
+.tab{font-size:40px;color:var(--t3);padding:0 12px;position:relative;white-space:nowrap}
+.tab.on{color:var(--t1);font-weight:600}
+.tab.on::after{content:"";position:absolute;left:22px;right:22px;bottom:-8px;height:10px;
+  border-radius:5px;background:var(--accent)}
+.searchpill{position:absolute;right:30px;top:35px;height:60px;display:flex;align-items:center;
+  gap:8px;padding:0 22px;border:1px solid var(--tv-line);border-radius:30px;background:#101014;color:var(--t3);font-size:24px}
+.searchpill svg{width:26px;height:26px}
+.ph{background:linear-gradient(160deg,#3d3550,#241f33 60%,#1a1726);position:relative;display:flex;
+  align-items:center;justify-content:center}
+.ph > span{font-size:34px;font-weight:700;color:rgba(255,255,255,.16)}
+.p1{background:linear-gradient(160deg,#5a3b2e,#33241c 65%,#211710)}
+.p2{background:linear-gradient(160deg,#2e4a5a,#1c2f33 65%,#101c21)}
+.p3{background:linear-gradient(160deg,#5a2e44,#331c2a 65%,#21101a)}
+.p4{background:linear-gradient(160deg,#3e5a2e,#24331c 65%,#161f10)}
+.p5{background:linear-gradient(160deg,#4a4a5f,#282838 65%,#171722)}
+.p6{background:linear-gradient(160deg,#5a5430,#332f1c 65%,#1f1d10)}
+.p7{background:linear-gradient(160deg,#30525a,#1c3033 65%,#101d21)}
+.p8{background:linear-gradient(160deg,#552e2e,#2f1c1c 65%,#1d1010)}
+.p9{background:linear-gradient(160deg,#39395c,#222240 65%,#141426)}
+.p10{background:linear-gradient(160deg,#2e5a3f,#1c3324 65%,#101f16)}
+.p11{background:linear-gradient(160deg,#5a4b2e,#33291c 65%,#1f1910)}
+.p12{background:linear-gradient(160deg,#46305c,#281c38 65%,#181024)}
+/* flush 贴角角标：贴边两角直角、内侧两角圆角 */
+.badge{position:absolute;font-size:20px;font-weight:700;line-height:1;padding:5px 12px 6px 8px;
+  border-radius:0 0 10px 0}
+.b-rank-accent{left:0;top:0;background:var(--accent);color:#14051f}
+.b-gold{left:0;top:0;background:var(--gold);color:#241a00}
+.b-silver{left:0;top:0;background:var(--silver);color:#1c2024}
+.b-bronze{left:0;top:0;background:var(--bronze);color:#241305}
+/* 状态链：状态标在右，季标接其左（画布内用 flex 模拟） */
+.corner-tr{position:absolute;right:0;top:0;display:flex}
+.corner-tr .b2{font-size:20px;font-weight:700;line-height:1;padding:5px 8px 6px 12px}
+.corner-tr .b2:first-child{border-radius:0 0 0 10px}
+.corner-tr .b2 + .b2{border-radius:0;padding-left:8px}
+.cover-foot{position:absolute;left:0;right:0;bottom:0;padding:20px 10px 8px;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.72));
+  display:flex;justify-content:space-between;font-size:20px;line-height:1.2;
+  white-space:nowrap;color:#fff}
+.cover-foot span{flex:none}
+/* 卡片（竖版剧卡） */
+.vcard{width:136px;position:relative}
+.vcard .cover{width:136px;height:170px;border-radius:10px;overflow:hidden;position:relative;
+  outline:1px solid rgba(255,255,255,.06)}
+.vcard .title{margin-top:9px;font-size:26px;color:var(--t1);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.vcard .sub{margin-top:3px;font-size:20px;color:var(--t3);white-space:nowrap;overflow:hidden}
+/* TV 焦点态：放大 + 强调描边 + 发光 */
+.focus-ring{transform:scale(1.05);transform-origin:center;outline:3px solid var(--accent);
+  border-radius:12px;box-shadow:0 0 0 6px var(--accent-40),0 0 24px var(--accent-40)}
+/* ============ 屏 1 我的页 ============ */
+.mine-wrap{position:absolute;left:30px;right:30px;top:129px;bottom:24px;display:flex;gap:20px}
+.acct{width:266px;flex:none;background:var(--card);border:1px solid var(--tv-line);border-radius:12px;
+  padding:26px 22px 18px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.avatar{width:84px;height:84px;border-radius:50%;background:var(--accent-15);
+  display:flex;align-items:center;justify-content:center}
+.avatar svg{width:50px;height:50px}
+.nick{margin-top:12px;font-size:36px;font-weight:600}
+.uid{margin-top:4px;font-size:20px;color:var(--t3)}
+.stat{margin-top:2px;font-size:20px;color:var(--t3)}
+.sync{margin-top:8px;display:flex;align-items:center;gap:7px;font-size:20px;color:var(--t2)}
+.sync i{width:9px;height:9px;border-radius:50%;background:var(--newg)}
+.acct-btns{margin-top:auto;display:flex;flex-direction:column;gap:8px;width:100%}
+.btn-ghost-s{height:44px;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--tv-line);border-radius:8px;font-size:20px;color:var(--t2)}
+.fn-grid{flex:1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:1fr 1fr;gap:16px}
+.fn-card{background:var(--card);border:1px solid var(--tv-line);border-radius:12px;padding:20px 22px 16px;
+  display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.fn-head{display:flex;align-items:center;gap:10px}
+.fn-head svg{width:26px;height:26px;flex:none}
+.fn-head .t{font-size:26px;font-weight:600}
+.fn-head .n{margin-left:auto;font-size:20px;color:var(--accent);background:var(--accent-15);
+  padding:3px 12px;border-radius:14px}
+.fn-row{margin-top:auto;display:flex;gap:10px;align-items:flex-end}
+.mini{width:56px;height:70px;border-radius:6px;overflow:hidden;position:relative;flex:none}
+.mini span{font-size:20px}
+.mini .pg{position:absolute;left:0;right:0;bottom:0;height:5px;background:rgba(255,255,255,.22)}
+.mini .pg i{display:block;height:100%;background:var(--accent)}
+.fn-more{width:56px;height:70px;border-radius:6px;border:1px dashed var(--tv-line);color:var(--t3);
+  display:flex;align-items:center;justify-content:center;font-size:26px;flex:none}
+.fn-sub{margin-top:8px;font-size:20px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.fn-card.focus{transform:scale(1.03);transform-origin:center;outline:3px solid var(--accent);
+  box-shadow:0 0 0 6px var(--accent-40),0 0 22px var(--accent-40);background:var(--card-hi)}
+/* ============ 屏 2 榜单页 ============ */
+.seg-row{position:absolute;left:30px;right:30px;top:112px;height:56px;display:flex;align-items:center;gap:12px}
+.seg{height:56px;padding:0 26px;display:flex;align-items:center;border-radius:8px;font-size:26px;
+  border:1px solid var(--tv-line);background:#101014;color:var(--t3)}
+.seg.on{background:var(--accent);border-color:var(--accent);color:#14051f;font-weight:700}
+.seg.focused{outline:3px solid #fff;outline-offset:-3px;color:var(--t1);background:var(--card-hi)}
+.seg-note{margin-left:auto;font-size:20px;color:var(--t3)}
+.rank-grid{position:absolute;left:30px;top:184px;display:grid;grid-template-columns:repeat(6,136px);
+  gap:16px}
+/* ============ 屏 3 登录弹窗 ============ */
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.68)}
+.ghost-tab{position:absolute;left:0;top:25px;height:80px;display:flex;align-items:center;
+  padding:0 30px;gap:6px;opacity:.35}
+.ghost-tab .tab{font-size:40px;color:#fff}
+.dlg{position:absolute;left:60px;top:44px;width:840px;height:452px;background:#17171b;
+  border:1px solid #34343c;border-radius:14px;padding:26px 30px 22px;display:flex;flex-direction:column}
+.dlg-head{display:flex;align-items:center}
+.dlg-head .t{font-size:30px;font-weight:700}
+.dlg-head .x{margin-left:auto;width:44px;height:44px;border-radius:8px;border:1px solid var(--tv-line);
+  display:flex;align-items:center;justify-content:center;color:var(--t3)}
+.dlg-tabs{margin-top:20px;display:flex;gap:12px}
+.dlg-tab{flex:1;height:56px;display:flex;align-items:center;justify-content:center;border-radius:8px;
+  font-size:26px;border:1px solid var(--tv-line);background:#101014;color:var(--t3)}
+.dlg-tab.on{background:var(--accent);border-color:var(--accent);color:#14051f;font-weight:700}
+.qr-panel{margin-top:22px;flex:1;display:flex;gap:30px;align-items:center}
+.qr-card{width:196px;height:196px;flex:none;background:#fff;border-radius:10px;padding:10px}
+.qr-side .s1{font-size:26px;color:var(--t1)}
+.qr-side .s2{margin-top:8px;font-size:20px;color:var(--t3)}
+.btn-outline{margin-top:20px;display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 26px;
+  border:1px solid #4a4a54;border-radius:8px;font-size:24px;color:var(--t1)}
+.btn-outline svg{width:24px;height:24px}
+.dlg-foot{margin-top:14px;font-size:20px;color:var(--t3);text-align:center}
+/* ============ 屏 4 公用件 ============ */
+.kit{position:absolute;inset:0;padding:16px 30px;display:flex;flex-direction:column;gap:12px}
+.kit-row{display:flex;align-items:flex-start;gap:26px}
+.kit-label{width:96px;flex:none;font-size:20px;color:var(--t3);padding-top:4px;line-height:1.5}
+.kit-sep{height:1px;background:#202027}
+.chipx{height:56px;display:inline-flex;align-items:center;padding:0 28px;border-radius:28px;
+  font-size:24px;border:1px solid var(--tv-line);background:#101014;color:var(--t2)}
+.chipx.sel{background:var(--accent-15);border-color:var(--accent);color:var(--accent)}
+.chipx.foc{outline:3px solid #fff;outline-offset:-3px;color:var(--t1)}
+.hotrow{width:400px;height:68px;border-radius:8px;background:#141419;border:1px solid #222228;
+  display:flex;align-items:center;gap:12px;padding:0 16px;font-size:26px;color:var(--t1)}
+.hotrow .rk{width:34px;height:34px;flex:none;border-radius:6px;background:var(--gold);color:#241a00;
+  font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.hotrow .tip{margin-left:auto;font-size:20px;color:var(--t3)}
+.btn-main{height:70px;padding:0 44px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:8px;background:var(--accent);color:#14051f;font-size:26px;font-weight:600}
+.btn-ghost{height:70px;padding:0 44px;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:8px;border:1px solid #4a4a54;color:var(--t1);font-size:26px}
+.btn-input{height:70px;width:300px;display:flex;align-items:center;gap:10px;padding:0 24px;
+  border:1px solid #3a3a44;border-radius:8px;color:var(--t3);font-size:26px;background:#0d0d10}
+.swatch{display:flex;flex-wrap:wrap;gap:12px}
+.sw{width:58px}
+.sw .c{height:30px;border-radius:4px;outline:1px solid rgba(255,255,255,.08)}
+.sw .l{margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--ink-dim);line-height:1.3;white-space:nowrap}
+.sw .l b{display:block;color:var(--ink);font-size:9.5px;font-weight:600}
+.empty{display:flex;align-items:center;gap:12px;height:56px}
+.empty svg{width:34px;height:34px;flex:none}
+.empty .e1{font-size:20px;color:var(--t3);white-space:nowrap}
+.empty .btn-ghost{height:44px;padding:0 22px;font-size:20px}
+/* ============ 新增状态画布（01·B / 01·C / 03·B / 03·C / 05）============ */
+.btn-main,.btn-ghost,.btn-ghost-s,.btn-outline,.login-cta{white-space:nowrap}
+.login-cta{width:100%;height:70px;border-radius:8px;background:var(--accent);color:#14051f;
+  font-size:26px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.acct-tip{margin-top:8px;font-size:20px;color:var(--t3);line-height:1.5}
+.fn-empty{margin-top:auto;height:70px;border:1px dashed var(--tv-line);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t3)}
+.shelf-head{position:absolute;left:30px;right:30px;top:25px;height:80px;display:flex;align-items:center;gap:14px}
+.shelf-head .back{width:44px;height:44px;border-radius:8px;border:1px solid var(--tv-line);
+  display:flex;align-items:center;justify-content:center;color:var(--t2)}
+.shelf-head .back svg{width:24px;height:24px}
+.shelf-head .t{font-size:30px;font-weight:700}
+.shelf-head .n{margin-left:6px;font-size:20px;color:var(--t3);margin-top:8px}
+.shelf-row{position:absolute;left:30px;top:150px;display:flex;gap:16px}
+.hscroll{position:absolute;left:30px;right:30px;top:400px;height:6px;border-radius:3px;background:#1c1c24}
+.hscroll i{position:absolute;left:0;top:0;height:100%;width:62%;border-radius:3px;background:var(--accent-40)}
+.shelf-note{position:absolute;left:30px;top:428px;font-size:20px;color:var(--t3)}
+.in-row{display:flex;align-items:center}
+.in-label{width:96px;font-size:24px;color:var(--t2);flex:none}
+.in-field{flex:1;height:56px;border:1px solid #3a3a44;border-radius:8px;background:#0d0d10;
+  display:flex;align-items:center;padding:0 20px;font-size:24px;color:var(--t3)}
+.mfa-card{margin-top:8px;background:var(--accent-15);border:1px solid var(--accent-40);border-radius:10px;
+  padding:0 14px;height:72px;display:flex;align-items:center;gap:12px}
+.mfa-card svg{width:28px;height:28px;flex:none}
+.mfa-card .tx{flex:1;font-size:20px;color:var(--t2)}
+.mfa-card .btn-main{height:48px;padding:0 22px;font-size:24px;flex:none}
+.paste-box{margin-top:14px;height:160px;border:1px dashed #3a3a44;border-radius:10px;padding:12px 18px;
+  font-family:var(--mono);font-size:20px;color:var(--t3);line-height:1.7;overflow:hidden}
+.btn-ghost.dis{border-color:#2a2a31;color:var(--t3);background:#131317}
+.skel .c{width:136px;height:170px;border-radius:10px;
+  background:linear-gradient(100deg,#1b1b22 42%,#26262e 50%,#1b1b22 58%)}
+.skel .l{margin-top:9px;height:24px;width:112px;border-radius:4px;background:#1e1e26}
+.skel .l2{margin-top:6px;height:18px;width:78px;border-radius:4px;background:#1c1c24}
+/* 画布内注释角标 */
+.tagc{position:absolute;font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.34);
+  letter-spacing:.4px;pointer-events:none}
+@media (max-width:1279px){.board{flex-wrap:wrap}.notes{max-width:960px}}
+footer{margin-top:52px;border-top:1px solid var(--line);padding-top:22px;
+  font-size:13px;color:var(--ink-faint)}
+footer code{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>红果短剧 TV · UI 重设计 — 第一波设计稿</h1>
+  <div class="meta">
+    2026-11-11 · 波次 1/3 · <b>9 组画布</b>（3 主形态 + 6 状态/通道/组件分屏）· 画布 <b>960×540 dp</b>（TV 16:9，1dp=1px，尺寸即 <code>px</code> 池口径）·
+    强调色示例 = 默认深色主题 <code>#bb86fc</code>，实现时一律 <code>?attr/colorAccent</code> 等主题引用 ·
+    海报均为 CSS 占位，非真实封面
+  </div>
+  <div class="chips">
+    <div class="chip"><b>决策①</b> 强调色 <i>跟随全局主题</i>，删硬编码红果橙</div>
+    <div class="chip"><b>决策②</b> 「红果页显示历史/收藏」<i>开关默认开</i>：开=六 tab，关=四 tab 并入我的页</div>
+    <div class="chip"><b>决策③</b> 榜单 <i>只保留网格</i>，四板换统一分段控件 + 前三名金银铜</div>
+  </div>
+  <div class="rule"></div>
+</header>
+
+<!-- ================= 屏 1 我的页 ================= -->
+<section>
+  <div class="sec-head"><span class="no">01</span><h2>我的页</h2>
+    <span class="tag">左账号卡 + 右功能卡区 · 封面货架替代文字弹窗 · 未登录态见旁注</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="tabbar">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab">榜单</div><div class="tab">分类</div><div class="tab on">我的</div>
+      </div>
+      <div class="searchpill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>
+        搜索
+      </div>
+      <div class="mine-wrap">
+        <div class="acct">
+          <div class="avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8">
+              <circle cx="12" cy="13.5" r="7.2"/><path d="M12 6.3c.4-2 1.8-3.3 3.8-3.8-.3 2-1.6 3.4-3.8 3.8z" fill="var(--accent)" stroke="none"/>
+            </svg>
+          </div>
+          <div class="nick">晴天同学</div>
+          <div class="uid">红果号：hg_88291024</div>
+          <div class="stat">本机收藏 32 部 · 历史 118 条</div>
+          <div class="sync"><i></i>云同步已开启</div>
+          <div class="acct-btns">
+            <div class="btn-ghost-s">退出登录</div>
+            <div class="btn-ghost-s">清除本机数据</div>
+          </div>
+        </div>
+        <div class="fn-grid">
+          <div class="fn-card focus">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>
+              <div class="t">稍后再看</div><div class="n">12</div>
+            </div>
+            <div class="fn-row">
+              <div class="mini ph p1"><span>逆</span><div class="pg"><i style="width:62%"></i></div></div>
+              <div class="mini ph p3"><span>闪</span><div class="pg"><i style="width:23%"></i></div></div>
+              <div class="mini ph p5"><span>家</span></div>
+              <div class="fn-more">+9</div>
+            </div>
+            <div class="fn-sub">最近：逆镜重生 · 看到 5/80 集</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><path d="M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              <div class="t">我的预约</div><div class="n">3</div>
+            </div>
+            <div class="fn-row">
+              <div class="mini ph p7"><span>长</span><div class="pg"><i style="width:0;background:var(--newg)"></i></div></div>
+              <div class="mini ph p9"><span>星</span><div class="pg"><i style="width:0;background:var(--newg)"></i></div></div>
+              <div class="mini ph p11"><span>剑</span><div class="pg"><i style="width:0;background:var(--newg)"></i></div></div>
+            </div>
+            <div class="fn-sub">明日上线：《长夜将尽》 第2季</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><path d="M12 20s-7-4.6-9.2-9A5.2 5.2 0 0 1 12 6.4 5.2 5.2 0 0 1 21.2 11c-2.2 4.4-9.2 9-9.2 9z"/></svg>
+              <div class="t">本机收藏</div><div class="n">32</div>
+            </div>
+            <div class="fn-row">
+              <div class="mini ph p4"><span>山</span></div>
+              <div class="mini ph p6"><span>暖</span></div>
+              <div class="mini ph p8"><span>深</span></div>
+              <div class="fn-more">+29</div>
+            </div>
+            <div class="fn-sub">与账号云同步中</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <div class="t">观看历史</div><div class="n">118</div>
+            </div>
+            <div class="fn-row">
+              <div class="mini ph p2"><span>迷</span><div class="pg"><i style="width:88%"></i></div></div>
+              <div class="mini ph p10"><span>田</span><div class="pg"><i style="width:41%"></i></div></div>
+              <div class="mini ph p12"><span>凤</span><div class="pg"><i style="width:9%"></i></div></div>
+              <div class="fn-more">+115</div>
+            </div>
+            <div class="fn-sub">上次看到：《迷城》 第 63 集</div>
+          </div>
+        </div>
+      </div>
+      <div class="tagc" style="right:14px;bottom:10px">默认焦点 = 稍后再看卡（已登录）</div>
+      <div class="tagc" style="left:14px;bottom:10px">tab 高 80 · 指示条 10 · 字 40</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>账号卡承载身份与云同步状态；<b>退出登录 / 清除本机数据</b>降为卡底小描边钮，与普通操作分离，危险项不再与功能按钮平级</li>
+        <li>功能卡区 2×2：<b>稍后再看 / 我的预约 / 本机收藏 / 观看历史</b>，数量徽标 + 最近 3 张封面小海报（带进度条 / 上线标），替代原纯文字弹窗</li>
+        <li>点功能卡 → 进入对应封面货架（复用统一竖版卡）；点小海报 → 直达详情弹窗</li>
+        <li class="plain">未登录态见 <b>01·B</b> 屏：头像占位 + 主按钮「登录红果账号」，功能卡隐藏数量、虚线占位引导登录</li>
+        <li class="plain">点功能卡进入的<b>封面货架页</b>（替代纯文字弹窗）见 <b>01·C</b> 屏，四入口共用形态</li>
+        <li class="plain">开关②关闭（四 tab）时：顶层历史/收藏 tab 撤出，本页四卡入口不变，两态兼容</li>
+        <li class="plain">焦点态=放大 1.03 + <code>colorAccent</code> 描边 + 发光（全 App 同款）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 1·B 我的页 · 未登录态 ================= -->
+<section>
+  <div class="sec-head"><span class="no">01·B</span><h2>我的页 · 未登录态</h2>
+    <span class="tag">主行动=登录红果账号 · 功能卡虚线占位引导登录 · 四入口与已登录态同构</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="tabbar">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab">榜单</div><div class="tab">分类</div><div class="tab on">我的</div>
+      </div>
+      <div class="searchpill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>
+        搜索
+      </div>
+      <div class="mine-wrap">
+        <div class="acct">
+          <div class="avatar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="1.8">
+              <circle cx="12" cy="13.5" r="7.2"/><path d="M12 6.3c.4-2 1.8-3.3 3.8-3.8-.3 2-1.6 3.4-3.8 3.8z"/>
+            </svg>
+          </div>
+          <div class="nick">未登录</div>
+          <div class="uid">登录后同步云端数据</div>
+          <div class="login-cta focus-ring" style="margin-top:auto">登录红果账号</div>
+          <div class="acct-tip">不登录也可正常观看<br>记录仅保存在本机</div>
+        </div>
+        <div class="fn-grid">
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><path d="M6 3h12v18l-6-4.5L6 21z"/></svg>
+              <div class="t">稍后再看</div>
+            </div>
+            <div class="fn-empty">登录后展示</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><path d="M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+              <div class="t">我的预约</div>
+            </div>
+            <div class="fn-empty">登录后展示</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><path d="M12 20s-7-4.6-9.2-9A5.2 5.2 0 0 1 12 6.4 5.2 5.2 0 0 1 21.2 11c-2.2 4.4-9.2 9-9.2 9z"/></svg>
+              <div class="t">本机收藏</div>
+            </div>
+            <div class="fn-empty">仍可查看本机记录</div>
+          </div>
+          <div class="fn-card">
+            <div class="fn-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <div class="t">观看历史</div>
+            </div>
+            <div class="fn-empty">仍可查看本机记录</div>
+          </div>
+        </div>
+      </div>
+      <div class="tagc" style="right:14px;bottom:10px">默认焦点 = 登录主按钮（accent 实底 70 高）</div>
+      <div class="tagc" style="left:14px;bottom:10px">本机类入口（收藏/历史）未登录仍可用</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>账号卡：灰剪影占位头像 + 昵称「未登录」；<b>唯一主按钮「登录红果账号」</b>（accent 实底 70 高）锚在卡底（margin-top:auto），位置与已登录态按钮区一致</li>
+        <li>数量徽标隐藏；云端类入口（稍后再看/预约）虚线占位「登录后展示」；<b>本机类入口（收藏/历史）未登录仍可用</b>，占位文案区分</li>
+        <li>点主按钮 / 云端类卡 → 唤起登录弹窗（03 屏）；底部灰字「不登录也可正常观看」与登录弹窗免责行呼应</li>
+        <li class="plain">开关②关闭（四 tab）时顶层撤历史/收藏 tab，本页结构不变</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 1·C 我的页 · 稍后再看货架 ================= -->
+<section>
+  <div class="sec-head"><span class="no">01·C</span><h2>我的页 · 封面货架页（稍后再看）</h2>
+    <span class="tag">功能卡进入 · 横滑货架替代纯文字弹窗 · 四入口共用此形态</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="shelf-head">
+        <div class="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg></div>
+        <div class="t">稍后再看</div><div class="n">12 部 · 与账号云同步</div>
+      </div>
+      <div class="shelf-row">
+        <div class="vcard">
+          <div class="cover focus-ring ph p1"><span>逆</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:62%;background:var(--accent)"></i></div>
+          </div>
+          <div class="title" style="color:var(--accent)">逆镜重生之巅峰</div>
+          <div class="sub">看到 5/80 集</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p3"><span>闪</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:23%;background:var(--accent)"></i></div>
+          </div>
+          <div class="title">闪婚老公是豪门</div>
+          <div class="sub">看到 23/66 集</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p2"><span>迷</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:84%;background:var(--accent)"></i></div>
+          </div>
+          <div class="title">迷城暗涌</div>
+          <div class="sub">看到 63/75 集</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p9"><span>星</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:8%;background:var(--accent)"></i></div>
+          </div>
+          <div class="title">星辰坠入你眼中</div>
+          <div class="sub">看到 8/110 集</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p5"><span>家</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:1%;background:var(--accent)"></i></div>
+          </div>
+          <div class="title">家父封侯我躺平</div>
+          <div class="sub">看到 1/92 集</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p11"><span>剑</span>
+            <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:100%;background:var(--silver)"></i></div>
+          </div>
+          <div class="title">剑出寒山</div>
+          <div class="sub">已看完</div>
+        </div>
+      </div>
+      <div class="hscroll"><i></i></div>
+      <div class="shelf-note">BACK 返回我的页 · OK 打开详情弹窗 · 长按移出列表</div>
+      <div class="tagc" style="right:14px;bottom:10px">默认焦点 = 续看进度最靠前一张（62%）</div>
+      <div class="tagc" style="left:14px;bottom:10px">标题行 80 高 · 货架行 top 150 · 横向滚动条示意</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>「稍后再看 / 我的预约 / 本机收藏 / 观看历史」四入口共用此货架页（标题与数据源不同），替代纯文字 ChoiceDialog</li>
+        <li>卡=统一竖版卡 + 底部进度条；sub 行=「看到 x/y 集」（对应清单「稍后再看卡带看到 x/y 集」），已看完显示银色满条+「已看完」</li>
+        <li>预约入口的卡进度条=绿色上线标（01 屏 mini 同款），其余入口=accent 进度条</li>
+        <li>行尾触边=横向滚动（TV 焦点驱动），滚动条位置示意；BACK 回我的页并还原功能卡焦点</li>
+        <li class="plain">货架空 = 05 屏空态组件；长按移出=沿用列表长按语义</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 2 榜单页 ================= -->
+<section>
+  <div class="sec-head"><span class="no">02</span><h2>榜单页</h2>
+    <span class="tag">四板统一分段控件 · 只保留网格 · 前三名金银铜徽章（flush 贴角）</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="tabbar">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab on">榜单</div><div class="tab">分类</div><div class="tab">我的</div>
+      </div>
+      <div class="searchpill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>
+        搜索
+      </div>
+      <div class="seg-row">
+        <div class="seg on">热播榜</div>
+        <div class="seg">真人榜</div>
+        <div class="seg focused">漫剧榜</div>
+        <div class="seg">AI剧榜</div>
+        <div class="seg-note">基于热度综合排序 · 每日更新</div>
+      </div>
+      <div class="rank-grid">
+        <div class="vcard">
+          <div class="cover focus-ring ph p1"><span>逆</span>
+            <div class="badge b-gold">★1</div>
+            <div class="corner-tr"><div class="b2" style="background:rgba(0,0,0,.62);color:#fff">第2季</div></div>
+            <div class="cover-foot"><span>2418万</span><span>80集</span></div>
+          </div>
+          <div class="title">逆镜重生之巅峰</div>
+          <div class="sub">都市 · 逆袭 · 8.6分</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p3"><span>闪</span><div class="badge b-silver">★2</div>
+            <div class="cover-foot"><span>1980万</span><span>66集</span></div></div>
+          <div class="title">闪婚老公是豪门</div>
+          <div class="sub">现代 · 豪门 · 8.4分</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p5"><span>家</span><div class="badge b-bronze">★3</div>
+            <div class="cover-foot"><span>1502万</span><span>92集</span></div></div>
+          <div class="title">家父封侯我躺平</div>
+          <div class="sub">古装 · 喜剧 · 8.3分</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p2"><span>迷</span><div class="badge b-rank-accent">4</div>
+            <div class="corner-tr"><div class="b2" style="background:rgba(0,0,0,.62);color:#fff">第1季</div></div>
+            <div class="cover-foot"><span>1210万</span><span>75集</span></div></div>
+          <div class="title">迷城暗涌</div>
+          <div class="sub">悬疑 · 都市 · 8.1分</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p7"><span>长</span><div class="badge b-rank-accent">5</div>
+            <div class="corner-tr"><div class="b2" style="background:var(--newg);color:#fff">新剧</div></div>
+            <div class="cover-foot"><span>986万</span><span>58集</span></div></div>
+          <div class="title">长夜将尽</div>
+          <div class="sub">末世 · 异能 · 8.0分</div>
+        </div>
+        <div class="vcard">
+          <div class="cover ph p9"><span>星</span><div class="badge b-rank-accent">6</div>
+            <div class="cover-foot"><span>842万</span><span>96集</span></div></div>
+          <div class="title">星辰坠入你眼中</div>
+          <div class="sub">甜宠 · 现代 · 7.9分</div>
+        </div>
+      </div>
+      <!-- 第二行露头示意：实际为 RecyclerView 纵向滚动，此处示意触底前的下一行 -->
+      <div class="vcard" style="position:absolute;left:30px;top:423px">
+        <div class="cover ph p4"><span>山</span><div class="badge b-rank-accent">7</div></div>
+        <div class="title">山河故人归</div>
+        <div class="sub">古装 · 权谋 · 7.9分</div>
+      </div>
+      <div class="tagc" style="left:14px;bottom:10px">网格 6 列 · 间距 16 · 卡宽 136 图高 170（4:5）· 纵向滚动触底预加载</div>
+      <div class="tagc" style="right:14px;bottom:10px">漫剧榜分段=遥控聚焦态示例（白描边）· 空态/加载态见 05</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>四板切换：统一 TV 分段控件（高 56 / 圆角 8 / 字 26），<b>选中=主题强调色实底</b>，聚焦=白描边+面提亮；替代原生 RadioButton</li>
+        <li>前三名徽章：<b>金 <code>#FFC53D</code> / 银 <code>#C0C7D1</code> / 铜 <code>#E09B62</code></b> 独立语义色（★+数字），第 4 名起主题强调色底纯数字；徽章 flush 贴角（贴边两角直角、内侧圆角）——<b>纯数字保障与右上季标并列时总宽 ≤136</b>，不重叠（对齐 hongguo-tv/HGTV 的数字名次徽章惯例）</li>
+        <li>右上角标=季/更新标（新剧绿=上新提示）；<b>状态标（爆剧/漫剧紫）让位给名次徽章</b>，仅用于非榜单场景（推荐/搜索）的左上槽位——「左上=名次/状态二选一」槽位口径，避免 136px 卡宽上左上+右上两组标重叠；底部左热度右集数压渐变白字</li>
+        <li>副题行=类型 · 评分（榜单接口 category/热度字段已有，不加请求）</li>
+        <li class="plain">右侧说明行灰字 20，文案可后定；网格纵向滚动（第二行露头示意）、触底预加载（距尾 4 项）、板间切换保持锚点，均沿用 <code>TvListFocusController</code> 现链路</li>
+        <li class="plain">拉取中/空榜单 = 05 屏加载骨架 / 空态组件，不另设样式</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 3 登录弹窗 ================= -->
+<section>
+  <div class="sec-head"><span class="no">03</span><h2>登录弹窗</h2>
+    <span class="tag">三通道页签统一 · 按钮两态体系 · 主形态=扫码（短信/导入面板见旁注）</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="dim"></div>
+      <div class="ghost-tab">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab">榜单</div><div class="tab">分类</div><div class="tab">我的</div>
+      </div>
+      <div class="dlg">
+        <div class="dlg-head">
+          <div class="t">登录红果账号</div>
+          <div class="x"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+        </div>
+        <div class="dlg-tabs">
+          <div class="dlg-tab on">扫码登录</div>
+          <div class="dlg-tab">短信登录</div>
+          <div class="dlg-tab">导入账号</div>
+        </div>
+        <div class="qr-panel">
+          <div class="qr-card">
+            <svg viewBox="0 0 29 29" width="100%" height="100%" shape-rendering="crispEdges">
+              <g fill="#1a1a1a">
+                <path d="M0 0h7v7H0zM2 2h3v3H2zM22 0h7v7h-7zM24 2h3v3h-3zM0 22h7v7H0zM2 24h3v3H2z"/>
+                <path d="M9 0h2v2H9zM13 0h2v3h-2zM17 1h2v2h-2zM9 4h1v3H9zM12 4h3v1h-3zM16 4h1v2h-1zM19 5h1v2h-1zM0 9h3v1H0zM4 9h2v2H4zM7 10h2v1H7zM10 9h2v2h-2zM14 9h1v3h-1zM17 9h2v1h-2zM20 9h3v2h-3zM25 9h2v1h-2zM28 9h1v2h-1zM1 12h2v2H1zM5 13h2v1H5zM8 12h3v3H8zM13 13h3v2h-3zM18 12h1v3h-1zM21 12h2v2h-2zM24 12h2v1h-2zM27 13h2v2h-2zM0 16h1v2H0zM3 16h2v2H3zM6 17h2v1H6zM9 16h2v2H9zM12 17h2v1h-2zM15 16h3v2h-3zM19 17h2v1h-2zM23 16h2v2h-2zM26 16h3v1h-3zM9 20h2v2H9zM13 20h1v2h-1zM16 21h3v1h-3zM21 20h2v2h-2zM25 20h1v3h-1zM28 20h1v1h-1zM9 24h1v2H9zM12 24h3v1h-3zM17 24h2v3h-2zM21 24h1v2h-1zM24 25h3v1h-3zM12 27h2v2h-2zM16 28h3v1h-3zM23 28h2v1h-2z"/>
+              </g>
+            </svg>
+          </div>
+          <div class="qr-side">
+            <div class="s1">打开红果 App 扫一扫登录</div>
+            <div class="s2">二维码 60 秒有效 · 过期自动刷新</div>
+            <div class="btn-outline">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 5v6h-6"/></svg>
+              刷新二维码
+            </div>
+          </div>
+        </div>
+        <div class="dlg-foot">登录后收藏与观看记录将与账号同步；不登录也可正常观看，记录仅保存在本机</div>
+      </div>
+      <div class="tagc" style="right:14px;bottom:10px">请求尺寸 px1000×740 → 实际按窗口钳制 840×452</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>三页签换统一分段控件（高 56），<b>选中=主题强调色实底</b>；页签 DOWN 动态落当前面板首控件（现有焦点逻辑保留）</li>
+        <li><b>按钮两态体系</b>：主行动（登录 / 导入 / 我已发送）=强调色实底；次行动（刷新二维码 / 发送验证码）=描边钮，倒计时中置灰</li>
+        <li>二维码白底卡片化（圆角 10 + 内衬 10），状态文字 + 有效期说明成组，替代裸白块</li>
+        <li>底部加隐私说明一行（灰字 20），呼应「不登录也可看」的产品语义</li>
+        <li class="plain">短信面板完整形态见 <b>03·B</b> 屏（输入行 + 倒计时置灰 + MFA 提示卡）；导入面板见 <b>03·C</b> 屏（能力不变，仅形态升级）</li>
+        <li class="plain">MFA 指引升级为浅底提示卡（accent 15% 底 + 盾图标 + 指引 +「我已发送」主钮），出现时不挤压布局（预留区）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 3·B 登录弹窗 · 短信通道 + MFA ================= -->
+<section>
+  <div class="sec-head"><span class="no">03·B</span><h2>登录弹窗 · 短信通道 + MFA 提示卡</h2>
+    <span class="tag">输入行 56 与页签同档 · 发送验证码倒计时置灰 · MFA=浅底提示卡</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="dim"></div>
+      <div class="ghost-tab">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab">榜单</div><div class="tab">分类</div><div class="tab">我的</div>
+      </div>
+      <div class="dlg">
+        <div class="dlg-head">
+          <div class="t">登录红果账号</div>
+          <div class="x"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+        </div>
+        <div class="dlg-tabs" style="margin-top:12px">
+          <div class="dlg-tab">扫码登录</div>
+          <div class="dlg-tab on">短信登录</div>
+          <div class="dlg-tab">导入账号</div>
+        </div>
+        <div style="margin-top:14px">
+          <div class="in-row">
+            <div class="in-label">手机号</div>
+            <div class="in-field">请输入手机号</div>
+          </div>
+          <div class="in-row" style="margin-top:8px">
+            <div class="in-label">验证码</div>
+            <div class="in-field">6 位验证码</div>
+            <div class="btn-ghost dis" style="height:56px;padding:0 18px;font-size:20px;margin-left:10px">重新发送 59s</div>
+          </div>
+          <div class="mfa-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 3l7 3v5c0 4.4-3 8.4-7 10-4-1.6-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+            <div class="tx">安全验证：验证码已发至尾号 8829 手机，请在新设备确认</div>
+            <div class="btn-main">我已发送</div>
+          </div>
+          <div class="btn-main" style="width:100%;height:56px;margin-top:8px">登 录</div>
+        </div>
+      </div>
+      <div class="tagc" style="right:14px;bottom:10px">「重新发送 59s」= 禁用态演示（描边钮倒计时置灰）</div>
+      <div class="tagc" style="left:14px;bottom:10px">MFA 卡=accent 15% 浅底 · 无 MFA 时不渲染、登录钮上移</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>输入行高 56（与页签同档）；label 96 定宽，手机号/验证码输入框灰底描边（05 屏 btn-input 同族）</li>
+        <li>按钮体系：<b>主行动「登录 / 我已发送」=accent 实底</b>；次行动「发送验证码」=描边钮，<b>倒计时中置灰</b>（本稿演示 59s 态）</li>
+        <li>MFA 提示卡：浅底 accent 15% + 盾图标 + 一行指引 + 主钮「我已发送」，高度 72 固定预留，出现/消失不挤压布局</li>
+        <li class="plain">键盘呼出/收起沿用搜索输入三件套现有链路（焦点即呼出）；数字验证码可用遥控数字键直输</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 3·C 登录弹窗 · 导入通道 ================= -->
+<section>
+  <div class="sec-head"><span class="no">03·C</span><h2>登录弹窗 · 导入通道</h2>
+    <span class="tag">粘贴框通栏 · 三种输入格式 · 能力不变仅形态升级</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="dim"></div>
+      <div class="ghost-tab">
+        <div class="tab">推荐</div><div class="tab">历史</div><div class="tab">收藏</div>
+        <div class="tab">榜单</div><div class="tab">分类</div><div class="tab">我的</div>
+      </div>
+      <div class="dlg">
+        <div class="dlg-head">
+          <div class="t">登录红果账号</div>
+          <div class="x"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+        </div>
+        <div class="dlg-tabs" style="margin-top:12px">
+          <div class="dlg-tab">扫码登录</div>
+          <div class="dlg-tab">短信登录</div>
+          <div class="dlg-tab on">导入账号</div>
+        </div>
+        <div class="paste-box">cookieStore_v2 = { "uid": "hg_88291024",<br>&nbsp;&nbsp;"token_hex": "9f2c7a41d8e6…（32 位）",<br>&nbsp;&nbsp;"cookies": "install_id=…; device_id=…" }</div>
+        <div style="margin-top:10px;font-size:20px;color:var(--t3)">支持三种输入：cookieStore.xml 导出 · 32 位 token hex · 原始 cookie 串</div>
+        <div class="btn-main" style="width:100%;height:56px;margin-top:10px">导入账号</div>
+      </div>
+      <div class="tagc" style="right:14px;bottom:10px">解析/校验逻辑沿用现 HongguoLoginDialog，能力不变</div>
+      <div class="tagc" style="left:14px;bottom:10px">粘贴框=虚线描边 160 高 · 焦点态白描边（同 chip 聚焦）</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>裸输入框升级为<b>虚线粘贴框</b>（通栏 160 高，等宽字体示意），格式说明从提示 toast 前置为框下一行灰字</li>
+        <li>主行动「导入账号」=accent 实底全宽；导入中/失败态复用 05 屏加载与空态组件的行内变体（按钮置灰 + 结果行文案）</li>
+        <li class="plain">三种输入格式的识别与登录流程完全沿用现有实现，本屏只定义视觉</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 4 公用件 · 剧卡与切换件 ================= -->
+<section>
+  <div class="sec-head"><span class="no">04</span><h2>公用件 · 剧卡与切换件</h2>
+    <span class="tag">剧卡四态 · chip 三态+叠加 —— 全模块复用（按钮/空态/加载/色板见 05）</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="kit">
+        <div class="kit-row">
+          <div class="kit-label">剧卡<br>136×170</div>
+          <div class="vcard">
+            <div class="cover ph p1"><span>逆</span></div>
+            <div class="title">逆镜重生</div><div class="sub">默认态</div>
+          </div>
+          <div class="vcard" style="margin-left:14px">
+            <div class="cover focus-ring ph p3"><span>闪</span></div>
+            <div class="title" style="color:var(--accent)">闪婚豪门</div>
+            <div class="sub">焦点态=放大1.05+描边+跑马灯</div>
+          </div>
+          <div class="vcard">
+            <div class="cover ph p2"><span>迷</span>
+              <div class="pg" style="position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.22)"><i style="display:block;height:100%;width:62%;background:var(--accent)"></i></div>
+            </div>
+            <div class="title">迷城暗涌</div><div class="sub">历史卡=底部进度条 62%</div>
+          </div>
+          <div class="vcard">
+            <div class="cover ph p9"><span>深</span>
+              <div class="badge b-gold">★1</div>
+              <div class="corner-tr"><div class="b2" style="background:rgba(0,0,0,.62);color:#fff">第2季</div></div>
+              <div class="cover-foot"><span>965万</span><span>80集</span></div>
+            </div>
+            <div class="title">深海来信</div><div class="sub">榜单卡=四槽位角标（左上名次/右上季·更新/左下热度/右下集数）</div>
+          </div>
+        </div>
+        <div class="kit-sep"></div>
+        <div class="kit-row" style="align-items:center">
+          <div class="kit-label">chip 56<br>三态+叠加</div>
+          <div class="chipx">类型</div>
+          <div class="chipx sel">类型 · 逆袭</div>
+          <div class="chipx foc">题材</div>
+          <div class="chipx sel foc">题材 · 漫剧</div>
+        </div>
+      </div>
+      <div class="tagc" style="left:14px;bottom:10px">卡宽 136 图高 170（4:5）· chip 高 56 · 焦点=放大1.05+accent描边</div>
+      <div class="tagc" style="right:14px;bottom:10px">行/按钮/空态/加载/色板见 05</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>剧卡四态：默认 / 焦点（放大+描边+标题跑马灯）/ 历史进度条 / 榜单四槽位角标——一套卡覆盖推荐/搜索/榜单/分类/我的</li>
+        <li>chip 四态齐备：<b>默认（面底）/ 选中（accent 15% 底+描边）/ 聚焦（白描边）/ 选中+聚焦叠加</b>——补齐现状「选中无视觉反馈」缺口；分段控件叠加同理=实底上叠白描边</li>
+        <li class="plain">第二/三波设计稿沿用本页规格，不再重复定义</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 屏 5 公用件 · 按钮/空态/加载态/色板 ================= -->
+<section>
+  <div class="sec-head"><span class="no">05</span><h2>公用件 · 按钮 / 空态 / 加载态 / 色板</h2>
+    <span class="tag">按钮两态+禁用 · 空态组件 · 首屏骨架 · 语义色板</span></div>
+  <div class="board">
+    <div class="screen">
+      <div class="kit">
+        <div class="kit-row" style="align-items:center">
+          <div class="kit-label">按钮 70</div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div class="btn-main" style="padding:0 30px">继续播放</div>
+            <div class="btn-ghost" style="padding:0 26px">收藏</div>
+            <div class="btn-ghost dis" style="padding:0 22px">重新发送 59s</div>
+            <div class="btn-input" style="width:264px;font-size:24px">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 20 20"/></svg>
+              输入剧名关键词
+            </div>
+          </div>
+        </div>
+        <div class="kit-row" style="align-items:center">
+          <div class="kit-label">空态<br>行 68</div>
+          <div class="empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4a4a54" stroke-width="1.6">
+              <rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="9" cy="9" r="1.4"/>
+            </svg>
+            <div class="e1">暂无内容，换个词试试</div>
+            <div class="btn-ghost" style="height:44px;padding:0 20px">重试</div>
+          </div>
+          <div class="hotrow" style="margin-left:26px;flex:none"><div class="rk">1</div>逆镜重生之巅峰<span class="tip">热度 2418万</span></div>
+        </div>
+        <div class="kit-sep"></div>
+        <div class="kit-row">
+          <div class="kit-label">加载态<br>骨架</div>
+          <div style="display:flex;gap:16px">
+            <div class="skel"><div class="c"></div><div class="l"></div><div class="l2"></div></div>
+            <div class="skel"><div class="c"></div><div class="l"></div><div class="l2"></div></div>
+            <div class="skel"><div class="c"></div><div class="l"></div><div class="l2"></div></div>
+            <div style="font-size:20px;color:var(--t3);width:230px;line-height:1.6;padding-top:4px">首屏骨架 ×6（网格位）<br>数据到达后原位替换<br>替代裸 ProgressBar</div>
+          </div>
+        </div>
+        <div class="kit-sep"></div>
+        <div class="kit-row" style="align-items:center">
+          <div class="kit-label">色板</div>
+          <div class="swatch">
+            <div class="sw"><div class="c" style="background:var(--accent)"></div><div class="l"><b>强调色</b>主题引用</div></div>
+            <div class="sw"><div class="c" style="background:#1c1c22"></div><div class="l"><b>聚焦高亮</b>主题引用</div></div>
+            <div class="sw"><div class="c" style="background:#050505"></div><div class="l"><b>页面底</b>#050505</div></div>
+            <div class="sw"><div class="c" style="background:#141418"></div><div class="l"><b>卡片面</b>主题面</div></div>
+            <div class="sw"><div class="c" style="background:#cccccc"></div><div class="l"><b>grey</b>引用</div></div>
+            <div class="sw"><div class="c" style="background:var(--gold)"></div><div class="l"><b>榜1金</b>#FFC53D</div></div>
+            <div class="sw"><div class="c" style="background:var(--silver)"></div><div class="l"><b>榜2银</b>#C0C7D1</div></div>
+            <div class="sw"><div class="c" style="background:var(--bronze)"></div><div class="l"><b>榜3铜</b>#E09B62</div></div>
+            <div class="sw"><div class="c" style="background:var(--boom)"></div><div class="l"><b>爆剧</b>#FF4D26</div></div>
+            <div class="sw"><div class="c" style="background:var(--newg)"></div><div class="l"><b>新剧</b>#3FA45B</div></div>
+            <div class="sw"><div class="c" style="background:var(--tagp)"></div><div class="l"><b>标签紫</b>#6A5AE0</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="tagc" style="left:14px;bottom:10px">行高三档：chip 56 / 行 68 / 主按钮 70 · 字号六档：20/24/26/30/36/40</div>
+      <div class="tagc" style="right:14px;bottom:10px">禁用态用于倒计时/导入中/无权限</div>
+    </div>
+    <div class="notes">
+      <h3>设计说明</h3>
+      <ul>
+        <li>按钮两态+禁用：主行动强调色实底（深色字）/ 次行动描边；<b>禁用态=倒计时/导入中置灰</b>（呼应 03·B「重新发送 59s」）</li>
+        <li>空态组件=图标 + 一句话 + 重试钮；热搜行高 68 = 名次徽章（前三金银铜）+ 剧名 + 热度 tip，替代 CCTV 借用背景</li>
+        <li><b>加载态=首屏骨架</b>：按网格位摆 6 张骨架卡，数据到达原位替换——替代现状灰字 + 裸 ProgressBar（清单公用件明确项）</li>
+        <li class="plain">色板分两组：<b>主题引用组</b>随主题漂移，<b>语义色组</b>（金银铜/爆剧/新剧/标签紫）入 <code>colors_hongguo.xml</code> 固定</li>
+        <li class="plain">第二/三波沿用 04/05 两页规格，不再重复定义</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  实现对照：尺寸标注为 <code>px 池</code> 口径（pxN = Ndp，960dp 画布）· 主题引用随全局主题漂移（示例=DarkTheme 紫 <code>#bb86fc</code>；Classics=粉 <code>#FB7299</code>、Blue=蓝 <code>#7f97d2</code>）·
+  语义色入 <code>colors_hongguo.xml</code> · 本稿只定义视觉与结构，实现沿用现有焦点链路（HongguoPageFocus / TvListFocusController / VideoCardFocusHelper）·
+  本稿 9 组画布 = 我的页（已登录 / 未登录 / 货架页）+ 榜单 + 登录（扫码 / 短信·MFA / 导入）+ 公用件（卡与切换件 / 按钮空态加载色板）·
+  第二波：主容器+推荐页（继续观看货架 / 筛选面板 / 六·四 tab 双形态 / 推荐三种内容形态）、搜索页三态+空结果 · 第三波：详情 / 分类 / 播放器 / tab 行双形态 / 设置开关项
+</footer>
+
+</div>
+</body>
+</html>

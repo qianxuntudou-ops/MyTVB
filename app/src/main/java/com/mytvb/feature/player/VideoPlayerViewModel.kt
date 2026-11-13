@@ -1232,6 +1232,13 @@ class VideoPlayerViewModel(
 
     fun playEpisode(index: Int, preferLastPlayTime: Boolean = true) {
         val episode = _episodes.value.getOrNull(index) ?: return
+        // [诊断] issue#112：切集入口快照——记录切集前 pendingSeek/VM 会话身份与 player 实际挂载身份
+        AppLog.i(
+            TAG,
+                "episode_switch_enter index=$index cid=${episode.cid} bvid=${episode.bvid} aid=${episode.aid} " +
+                "preferLast=$preferLastPlayTime pendingSeek=${pendingSeekPositionMs}ms " +
+                "vmCid=$currentCid vmBvid=$currentBvid attached=${PlayerInstancePool.attachedSourceKeyDescription()}"
+        )
         reportPlaybackHeartbeat(force = true)
         savePlayerSnapshot()
         val targetBvid = episode.bvid.takeIf { it.isNotBlank() }
@@ -3022,6 +3029,17 @@ class VideoPlayerViewModel(
                 serverMs = if (useServerResume) initialPlayInfo.lastPlayTime else 0L,
                 durationMs = initialPlayInfo.timeLength
             )
+            // [诊断] issue#112：续播三源决策全景——entryMs 是会话级 pendingSeek（切集须为 0），
+            // localMs 本地 (bvid,cid) 键，serverMs 须 lastPlayCid==cid。任一源带旧集进度即当次跳时间戳。
+            AppLog.i(
+                TAG,
+                "resume_three_source cid=${identity.cid} bvid=${identity.bvid} epId=${identity.epId ?: 0L} " +
+                    "entryMs=$playbackPositionMs localMs=$localResumeMs " +
+                    "serverMs=${if (useServerResume) initialPlayInfo.lastPlayTime else 0L} " +
+                    "(lastPlayCid=${initialPlayInfo.lastPlayCid} lastPlayTime=${initialPlayInfo.lastPlayTime} " +
+                    "dur=${initialPlayInfo.timeLength}) preferLast=$effectivePreferLastPlayTime " +
+                    "replace=$replaceInPlace → raw=$rawResumePosition"
+            )
 
             val shouldResume = (replaceInPlace && playbackPositionMs > 0L) ||
                 (effectivePreferLastPlayTime &&
@@ -3104,7 +3122,17 @@ class VideoPlayerViewModel(
             continuationIntentId = preparedPlayback.continuationIntentId,
             startupTraceId = preparedPlayback.startupTraceId,
             startupTraceStartElapsedMs = preparedPlayback.startupTraceStartElapsedMs
-        ).also { armFirstFrameWatchdog(it) }
+        ).also {
+            // [诊断] issue#112：最终发射的起播 seek 值与身份
+            AppLog.i(
+                TAG,
+                "playback_request_emit cid=${preparedPlayback.identity.cid} bvid=${preparedPlayback.identity.bvid} " +
+                    "seek=${preparedPlayback.seekToStart}ms replace=${preparedPlayback.replaceInPlace} " +
+                    "resumeHint=${preparedPlayback.resumeHintPositionMs ?: 0L} " +
+                    "intentId=${preparedPlayback.playbackIntentId}"
+            )
+            armFirstFrameWatchdog(it)
+        }
         if (pendingContinuationIntentId == preparedPlayback.continuationIntentId) {
             pendingContinuationIntentId = null
         }
@@ -3305,6 +3333,10 @@ class VideoPlayerViewModel(
 
     fun handlePlaybackStall(positionMs: Long, stalledMs: Long): Boolean =
         fallbackController.handlePlaybackStall(positionMs, stalledMs)
+
+    /** 网络性卡顿救援（issue#114）：只换 CDN 不降画质。 */
+    fun handleNetworkStall(positionMs: Long, stalledMs: Long): Boolean =
+        fallbackController.handleNetworkStall(positionMs, stalledMs)
 
     /**
      * 双宿主 onPlaybackStateChanged 的 CDN 健康分回流：

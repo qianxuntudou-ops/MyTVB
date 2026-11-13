@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果详情选集格（正在看=选中态）：状态集与全 App 通用按钮（tab_round_background，侧栏功能钮）完全同序同色——
+     点击=colorPrimary、激活(聚焦)=colorControlHighlight、选中=tabBarHighlight、常态=#14FFFFFF；
+     圆角保留 px15（格子形态，非侧栏圆形）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="?attr/tabBarHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="#14FFFFFF"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>
