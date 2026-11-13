@@ -80,7 +80,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
     /** 本次 OK 键序列是否被路由接管（false = 焦点按钮自身 click，放行框架分发）。 */
     private var okKeyTaken = false
 
-    private var controlsVisible = true
+    private var controlsVisible = false
     private var hideRunnable: Runnable = Runnable { onControlsHideTick() }
 
     /** 控制栏 4s 超时隐藏：暂停时常驻；右侧面板打开期间续期不隐藏。 */
@@ -139,6 +139,13 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var swipeDownY = 0f
     private var swipeStartMs = 0L
     private var swipeTargetMs = 0L
+    /** 垂直滑动切集会话（与水平 seek 互斥，按主导轴判定）。 */
+    private var isSwipeEpisode = false
+    private var swipeEpisodeArmed = false
+    /** 切集触发阈值：屏高 12%（约 130px）。 */
+    private val episodeSwipeThresholdPx by lazy {
+        (resources.displayMetrics.heightPixels * 0.12f).toInt().coerceAtLeast(80)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -160,6 +167,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
         setupSeekPreview()
         setupTimebarScrub()
         setupExit()
+        // 进入播放页不显示播放 UI：先同步隐藏顶/底栏（起播也不再自动呼出）
+        setControlsVisible(false)
         loadAndPlay()
     }
 
@@ -272,8 +281,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
             return
         }
         val labels = (1..episodeCount).map { it.toString() }
+        // 标题带总数：面板一屏约 9 行，标出"共N集"防止误读为只有可见数量
         val panel = HongguoRightPanelDialog.show(
-            this, getString(R.string.choose_episode), labels, episodeIndex - 1, spanCount = 6
+            this, "选集 · 共${episodeCount}集", labels, episodeIndex - 1, spanCount = 6
         ) { index ->
             rightPanel?.dismiss()
             val target = index + 1
@@ -401,8 +411,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** [revealControls]=false 为切集路径：控制栏保持隐藏态不呼出（UP/DOWN 切集/播完连播不弹 UI）。 */
-    private fun startPlayer(url: String, revealControls: Boolean = true) {
+    /** [revealControls]=false（默认）：进入播放/切集/切画质均保持控制栏隐藏，只有用户主动呼出才显示。 */
+    private fun startPlayer(url: String, revealControls: Boolean = false) {
         player?.release()
         val p = ExoPlayer.Builder(this).build()
         player = p
@@ -979,35 +989,68 @@ class HongguoPlayerActivity : AppCompatActivity() {
      * 滑动期间画面不冻结（与 B 站一致），交由现有 seek 会话状态机统一渲染。 */
     private fun handleSwipeSeekTouch(event: MotionEvent): Boolean {
         val p = player ?: return false
-        val dur = p.duration.coerceAtLeast(0L)
-        if (dur <= 0L || !p.isCurrentMediaItemSeekable) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 swipeDownX = event.x
                 swipeDownY = event.y
                 swipeStartMs = p.currentPosition.coerceAtLeast(0L)
                 swipeTargetMs = swipeStartMs
+                isSwipeEpisode = false
+                swipeEpisodeArmed = false
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - swipeDownX
                 val dy = event.y - swipeDownY
-                if (!isSwipeSeeking) {
+                if (!isSwipeSeeking && !isSwipeEpisode) {
                     val horizontal = kotlin.math.abs(dx) > touchSlop &&
                         kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.2f
-                    if (!horizontal) return false
-                    isSwipeSeeking = true
-                    cancelExitSeekUi()
-                    seekUiActive = true
-                    seekFromTimebar = false // 瞬时条形态（B 站 enterSeekProgressOnly）
-                    seekAnchorMs = swipeStartMs
-                    enterSeekUi()
+                    val vertical = kotlin.math.abs(dy) > touchSlop &&
+                        kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.2f
+                    if (horizontal) {
+                        val dur = p.duration.coerceAtLeast(0L)
+                        if (dur <= 0L || !p.isCurrentMediaItemSeekable) return false
+                        isSwipeSeeking = true
+                        cancelExitSeekUi()
+                        seekUiActive = true
+                        seekFromTimebar = false // 瞬时条形态（B 站 enterSeekProgressOnly）
+                        seekAnchorMs = swipeStartMs
+                        enterSeekUi()
+                    } else if (vertical) {
+                        // 垂直滑动 = 切集（上滑下一集 / 下滑上一集），与水平 seek 按主导轴区分
+                        isSwipeEpisode = true
+                    } else {
+                        return false
+                    }
                 }
+                if (isSwipeEpisode) {
+                    val armed = kotlin.math.abs(dy) >= episodeSwipeThresholdPx
+                    if (armed != swipeEpisodeArmed) {
+                        swipeEpisodeArmed = armed
+                        if (armed) showEpisodeSwipeHint(if (dy < 0) "松开播放下一集" else "松开播放上一集")
+                        else hideSeekHint()
+                    }
+                    return true
+                }
+                val dur = p.duration.coerceAtLeast(0L)
+                if (dur <= 0L) return false
                 swipeTargetMs = (swipeStartMs + computeSwipeDeltaMs(dx, dur))
                     .coerceIn(0L, seekUpperBoundMs(dur))
                 renderSeekPreview(swipeTargetMs, dur)
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isSwipeEpisode) {
+                    val dy = event.y - swipeDownY
+                    val trigger = event.actionMasked == MotionEvent.ACTION_UP &&
+                        kotlin.math.abs(dy) >= episodeSwipeThresholdPx
+                    isSwipeEpisode = false
+                    swipeEpisodeArmed = false
+                    hideSeekHint()
+                    if (trigger) {
+                        if (dy < 0) switchEpisodeRelative(1) else switchEpisodeRelative(-1)
+                    }
+                    return true
+                }
                 if (!isSwipeSeeking) return false
                 isSwipeSeeking = false
                 if (event.actionMasked == MotionEvent.ACTION_UP) {
@@ -1020,6 +1063,21 @@ class HongguoPlayerActivity : AppCompatActivity() {
             }
         }
         return false
+    }
+
+    /** 上下滑动切集：+1=下一集，-1=上一集（边界静默忽略）。 */
+    private fun switchEpisodeRelative(delta: Int) {
+        val target = episodeIndex + delta
+        if (target < 1) return
+        if (episodeCount > 0 && target > episodeCount) return
+        if (switchingSource) return
+        switchEpisode(target)
+    }
+
+    /** 切集滑动提示复用中央快退/快进提示位。 */
+    private fun showEpisodeSwipeHint(text: String) {
+        binding.textSeekHint.text = text
+        binding.textSeekHint.visibility = View.VISIBLE
     }
 
     /** 滑满一整屏宽 = 100% 时长，滑动比例即时长比例（B 站 computeSwipeSeekDeltaMs 同款手感）。 */
