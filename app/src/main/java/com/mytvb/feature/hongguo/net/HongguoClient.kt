@@ -1202,8 +1202,8 @@ class HongguoClient(
             for (i in 0 until rows.length()) {
                 val video = rows.optJSONObject(i)?.optJSONObject("video") ?: continue
                 val id = video.optString("video_id")
-                val common = video.optJSONObject("common")
-                val title = common?.optString("title")?.trim().orEmpty()
+                val common = video.optJSONObject("common") ?: continue
+                val title = common.optString("title").trim()
                 if (id.isEmpty() || !id.matches(Regex("\\d{1,30}")) || title.isEmpty()) continue
                 val stat = video.optJSONObject("stat")
                 val expand = video.optJSONObject("expand")
