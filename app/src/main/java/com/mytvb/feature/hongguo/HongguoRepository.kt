@@ -238,6 +238,172 @@ class HongguoRepository private constructor(context: Context) {
         return d
     }
 
+    // ---- 长按菜单：相关作品 / 创作者（数据通道对照 HGTV 详情页 authorBox/relatedBox） ----
+
+    /**
+     * 相关作品（三级数据源，2026-11-13 openhongguo 反哺定稿）：
+     * 1) client.related = 系列剧（plan/v1 from=single_col_same_ip_series 的 547 cell，
+     *    同 IP 全部季）→ 相关推荐（from=select_panel_recommend，匿名回 401 通用推荐）；
+     * 2) 仍空 → 剧名系列主干搜索（同 IP 其它季；搜索通道匿名可用）。短 TTL 同详情。
+     */
+    suspend fun related(seriesId: String, title: String): List<HongguoClient.Drama> {
+        val cacheKey = "related|$seriesId"
+        contentCacheGet<List<HongguoClient.Drama>>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
+        val list = withContext(Dispatchers.IO) {
+            val exact = runCatching { client.related(seriesId) }.getOrDefault(emptyList())
+            if (exact.isNotEmpty()) {
+                exact
+            } else {
+                relatedByTitleSearch(seriesId, title)
+            }
+        }
+        contentCachePut(cacheKey, list)
+        return list
+    }
+
+    /** 标题系列搜索兜底：主干搜索 → 标题含主干且非本剧。 */
+    private suspend fun relatedByTitleSearch(
+        seriesId: String,
+        title: String
+    ): List<HongguoClient.Drama> {
+        val stem = seriesStem(title)
+        if (stem.length < 2) return emptyList()
+        val page = try {
+            searchRaw(stem)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        val stemNorm = normalizeAuthor(stem)
+        return page.items.asSequence()
+            .filter { it.seriesId != seriesId }
+            .filter { normalizeAuthor(it.title).contains(stemNorm) }
+            .map { it.toDrama() }
+            .toList()
+    }
+
+    /**
+     * 剧名系列主干：「我家后山藏真龙第四季」→「我家后山藏真龙」、
+     * 「小镇是非多之同床异梦」→「小镇是非多」；无系列词返回全名。
+     */
+    internal fun seriesStem(title: String): String {
+        val t = title.trim()
+        val m = Regex("^(.{2,}?)(第[0-9一二三四五六七八九十百]+[季部篇曲]|之.+)").find(t)
+        return m?.groupValues?.get(1)?.trim()?.takeIf { it.length >= 2 } ?: t
+    }
+
+    /**
+     * 本剧创作者（官方口径两级，2026-11-13 openhongguo 反哺）：
+     * ① inner_feed_detail（出品方 user_name+user_id 优先，主演领衔兜底）；
+     * ② miss 回落 multi-detail 书城 author/source（纯名无 userId）。
+     * 命中才落 5min 缓存（空不缓存，区分「确认无」与网络失败）。
+     */
+    suspend fun creatorInfo(seriesId: String): HongguoClient.Creator? {
+        val cacheKey = "creator|$seriesId"
+        contentCacheGet<HongguoClient.Creator>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
+        val creator = withContext(Dispatchers.IO) {
+            client.innerFeedDetailCreators(listOf(seriesId))[seriesId]
+                ?: client.authorsOf(listOf(seriesId))[seriesId]?.takeIf { it.isNotEmpty() }
+                    ?.let { HongguoClient.Creator(userId = "", name = it) }
+        }
+        if (creator != null) contentCachePut(cacheKey, creator)
+        return creator
+    }
+
+    /**
+     * 创作者作品（两级，2026-11-13 hook 官方 App 实测定稿）：
+     * ① userId 直拉 personWorks——官方主页「作品›剧作」tab（sinfonlinec 域）；
+     * ② 无 userId（multi-detail 兜底名场景）→ 搜名 + 搜索结果内嵌发布者
+     *    user_info 直配（HGTV 原链路的最小子集，无换名/target 魔法）。
+     * 结果 5min 缓存。
+     */
+    suspend fun authorWorks(creator: HongguoClient.Creator?, excludeSeriesId: String): List<HongguoClient.Drama> {
+        val author = creator?.name.orEmpty()
+        if (normalizeAuthor(author).isEmpty()) return emptyList()
+        val cacheKey = "authorworks|$author|$excludeSeriesId"
+        contentCacheGet<List<HongguoClient.Drama>>(cacheKey, ttlMs = DETAIL_TTL_MS)
+            ?.let { return it }
+        val works = withContext(Dispatchers.IO) {
+            // ① 官方直拉：主页的「剧作」tab（有 userId 才能走）
+            val direct = creator?.userId?.takeIf { it.isNotEmpty() }
+                ?.let { uid ->
+                    client.personWorks(uid).filter { it.seriesId != excludeSeriesId }
+                }.orEmpty()
+            if (direct.isNotEmpty()) {
+                direct
+            } else {
+                worksBySearchMatch(author, excludeSeriesId)
+            }
+        }
+        contentCachePut(cacheKey, works)
+        return works
+    }
+
+    /** 搜索名匹配兜底（无 userId 时）：搜索结果内嵌发布者 user_info 直配。 */
+    private suspend fun worksBySearchMatch(
+        author: String,
+        excludeSeriesId: String
+    ): List<HongguoClient.Drama> = withContext(Dispatchers.IO) {
+        val page = try {
+            searchRaw(author)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return@withContext emptyList()
+        }
+        page.items.asSequence()
+            .filter { it.seriesId != excludeSeriesId }
+            .filter { matchesAuthor(it.author, author) }
+            .map { it.toDrama() }
+            .toList()
+    }
+
+    /** 原始搜索（关闭相关性过滤 + 不落搜索历史；身份三败抛错由调用方兜底）。 */
+    private suspend fun searchRaw(keyword: String): HongguoSearch.SearchPage {
+        var current = identity()
+        var lastError: Exception? = null
+        for (attempt in 0 until 3) {
+            try {
+                return search.searchTab(keyword, 0, null, current, relevanceFilter = false)
+            } catch (e: HongguoSearch.EmptyResponseException) {
+                lastError = e
+                if (attempt == 2) break
+                current = registerAndSave()
+                Thread.sleep(120)
+            }
+        }
+        throw lastError ?: IllegalStateException("搜索接口无响应")
+    }
+
+    /** 作者名归一（HGTV E0：去空白 + 小写）。 */
+    private fun normalizeAuthor(value: String): String =
+        value.filterNot { it.isWhitespace() }.lowercase()
+
+    /** 归一后非空且相等（HGTV D0）。 */
+    private fun matchesAuthor(candidate: String, target: String): Boolean {
+        val c = normalizeAuthor(candidate)
+        return c.isNotEmpty() && c == normalizeAuthor(target)
+    }
+
+    private fun HongguoSearch.SearchResult.toDrama(): HongguoClient.Drama = HongguoClient.Drama(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        intro = intro,
+        score = "",
+        playCount = playCount,
+        episodeCount = episodeCount,
+        vid = "",
+        tags = emptyList(),
+        heatText = "",
+        statusTags = emptyList(),
+        seasonIndex = 0,
+        multiSeason = false,
+        contentType = "",
+        seriesStatus = ""
+    )
+
     // ---- 播放 ----
 
     /**

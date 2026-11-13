@@ -22,7 +22,9 @@ class HongguoSearch {
         val cover: String,
         val episodeCount: Int,
         val intro: String,
-        val playCount: Long
+        val playCount: Long,
+        /** 发布者名（官方口径：video_data 内嵌 user_info.user_name；空=该结果未带发布者）。 */
+        val author: String = ""
     )
 
     data class SearchPage(
@@ -36,11 +38,15 @@ class HongguoSearch {
     /**
      * @param identity 真注册设备身份（搜索校验 device_id/iid 真实性 + cdid UUID 格式）。
      * 空响应或 100103 时抛 [EmptyResponseException]，调用方轮换身份重试。
+     * @param relevanceFilter 分词相关性过滤（默认开；作者名搜索时必须关——作者名
+     *   不在 title/intro/tags 元数据里，开着会把结果全过滤光，对照 HGTV 作者作品
+     *   走原始搜索后按 multi-detail 补的 author 精确匹配过滤）
      */
     fun searchTab(
         keyword: String, offset: Int,
         cursor: SearchPage.Cursor?,
-        identity: HongguoDeviceRegister.Identity
+        identity: HongguoDeviceRegister.Identity,
+        relevanceFilter: Boolean = true
     ): SearchPage {
         val kw = keyword.trim().take(80)
         require(kw.isNotEmpty()) { "搜索词为空" }
@@ -128,7 +134,7 @@ class HongguoSearch {
                 // 100103=游标会话失效：按 APK 行为可原签名重试，这里简化为身份轮换
                 throw EmptyResponseException()
             }
-            return parsePage(payload, kw, offset)
+            return parsePage(payload, kw, offset, relevanceFilter)
         }
     }
 
@@ -202,7 +208,7 @@ class HongguoSearch {
     class EmptyResponseException : IllegalStateException("search empty body")
 
     /** 解析 + 去重 + 相关性过滤（对照 hongguo-app-search.js parseSearch + search-relevance.js）。 */
-    private fun parsePage(payload: JSONObject, keyword: String, offset: Int): SearchPage {
+    private fun parsePage(payload: JSONObject, keyword: String, offset: Int, relevanceFilter: Boolean): SearchPage {
         val tabs = payload.optJSONArray("search_tabs")
             ?: payload.optJSONObject("data")?.optJSONArray("search_tabs")
             ?: JSONArray()
@@ -241,7 +247,7 @@ class HongguoSearch {
                 .append(celebrityText(video.optJSONArray("celebrities")))
             val hay = normalize(meta.toString())
             val terms = normalize(keyword).split(Regex("\\s+")).filter { it.isNotEmpty() }
-            if (terms.isNotEmpty() && terms.any { !hay.contains(it) }) continue
+            if (relevanceFilter && terms.isNotEmpty() && terms.any { !hay.contains(it) }) continue
             items.add(
                 SearchResult(
                     seriesId = id,
@@ -260,7 +266,8 @@ class HongguoSearch {
                         video.optString("series_intro").ifEmpty { video.optString("video_desc") }
                             .ifEmpty { cell.optString("series_intro") }
                     ),
-                    playCount = video.optLong("play_cnt", 0L)
+                    playCount = video.optLong("play_cnt", 0L),
+                    author = parseVideoAuthor(video)
                 )
             )
         }
@@ -351,10 +358,21 @@ class HongguoSearch {
         return 0
     }
 
-    private companion object {
+    companion object {
         /** 搜索 UA（GET 模板：72232 无 Cronet 后缀）+真实环境（与 query 同源防矛盾）。 */
-        val SEARCH_UA: String
+        private val SEARCH_UA: String
             get() = "com.phoenix.read/72232 (Linux; U; Android ${HongguoEnv.osVersion}; " +
                 "zh_CN; ${HongguoEnv.deviceType}; Build/${android.os.Build.ID ?: "V417IR"})"
+
+        /**
+         * 发布者名（官方口径，2026-11-13 抓包实证 video_data 内嵌）：优先出品方
+         * user_info.user_name，空则回落原著 book_record_info.author_name（改编类短剧
+         * 无 UGC 发布者时的第二口径）；两者皆空返回空串。
+         */
+        fun parseVideoAuthor(video: JSONObject): String =
+            video.optJSONObject("user_info")?.optString("user_name")?.trim().orEmpty()
+                .ifEmpty {
+                    video.optJSONObject("book_record_info")?.optString("author_name")?.trim().orEmpty()
+                }
     }
 }

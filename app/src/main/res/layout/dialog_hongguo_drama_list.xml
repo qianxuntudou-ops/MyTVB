@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果长按菜单结果列表弹窗（创作者作品/相关作品共用）：标题 + 竖版 4:5 网格。 -->
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:orientation="vertical">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:singleLine="true"
+        android:paddingStart="@dimen/px24"
+        android:paddingTop="@dimen/px20"
+        android:paddingEnd="@dimen/px24"
+        android:paddingBottom="@dimen/px12"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px32"
+        android:textStyle="bold" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_state"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="@dimen/px40"
+        android:text="@string/hongguo_empty"
+        android:textColor="@color/subTextColor"
+        android:textSize="@dimen/px24"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_dramas"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/px16"
+        android:paddingTop="@dimen/px4"
+        android:paddingEnd="@dimen/px16"
+        android:paddingBottom="@dimen/px16" />
+
+</androidx.appcompat.widget.LinearLayoutCompat>

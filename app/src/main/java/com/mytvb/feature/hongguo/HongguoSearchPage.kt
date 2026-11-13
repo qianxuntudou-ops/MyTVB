@@ -43,7 +43,12 @@ class HongguoSearchPage : Fragment() {
     private var _binding: FragmentHongguoSearchBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
-    private val resultAdapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private val resultAdapter = HongguoDramaAdapter(
+        onItemClick = ::openDetail,
+        onItemLongPress = { item, _ ->
+            HongguoCardMenuDialog.show(requireContext(), repository, item)
+        }
+    )
     private var tvFocusController: TvListFocusController? = null
 
     // 结果卡与推荐页同款竖版 4:5，列数同档

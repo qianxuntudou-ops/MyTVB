@@ -284,6 +284,350 @@ class HongguoClient(
         return parseDiscovery(payload)
     }
 
+    // ---- 相关作品 / 创作者（详情页长按菜单两个入口的数据通道） ----
+    //
+    // 相关作品（三级数据源，口径取自 openhongguo SDK 对官方客户端的观察 2026-10-24）：
+    // 1) 系列剧：GET /reading/bookapi/plan/v1/ from=single_col_same_ip_series&filter_ids=
+    //    <id>（同 IP 全部季，cell show_type=547；无其它季服务端回 code=101116）；
+    // 2) 相关推荐：from=select_panel_recommend（详情页相关 tab；匿名拿不到 160 cell，
+    //    取任意有内容 cell 当通用推荐）；
+    // 3) Repository 层再兜底标题主干搜索。签名链与 searchTab 同基座（72232+cdid+
+    //    sinfonlinea）——detail_page_more_related 旧口径匿名只回 lynx 模板（已弃用）。
+    fun related(bookId: String): List<Drama> =
+        planSeriesSeasons(bookId).ifEmpty { planRecommend(bookId) }
+
+    /** 系列剧（同 IP 全部季，含自己在内——由调用方排除）。无其它季返回空。 */
+    fun planSeriesSeasons(bookId: String): List<Drama> {
+        val list = planFeed(bookId, "single_col_same_ip_series", extraFilterIds = true)
+        // 547 cell 的 video_data 是季列表；若无 547（如 code=101116）返回空
+        return list
+    }
+
+    /** 相关推荐（select_panel_recommend；匿名回通用「更多好剧」也接受）。 */
+    fun planRecommend(bookId: String): List<Drama> =
+        planFeed(bookId, "select_panel_recommend", extraFilterIds = false)
+
+    private fun planFeed(bookId: String, from: String, extraFilterIds: Boolean): List<Drama> {
+        require(bookId.matches(Regex("\\d{1,30}"))) { "series_id 无效" }
+        var lastError: Exception? = null
+        for (attempt in 0 until 3) {
+            try {
+                val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
+                return planOnce(bookId, from, extraFilterIds, identity)
+            } catch (e: EmptyResponseException) {
+                lastError = e
+                apiIdentity = null
+                if (attempt == 2) break
+                Thread.sleep(100)
+            } catch (e: PlanNoSeasonException) {
+                return emptyList()   // 101116：单季剧，无系列 cell，非错误
+            }
+        }
+        throw lastError ?: IllegalStateException("红果接口无响应")
+    }
+
+    private class PlanNoSeasonException : IllegalStateException("plan no season")
+
+    /** plan feed 单次请求（searchTab 同款 72232 搜索中段页签名全家桶）。 */
+    private fun planOnce(
+        bookId: String, from: String, extraFilterIds: Boolean,
+        identity: HongguoDeviceRegister.Identity
+    ): List<Drama> {
+        val q = java.util.LinkedHashMap<String, String>()
+        q["iid"] = identity.installId
+        q["device_id"] = identity.deviceId
+        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
+        q["app_name"] = "novelread"
+        q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
+        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
+        q["device_type"] = HongguoEnv.deviceType
+        q["device_brand"] = HongguoEnv.deviceBrand
+        q["language"] = "zh"
+        q["os_api"] = HongguoEnv.osApi
+        q["os_version"] = HongguoEnv.osVersion
+        q["manifest_version_code"] = "72232"
+        q["resolution"] = HongguoEnv.resolution
+        q["dpi"] = HongguoEnv.dpi
+        q["update_version_code"] = "72232"; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = "72232"
+        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
+        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
+        q["cdid"] = identity.cdid
+        // 业务参数（openhongguo SignedPlanPairsFrom，官方客户端观察值）
+        q["book_id"] = bookId
+        q["from"] = from
+        q["scene"] = "10"
+        q["session_uuid"] = java.util.UUID.randomUUID().toString()
+        q["user_is_login"] = "0"
+        if (extraFilterIds) q["filter_ids"] = bookId
+
+        val nowMs = System.currentTimeMillis()
+        val versionName = "7.2.2.32"
+        val signed = HongguoCrypto.signRequest(
+            q, null, nowMs, identity.deviceId,
+            targetBranch = 0, version = versionName
+        )
+        val ts = signed.headers["X-Khronos"]?.toIntOrNull() ?: (nowMs / 1000).toInt()
+        val realLadonArgus = HongguoArgus.generate(
+            signed.query, null, ts, versionName, identity.deviceId,
+            deviceProfile = HongguoEnv.argusProfile
+        )
+        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
+        val traceHex = java.util.UUID.randomUUID().toString().replace("-", "")
+        val ua = HongguoEnv.ua("72232")
+        val req = Request.Builder()
+            .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/plan/v1/?${signed.query}")
+            .get()
+            .header("User-Agent", ua)
+            .header("Accept-Language", "zh-CN,zh;q=0.9")
+            .header("X-SS-DP", "8662")
+            .header("X-Tt-Store-Region", "cn")
+            .header("X-Tt-Store-Region-Src", "did")
+            .header("X-XS-From-Web", "0")
+            .header("Sdk-Version", "2")
+            .header("User-Agent", ua)
+            .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
+            .header("x-ss-req-ticket", ticket)
+            .header("sdk-version", "2")
+            .header("passport-sdk-version", "5051452")
+            .header("x-xs-from-web", "0")
+            .header("x-khronos", signed.headers["X-Khronos"] ?: "")
+            .header("x-ladon", realLadonArgus.ladon)
+            .header("x-argus", realLadonArgus.argus)
+            .header("x-gorgon", signed.headers["X-Gorgon"] ?: "")
+            .header("x-helios", HongguoArgus.helios(ts))
+            .header("lc", "101")
+            .header("x-ss-dp", "8662")
+            .header("x-tt-trace-id", "00-$traceHex-${traceHex.substring(0, 16)}-01")
+            .build()
+        http.newCall(req).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: ByteArray(0)
+            android.util.Log.d("Hongguo", "plan from=$from http=${resp.code} len=${bytes.size}")
+            if (!resp.isSuccessful) throw IllegalStateException("相关作品 HTTP ${resp.code}")
+            if (bytes.isEmpty()) throw EmptyResponseException()
+            val payload = JSONObject(String(bytes, Charsets.UTF_8))
+            val code = payload.optString("code", "0")
+            if (code == "101116") throw PlanNoSeasonException()
+            if (code != "0") throw EmptyResponseException()
+            // 系列剧只认 547 cell；相关推荐接受任意带剧数据的 cell（匿名回 401 通用推荐）
+            return parseRelatedCells(payload, bookId, exactOnly = from == "single_col_same_ip_series")
+        }
+    }
+
+    /**
+     * 解析 plan cell（openhongguo ParsePlanCell 口径）：条目取 video_data，空则
+     * cell_data。exactOnly=true 只认 547/相关作品 cell（系列剧语义）；false 时
+     * 兜底任意带剧数据的 cell（相关推荐语义——匿名拿不到 160，401 通用推荐也收）。
+     */
+    internal fun parseRelatedCells(
+        payload: JSONObject, bookId: String, exactOnly: Boolean = false
+    ): List<Drama> {
+        val cells = payload.optJSONArray("data") ?: return emptyList()
+        val out = LinkedHashMap<String, Drama>()
+        collectRelatedCells(cells, exactOnly = true, bookId, out)
+        if (out.isEmpty() && !exactOnly) {
+            collectRelatedCells(cells, exactOnly = false, bookId, out)
+        }
+        if (out.isEmpty()) {
+            // 诊断：cell 概要定位结构差异（exactOnly 两遍皆空才会到这里）
+            val digest = StringBuilder()
+            for (i in 0 until cells.length()) {
+                val cell = cells.optJSONObject(i) ?: continue
+                val keyItr = cell.keys()
+                val keysStr = StringBuilder()
+                var count = 0
+                while (keyItr.hasNext() && count < 12) {
+                    if (count > 0) keysStr.append(',')
+                    keysStr.append(keyItr.next())
+                    count++
+                }
+                digest.append("[st=").append(cell.optInt("show_type", -1))
+                    .append(" name=").append(cell.optString("cell_name"))
+                    .append(" vd=").append(cell.optJSONArray("video_data")?.length() ?: -1)
+                    .append(" cd=").append(
+                        when (val cd = cell.opt("cell_data")) {
+                            is org.json.JSONArray ->
+                                "arr${cd.length()} first=${cd.opt(0)?.toString()?.take(400) ?: "null"}"
+                            is org.json.JSONObject -> cd.toString().take(240)
+                            is String -> cd.take(120)
+                            else -> "null"
+                        }
+                    )
+                    .append(" keys=").append(keysStr)
+                    .append("] ")
+            }
+            android.util.Log.w("Hongguo", "related empty book_id=$bookId cells=$digest")
+        }
+        return out.values.toList()
+    }
+
+    /** 收集相关作品 cell 的 video_data（exactOnly=true 只认 547/相关作品，否则任意 cell）。 */
+    private fun collectRelatedCells(
+        cells: org.json.JSONArray, exactOnly: Boolean, bookId: String,
+        out: LinkedHashMap<String, Drama>
+    ) {
+        for (i in 0 until cells.length()) {
+            val cell = cells.optJSONObject(i) ?: continue
+            if (exactOnly &&
+                cell.optInt("show_type", -1) != RELATED_SHOW_TYPE &&
+                cell.optString("cell_name") != RELATED_CELL_NAME
+            ) continue
+            // 列表字段两代并存：73532 响应为 video_data，72232（HGTV 通道）为
+            // cell_data（MuMu 实证 2026-11-13「猜你喜欢」st=506 keys 含 cell_data）
+            val videos = cell.optJSONArray("video_data")
+                ?: cell.optJSONArray("cell_data")
+                ?: continue
+            for (j in 0 until videos.length()) {
+                val drama = normalizeDrama(videos.opt(j)) ?: continue
+                if (drama.seriesId != bookId && !out.containsKey(drama.seriesId)) {
+                    out[drama.seriesId] = drama
+                }
+            }
+        }
+    }
+
+    /** 创作者（带 userId——PersonWorks 拉作品要用它，不是剧 id）。 */
+    data class Creator(val userId: String, val name: String)
+
+    /**
+     * 批量查短剧创作者：POST /reading/distribution/book_pack_fields/inner_feed_detail/v1
+     * （req_ids 批量）。两路互补（2026-11-13 MuMu 实测不同剧各给一路）：
+     * ① author_user_info.base_info = 出品方（如「橙子漫剧」）优先；
+     * ② main_creator_user_groups[].ugc_user_infos[0].base_info = 主演（领衔）。
+     * userId 一并带回（Person/PersonWorks 用）；multi-detail 的 author 是书城小说
+     * 作者口径且无 userId，仅作 Repository 层名字兜底。单批失败返回空映射。
+     */
+    fun innerFeedDetailCreators(seriesIds: List<String>): Map<String, Creator> {
+        val ids = seriesIds.filter { it.matches(Regex("\\d{1,30}")) }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, Creator>()
+        for (batch in ids.chunked(MULTI_DETAIL_BATCH)) {
+            val reqIds = JSONArray()
+            for (id in batch) {
+                // 官方请求体 req_ids 是数字数组（非字符串）
+                id.toLongOrNull()?.let { reqIds.put(it) }
+            }
+            if (reqIds.length() == 0) continue
+            val body = JSONObject().apply {
+                put("book_pack_channel", "inner_feed_detail")
+                put("req_fields", JSONArray(INNER_FEED_REQ_FIELDS))
+                put("req_ids", reqIds)
+            }
+            try {
+                val payload = postSignedJson(
+                    "/reading/distribution/book_pack_fields/inner_feed_detail/v1",
+                    body
+                )
+                val parsed = parseInnerFeedCreators(payload)
+                if (parsed.isEmpty()) {
+                    android.util.Log.w(
+                        "Hongguo",
+                        "inner_feed_detail miss ids=$ids resp=${payload.toString().take(400)}"
+                    )
+                }
+                out.putAll(parsed)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.w("Hongguo", "inner_feed_detail fail: ${e.message}")
+            }
+        }
+        return out
+    }
+
+    /**
+     * 演员主页（GET /reading/user/profile/get/v1/，openhongguo 同款）：名字+简介+
+     * 头像+粉丝/获赞。查不到返回 null（名字为空即无此人）。
+     */
+    fun person(userId: String): Person? {
+        if (!userId.matches(Regex("\\d{1,30}"))) return null
+        return try {
+            val payload = getSignedJson(
+                "/reading/user/profile/get/v1/",
+                linkedMapOf("user_id" to userId, "user_is_login" to "0")
+            )
+            parsePerson(payload)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.w("Hongguo", "person fail: ${e.message}")
+            null
+        }
+    }
+
+    /** 演员主页（openhongguo ParseProfile：data.ugc_user）。 */
+    data class Person(
+        val userId: String, val name: String, val description: String,
+        val avatar: String, val fans: Long, val likes: Long
+    )
+
+    /**
+     * 创作者作品（POST /novel/commentapi/user/profile/{uid}/v1）：主页「作品›剧作」
+     * tab（tab_type=23/sub_tab_type=22，按时间倒序每页 18 条）。body 照抄官方 App
+     * 抓包（2026-11-13）；**域名必须 sinfonlinec**——sinfonlineb 同参响应恒空
+     * （用户 hook 官方 App 实测对照定位）。
+     */
+    fun personWorks(userId: String): List<Drama> {
+        if (!userId.matches(Regex("\\d{1,30}"))) return emptyList()
+        return try {
+            val body = JSONObject().apply {
+                put("comment_source", 1506)
+                put("count", 18)
+                put("cursor", "")
+                put("extra_param", JSONObject().put("is_video_tab_comment", "1"))
+                put("locate_post_id", "")
+                put("profile_user_type", 0)
+                put("sort", "time_desc")
+                put("sub_tab_type", 22)
+                put("tab_type", 23)
+                put("target_user_id", userId)
+            }
+            val payload = postSignedJson(
+                "/novel/commentapi/user/profile/$userId/v1", body,
+                baseUrl = "https://api5-normal-sinfonlinec.fqnovel.com",
+                version = HongguoApiVersion.V74532
+            )
+            parsePersonWorks(payload)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.w("Hongguo", "personWorks fail: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * 批量查作者名：GET /reading/bookapi/multi-detail/v（book_id=逗号分隔&book_type=2），
+     * 对照 HGTV b.x()：每项取 author，空则回落 source；批大小 50 同款。
+     * 书城口径（小说作者/来源方），仅作 inner_feed_detail 缺数据时的兜底。
+     * 单批失败返回空映射（作者名缺失按「暂无创作者」处理，不阻断菜单）。
+     */
+    fun authorsOf(seriesIds: List<String>): Map<String, String> {
+        val ids = seriesIds.filter { it.matches(Regex("\\d{1,30}")) }.distinct()
+        if (ids.isEmpty()) return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (batch in ids.chunked(MULTI_DETAIL_BATCH)) {
+            try {
+                val payload = getSignedJson(
+                    "/reading/bookapi/multi-detail/v",
+                    linkedMapOf(
+                        "book_id" to batch.joinToString(","),
+                        "book_type" to "2"
+                    )
+                )
+                val rows = payload.optJSONArray("data") ?: continue
+                for (i in 0 until rows.length()) {
+                    val row = rows.optJSONObject(i) ?: continue
+                    val id = row.optString("book_id").ifEmpty { row.optString("series_id") }
+                    if (id.isEmpty()) continue
+                    val author = row.optString("author").ifEmpty { row.optString("source") }.trim()
+                    if (author.isNotEmpty()) out[id] = author
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.w("Hongguo", "multi-detail fail: ${e.message}")
+            }
+        }
+        return out
+    }
+
     private fun parseDiscovery(payload: JSONObject): DiscoveryData {
         val guesses = ArrayList<DiscoveryItem>()
         val boards = LinkedHashMap<String, MutableList<DiscoveryItem>>()
@@ -410,13 +754,16 @@ class HongguoClient(
     }
 
     /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。与 feed 共用一号。 */
-    private fun getSignedJson(path: String, values: LinkedHashMap<String, String>): JSONObject {
+    private fun getSignedJson(
+        path: String, values: LinkedHashMap<String, String>,
+        version: HongguoApiVersion = HongguoApiVersion.V73532
+    ): JSONObject {
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
             try {
                 // 号复用+空响应轮换（apiIdentity 共享；随机假身份在模拟器出口全空——实证）
                 val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
-                return getOnce(path, values, identity.deviceId, identity.installId)
+                return getOnce(path, values, identity.deviceId, identity.installId, version)
             } catch (e: EmptyResponseException) {
                 lastError = e
                 apiIdentity = null
@@ -427,34 +774,35 @@ class HongguoClient(
         throw lastError ?: IllegalStateException("红果接口无响应")
     }
 
-    /** GET 签名（bookmall 等）：F0.x1 形态（73532 档案+HongguoEnv+真版签名头集）。 */
+    /** GET 签名（bookmall 等）：F0.x1 形态（HongguoEnv+真版签名头集）。 */
     private fun getOnce(
         path: String, values: LinkedHashMap<String, String>,
-        deviceId: String, installId: String
+        deviceId: String, installId: String,
+        version: HongguoApiVersion = HongguoApiVersion.V73532
     ): JSONObject {
         val q = java.util.LinkedHashMap<String, String>()
         q["iid"] = installId
         q["device_id"] = deviceId
         q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
         q["app_name"] = "novelread"
-        q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
+        q["version_code"] = version.code; q["version_name"] = version.versionName
         q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
         q["device_type"] = HongguoEnv.deviceType
         q["device_brand"] = HongguoEnv.deviceBrand
         q["language"] = "zh"
         q["os_api"] = HongguoEnv.osApi
         q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "73532"
+        q["manifest_version_code"] = version.code
         q["resolution"] = HongguoEnv.resolution
         q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
+        q["update_version_code"] = version.code; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = version.code
         q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
         q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
         q["ts"] = (System.currentTimeMillis() / 1000).toString()
         q.putAll(values)
 
-        val versionName = "7.3.5.32"
+        val versionName = version.versionName
         val signed = HongguoCrypto.signRequest(q, null, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
         val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
         val realLadonArgus = HongguoArgus.generate(
@@ -462,7 +810,7 @@ class HongguoClient(
             deviceProfile = HongguoEnv.argusProfile
         )
         val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val ua = HongguoEnv.ua("73532")
+        val ua = HongguoEnv.ua(version.code)
         val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
             .let { "00-$it-${it.substring(0, 16)}-01" }
         val req = Request.Builder()
@@ -492,7 +840,10 @@ class HongguoClient(
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
-            android.util.Log.d("Hongguo", "rank $path http=${resp.code} len=${bytes.size}")
+            android.util.Log.d(
+                "Hongguo",
+                "rank $path vc=${version.code} http=${resp.code} len=${bytes.size}"
+            )
             if (!resp.isSuccessful) throw IllegalStateException("红果接口 HTTP ${resp.code}")
             if (bytes.isEmpty()) throw EmptyResponseException()
             val text = String(bytes, Charsets.UTF_8)
@@ -521,14 +872,18 @@ class HongguoClient(
             HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
         }
 
-    private fun postSignedJson(path: String, body: JSONObject): JSONObject {
+    private fun postSignedJson(
+        path: String, body: JSONObject,
+        baseUrl: String = apiBase,
+        version: HongguoApiVersion = HongguoApiVersion.V73532
+    ): JSONObject {
         val raw = body.toString().toByteArray(Charsets.UTF_8)
         var lastError: Exception? = null
         for (attempt in 0 until 3) {
             try {
                 // 注册号复用，空响应才换新（feed 翻页高频，不能每页注册）
                 val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
-                return postOnce(path, raw, identity.deviceId, identity.installId)
+                return postOnce(path, raw, identity.deviceId, identity.installId, baseUrl, version)
             } catch (e: EmptyResponseException) {
                 apiIdentity = null
                 lastError = e
@@ -542,7 +897,11 @@ class HongguoClient(
     private class EmptyResponseException : IllegalStateException("empty body")
 
 
-    private fun postOnce(path: String, raw: ByteArray, deviceId: String, installId: String): JSONObject {
+    private fun postOnce(
+        path: String, raw: ByteArray, deviceId: String, installId: String,
+        baseUrl: String = apiBase,
+        version: HongguoApiVersion = HongguoApiVersion.V73532
+    ): JSONObject {
         // Kotlin 签名链（2026-11-10 与 F0.x1 逐字段对拍后，L1 字节码通道已拆除）：
         // （73532+HongguoEnv 动态环境+插入序）+ 真版 Ladon/Argus/Helios/Gorgon +
         // HGTV 同款头集（E0 外层+G0 改写后形态）。播放接口三通道实测与 L1 字节码等价。
@@ -551,23 +910,23 @@ class HongguoClient(
         q["device_id"] = deviceId
         q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
         q["app_name"] = "novelread"
-        q["version_code"] = "73532"; q["version_name"] = "7.3.5.32"
+        q["version_code"] = version.code; q["version_name"] = version.versionName
         q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
         q["device_type"] = HongguoEnv.deviceType
         q["device_brand"] = HongguoEnv.deviceBrand
         q["language"] = "zh"
         q["os_api"] = HongguoEnv.osApi
         q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "73532"
+        q["manifest_version_code"] = version.code
         q["resolution"] = HongguoEnv.resolution
         q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = "73532"; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "73532"
+        q["update_version_code"] = version.code; q["host_abi"] = HongguoEnv.HOST_ABI
+        q["dragon_device_type"] = "phone"; q["pv_player"] = version.code
         q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
         q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
         q["ts"] = (System.currentTimeMillis() / 1000).toString()
 
-        val versionName = "7.3.5.32"
+        val versionName = version.versionName
         val signed = HongguoCrypto.signRequest(q, raw, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
         val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
         val realLadonArgus = HongguoArgus.generate(
@@ -575,7 +934,7 @@ class HongguoClient(
             deviceProfile = HongguoEnv.argusProfile
         )
         val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val ua = HongguoEnv.ua("73532")
+        val ua = HongguoEnv.ua(version.code)
         val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
             .let { "00-$it-${it.substring(0, 16)}-01" }
         val headers: List<Pair<String, String>> = listOf(
@@ -610,7 +969,7 @@ class HongguoClient(
         )
 
         val req = Request.Builder()
-            .url("$apiBase$path?${signed.query}")
+            .url("$baseUrl$path?${signed.query}")
             .post(raw.toRequestBody("application/json; charset=UTF-8".toMediaType()))
             .apply { headers.forEach { (k, v) -> header(k, v) } }
             .build()
@@ -736,10 +1095,142 @@ class HongguoClient(
     }
 
     companion object {
+        /**
+         * 接口版本档案：不同接口须按 HGTV 各自的 App 版本口径请求——服务端按
+         * version_code 下发不同 cell 结构（实证 2026-11-13：plan/v1 相关作品
+         * 73532 只回「猜你喜欢」st=506，72232 才回「相关作品」st=547）。
+         */
+        enum class HongguoApiVersion(val code: String, val versionName: String) {
+            /** feed/landpage/bookmall 通道（线上验证）。 */
+            V73532("73532", "7.3.5.32"),
+
+            /** plan/v1 相关作品通道（HGTV t0 同款）+ 搜索（searchTab 已同款）。 */
+            V72232("72232", "7.2.2.32"),
+
+            /** commentapi 用户主页通道（官方 7.4.5 实测口径）。 */
+            V74532("74532", "7.4.5.32")
+        }
+
         private val FILTER_KINDS = listOf(
             "genre", "category_dim_theme", "category_dim_role", "category_dim_epoch",
             "sort", "gender", "online_time", "creation_status"
         )
+
+        /** 相关作品 cell 过滤值（对照 HGTV b 构造器：show_type=547 / cell_name="相关作品"）。 */
+        private const val RELATED_SHOW_TYPE = 547
+        private const val RELATED_CELL_NAME = "相关作品"
+
+        /** multi-detail 批大小（HGTV f7216q=50 同款）。 */
+        private const val MULTI_DETAIL_BATCH = 50
+
+        /** inner_feed_detail 请求字段（照抄官方请求体全集，服务端按需回填）。 */
+        private val INNER_FEED_REQ_FIELDS = listOf(
+            "author_user_info", "album_id", "album_serial_count", "series_in_album_order",
+            "real_album_serial_count", "rec_tags", "video_tag_info", "main_creator_users_group",
+            "op_tag", "show_urge_update", "has_urge_update", "urge_update_count"
+        )
+
+        /**
+         * inner_feed_detail 响应解析：data 是 { id -> { base_info } } 映射。
+         * 创作者两路（2026-11-13 MuMu 实测+用户反馈定案）：
+         * ① author_user_info.base_info（出品方/上传者，带 user_id）优先；
+         * ② main_creator_user_groups 里 group_type=="出品方"（ugc_creator_type=2）
+         *    的组首位——部分剧只有这一路；**「主演」组不是创作者**（演员剧作
+         *    tab 空、按名搜索匹配不上，曾致「创作者只有一个作品」误报，跳过）。
+         * 都没有时由 Repository 回落 multi-detail author（HGTV 同款上传者口径）。
+         */
+        internal fun parseInnerFeedCreators(payload: JSONObject): Map<String, Creator> {
+            val data = payload.optJSONObject("data") ?: return emptyMap()
+            val out = LinkedHashMap<String, Creator>()
+            for (key in data.keys()) {
+                val base = data.optJSONObject(key)?.optJSONObject("base_info") ?: continue
+                val creator = base.optJSONObject("author_user_info")
+                    ?.optJSONObject("base_info")
+                    ?.let { creatorOf(it) }
+                    ?: studioGroupFirst(base)
+                if (creator != null) out[key] = creator
+            }
+            return out
+        }
+
+        /** base_info 节点 → Creator（user_id + user_name）。 */
+        private fun creatorOf(base: JSONObject): Creator? {
+            val name = base.optString("user_name").trim()
+            if (name.isEmpty()) return null
+            return Creator(userId = base.optString("user_id"), name = name)
+        }
+
+        /** main_creator_user_groups 的「出品方」组（group_type/ugc_creator_type 双判）首位。 */
+        private fun studioGroupFirst(base: JSONObject): Creator? {
+            val groups = base.optJSONArray("main_creator_user_groups") ?: return null
+            for (i in 0 until groups.length()) {
+                val group = groups.optJSONObject(i) ?: continue
+                val isStudio = group.optString("group_type") == "出品方" ||
+                    group.optInt("ugc_creator_type", -1) == 2
+                if (!isStudio) continue
+                val infos = group.optJSONArray("ugc_user_infos") ?: continue
+                for (j in 0 until infos.length()) {
+                    val c = infos.optJSONObject(j)?.optJSONObject("base_info")?.let { creatorOf(it) }
+                    if (c != null) return c
+                }
+            }
+            return null
+        }
+
+        /** person 响应解析（openhongguo ParseProfile：data.ugc_user）。名字空=null。 */
+        internal fun parsePerson(payload: JSONObject): Person? {
+            val user = payload.optJSONObject("data")?.optJSONObject("ugc_user") ?: return null
+            val base = user.optJSONObject("base_info") ?: return null
+            val name = base.optString("user_name").trim()
+            if (name.isEmpty()) return null
+            val relation = user.optJSONObject("user_relation")
+            return Person(
+                userId = user.optString("user_id"),
+                name = name,
+                description = base.optString("description"),
+                avatar = base.optString("user_avatar"),
+                fans = relation?.optLong("fans_num", 0L) ?: 0L,
+                likes = relation?.optLong("recv_digged_count", 0L) ?: 0L
+            )
+        }
+
+        /** personWorks 响应解析（openhongguo ParseUserWorks：data.data_list[].video）。 */
+        internal fun parsePersonWorks(payload: JSONObject): List<Drama> {
+            val rows = payload.optJSONObject("data")?.optJSONArray("data_list")
+                ?: return emptyList()
+            val out = ArrayList<Drama>()
+            for (i in 0 until rows.length()) {
+                val video = rows.optJSONObject(i)?.optJSONObject("video") ?: continue
+                val id = video.optString("video_id")
+                val common = video.optJSONObject("common")
+                val title = common?.optString("title")?.trim().orEmpty()
+                if (id.isEmpty() || !id.matches(Regex("\\d{1,30}")) || title.isEmpty()) continue
+                val stat = video.optJSONObject("stat")
+                val expand = video.optJSONObject("expand")
+                out.add(
+                    Drama(
+                        seriesId = id,
+                        title = title,
+                        cover = HongguoCoverUrl.rewrite(
+                            common.optString("cover").takeIf { it.startsWith("http") } ?: ""
+                        ),
+                        intro = common.optString("intro"),
+                        score = "",
+                        playCount = stat?.optLong("play_cnt", 0L) ?: 0L,
+                        episodeCount = expand?.optInt("episode_cnt", 0) ?: 0,
+                        vid = "",
+                        tags = emptyList(),
+                        heatText = "",
+                        statusTags = emptyList(),
+                        seasonIndex = 0,
+                        multiSeason = false,
+                        contentType = "",
+                        seriesStatus = ""
+                    )
+                )
+            }
+            return out
+        }
     }
 
     /** 排障开关：JVM 单测置 true 打印响应详情。 */

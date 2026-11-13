@@ -36,7 +36,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private var _binding: FragmentHongguoFeedBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
-    private val adapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private val adapter = HongguoDramaAdapter(
+        onItemClick = ::openDetail,
+        onItemLongPress = { item, _ ->
+            HongguoCardMenuDialog.show(requireContext(), repository, item)
+        }
+    )
     private var tvFocusController: TvListFocusController? = null
 
     // 竖版 4:5 卡片列数对齐 CCTV 片库（6 列/超宽 12 列）
@@ -337,17 +342,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         }
     }
 
-    private fun HongguoClient.Drama.toUi(): DramaUi = DramaUi(
-        seriesId = seriesId,
-        title = title,
-        cover = cover,
-        subtitle = listOf(
-            score.takeIf { it.isNotBlank() },
-            if (episodeCount > 0) "共${episodeCount}集" else null,
-            heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else null }
-        ).filterNotNull().joinToString(" · "),
-        score = score
-    )
+    private fun HongguoClient.Drama.toUi(): DramaUi = toDramaUi()
 
     private fun HongguoRepository.WatchRecord.toUi(): DramaUi {
         val percent = if (durationMs > 0) (positionMs * 100 / durationMs).toInt() else 0

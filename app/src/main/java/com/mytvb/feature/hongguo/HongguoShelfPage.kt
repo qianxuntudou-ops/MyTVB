@@ -35,7 +35,14 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
 
     // 网格列数对齐正常列表页（HongguoFeedPage 同款 6 列/超宽 12 列），卡宽不固定
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
-    private val adapter by lazy { HongguoDramaAdapter(onItemClick = ::openDetail) }
+    private val adapter by lazy {
+        HongguoDramaAdapter(
+            onItemClick = ::openDetail,
+            onItemLongPress = { item, _ ->
+                HongguoCardMenuDialog.show(requireContext(), repository, item)
+            }
+        )
+    }
 
     private var source = Source.WATCH_LATER
 

@@ -6,11 +6,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.common.log.VideoCardPerfLogger
 import com.mytvb.core.ui.base.BaseVideoAdapter
+import com.mytvb.core.ui.base.BaseVideoViewHolder
 import com.mytvb.core.ui.focus.VideoCardFocusHelper
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.video.VideoCardCoverRatio
 import com.mytvb.core.ui.video.VideoCardViews
 import com.mytvb.core.ui.video.VideoLightCardFactory
+import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.ui.adapter.VideoAdapter
 
 /** 红果卡片统一 UI 模型：feed/搜索/历史/收藏/榜单各自映射成它，渲染全走 [HongguoDramaAdapter]。 */
@@ -36,6 +38,18 @@ data class DramaUi(
     val score: String = ""
 )
 
+/** [HongguoClient.Drama] → 卡片 UI 模型（副标题=评分/集数/热度，各列表页与长按菜单弹窗共用）。 */
+fun HongguoClient.Drama.toDramaUi(): DramaUi = DramaUi(
+    seriesId = seriesId,
+    title = title,
+    cover = cover,
+    subtitle = listOf(
+        score.takeIf { it.isNotBlank() },
+        if (episodeCount > 0) "共${episodeCount}集" else null,
+        heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else null }
+    ).filterNotNull().joinToString(" · ")
+)
+
 /**
  * 红果剧卡片（复用全 App 统一 B 站卡片，2026-11-10 从自绘 cell_hongguo_drama 迁移）。
  *
@@ -46,6 +60,8 @@ data class DramaUi(
 class HongguoDramaAdapter(
     /** position 供页面记录来源卡片（播放器返回后焦点恢复兜底）。 */
     private val onItemClick: (DramaUi, Int) -> Unit,
+    /** 长按（遥控 OK 或触摸长按）弹出卡片菜单；null=宿主页面未接长按。 */
+    private val onItemLongPress: ((DramaUi, Int) -> Unit)? = null,
     /** 固定卡宽（px）：网格页留空由 LayoutManager 均分；货架页横滑单行必须给定（卡根默认 MATCH_PARENT，横向列表会撑满整屏宽）。 */
     private val itemWidthPx: Int? = null
 ) : BaseVideoAdapter<DramaUi, HongguoDramaAdapter.ViewHolder>() {
@@ -93,17 +109,57 @@ class HongguoDramaAdapter(
 
     inner class ViewHolder(
         private val views: VideoCardViews
-    ) : RecyclerView.ViewHolder(views.root) {
+    ) : BaseVideoViewHolder(views.root) {
+
+        private var currentItem: DramaUi? = null
+
+        /** 遥控 OK 长按检测（与 VideoAdapter.VideoViewHolder 同款：经 bindSidebarExit 尾部透传收非边缘键）。 */
+        private val keyListener = View.OnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                keyCode == android.view.KeyEvent.KEYCODE_ENTER
+            ) {
+                when (event.action) {
+                    android.view.KeyEvent.ACTION_DOWN -> {
+                        if (event.repeatCount == 0) startLongPress()
+                    }
+                    android.view.KeyEvent.ACTION_UP -> cancelLongPress()
+                }
+                false
+            } else {
+                false
+            }
+        }
+
+        override fun showCardMenu() {
+            cancelLongPress()
+            val item = currentItem ?: return
+            val position = bindingAdapterPosition
+            onItemLongPress?.invoke(item, position)
+        }
 
         init {
             views.imageView.clipToOutline = true
             views.imageView.outlineProvider =
                 VideoAdapter.VideoViewHolder.coverOutlineProviderFor(views.imageView.resources)
             views.root.setOnClickListener {
+                // 长按已触发时吞掉紧随的点击（VideoAdapter 同款）
+                if (longPressTriggered) {
+                    longPressTriggered = false
+                    return@setOnClickListener
+                }
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     getItem(position)?.let { onItemClick(it, position) }
                 }
+            }
+            @android.annotation.SuppressLint("ClickableViewAccessibility")
+            views.root.setOnTouchListener { _, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> startLongPress()
+                    android.view.MotionEvent.ACTION_UP,
+                    android.view.MotionEvent.ACTION_CANCEL -> cancelLongPress()
+                }
+                false
             }
             views.root.onFocusChangeListener = View.OnFocusChangeListener { view, hasFocus ->
                 if (!hasFocus) return@OnFocusChangeListener
@@ -114,11 +170,13 @@ class HongguoDramaAdapter(
             }
             VideoCardFocusHelper.bindSidebarExit(
                 view = views.root,
-                onTopEdgeUp = { onTopEdgeUp?.invoke() == true }
+                onTopEdgeUp = { onTopEdgeUp?.invoke() == true },
+                chainedListener = keyListener
             )
         }
 
         fun bind(item: DramaUi) {
+            currentItem = item
             views.textLayer.setTitle(item.title, lines = 1)
             views.textLayer.setOwner(
                 ownerText = item.subtitle,

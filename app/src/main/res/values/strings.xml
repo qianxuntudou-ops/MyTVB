@@ -109,6 +109,16 @@
     <string name="hongguo_play_continue">继续播放</string>
     <string name="hongguo_favorite">收藏</string>
     <string name="hongguo_unfavorite">取消收藏</string>
+    <string name="hongguo_menu_subtitle">查看这部短剧的创作者与同类作品</string>
+    <string name="hongguo_menu_creator">创作者</string>
+    <string name="hongguo_menu_creator_summary">查看该创作者的其它作品</string>
+    <string name="hongguo_menu_creator_unknown">暂无创作者信息</string>
+    <string name="hongguo_menu_creator_only_one">这位创作者暂时只有这一部作品</string>
+    <string name="hongguo_menu_creator_failed">创作者作品加载失败</string>
+    <string name="hongguo_menu_related">相关作品</string>
+    <string name="hongguo_menu_related_summary">看过这部的人也在看</string>
+    <string name="hongguo_menu_related_empty">暂时没有相关作品</string>
+    <string name="hongguo_menu_related_failed">相关作品加载失败</string>
     <string name="hongguo_not_logged_in">未登录</string>
     <string name="hongguo_login">登录红果账号</string>
     <string name="hongguo_login_p2">红果账号登录将在下一版本提供，与 B 站账号完全独立</string>

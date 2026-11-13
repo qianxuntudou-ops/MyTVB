@@ -40,7 +40,12 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     private var _binding: FragmentHongguoRankBinding? = null
     private val binding get() = _binding!!
     private val repository by lazy { HongguoRepository.get(requireContext()) }
-    private val adapter = HongguoDramaAdapter(onItemClick = ::openDetail)
+    private val adapter = HongguoDramaAdapter(
+        onItemClick = ::openDetail,
+        onItemLongPress = { item, _ ->
+            HongguoCardMenuDialog.show(requireContext(), repository, item)
+        }
+    )
     private var tvFocusController: TvListFocusController? = null
     private var skeletonAnimator: ValueAnimator? = null
 
