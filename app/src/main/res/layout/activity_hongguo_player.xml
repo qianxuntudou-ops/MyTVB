@@ -209,6 +209,24 @@
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>
+    <!-- 切集提示：连播/滑动/选集切集时不弹控制栏，左下角短暂亮出「剧名 · 第N集」告知已换集 -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_episode_hint"
+        android:textSize="@dimen/px40"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:shadowColor="@color/black"
+        android:shadowDx="1.5"
+        android:shadowDy="1.3"
+        android:shadowRadius="1.6"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="@dimen/px30"
+        android:layout_marginBottom="@dimen/px90"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
     <!-- 常驻时钟：「时间常驻显示」开关打开时，控制栏隐藏期间右上角显示（B站 setAlwaysOnClock 同款） -->
     <TextClock
         android:id="@+id/text_clock_always"

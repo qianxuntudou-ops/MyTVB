@@ -82,6 +82,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
     private var controlsVisible = false
     private var hideRunnable: Runnable = Runnable { onControlsHideTick() }
+    /** 切集提示停留时长：换集不弹控制栏，左下角亮「剧名 · 第N集」。 */
+    private val episodeHintDurationMs = 1000L
+    private val episodeHintHideRunnable = Runnable { binding.textEpisodeHint.visibility = View.GONE }
 
     /** 控制栏 4s 超时隐藏：暂停时常驻；右侧面板打开期间续期不隐藏。 */
     private fun onControlsHideTick() {
@@ -912,6 +915,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
                 startPlayer(playable, revealControls = false)
+                flashEpisodeHint()
                 preloadFollowingEpisodes()
             } catch (e: CancellationException) {
                 throw e
@@ -954,8 +958,20 @@ class HongguoPlayerActivity : AppCompatActivity() {
             // 从瞬时条恢复时还原底栏完整元素
             binding.textTitle.visibility = View.VISIBLE
             binding.buttonPlay.visibility = View.VISIBLE
+            // 底栏标题在场，切集浮层让位（1s 窗口内呼出控制栏的场景）
+            binding.root.removeCallbacks(episodeHintHideRunnable)
+            binding.textEpisodeHint.visibility = View.GONE
         }
         updateAlwaysClock()
+    }
+
+    /** 切集提示：换集不弹控制栏，左下角短暂亮出标题行 1s 告知已换到第 N 集。 */
+    private fun flashEpisodeHint() {
+        if (controlsVisible) return
+        binding.textEpisodeHint.text = binding.textTitle.text
+        binding.root.removeCallbacks(episodeHintHideRunnable)
+        binding.textEpisodeHint.visibility = View.VISIBLE
+        binding.root.postDelayed(episodeHintHideRunnable, episodeHintDurationMs)
     }
 
     /** 常驻时钟：设置开 + 控制栏隐藏 + 无 seek 界面时显示（B 站 setAlwaysOnClock 避让逻辑）。 */
