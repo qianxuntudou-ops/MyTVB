@@ -41,9 +41,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
 
+        <!-- 仅首屏/筛选刷新（列表空）时显示；色取全 app 高亮统一粉（主题默认是紫圈） -->
         <ProgressBar
             android:id="@+id/progress_loading"
             android:layout_gravity="center"
+            android:indeterminateTint="@color/tab_highlightClassic"
             android:visibility="gone"
             android:layout_width="@dimen/px60"
             android:layout_height="@dimen/px60"/>
