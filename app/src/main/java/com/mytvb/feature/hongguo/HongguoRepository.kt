@@ -10,6 +10,7 @@ import com.mytvb.feature.hongguo.net.HongguoSession
 import com.mytvb.feature.hongguo.net.HongguoSync
 import com.mytvb.feature.hongguo.net.HongguoWeb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -447,24 +448,122 @@ class HongguoRepository private constructor(context: Context) {
         }
 
     /**
-     * 后台批量预取后续集播放地址（官方 preload/v1，dr_scene="preload"）。
-     * 起播成功后由播放器调用（当前集+1 起 2 集）；档位与切集同源
-     * （[defaultQualityPixels]，键不同档位不互通）；失败静默，切集实时解析兜底。
+     * 起播/切集成功后后台预热后续集（当前集+1 起 2 集；[vids] 首位=下一集）：
+     * 1) 官方 preload/v1 批量预取地址（服务端 200 空体时全挂，走 2 兜底）；
+     * 2) 下一集地址缓存 miss 时实时解析（player/v1 → K-M1 fallback，历史实证可用）；
+     * 3) 下一集为加密流时整集预下载落地（切集秒开，[resolvePlayableFile] 在途去重
+     *    防与切集并发双下）。释放同池：落地即受「缓存限制」LRU 修剪，无独立释放点。
+     * 全部失败静默，切集实时解析兜底。
      */
     fun preloadNextEpisodes(vids: List<String>) {
         val pixels = defaultQualityPixels()
         val pending = vids.filter { it.isNotEmpty() && takeCachedPlayUrl("$it@$pixels") == null }
-        if (pending.isEmpty()) return
-        android.util.Log.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
-        cloudScope.launch {
-            withIdentity { id ->
-                runCatching { play.preloadEntries(pending, id, pixels) }
-                    .onSuccess { entries ->
-                        entries.forEach { (vid, url) -> cachePlayUrl("$vid@$pixels", url) }
-                        android.util.Log.d("Hongguo", "preload episodes ok ${entries.keys}")
-                    }
-                    .onFailure { android.util.Log.w("Hongguo", "preload episodes fail: ${it.message}") }
+        if (pending.isNotEmpty()) {
+            android.util.Log.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
+            cloudScope.launch {
+                withIdentity { id ->
+                    runCatching { play.preloadEntries(pending, id, pixels) }
+                        .onSuccess { entries ->
+                            entries.forEach { (vid, url) -> cachePlayUrl("$vid@$pixels", url) }
+                            android.util.Log.d("Hongguo", "preload episodes ok ${entries.keys}")
+                        }
+                        .onFailure { android.util.Log.w("Hongguo", "preload episodes fail: ${it.message}") }
+                }
             }
+        }
+        val next = vids.firstOrNull { it.isNotEmpty() } ?: return
+        cloudScope.launch {
+            runCatching {
+                // playUrl 内部先查地址缓存（preload/v1 命中免请求），miss 走 player/v1→K-M1
+                val play = playUrl(next, pixels)
+                if (play.contentKeyHex != null) {
+                    resolvePlayableFile(play)
+                    android.util.Log.d("Hongguo", "prefetch download ok vid=$next q=${play.pixels}")
+                } else {
+                    android.util.Log.d("Hongguo", "prefetch next plain vid=$next (直链不落地)")
+                }
+            }.onFailure { android.util.Log.d("Hongguo", "prefetch next fail vid=$next: ${it.message}") }
+        }
+    }
+
+    // ---- CENC 解密流整集落地（起播/切集/预下载共用，从 Activity 平移） ----
+
+    /** CENC 片源下载客户端（复用连接池；此前 Activity 每次下载新建 OkHttpClient）。 */
+    private val cencHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
+
+    /** 同文件在途下载去重：切集与预下载并发命中同一集时共享一份，防双下 8~27MB。 */
+    private val inflightLock = Any()
+    private val inflightDownloads = HashMap<String, kotlinx.coroutines.Deferred<String>>()
+
+    /** CENC 缓存文件名：同集按画质档区分（vid@1080.mp4；无档位回落 vid.mp4 兼容旧缓存）。 */
+    private fun cachedName(play: HongguoPlay.PlayUrl): String =
+        if (play.pixels > 0) "${play.vid}@${play.pixels}.mp4" else "${play.vid}.mp4"
+
+    /**
+     * 播放地址 → 可播 URI：未加密直链原样返回；加密流缓存命中直接给本地 URI，
+     * 未命中整集下载 + AES-128-CTR 解密落地（Node 同款方案，单集约 30MB）。
+     * 在途去重：同文件并发调用共享一份下载。下载在 cloudScope（Supervisor）跑——
+     * 调用方（播放页）销毁/取消只解除等待不中断下载，退出后仍下完落地，下次秒开。
+     */
+    suspend fun resolvePlayableFile(play: HongguoPlay.PlayUrl): String {
+        val keyHex = play.contentKeyHex ?: return play.url
+        val key = com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(keyHex)
+        val outFile = java.io.File(HongguoMediaCache.dir(appContext), cachedName(play))
+        if (outFile.isFile && outFile.length() > 0) return android.net.Uri.fromFile(outFile).toString()
+        val fileName = outFile.name
+        val deferred = synchronized(inflightLock) {
+            inflightDownloads[fileName] ?: cloudScope.async(kotlinx.coroutines.Dispatchers.IO) {
+                downloadDecryptLand(play, key, outFile)
+            }.also { d ->
+                inflightDownloads[fileName] = d
+                d.invokeOnCompletion {
+                    synchronized(inflightLock) { if (inflightDownloads[fileName] === d) inflightDownloads.remove(fileName) }
+                }
+            }
+        }
+        return deferred.await()
+    }
+
+    /** 下载整集 + 解密 + 原子落地（tmp 改名防半截文件被缓存命中）+ 落地后 LRU 修剪。 */
+    private fun downloadDecryptLand(play: HongguoPlay.PlayUrl, key: ByteArray, outFile: java.io.File): String {
+        android.util.Log.d("Hongguo", "cenc download start ${play.vid} q=${play.pixels}")
+        val bytes = cencHttpClient.newCall(
+            okhttp3.Request.Builder().url(play.url)
+                .header("User-Agent", "com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR)")
+                .header("Range", "bytes=0-")
+                .build()
+        ).execute().use { resp ->
+            if (!resp.isSuccessful) throw IllegalStateException("片源下载 HTTP ${resp.code}")
+            resp.body?.bytes() ?: throw IllegalStateException("片源下载为空")
+        }
+        android.util.Log.d("Hongguo", "cenc downloaded ${bytes.size}B, decrypting")
+        val plain = com.mytvb.feature.hongguo.net.HongguoMp4Decrypt.decryptMp4Buffer(bytes, key)
+        java.io.File(outFile.parentFile, "${play.vid}.tmp").let { tmp ->
+            tmp.writeBytes(plain)
+            if (!tmp.renameTo(outFile)) {
+                tmp.copyTo(outFile, overwrite = true)
+                tmp.delete()
+            }
+        }
+        android.util.Log.d("Hongguo", "cenc decrypted ${plain.size}B -> ${outFile.name}")
+        // 落地后按「缓存限制」设置修剪旧集（LRU），预下载与观看缓存同池同口径
+        HongguoMediaCache.enforceLimit(appContext)
+        return android.net.Uri.fromFile(outFile).toString()
+    }
+
+    /** 切画质成功后清理同集其它档位的落地缓存（单档约 30MB，防止逐档堆积）。 */
+    fun cleanupOtherQualityCaches(play: HongguoPlay.PlayUrl) {
+        val keep = cachedName(play)
+        HongguoMediaCache.dir(appContext).listFiles()?.forEach { f ->
+            val name = f.name
+            if (name != keep && name.startsWith("${play.vid}") &&
+                (name == "${play.vid}.mp4" || name.matches(Regex("${play.vid}@\\d+\\.mp4")))
+            ) f.delete()
         }
     }
 
