@@ -118,6 +118,14 @@ class HongguoWeb(
         val vidList = stringList(detailObj.optJSONArray("vid_list"))
         var accessible = detailObj.optInt("accessible_episode_cnt", 0)
         if (accessible <= 0 || accessible > vidList.size) accessible = vidList.size
+        // 选集集数口径日志：视频详情四个来源各记一条，便于排查「共N集」与实际分集不一致
+        android.util.Log.d(
+            "Hongguo",
+            "detail eps series=$seriesId episode_cnt=${detailObj.optInt("episode_cnt")} " +
+                "episode_total_cnt=${detailObj.optInt("episode_total_cnt")} " +
+                "accessible=$accessible vid_list=${vidList.size} " +
+                "drama.episodeCount=${drama.episodeCount}"
+        )
         val episodes = ArrayList<Episode>(vidList.size)
         for ((i, vid) in vidList.withIndex()) {
             episodes.add(Episode(i + 1, vid, "第${i + 1}集", i >= accessible))
