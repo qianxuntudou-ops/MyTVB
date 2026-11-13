@@ -509,6 +509,8 @@ class HongguoRepository private constructor(context: Context) {
      * 未命中整集下载 + AES-128-CTR 解密落地（Node 同款方案，单集约 30MB）。
      * 在途去重：同文件并发调用共享一份下载。下载在 cloudScope（Supervisor）跑——
      * 调用方（播放页）销毁/取消只解除等待不中断下载，退出后仍下完落地，下次秒开。
+     * 等来的在途下载失败不连坐：自己重下一次（CDN 抖动重试可过），二次失败才如实抛
+     * （实测 v11-reading-video host 下载 11.5s 被 Connection reset，切集等在途被连坐报「切换失败」）。
      */
     suspend fun resolvePlayableFile(play: HongguoPlay.PlayUrl): String {
         val keyHex = play.contentKeyHex ?: return play.url
@@ -516,17 +518,28 @@ class HongguoRepository private constructor(context: Context) {
         val outFile = java.io.File(HongguoMediaCache.dir(appContext), cachedName(play))
         if (outFile.isFile && outFile.length() > 0) return android.net.Uri.fromFile(outFile).toString()
         val fileName = outFile.name
-        val deferred = synchronized(inflightLock) {
-            inflightDownloads[fileName] ?: cloudScope.async(kotlinx.coroutines.Dispatchers.IO) {
-                downloadDecryptLand(play, key, outFile)
-            }.also { d ->
-                inflightDownloads[fileName] = d
-                d.invokeOnCompletion {
-                    synchronized(inflightLock) { if (inflightDownloads[fileName] === d) inflightDownloads.remove(fileName) }
+        var retried = false
+        while (true) {
+            val deferred = synchronized(inflightLock) {
+                inflightDownloads[fileName] ?: cloudScope.async(kotlinx.coroutines.Dispatchers.IO) {
+                    downloadDecryptLand(play, key, outFile)
+                }.also { d ->
+                    inflightDownloads[fileName] = d
+                    d.invokeOnCompletion {
+                        synchronized(inflightLock) { if (inflightDownloads[fileName] === d) inflightDownloads.remove(fileName) }
+                    }
                 }
             }
+            try {
+                return deferred.await()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (retried) throw e
+                retried = true
+                android.util.Log.w("Hongguo", "cenc await fail (${e.message}), retry self vid=${play.vid}")
+            }
         }
-        return deferred.await()
     }
 
     /** 下载整集 + 解密 + 原子落地（tmp 改名防半截文件被缓存命中）+ 落地后 LRU 修剪。 */
