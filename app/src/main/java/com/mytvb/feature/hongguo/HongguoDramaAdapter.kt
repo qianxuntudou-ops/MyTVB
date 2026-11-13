@@ -31,7 +31,9 @@ data class DramaUi(
     /** 封面底部右侧「共 N 集」。 */
     val episodeCount: Int = 0,
     /** 右上季数标签（如「第 1 季」，多季剧才有）。 */
-    val seasonText: String = ""
+    val seasonText: String = "",
+    /** 评分原文（列表接口下发，详情 SSR 不下发）：详情弹窗头部评分用入口值兜底。 */
+    val score: String = ""
 )
 
 /**

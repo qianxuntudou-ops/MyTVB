@@ -159,7 +159,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
 
     private fun openDetail(item: DramaUi, position: Int) {
         lastOpenedPosition = position
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
     }
 
     /** 焦点是否落在 tab 行（一级页签 TabLayout / 分类子档 tab / 榜单分段控件）。 */
@@ -345,7 +345,8 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             score.takeIf { it.isNotBlank() },
             if (episodeCount > 0) "共${episodeCount}集" else null,
             heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else null }
-        ).filterNotNull().joinToString(" · ")
+        ).filterNotNull().joinToString(" · "),
+        score = score
     )
 
     private fun HongguoRepository.WatchRecord.toUi(): DramaUi {

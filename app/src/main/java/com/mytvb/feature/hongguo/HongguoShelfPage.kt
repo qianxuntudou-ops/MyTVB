@@ -93,7 +93,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     private fun host(): HongguoFragment? = parentFragment as? HongguoFragment
 
     private fun openDetail(item: DramaUi, position: Int) {
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
     }
 
     private fun load(source: Source) {

@@ -117,7 +117,7 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         lanes.clear()
         fun newAdapter() = HongguoDramaAdapter(
             onItemClick = { item, _ ->
-                HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+                HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
             },
             // 横向单行卡根默认 MATCH_PARENT 会撑满整屏宽，必须给定实际像素（Fragment 属性初始化无 resources，走方法内）
             itemWidthPx = resources.getDimensionPixelSize(R.dimen.px135)

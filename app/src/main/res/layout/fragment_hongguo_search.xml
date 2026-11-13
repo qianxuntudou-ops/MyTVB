@@ -66,14 +66,16 @@
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/button_hongguo_search_go"
             android:text="@string/hongguo_search_hint"
-            android:textSize="@dimen/px26"
+            android:textSize="@dimen/px28"
             android:textColor="@color/white"
-            android:background="@drawable/hongguo_btn_play"
+            android:background="@drawable/bg_hongguo_btn_primary"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
             android:layout_marginStart="@dimen/px20"
             android:paddingStart="@dimen/px40"
             android:paddingEnd="@dimen/px40"
             android:layout_width="wrap_content"
-            android:layout_height="@dimen/px76"/>
+            android:layout_height="@dimen/px70"/>
     </LinearLayout>
 
     <FrameLayout

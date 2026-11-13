@@ -147,7 +147,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     }
 
     private fun openDetail(item: DramaUi, position: Int) {
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
     }
 
     private fun refresh() {
@@ -220,7 +220,8 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
         heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
         episodeCount = episodeCount,
-        seasonText = if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else ""
+        seasonText = if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else "",
+        score = score
     )
 
     override fun onDestroyView() {

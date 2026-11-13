@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果详情弹窗（对照红果官方详情页）：左海报+右信息/三按钮+选集区（分页 chip+网格）。
+<!-- 红果详情弹窗：左海报 + 右信息/三按钮 + 选集区（分页 chip + 网格）。
+     控件语言对齐全 App 详情弹窗（CCTV 影视详情同款）：主钮=bg_hongguo_btn_primary
+     三态（中性底/按下 colorPrimary/聚焦提亮），次钮=白描边，选中格=主题强调色实底。
      焦点链：按钮行 ↓ 选集区；选集/分页顶行 ↑ 按钮行；BACK 关弹窗。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -34,27 +36,47 @@
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_title"
-                android:textSize="@dimen/px36"
+                android:textSize="@dimen/px38"
                 android:textStyle="bold"
                 android:textColor="?android:attr/textColorPrimary"
                 android:maxLines="2"
                 android:ellipsize="end"
+                android:lineSpacingMultiplier="1.1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"/>
 
-            <androidx.appcompat.widget.AppCompatTextView
-                android:id="@+id/text_tags"
-                android:textSize="@dimen/px24"
-                android:textColor="@color/grey"
-                android:maxLines="1"
-                android:ellipsize="end"
-                android:layout_marginTop="@dimen/px12"
+            <!-- 评分（强调色）+ 类型标签（灰）同一行：评分无数据时整行只剩标签 -->
+            <LinearLayout
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="@dimen/px10"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"/>
+                android:layout_height="wrap_content">
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_score"
+                    android:textSize="@dimen/px30"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorAccent"
+                    android:layout_marginEnd="@dimen/px16"
+                    android:visibility="gone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <androidx.appcompat.widget.AppCompatTextView
+                    android:id="@+id/text_tags"
+                    android:textSize="@dimen/px24"
+                    android:textColor="@color/grey"
+                    android:maxLines="1"
+                    android:ellipsize="end"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
 
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_intro"
-                android:textSize="@dimen/px24"
+                android:textSize="@dimen/px26"
                 android:textColor="?android:attr/textColorSecondary"
                 android:maxLines="2"
                 android:ellipsize="end"
@@ -75,7 +97,9 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 按钮行：继续播放（橙主钮）/ 收藏 / 稍后看 -->
+    <!-- 按钮行：继续播放 / 收藏 / 稍后看，三者统一 App 通用按钮状态语言
+         （tab_round_background，与侧栏功能钮同一文件）：常态透明 /
+         激活(colorControlHighlight) / 选中(tabBarHighlight) / 点击(colorPrimary) -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_marginTop="@dimen/px24"
@@ -87,7 +111,7 @@
             android:id="@+id/button_play"
             android:orientation="horizontal"
             android:gravity="center"
-            android:background="@drawable/hongguo_btn_play"
+            android:background="@drawable/tab_round_background"
             android:focusable="true"
             android:clickable="true"
             android:addStatesFromChildren="true"
@@ -96,8 +120,8 @@
             android:layout_height="@dimen/px76">
 
             <androidx.appcompat.widget.AppCompatImageView
-                android:layout_width="@dimen/px32"
-                android:layout_height="@dimen/px32"
+                android:layout_width="@dimen/px30"
+                android:layout_height="@dimen/px30"
                 android:layout_marginEnd="@dimen/px12"
                 android:contentDescription="@string/hongguo_play_continue"
                 app:srcCompat="@drawable/ic_play"/>
@@ -105,8 +129,8 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_button_play"
                 android:text="@string/hongguo_play_continue"
-                android:textSize="@dimen/px26"
-                android:textColor="@color/white"
+                android:textSize="@dimen/px28"
+                android:textColor="@color/textColor"
                 android:singleLine="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"/>
@@ -114,9 +138,9 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/button_favorite"
-            android:textSize="@dimen/px26"
-            android:textColor="?android:attr/textColorPrimary"
-            android:background="@drawable/button_common"
+            android:textSize="@dimen/px28"
+            android:textColor="@color/textColor"
+            android:background="@drawable/tab_round_background"
             android:drawableStart="@drawable/ic_favorite"
             android:drawablePadding="@dimen/px12"
             android:gravity="center"
@@ -131,9 +155,9 @@
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/button_watch_later"
-            android:textSize="@dimen/px26"
-            android:textColor="?android:attr/textColorPrimary"
-            android:background="@drawable/button_common"
+            android:textSize="@dimen/px28"
+            android:textColor="@color/textColor"
+            android:background="@drawable/tab_round_background"
             android:drawableStart="@drawable/ic_after_play"
             android:drawablePadding="@dimen/px12"
             android:gravity="center"
@@ -180,19 +204,23 @@
             android:layout_height="wrap_content"/>
     </LinearLayout>
 
-    <!-- 分页 chip 行（1-20 / 21-40 / …） -->
+    <!-- 分页 chip 行（1-20 / 21-40 / …），选集不足一页时整行隐藏 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_page_chips"
         android:orientation="horizontal"
+        android:focusable="false"
+        android:descendantFocusability="afterDescendants"
         android:paddingTop="@dimen/px16"
         android:clipToPadding="false"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"/>
 
-    <!-- 选集网格（10 列，页内滚动） -->
+    <!-- 选集网格（8 列，页内滚动） -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recycler_episodes"
+        android:focusable="false"
+        android:descendantFocusability="afterDescendants"
         android:clipToPadding="false"
         android:layout_marginTop="@dimen/px8"
         android:layout_width="match_parent"

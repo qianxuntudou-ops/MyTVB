@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果分页 chip：选中白底（同 bg_hongguo_episode，独立文件便于后续微调页签观感） -->
+<!-- 红果详情选集分页 chip（当前页=选中态）：状态集与全 App 通用按钮（tab_round_background，侧栏功能钮）完全同序同色——
+     点击=colorPrimary、激活(聚焦)=colorControlHighlight、选中=tabBarHighlight、常态=#14FFFFFF；
+     圆角保留 px15（格子形态，非侧栏圆形）。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
     <item android:state_pressed="true">
@@ -16,7 +18,7 @@
     </item>
     <item android:state_selected="true">
         <shape>
-            <solid android:color="#F2FFFFFF"/>
+            <solid android:color="?attr/tabBarHighlight"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
