@@ -12,6 +12,7 @@ import com.mytvb.feature.hongguo.net.HongguoSync
 import com.mytvb.feature.hongguo.net.HongguoWeb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -724,18 +725,25 @@ class HongguoRepository private constructor(context: Context) {
                         episodeCount = if (base.episodeCount > 0) base.episodeCount else borrowed.episodeCount)
                 } else base
             }
-            // 云端新条目（本机没收藏过）逐条补剧卡（title/cover 任缺即补）；补失败保留原条
-            val enriched = cloud.map { rec ->
-                if (rec.title.isNotEmpty() && rec.cover.isNotEmpty()) return@map rec
-                try {
-                    val d = detail(rec.seriesId)
-                    rec.copy(title = d.drama.title, cover = d.drama.cover,
-                        episodeCount = d.drama.episodeCount)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    rec
-                }
+            // 云端新条目（本机没收藏过）并行补剧卡（title/cover 任缺即补）；补失败保留原条。
+            // 原串行逐条 detail：几十条收藏要几十次顺序请求（每条几百 ms），
+            // 收藏页刷新长时间无反馈——"卡住等刷新"体感主因之一；改并行后由
+            // OkHttp 每主机并发上限自然限流，contentCache 30min 复用不变
+            val enriched = coroutineScope {
+                cloud.map { rec ->
+                    async {
+                        if (rec.title.isNotEmpty() && rec.cover.isNotEmpty()) return@async rec
+                        try {
+                            val d = detail(rec.seriesId)
+                            rec.copy(title = d.drama.title, cover = d.drama.cover,
+                                episodeCount = d.drama.episodeCount)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            rec
+                        }
+                    }
+                }.awaitAll()
             }
             mergeByIdNewerWins(local, enriched).also {
                 AppLog.d("Hongguo", "merged favorites local=${local.size} cloud=${enriched.size} " +

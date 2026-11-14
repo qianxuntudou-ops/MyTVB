@@ -50,6 +50,9 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     // 竖版 4:5 卡片列数对齐 CCTV 片库（6 列/超宽 12 列）
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
+    /** 触底预拉阈值：末两行（原 4 个太小，append 一页 15 个后旧位置立刻脱区，续拉空窗）。 */
+    private val loadMoreThreshold get() = spanCount * 2
+
     private var loadJob: Job? = null
     private var offset = 0
     private var sessionId = ""
@@ -98,7 +101,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         adapter.bindTopEdgeUp { focusAboveContent() }
         adapter.setOnItemFocusListeners(
             onFocused = { position ->
-                if (position >= adapter.contentCount() - LOAD_MORE_THRESHOLD) {
+                if (position >= adapter.contentCount() - loadMoreThreshold) {
                     loadMore(mode, genre)
                 }
             },
@@ -133,11 +136,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         }
         binding.recyclerFeed.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                if (dy <= 0 || !hasMore || loading) return
-                val lm = rv.layoutManager as? GridLayoutManager ?: return
-                if (lm.findLastVisibleItemPosition() >= adapter.itemCount - spanCount * 2) {
-                    loadMore(mode, genre)
-                }
+                if (dy > 0) checkLoadMore(mode, genre)
             }
         })
         // 触摸下拉刷新（B 站首页推荐同款；SwipeRefreshLayout 只拦触摸手势，遥控焦点链不受影响；
@@ -231,6 +230,10 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             return
         }
         offset = 0; sessionId = ""; hasMore = true
+        // 取消在飞的翻页请求并复位标志：否则 loading 早退会把刷新的 load() 整个吞掉
+        // （列表已清、无新请求、无空态），旧轮完成后还会把旧 sessionId/offset 写回污染新会话
+        loadJob?.cancel()
+        loading = false
         adapter.clear()
         adapter.notifyDataSetChanged()
         load(mode, genre, withPanel = selectorRows.isEmpty())
@@ -239,6 +242,26 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private fun loadMore(mode: String, genre: String) {
         if (loading || !hasMore) return
         load(mode, genre, withPanel = false)
+    }
+
+    /**
+     * 触底加载统一判定（feed/分类模式）：贴尾阈值 或 已滚到硬底即拉。
+     * 硬底判定是触摸场景的关键：滑到列表最底后不再产生滚动事件（onScrolled 收不到）；
+     * 首页 15 条不满一屏时列表不可滚动、滚动事件全程为零，只能靠"到底即拉"+数据
+     * 落地后续拉补查驱动（B 站列表"落地即续拉"同款修法）。历史/收藏 hasMore=false 直通。
+     */
+    private fun checkLoadMore(mode: String, genre: String) {
+        if (loading || !hasMore) return
+        if (_binding == null) return
+        val rv = binding.recyclerFeed
+        val lm = rv.layoutManager as? GridLayoutManager ?: return
+        val nearTail = lm.findLastVisibleItemPosition() >= adapter.contentCount() - loadMoreThreshold
+        val atBottom = !rv.canScrollVertically(1)
+        if (nearTail || atBottom) {
+            AppLog.d("Hongguo", "feed load_more trigger mode=$mode offset=$offset " +
+                "items=${adapter.contentCount()} nearTail=$nearTail atBottom=$atBottom")
+            loadMore(mode, genre)
+        }
     }
 
     private fun load(mode: String, genre: String, withPanel: Boolean) {
@@ -332,11 +355,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             binding.progressLoading.visibility = View.VISIBLE
         }
         loadJob?.cancel()
-        loadJob = viewLifecycleOwner.lifecycleScope.launch {
+        val job = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val page = repository.feed(path, offset, sessionId, selectedFilters, withPanel)
                 sessionId = page.sessionId
-                hasMore = page.hasMore
+                // 空页=数据枯竭兜底：服务端 has_more 偶发不归零，防落地续拉原地空转
+                hasMore = page.hasMore && page.items.isNotEmpty()
                 offset = if (page.nextOffset > 0) page.nextOffset else offset + page.items.size
                 adapter.addData(page.items.map { it.toUi() })
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
@@ -352,14 +376,24 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 AppToast.show(requireContext(), e.message ?: "加载失败")
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
             } finally {
-                loading = false
-                binding.progressLoading.visibility = View.GONE
-                swipeRefreshLayout?.isRefreshing = false
-                // 刷新清列表会让卡片焦点悬空（数据异步回来前）：落地后校一次焦点，
-                // 无效则回锚点/首卡；loadMore 时焦点有效，ensureValidFocus 零开销直通
-                tvFocusController?.ensureValidFocus("feedLoad")
+                // 代际校验：被 reload 取消的旧轮 finally 仍会异步跑（loading 复位/收尾），
+                // 只有仍是最新一轮时才收尾，避免污染新轮的 loading 标志
+                if (loadJob === coroutineContext[Job]) {
+                    loading = false
+                    binding.progressLoading.visibility = View.GONE
+                    swipeRefreshLayout?.isRefreshing = false
+                    // 刷新清列表会让卡片焦点悬空（数据异步回来前）：落地后校一次焦点，
+                    // 无效则回锚点/首卡；loadMore 时焦点有效，ensureValidFocus 零开销直通
+                    tvFocusController?.ensureValidFocus("feedLoad")
+                    // 落地即续拉：post 一帧等 layout 完成，视口仍贴硬底/阈值区
+                    // （首屏不满屏、滑到底停手）时立即预取下一页，消除"到底干等"空窗
+                    binding.recyclerFeed.post {
+                        if (_binding != null) checkLoadMore(mode, genre)
+                    }
+                }
             }
         }
+        loadJob = job
     }
 
     /** 点选某维度选项：更新选中 → 重开会话（offset=0 + panel）。 */
@@ -523,7 +557,6 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     companion object {
         private const val ARG_MODE = "mode"
         private const val ARG_GENRE = "genre"
-        private const val LOAD_MORE_THRESHOLD = 4
         const val MODE_FEED = "feed"
         const val MODE_HISTORY = "history"
         const val MODE_FAVORITE = "favorite"

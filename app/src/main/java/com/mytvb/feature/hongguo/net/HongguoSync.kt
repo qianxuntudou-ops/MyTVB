@@ -175,8 +175,10 @@ class HongguoSync(
      * 云端观看历史（对照 HGTV cloud.go）：
      * GET read_history/list/v，limit=0（官方同款，服务端每批最多 500 条）；
      * 按 series_id 去重保留最近播放，按时间倒序。
+     * 截断上限对齐服务端批大小 500（原 100：重度用户历史滑到底"莫名没了"，
+     * 历史 tab 无分页加载，只能靠一次拉满）。
      */
-    fun cloudHistory(maxItems: Int = 100): List<CloudHistoryItem> {
+    fun cloudHistory(maxItems: Int = 500): List<CloudHistoryItem> {
         val payload = accountGet(
             "/reading/bookapi/read_history/list/v/",
             linkedMapOf(

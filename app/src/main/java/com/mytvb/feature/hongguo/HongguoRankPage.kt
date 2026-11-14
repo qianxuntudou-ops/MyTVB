@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.tabs.TabLayout
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
@@ -51,6 +52,9 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     private var swipeRefreshLayout: SwipeRefreshLayout? = null
 
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
+
+    /** 触底预拉阈值：末两行（原 4 个太小，append 一页 20 个后旧位置立刻脱区，续拉空窗）。 */
+    private val LOAD_MORE_THRESHOLD get() = spanCount * 2
 
     private var board = 0
     private var offset = 0
@@ -100,9 +104,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         )
         binding.recyclerRank.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                if (dy <= 0 || !hasMore || loading) return
-                val lm = rv.layoutManager as? GridLayoutManager ?: return
-                if (lm.findLastVisibleItemPosition() >= adapter.contentCount() - LOAD_MORE_THRESHOLD) load()
+                if (dy > 0) checkLoadMore()
             }
         })
         // 四板档位：App 一贯 TabLayout 文字+accent 下划线（同分类子档 tab），OK 点击切换
@@ -175,9 +177,32 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     /** 菜单键/重选一级 tab/触摸下拉/空态重试的统一刷新；clear 后列表自然回顶。 */
     override fun refresh() {
         offset = 0; sessionId = ""; hasMore = false
+        // 取消在飞的翻页请求并复位标志：否则 loading 早退会把刷新的 load() 整个吞掉
+        // （列表已清、无新请求、无空态），旧轮完成后还会把旧 sessionId/offset 写回污染新会话
+        loadJob?.cancel()
+        loading = false
         adapter.clear()
         adapter.notifyDataSetChanged()
         load()
+    }
+
+    /**
+     * 触底加载统一判定：贴尾阈值 或 已滚到硬底即拉。
+     * 硬底判定是触摸场景的关键：滑到列表最底后不再产生滚动事件（onScrolled 收不到），
+     * 只能靠"到底即拉"+数据落地后续拉补查驱动（B 站列表"落地即续拉"同款修法）。
+     */
+    private fun checkLoadMore() {
+        if (loading || !hasMore) return
+        if (_binding == null) return
+        val rv = binding.recyclerRank
+        val lm = rv.layoutManager as? GridLayoutManager ?: return
+        val nearTail = lm.findLastVisibleItemPosition() >= adapter.contentCount() - LOAD_MORE_THRESHOLD
+        val atBottom = !rv.canScrollVertically(1)
+        if (nearTail || atBottom) {
+            AppLog.d("Hongguo", "rank load_more trigger offset=$offset items=${adapter.contentCount()} " +
+                "nearTail=$nearTail atBottom=$atBottom")
+            load()
+        }
     }
 
     private fun load() {
@@ -186,11 +211,12 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         // 首屏中央圈，翻页静默追加（对齐历史/分类页与 B 站列表）
         if (adapter.contentCount() == 0) showLoading(true)
         loadJob?.cancel()
-        loadJob = viewLifecycleOwner.lifecycleScope.launch {
+        val job = viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val page = repository.rank(board, offset, sessionId)
                 sessionId = page.sessionId
-                hasMore = page.hasMore
+                // 空页=数据枯竭兜底：服务端 has_more 偶发不归零，防落地续拉原地空转
+                hasMore = page.hasMore && page.items.isNotEmpty()
                 offset = page.nextOffset
                 // 全局名次 = 已有条数 + 批次内偏移 + 1
                 val baseRank = adapter.contentCount()
@@ -202,14 +228,22 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             } catch (e: Exception) {
                 AppToast.show(requireContext(), e.message ?: "榜单加载失败")
             } finally {
-                loading = false
-                showLoading(false)
-                swipeRefreshLayout?.isRefreshing = false
-                // 刷新清列表会让卡片焦点悬空：落地后校一次（焦点有效时零开销直通）
-                tvFocusController?.ensureValidFocus("rankLoad")
-                syncEmptyState()
+                // 代际校验：被 refresh 取消的旧轮 finally 仍会异步跑（loading 复位/收尾），
+                // 只有仍是最新一轮时才收尾，避免污染新轮的 loading 标志
+                if (loadJob === coroutineContext[Job]) {
+                    loading = false
+                    showLoading(false)
+                    swipeRefreshLayout?.isRefreshing = false
+                    // 刷新清列表会让卡片焦点悬空：落地后校一次（焦点有效时零开销直通）
+                    tvFocusController?.ensureValidFocus("rankLoad")
+                    syncEmptyState()
+                    // 落地即续拉：post 一帧等 layout 完成，视口仍贴硬底/阈值区
+                    // （首屏不满屏、滑到底停手）时立即预取下一页，消除"到底干等"空窗
+                    binding.recyclerRank.post { if (_binding != null) checkLoadMore() }
+                }
             }
         }
+        loadJob = job
     }
 
     /** 中央加载圈显隐（load_data.gif 帧动画自驱动，不依赖系统动画设置）。 */
@@ -246,8 +280,6 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     }
 
     companion object {
-        private const val LOAD_MORE_THRESHOLD = 4
-
         fun newInstance(): HongguoRankPage = HongguoRankPage()
     }
 }
