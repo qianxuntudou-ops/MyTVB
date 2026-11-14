@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.DialogWindowFit
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.CellHongguoPanelItemBinding
 import com.mytvb.databinding.DialogHongguoRightPanelBinding
 
@@ -138,8 +139,8 @@ class HongguoRightPanelDialog private constructor(
                     // 网格内边距压到最小：cell 宽约 89px，布局默认左右各 px30 会只剩 29px，
                     // 单字符数字勉强放得下、双位数（"10" 起）直接被裁成空白（可聚焦但看不见文字）
                     val pad = context.resources.getDimensionPixelSize(R.dimen.px6)
-                    clickView.setPadding(pad, 0, pad, 0)
-                    clickView.gravity = Gravity.CENTER
+                    contentRow.setPadding(pad, 0, pad, 0)
+                    contentRow.gravity = Gravity.CENTER
                     textLabel.gravity = Gravity.CENTER
                     textLabel.isSingleLine = true
                     textLabel.setTextSize(
@@ -151,12 +152,22 @@ class HongguoRightPanelDialog private constructor(
                     iconCheck.visibility = View.GONE
                     if (index < items.size) {
                         textLabel.text = items[index]
-                        clickView.isSelected = index == selectedIndex
+                        val isCurrent = index == selectedIndex
+                        clickView.isSelected = isCurrent
+                        // 当前集右上角挂「正在播放」动图（照播放器右侧竖版选集面板同款加载方式）
+                        if (isCurrent) {
+                            iconPlaying.visibility = View.VISIBLE
+                            ImageLoader.loadDrawableRes(iconPlaying, R.drawable.playing)
+                        } else {
+                            iconPlaying.visibility = View.GONE
+                            ImageLoader.clear(iconPlaying)
+                        }
                         clickView.setOnClickListener { onSelected(index) }
                     } else {
                         clickView.isFocusable = false
                         clickView.isClickable = false
                         clickView.isSelected = false
+                        iconPlaying.visibility = View.GONE
                         textLabel.text = ""
                     }
                 }
