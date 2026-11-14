@@ -1,13 +1,12 @@
 package com.mytvb.feature.player.view
 
-import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.View
-import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 
 class CountdownView @JvmOverloads constructor(
     context: Context,
@@ -51,7 +50,26 @@ class CountdownView @JvmOverloads constructor(
     private var strokeWidth = 0f
     private var progress = 0f
 
-    private var animator: ValueAnimator? = null
+    // 不用 ValueAnimator：设备「动画时长缩放=0」时（MuMu/部分电视 ROM 实测）它不产生
+    // 中间帧，进度环直接定格空圈——同类坑已把加载圈统一换成 gif（见 2026-11-14 记录）。
+    // 本控件是进度环套不了 gif，改为墙钟自驱动：postOnAnimation 挂 vsync 不受动画缩放影响。
+    private var countdownStartElapsedMs = 0L
+    private var countdownTotalMs = 0L
+
+    private val countdownTick = object : Runnable {
+        override fun run() {
+            val elapsedMs = SystemClock.elapsedRealtime() - countdownStartElapsedMs
+            progress = if (countdownTotalMs > 0L) {
+                (elapsedMs.toFloat() / countdownTotalMs).coerceIn(0f, 1f)
+            } else {
+                1f
+            }
+            invalidate()
+            if (progress < 1f) {
+                postOnAnimation(this)
+            }
+        }
+    }
 
     init {
         val density = resources.displayMetrics.density
@@ -63,22 +81,26 @@ class CountdownView @JvmOverloads constructor(
 
     fun startCountdown(durationMs: Long) {
         stopCountdown()
-        animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = durationMs
-            interpolator = FastOutSlowInInterpolator()
-            addUpdateListener { animation ->
-                progress = animation.animatedValue as Float
-                invalidate()
-            }
-            start()
+        if (durationMs <= 0L) {
+            return
         }
+        countdownStartElapsedMs = SystemClock.elapsedRealtime()
+        countdownTotalMs = durationMs
+        progress = 0f
+        invalidate()
+        postOnAnimation(countdownTick)
     }
 
     fun stopCountdown() {
-        animator?.cancel()
-        animator = null
+        removeCallbacks(countdownTick)
+        countdownTotalMs = 0L
         progress = 0f
         invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(countdownTick)
+        super.onDetachedFromWindow()
     }
 
     override fun onDraw(canvas: Canvas) {

@@ -110,6 +110,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         private const val EXTRA_START_EPISODE = "player_start_episode"
         private const val EXTRA_STARTUP_TRACE_ID = "player_startup_trace_id"
         private const val EXTRA_STARTUP_TRACE_START_MS = "player_startup_trace_start_ms"
+        // 出窗判定容差：seek 回退/重播后 remaining 抬升超过它才取消提前弹的卡（正常播放 remaining 单调减不误伤）
+        private const val AUTO_NEXT_PREQUEUE_TOLERANCE_MS = 1000L
         /** 青少年模式-公益广告锁死模式：屏蔽所有操作，播完自动退出。 */
         private const val EXTRA_PSAS_LOCKED = "player_psas_locked"
         /** 期望清晰度 qn（手机投屏下发；0=无偏好，走默认清晰度设置）。 */
@@ -459,6 +461,13 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         resumePlaybackIfNeeded()
     }
 
+    // ===== 片尾提前连播（弹卡时机=剩余时长等于倒计时总长，数完正好衔接切集）=====
+    /** 本视频剩余窗口内只尝试构建一次提前连播计划（防 500ms 轮询重复构建/刷日志），出窗重置 */
+    private var autoNextPrequeueChecked = false
+
+    /** 用户在片尾提前倒计时中按过 BACK：本视频播完不再自动连播（避免取消后 ENDED 又重新弹卡重数） */
+    private var autoNextCancelledByUser = false
+
     private val progressCoordinator = VideoPlayerProgressCoordinator(
         playerProvider = { player },
         // 常驻进度显示（细条或章节分段条）任一可见时才高频发布位置状态（节流）；
@@ -478,6 +487,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 latestPlaybackDurationMs = durationMs.coerceAtLeast(0L)
                 renderBottomProgressBar()
             }
+            maybePrequeueAutoNext(positionMs, durationMs)
         },
         onPlaybackPositionChanged = { positionMs ->
             playerView.syncDanmakuPosition(positionMs)
@@ -702,7 +712,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                         playerView.resumeDanmaku()
                     }
                     maybeShowPreviewHint()
-                    hideNextPreview()
+                    // 片尾提前弹的连播卡不受 rebuffer 重进 READY 影响（缓冲一下卡就没了）；
+                    // 其余场景（切集/重播/取消后）hasPendingAction=false，清卡幂等。
+                    if (!autoPlayController.hasPendingAction) hideNextPreview()
                 }
                 Player.STATE_ENDED -> {
                     viewModel.setLoading(false)
@@ -729,6 +741,11 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 Player.STATE_IDLE -> {
                     viewModel.setLoading(false)
                     playerView.pauseDanmaku()
+                    // 换源/切集/出错重建（IDLE）：旧目标的连播倒计时一律作废，
+                    // 否则片尾提前倒计时的挂起目标会在新视频播完时错误触发。
+                    if (autoPlayController.hasPendingAction) {
+                        autoPlayController.cancelPendingAction()
+                    }
                 }
             }
             // CDN 健康分事件回流（READY/BUFFERING），seek 态由宿主判定后传入。
@@ -1369,10 +1386,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     exitPlayerFromEndPanel = { finish() },
                     isAutoPlayPending = autoPlayController.hasPendingAction,
                     cancelAutoPlayAndShowEndPanel = {
-                        // 隐藏右下角倒计时卡=取消连播（触发 clearPendingContinuation），并展示推荐页
                         AppLog.i(TAG, "BACK branch: cancel autoplay + show end panel")
-                        hideNextPreview()
-                        playbackEndPanelController.show()
+                        if (player?.playbackState == Player.STATE_ENDED) {
+                            // 播完倒计时中取消：视频已停在结束画面，展示推荐页（原行为）
+                            hideNextPreview()
+                            playbackEndPanelController.show()
+                        } else {
+                            // 片尾提前倒计时中取消：视频还在播，只取消连播不弹面板；
+                            // 播完经 handlePlaybackEnded 落到结束面板，不再弹卡重数
+                            autoNextCancelledByUser = true
+                            hideNextPreview()
+                        }
                     },
                     // 部分可见（仅进度条/淡出动画中）时 BACK 也要先收控制层：
                     // 否则一旦进度条卡在部分可见态，BACK 会穿透成退出播放器
@@ -2362,7 +2386,13 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private fun restartProgressUpdates() { progressCoordinator.restart() }
-    private fun stopProgressUpdates() { progressCoordinator.stop(); autoPlayController.cancelPendingAction() }
+    private fun stopProgressUpdates() {
+        progressCoordinator.stop()
+        autoPlayController.cancelPendingAction()
+        // 后台/销毁：片尾提前连播的一次性闸门与用户取消标志随会话作废（回前台重进窗口会重新弹卡）
+        autoNextPrequeueChecked = false
+        autoNextCancelledByUser = false
+    }
 
     private fun recoverFromPlaybackStall(positionMs: Long, stalledMs: Long) {
         val currentPlayer = player ?: return
@@ -2375,19 +2405,91 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         }
     }
 
-    private fun handlePlaybackEnded() {
+    /**
+     * 片尾提前连播（对齐 B 站官方体验）：剩余时长（按倍速折算成墙钟）进入倒计时窗口时
+     * 提前弹右下角连播卡并开始倒计时，数完正好衔接切集，省掉播完后的整段黑等。
+     *
+     * 与 ENDED 分发同源：只有能产出 PlayIntent 的模式才提前弹（播放队列构建会消费
+     * 队列、取消后无法回退，保持播完再弹）；提前弹卡后 ENDED 重新分发由
+     * [VideoPlayerAutoPlayController.queueNextSession] 的同目标幂等兜住。
+     */
+    private fun maybePrequeueAutoNext(positionMs: Long, durationMs: Long) {
+        if (durationMs <= 0L) return
+        val remainingMs = durationMs - positionMs
+        if (remainingMs <= 0L) return
+        val speed = player?.playbackParameters?.speed ?: 1f
+        val leadMs = (VideoPlayerAutoPlayController.AUTO_PLAY_COUNTDOWN_MS * speed).toLong()
+        if (remainingMs > leadMs + AUTO_NEXT_PREQUEUE_TOLERANCE_MS) {
+            // 出窗（切到新视频开头/seek 回退/倍速调大）：重置一次性闸门；
+            // 提前弹的卡作废——否则数完的倒计时会挂到几分钟后的 ENDED 才触发。
+            autoNextPrequeueChecked = false
+            autoNextCancelledByUser = false
+            if (autoPlayController.hasPendingAction) {
+                AppLog.i(TAG, "auto next prequeue cancelled: remaining=${remainingMs}ms lead=${leadMs}ms")
+                autoPlayController.cancelPendingAction()
+            }
+            return
+        }
+        if (autoNextPrequeueChecked || autoPlayController.hasPendingAction) return
+        val currentPlayer = player ?: return
+        // 缓冲/暂停中媒体钟不走，此时弹卡会让倒计时超前视频；等恢复播放后的下一轮再触发，
+        // 误差方向固定为「视频先 ENDED 等倒计时数完」，数完即切不截尾。
+        if (!currentPlayer.isPlaying) return
+        if (psasLocked || viewModel.isPreviewPlayback) return
+        val mode = playerSettings.afterPlayMode
+        if (mode != AfterPlayMode.NEXT_EPISODE && mode != AfterPlayMode.RECOMMEND) return
+        autoNextPrequeueChecked = true
         val plan = sessionCoordinator.buildContinuationPlan(
-            afterPlayMode = playerSettings.afterPlayMode,
+            afterPlayMode = mode,
             exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
             hasNextEpisode = viewModel.hasNextEpisode(),
             nextEpisode = viewModel.getNextEpisode()
         )
+        val intent = (plan as? PlayerSessionCoordinator.ContinuationPlan.PlayIntent)?.intent ?: return
+        val session = viewModel.prepareContinuation(intent) ?: return
+        AppLog.i(
+            TAG,
+            "auto next prequeued: remaining=${remainingMs}ms lead=${leadMs}ms mode=${intent.mode} next=${intent.title}"
+        )
+        // 手动 seek 拖进窗口时剩余已不足倒计时总长：按实际剩余(墙钟)缩短倒计时，
+        // 保证任何进入方式下都「数完正好接上」，而不是数完后再黑等一段。
+        val countdownMs = minOf(
+            VideoPlayerAutoPlayController.AUTO_PLAY_COUNTDOWN_MS,
+            (remainingMs / speed).toLong()
+        )
+        autoPlayController.queueNextSession(intent.title, intent.coverUrl, session.id, delayMs = countdownMs)
+    }
+
+    private fun handlePlaybackEnded() {
+        // 片尾提前倒计时已数完挂起：ENDED 一到立即切集（数完即衔接，无黑等）
+        if (autoPlayController.consumeEndedPending()) {
+            return
+        }
+        val plan = if (autoNextCancelledByUser) {
+            // 用户已在片尾提前倒计时中取消连播：播完不再自动连播，落回结束面板/退出
+            if (playerSettings.exitPlayerWhenPlaybackFinished) {
+                PlayerSessionCoordinator.ContinuationPlan.ExitPlayer
+            } else {
+                PlayerSessionCoordinator.ContinuationPlan.ShowController
+            }
+        } else {
+            sessionCoordinator.buildContinuationPlan(
+                afterPlayMode = playerSettings.afterPlayMode,
+                exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
+                hasNextEpisode = viewModel.hasNextEpisode(),
+                nextEpisode = viewModel.getNextEpisode()
+            )
+        }
+        autoNextCancelledByUser = false
         com.mytvb.feature.player.PlaybackCompletionDispatcher.dispatch(
             plan = plan,
             mode = playerSettings.afterPlayMode,
             locked = psasLocked,
             play = { intent ->
-                val session = viewModel.prepareContinuation(intent)
+                // 片尾已提前排队同一目标：复用既有 session 续接倒计时（id 幂等），
+                // 否则新 UUID 会让 controller 判定目标变化而清零重数。
+                val session = viewModel.findReusableContinuationSession(intent.mode, intent.target)
+                    ?: viewModel.prepareContinuation(intent)
                 if (session != null) autoPlayController.queueNextSession(intent.title, intent.coverUrl, session.id)
             },
             showRecommendations = { playbackEndPanelController.show() },

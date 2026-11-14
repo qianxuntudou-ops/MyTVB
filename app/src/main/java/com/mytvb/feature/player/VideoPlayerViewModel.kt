@@ -51,6 +51,7 @@ import com.mytvb.core.ui.base.AppToast
 import com.mytvb.feature.player.cache.PlayerMediaCache
 import com.mytvb.network.cookie.CookieManager
 import com.mytvb.repository.UserRepository
+import com.mytvb.feature.player.settings.AfterPlayMode
 import com.mytvb.feature.player.settings.PlayerSettings
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import kotlinx.coroutines.Dispatchers
@@ -1596,6 +1597,21 @@ class VideoPlayerViewModel(
         )
         preloadPlayback(intent.target, continuationIntentId = intent.id)
         return ContinuationSession(id = intent.id, intent = intent)
+    }
+
+    /**
+     * 播完重新分发时复用片尾提前创建的同目标延续会话：提前弹的连播卡按 session id
+     * 幂等续接倒计时，若按新 intent 重开 session（id 是随机 UUID）会导致倒计时清零重数，
+     * 片尾提前量失效。目标或模式已变（如推荐池刷新/设置变更）则返回 null 走正常新建。
+     */
+    fun findReusableContinuationSession(
+        mode: AfterPlayMode,
+        target: PlaybackPreloadTarget
+    ): ContinuationSession? {
+        val identity = target.toPlayRequestIdentity() ?: return null
+        return continuationSessions.values.firstOrNull { entry ->
+            entry.mode == mode && entry.target.toPlayRequestIdentity() == identity
+        }?.let { ContinuationSession(id = it.id, intent = it) }
     }
 
     fun clearPendingContinuation() {
