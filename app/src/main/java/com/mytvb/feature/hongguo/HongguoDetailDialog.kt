@@ -25,7 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * 红果详情弹窗（对照红果官方详情页）：左海报 + 右信息/三按钮（继续播放/收藏/稍后看）
+ * 红果详情弹窗（对照红果官方详情页）：左海报 + 右信息/双按钮（继续播放/收藏）
  * + 选集区（分页 chip 20集/页 + 8 列网格，正在看集主题色高亮）。
  * 焦点链：按钮行 ↓ 落分页/选集；选集与分页顶行 ↑ 回按钮行；BACK 关弹窗。
  *
@@ -81,7 +81,6 @@ class HongguoDetailDialog(
         binding.recyclerPageChips.itemAnimator = null
         binding.buttonPlay.setOnClickListener { playEpisode(lastEpisodeIndex) }
         binding.buttonFavorite.setOnClickListener { toggleFavorite() }
-        binding.buttonWatchLater.setOnClickListener { toggleWatchLater() }
         // 播放期间弹窗保持打开（对齐红果官方详情页语义：退出播放回详情），
         // 播放器 finish 后本窗口重获焦点时刷新观看进度（正在看/按钮文案/角标/选集页）
         binding.root.viewTreeObserver.addOnWindowFocusChangeListener { hasFocus ->
@@ -221,15 +220,11 @@ class HongguoDetailDialog(
         binding.textButtonPlay.text =
             if (hasWatched) "继续播放 第${lastEpisodeIndex}集" else "开始观看 第1集"
         val favorite = repository.isFavorite(seriesId)
-        val watchLater = repository.isWatchLater(seriesId)
         binding.buttonFavorite.text =
             if (favorite) R.string.hongguo_unfavorite.asText() else R.string.hongguo_favorite.asText()
-        binding.buttonWatchLater.text =
-            if (watchLater) "已稍后看" else R.string.hongguo_watch_later.asText()
-        // 按钮选中态 = 已在收藏/稍后看（tab_round_background 的 tabBarHighlight 底），
+        // 按钮选中态 = 已收藏（tab_round_background 的 tabBarHighlight 底），
         // 文案之外再给一层可扫视的状态反馈
         binding.buttonFavorite.isSelected = favorite
-        binding.buttonWatchLater.isSelected = watchLater
     }
 
     private fun toggleFavorite() {
@@ -238,14 +233,6 @@ class HongguoDetailDialog(
         binding.buttonFavorite.text =
             if (added) R.string.hongguo_unfavorite.asText() else R.string.hongguo_favorite.asText()
         binding.buttonFavorite.isSelected = added
-    }
-
-    private fun toggleWatchLater() {
-        val d = detail ?: return
-        val added = repository.toggleWatchLater(watchRecord(d))
-        binding.buttonWatchLater.text = if (added) "已稍后看" else R.string.hongguo_watch_later.asText()
-        binding.buttonWatchLater.isSelected = added
-        AppToast.show(context, if (added) "已加入稍后看" else "已从稍后看移除")
     }
 
     private fun playEpisode(index: Int) {

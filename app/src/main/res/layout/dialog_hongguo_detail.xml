@@ -97,7 +97,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 按钮行：继续播放 / 收藏 / 稍后看，三者统一 App 通用按钮状态语言
+    <!-- 按钮行：继续播放 / 收藏，两者统一 App 通用按钮状态语言
          （tab_round_background，与侧栏功能钮同一文件）：常态透明 /
          激活(colorControlHighlight) / 选中(tabBarHighlight) / 点击(colorPrimary) -->
     <LinearLayout
@@ -142,23 +142,6 @@
             android:textColor="@color/textColor"
             android:background="@drawable/tab_round_background"
             android:drawableStart="@drawable/ic_favorite"
-            android:drawablePadding="@dimen/px12"
-            android:gravity="center"
-            android:focusable="true"
-            android:clickable="true"
-            android:layout_marginStart="@dimen/px20"
-            android:paddingStart="@dimen/px20"
-            android:paddingEnd="@dimen/px20"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="@dimen/px76"/>
-
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/button_watch_later"
-            android:textSize="@dimen/px28"
-            android:textColor="@color/textColor"
-            android:background="@drawable/tab_round_background"
-            android:drawableStart="@drawable/ic_after_play"
             android:drawablePadding="@dimen/px12"
             android:gravity="center"
             android:focusable="true"

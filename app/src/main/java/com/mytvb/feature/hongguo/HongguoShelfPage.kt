@@ -20,9 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 红果封面货架页（2026-11-11 重设计）：我的页四入口共用，替代纯文字 ChoiceDialog。
+ * 红果封面货架页（2026-11-11 重设计）：我的页三入口共用，替代纯文字 ChoiceDialog。
  * 网格货架 + 统一竖版卡（HongguoDramaAdapter，列数同 HongguoFeedPage 6 列档，
- * 卡宽由网格均分与正常列表页一致）：稍后再看/历史带「看到 x/y 集」进度条；
+ * 卡宽由网格均分与正常列表页一致）：历史带「看到 x/y 集」进度条；
  * 预约带上线时间；OK 打开详情弹窗。宿主 HongguoFragment 以全屏覆盖层承载，
  * BACK 收层并还原功能卡焦点。无触底加载/锚点需求，不接 TvListFocusController，
  * 焦点滚动走 RecyclerView 框架自动滚动。
@@ -44,7 +44,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
         )
     }
 
-    private var source = Source.WATCH_LATER
+    private var source = Source.SUBSCRIBE
 
     /** 外部焦点入口（触摸模式盲恢复等）：空态/未显示时不接焦点，落位复用开层聚焦逻辑。 */
     override fun focusFirstCard(): Boolean {
@@ -55,7 +55,6 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
 
     /** 货架数据源：标题与拉取逻辑一一对应。 */
     enum class Source(val titleRes: Int) {
-        WATCH_LATER(R.string.hongguo_watch_later),
         SUBSCRIBE(R.string.hongguo_my_subscribe),
         FAVORITE(R.string.hongguo_tab_favorite),
         HISTORY(R.string.hongguo_tab_history)
@@ -86,7 +85,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
         binding.buttonShelfBack.setOnClickListener { host()?.hideShelfOverlay() }
         source = Source.values().getOrElse(
             arguments?.getInt(ARG_SOURCE) ?: 0
-        ) { Source.WATCH_LATER }
+        ) { Source.SUBSCRIBE }
         load(source)
     }
 
@@ -132,7 +131,6 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     }
 
     private suspend fun fetch(source: Source): List<DramaUi> = when (source) {
-        Source.WATCH_LATER -> repository.watchLater().map { it.toDramaUi() }
         Source.FAVORITE -> repository.favorites().map { it.toDramaUi() }
         Source.HISTORY -> repository.history().map { it.toDramaUi() }
         Source.SUBSCRIBE -> repository.subscribeList(onlyOnline = false).map { it.toDramaUi() }

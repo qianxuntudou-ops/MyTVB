@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.DialogWindowFit
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.DialogHongguoLoginBinding
 import com.mytvb.feature.hongguo.net.HongguoAccount
 import kotlinx.coroutines.CancellationException
@@ -38,6 +39,8 @@ class HongguoLoginDialog(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = DialogHongguoLoginBinding.inflate(LayoutInflater.from(context))
+        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
+        ImageLoader.loadDrawableRes(binding.progressLogin, R.drawable.load_data)
         // 弹窗加宽（用户反馈二维码/输入框看不清）：px860→px1000（池内值），二维码同步 px197→px280；
         // 高度按内容自适应——MFA 提示卡出现时窗口随之长高，避免固定高裁内容
         DialogWindowFit.overlay(

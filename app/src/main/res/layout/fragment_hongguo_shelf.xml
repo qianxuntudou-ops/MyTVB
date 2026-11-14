@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果封面货架页（2026-11-11 重设计）：我的页四入口（稍后再看/我的预约/本机收藏/观看历史）
+<!-- 红果封面货架页（2026-11-11 重设计）：我的页三入口（我的预约/本机收藏/观看历史）
      共用，替代原纯文字 ChoiceDialog。标题行（返回钮+标题+数量）+ 网格封面货架
-     （统一竖版卡，稍后再看带「看到 x/y 集」进度）+ 空态。 -->
+     （统一竖版卡，历史带「看到 x/y 集」进度）+ 空态。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"

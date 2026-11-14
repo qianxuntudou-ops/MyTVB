@@ -265,10 +265,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:visibility="gone"/>
-    <ProgressBar
+    <!-- 缓冲圈：B 站同款 load_data.gif（onCreate 里 ImageLoader 挂 GifDrawable 帧动画）——
+         裸 ProgressBar 的 indeterminate 动画受系统「动画程序时长缩放」支配，电视 ROM 常设 0 → 圈静止 -->
+    <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/progress_buffering"
+        android:contentDescription="@string/loading"
         android:layout_gravity="center"
         android:visibility="gone"
-        android:layout_width="@dimen/px70"
-        android:layout_height="@dimen/px70"/>
+        android:layout_width="@dimen/px113"
+        android:layout_height="@dimen/px113"/>
 </FrameLayout>

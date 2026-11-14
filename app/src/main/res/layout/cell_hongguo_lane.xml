@@ -2,7 +2,7 @@
 <!-- 红果我的页横滑 lane（2026-11-12 重构）：标题行（名称+数量灰字+「更多」描边钮，
      无图标——靠标题字号定层级）+ 横向竖版卡列表（HongguoDramaAdapter）。
      lane 无数据时列表隐藏、显示灰字暂无行（App 空态语言，无框）。
-     四入口（稍后再看/我的预约/收藏/历史）共用。 -->
+     三入口（我的预约/收藏/历史）共用。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_marginBottom="@dimen/px24"

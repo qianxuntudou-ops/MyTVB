@@ -81,6 +81,8 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         super.onViewCreated(view, savedInstanceState)
         val mode = requireArguments().getString(ARG_MODE, MODE_FEED)
         val genre = requireArguments().getString(ARG_GENRE, "")
+        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
+        ImageLoader.loadDrawableRes(binding.progressLoading, R.drawable.load_data)
         binding.recyclerFeed.layoutManager = WrapContentGridLayoutManager(requireContext(), spanCount)
         binding.recyclerFeed.adapter = adapter
         binding.recyclerFeed.itemAnimator = null

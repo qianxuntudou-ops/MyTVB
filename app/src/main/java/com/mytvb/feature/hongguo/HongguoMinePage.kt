@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 /**
  * 红果「我的」页（2026-11-12 二次重构：未登录=整页居中登录引导（大头像+权益文案+
  * 主钮，单一焦点单一 CTA）；已登录=hero 头部（大头像/昵称/红果号/同步与统计/
- * 退出+清除描边钮）+ 稍后再看/我的预约横滑 lane（HongguoDramaAdapter 竖版卡，
+ * 退出+清除描边钮）+ 我的预约横滑 lane（HongguoDramaAdapter 竖版卡，
  * 点卡片开详情弹窗、「更多」进货架网格页）。收藏/历史有独立顶部 tab 不在此重复
  * （lane 视图保留作「红果页显示历史/收藏」开关关闭时的并入位）。
  * 红果账号与 B 站完全隔离（票据在 hongguo_session，登出只清红果票据保留设备身份）。
@@ -125,14 +125,12 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             // 横向单行卡根默认 MATCH_PARENT 会撑满整屏宽，必须给定实际像素（Fragment 属性初始化无 resources，走方法内）
             itemWidthPx = resources.getDimensionPixelSize(R.dimen.px135)
         )
-        lanes += Lane(binding.laneWatchLater, newAdapter(), HongguoShelfPage.Source.WATCH_LATER, true)
         lanes += Lane(binding.laneSubscribe, newAdapter(), HongguoShelfPage.Source.SUBSCRIBE, true)
         lanes += Lane(binding.laneFavorite, newAdapter(), HongguoShelfPage.Source.FAVORITE, true)
         lanes += Lane(binding.laneHistory, newAdapter(), HongguoShelfPage.Source.HISTORY, false)
-        lanes[0].cell.textLaneTitle.setText(R.string.hongguo_watch_later)
-        lanes[1].cell.textLaneTitle.setText(R.string.hongguo_my_subscribe)
-        lanes[2].cell.textLaneTitle.setText(R.string.hongguo_tab_favorite)
-        lanes[3].cell.textLaneTitle.setText(R.string.hongguo_tab_history)
+        lanes[0].cell.textLaneTitle.setText(R.string.hongguo_my_subscribe)
+        lanes[1].cell.textLaneTitle.setText(R.string.hongguo_tab_favorite)
+        lanes[2].cell.textLaneTitle.setText(R.string.hongguo_tab_history)
         lanes.forEach { lane ->
             lane.cell.rvLane.layoutManager =
                 LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
@@ -197,16 +195,15 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
     }
 
     /**
-     * 正文 lane 填充：已登录四条恒显示（空 lane=灰字暂无行，App 空态语言）；
+     * 正文 lane 填充：已登录三条恒显示（空 lane=灰字暂无行，App 空态语言）；
      * 未登录云端类隐藏、本机类仅有本机数据时显示，全部为空时显示居中空态。
      */
     private fun refreshLanes() {
-        bindLane(lanes[0], loggedIn, repository.watchLater().map { it.toDramaUi() })
-        bindLane(lanes[1], loggedIn, subscribeItems.map { it.toDramaUi() })
+        bindLane(lanes[0], loggedIn, subscribeItems.map { it.toDramaUi() })
         // 收藏/历史已有独立顶部 tab（六 tab），我的页不重复铺；lane 视图保留作
         // 「红果页显示历史/收藏」开关（三定案②，待第三波设置项）关闭=四 tab 模式的并入位
+        bindLane(lanes[1], false, emptyList())
         bindLane(lanes[2], false, emptyList())
-        bindLane(lanes[3], false, emptyList())
         // 卡片 UP 不拦截（isAtTopEdge 只认竖版列表，横向 lane 全 App 统一走框架几何导航：
         // 卡→「更多」钮→账号行/顶部 tab，与首页横滑 lane 行为一致）
     }
@@ -239,29 +236,11 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
                 emptyList()
             }
             if (_binding == null || !loggedIn) return@launch
-            bindLane(lanes[1], true, subscribeItems.map { it.toDramaUi() })
+            bindLane(lanes[0], true, subscribeItems.map { it.toDramaUi() })
         }
     }
 
     // ---- 卡片数据映射（与 HongguoShelfPage 同口径） ----
-
-    private fun HongguoRepository.WatchRecord.toDramaUi(): DramaUi {
-        val seen = episodeIndex + 1
-        val done = episodeCount in 1..seen
-        val pct = when {
-            done -> 100
-            durationMs > 0 -> ((positionMs * 100) / durationMs).toInt().coerceIn(1, 99)
-            else -> 0
-        }
-        return DramaUi(
-            seriesId = seriesId,
-            title = title,
-            cover = cover,
-            subtitle = if (done) getString(R.string.hongguo_seen_done)
-            else getString(R.string.hongguo_seen_episode, seen, episodeCount),
-            progressPercent = pct
-        )
-    }
 
     private fun HongguoSync.SubscribeItem.toDramaUi(): DramaUi = DramaUi(
         seriesId = seriesId,

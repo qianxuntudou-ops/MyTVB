@@ -4,7 +4,7 @@
      · 未登录=整页只留居中登录引导（px120 圆底头像+「未登录」+权益文案+accent 主钮），
        账号行隐藏，单一视觉焦点单一 CTA；
      · 已登录=hero 头部（px100 圆底头像+昵称 px36+红果号/同步/统计灰字行+退出与清除
-       描边钮右端对齐）+ 稍后再看/我的预约横滑 lane 直铺（cell_hongguo_lane，点卡片
+       描边钮右端对齐）+ 我的预约横滑 lane 直铺（cell_hongguo_lane，点卡片
        详情弹窗、「更多」进货架网格）；收藏/历史有独立顶部 tab 不在此重复（lane 视图
        保留作「红果页显示历史/收藏」开关关闭=四 tab 模式的并入位）。 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -134,12 +134,6 @@
             android:layout_marginTop="@dimen/px30"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-
-            <include
-                android:id="@+id/lane_watch_later"
-                layout="@layout/cell_hongguo_lane"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"/>
 
             <include
                 android:id="@+id/lane_subscribe"

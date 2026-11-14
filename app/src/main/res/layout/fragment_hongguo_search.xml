@@ -270,8 +270,10 @@
                 android:layout_height="match_parent"
                 android:visibility="gone"/>
 
-            <ProgressBar
+            <!-- B 站同款 load_data.gif 帧动画（ onViewCreated 挂载；裸 ProgressBar 在电视 ROM 动画缩放=0 下不转） -->
+            <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/progress_hongguo_search"
+                android:contentDescription="@string/loading"
                 android:layout_gravity="center"
                 android:layout_width="@dimen/px50"
                 android:layout_height="@dimen/px50"

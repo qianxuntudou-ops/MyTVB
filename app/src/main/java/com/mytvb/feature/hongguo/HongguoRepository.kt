@@ -726,22 +726,6 @@ class HongguoRepository private constructor(context: Context) {
 
     fun history(): List<WatchRecord> = readRecords("history")
 
-    // ---- 稍后看（本地书签，红果官方详情「稍后看」；不云同步） ----
-    fun watchLater(): List<WatchRecord> = readRecords("watch_later")
-
-    fun isWatchLater(seriesId: String): Boolean =
-        localPrefs.getString("watch_later", null)?.contains("\"$seriesId\"") == true
-
-    fun toggleWatchLater(record: WatchRecord): Boolean {
-        val list = watchLater().toMutableList()
-        val existing = list.indexOfFirst { it.seriesId == record.seriesId }
-        return if (existing >= 0) {
-            list.removeAt(existing); writeRecords("watch_later", list); false
-        } else {
-            list.add(0, record); writeRecords("watch_later", list.take(50)); true
-        }
-    }
-
     fun saveProgress(record: WatchRecord, vid: String = record.seriesId) {
         val list = history().filter { it.seriesId != record.seriesId }.toMutableList()
         list.add(0, record)
@@ -798,6 +782,8 @@ class HongguoRepository private constructor(context: Context) {
 
     init {
         migrateEpisodeIndexOnce()
+        // 「稍后看」功能已移除（红果官方无此接口，自建本地书签下线），清掉存量孤儿数据
+        localPrefs.edit().remove("watch_later").apply()
     }
 
     /**
@@ -807,7 +793,7 @@ class HongguoRepository private constructor(context: Context) {
      */
     private fun migrateEpisodeIndexOnce() {
         if (localPrefs.getBoolean(PREF_KEY_EP_INDEX_MIGRATED, false)) return
-        for (key in listOf("history", "favorites", "watch_later")) {
+        for (key in listOf("history", "favorites")) {
             val list = readRecords(key)
             if (list.any { it.episodeIndex > 0 }) {
                 writeRecords(

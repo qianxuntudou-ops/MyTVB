@@ -24,6 +24,7 @@ import androidx.media3.ui.TimeBar
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
@@ -166,6 +167,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
             speed = it.defaultPlaybackSpeed
         }
         binding.textTitle.text = "$title · 第${episodeIndex}集"
+        // 缓冲圈：B 站同款 load_data.gif 帧动画（GifDrawable 自驱动；裸 ProgressBar 的
+        // indeterminate 走 ObjectAnimator，电视 ROM 动画缩放=0 时圈静止不转）
+        ImageLoader.loadDrawableRes(binding.progressBuffering, R.drawable.load_data)
         binding.playerView.useController = false
         binding.playerView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
         setupSeekPreview()
@@ -334,10 +338,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
         player?.pause()
         lifecycleScope.launch {
             try {
-                val play = resolvePlayUrl(currentVid, pixels)
+                // 切画质立即出圈（旧画面已定格），覆盖重解析+下载全程
                 binding.progressBuffering.visibility = View.VISIBLE
+                val play = resolvePlayUrl(currentVid, pixels)
                 val playable = resolvePlayable(play)
-                binding.progressBuffering.visibility = View.GONE
                 currentPlay = play
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 repository.cleanupOtherQualityCaches(play)
@@ -352,6 +356,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 AppToast.show(this@HongguoPlayerActivity, e.message ?: "切换画质失败")
             } finally {
                 switchingSource = false
+                binding.progressBuffering.visibility = View.GONE
                 bumpControls()
             }
         }
@@ -393,12 +398,12 @@ class HongguoPlayerActivity : AppCompatActivity() {
         switchingSource = true
         lifecycleScope.launch {
             try {
+                // 进播放即出圈（B 站同款观感）：地址解析黑屏段也有加载反馈，收圈统一在 finally
+                binding.progressBuffering.visibility = View.VISIBLE
                 AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
                 AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
-                binding.progressBuffering.visibility = View.VISIBLE
                 val playable = resolvePlayable(play)
-                binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
                 startPlayer(playable)
@@ -411,6 +416,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 finish()
             } finally {
                 switchingSource = false
+                binding.progressBuffering.visibility = View.GONE
             }
         }
     }
@@ -905,6 +911,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 cancelSeekSession()
+                binding.progressBuffering.visibility = View.VISIBLE
                 val detail = repository.detail(seriesId)
                 val episode = detail.episodes.getOrNull(index - 1) ?: return@launch
                 episodeIndex = index
@@ -912,9 +919,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 currentVid = episode.videoId
                 binding.textTitle.text = "$title · 第${episodeIndex}集"
                 val play = resolvePlayUrl(episode.videoId).also { currentPlay = it }
-                binding.progressBuffering.visibility = View.VISIBLE
                 val playable = resolvePlayable(play)
-                binding.progressBuffering.visibility = View.GONE
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
                 startPlayer(playable, revealControls = false)
@@ -926,6 +931,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 AppToast.show(this@HongguoPlayerActivity, e.message ?: "切换失败")
             } finally {
                 switchingSource = false
+                binding.progressBuffering.visibility = View.GONE
             }
         }
     }

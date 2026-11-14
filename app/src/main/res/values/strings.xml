@@ -89,7 +89,6 @@
     <string name="hongguo_quality">默认画质</string>
     <string name="hongguo_quality_pick">切换画质</string>
     <string name="hongguo_quality_single">当前剧集仅提供 %1$s 画质</string>
-    <string name="hongguo_tab_recommend">推荐</string>
     <string name="hongguo_tab_history">历史</string>
     <string name="hongguo_tab_favorite">收藏</string>
     <string name="hongguo_tab_rank">榜单</string>
@@ -102,8 +101,6 @@
     <string name="hongguo_board_short">短剧热搜榜</string>
     <string name="hongguo_board_comic">漫剧热搜榜</string>
     <string name="hongguo_pick_episode">选集</string>
-    <string name="hongguo_watch_later">稍后看</string>
-    <string name="hongguo_watch_later_empty">稍后看还是空的</string>
     <string name="hongguo_coming_soon">功能开发中，敬请期待</string>
     <string name="hongguo_empty">暂无内容</string>
     <string name="hongguo_play_continue">继续播放</string>
@@ -156,7 +153,7 @@
     <string name="hongguo_cloud_sync_on">云同步已开启</string>
     <string name="hongguo_mine_stats">本机收藏 %1$d 部 · 历史 %2$d 条</string>
     <string name="hongguo_lane_count_series">共 %1$d 部</string>
-    <string name="hongguo_mine_empty_guest">登录红果账号后可同步稍后再看与预约，收藏与历史保留本机记录</string>
+    <string name="hongguo_mine_empty_guest">登录红果账号后可同步我的预约，收藏与历史保留本机记录</string>
     <string name="hongguo_login_sync_hint">登录后同步云端数据</string>
     <string name="hongguo_seen_episode">看到 %1$d/%2$d 集</string>
     <string name="hongguo_seen_done">已看完</string>
