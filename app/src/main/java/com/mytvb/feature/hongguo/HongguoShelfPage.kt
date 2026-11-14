@@ -133,7 +133,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
 
     private suspend fun fetch(source: Source): List<DramaUi> = when (source) {
         // 收藏/历史登录态拉云端合并（2026-11-14：此前纯本地，用户反馈收藏不是云端数据）
-        Source.FAVORITE -> repository.mergedFavorites().map { it.toDramaUi() }
+        Source.FAVORITE -> repository.mergedFavorites().map { it.toFavoriteUi() }
         Source.HISTORY -> repository.mergedHistory().map { it.toDramaUi() }
         Source.SUBSCRIBE -> repository.subscribeList(onlyOnline = false).map { it.toDramaUi() }
     }
@@ -152,18 +152,40 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
             cover = cover,
             subtitle = if (done) getString(R.string.hongguo_seen_done)
             else getString(R.string.hongguo_seen_episode, seen, episodeCount),
+            // 封面右下「共 N 集」与信息流卡对齐（此前历史卡只有进度条，封面信息行全空）
+            episodeCount = episodeCount,
+            // 右上形态标签（AI剧/漫剧/真人剧，官方口径；历史无状态标此位空闲）
+            statusTag = formLabelOf(contentType),
             progressPercent = pct
         )
     }
+
+    /** 收藏卡：未看过的剧不走「看到 x/y 集」（WatchRecord.positionMs=0 会误显示
+     *  「看到 1/N 集」），副标题=共 N 集；封面集数行同信息流。 */
+    private fun HongguoRepository.WatchRecord.toFavoriteUi(): DramaUi = DramaUi(
+        seriesId = seriesId,
+        title = title,
+        cover = cover,
+        subtitle = if (episodeCount > 0) getString(R.string.hongguo_episode_count, episodeCount) else "",
+        episodeCount = episodeCount,
+        statusTag = formLabelOf(contentType)
+    )
 
     private fun HongguoSync.SubscribeItem.toDramaUi(): DramaUi = DramaUi(
         seriesId = seriesId,
         title = title,
         cover = cover,
-        subtitle = if (onlineTimeSec > 0)
-            getString(R.string.hongguo_subscribe_online_at, formatOnlineTime(onlineTimeSec))
-        else
-            getString(R.string.hongguo_subscribe_pending)
+        // 官方上线文案（「11月15日上线」）优先，缺省退本地时间拼装
+        subtitle = onlineText.ifEmpty {
+            if (onlineTimeSec > 0)
+                getString(R.string.hongguo_subscribe_online_at, formatOnlineTime(onlineTimeSec))
+            else
+                getString(R.string.hongguo_subscribe_pending)
+        },
+        // 封面右下「共 N 集」（已上线剧才有；预约未开播多数无值）
+        episodeCount = episodeCount,
+        // 右上官方状态标（tag_info「预告」金底）优先；预约响应无 content_type 不标形态
+        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(contentType) else "" }
     )
 
     private fun formatOnlineTime(sec: Long): String {

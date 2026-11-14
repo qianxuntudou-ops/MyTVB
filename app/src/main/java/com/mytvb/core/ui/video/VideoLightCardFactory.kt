@@ -44,7 +44,9 @@ object VideoLightCardFactory {
     fun create(
         parent: ViewGroup,
         source: String = "VideoLightCard.flat",
-        coverRatio: VideoCardCoverRatio = VideoCardCoverRatio.LANDSCAPE_16_9
+        coverRatio: VideoCardCoverRatio = VideoCardCoverRatio.LANDSCAPE_16_9,
+        /** 底部渐变带高度占封面高度比例（竖版卡调大，见 [VideoCoverMetaOverlayView]）。 */
+        coverMetaGradientRatio: Float = 0f
     ): VideoCardViews {
         val context = parent.context
         val metrics = LightCardMetrics.get(context)
@@ -74,7 +76,7 @@ object VideoLightCardFactory {
         root.addView(imageView)
         root.imageView = imageView
 
-        val coverMetaOverlay = VideoCoverMetaOverlayView(context)
+        val coverMetaOverlay = VideoCoverMetaOverlayView(context, gradientHeightRatio = coverMetaGradientRatio)
         root.addView(coverMetaOverlay)
         root.coverMetaOverlay = coverMetaOverlay
 
@@ -144,7 +146,10 @@ class VideoCardProgressView @JvmOverloads constructor(
 
 class VideoCoverMetaOverlayView @JvmOverloads constructor(
     context: Context,
-    attrs: AttributeSet? = null
+    attrs: AttributeSet? = null,
+    /** 底部渐变带高度占封面高度比例；0=用 metrics 固定 px70（16:9 矮卡观感基准）。
+     *  竖版 4:5 海报（红果）图高约 2 倍于 16:9，固定 px70 只罩一小条，传 ~0.22 罩住热度行。 */
+    private val gradientHeightRatio: Float = 0f
 ) : View(context, attrs) {
 
     private var metrics = LightCardMetrics.get(context)
@@ -170,6 +175,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private var durationText: CharSequence = ""
     private var showPlayCount = false
     private var showDanmakuCount = false
+
+    /** playCount 槽位用火焰热度图标（红果卡片官方同款）；false=B 站播放三角，默认路径。 */
+    private var useHeatIcon = false
     private var showInteractionBadge = false
     private var showChargeBadge = false
     private var typeBadgeText: String = ""
@@ -187,6 +195,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private var seasonBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
     private var statusBadgeText: String = ""
     private var statusBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
+
+    /** 右上状态标文字色（红果首发白底红字；默认白字）。 */
+    private var statusBadgeTextColor: Int = Color.WHITE
     private var progressMax = 100
     private var progressValue = 0
     private var showProgress = false
@@ -206,16 +217,31 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     }
 
     private fun rebuildCoverGradient(w: Int, h: Int) {
-        val top = (h - metrics.coverGradientHeight).coerceAtLeast(0).toFloat()
-        gradientPaint.shader = LinearGradient(
-            0f,
-            top,
-            0f,
-            h.toFloat(),
-            Color.TRANSPARENT,
-            0xAA000000.toInt(),
-            Shader.TileMode.CLAMP
-        )
+        val gradH = if (gradientHeightRatio > 0f) {
+            (h * gradientHeightRatio).toInt()
+        } else {
+            metrics.coverGradientHeight
+        }
+        val top = (h - gradH).coerceAtLeast(0).toFloat()
+        gradientPaint.shader = if (gradientHeightRatio > 0f) {
+            // 竖版海报三色 scrim：顶部 0 全透明渐入 → 55% 处 35% 黑缓升 → 底部 79% 黑护住文字
+            LinearGradient(
+                0f, top, 0f, h.toFloat(),
+                intArrayOf(0x00000000, 0x5A000000.toInt(), 0xC8000000.toInt()),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        } else {
+            LinearGradient(
+                0f,
+                top,
+                0f,
+                h.toFloat(),
+                Color.TRANSPARENT,
+                0xAA000000.toInt(),
+                Shader.TileMode.CLAMP
+            )
+        }
         gradientClipRect.set(0f, 0f, w.toFloat(), h.toFloat())
         gradientClipPath.reset()
         gradientClipPath.addRoundRect(
@@ -246,6 +272,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     fun bind(
         playCountText: CharSequence? = this.playCountText,
         showPlayCount: Boolean = this.showPlayCount,
+        useHeatIcon: Boolean = this.useHeatIcon,
         danmakuText: CharSequence? = this.danmakuText,
         showDanmakuCount: Boolean = this.showDanmakuCount,
         durationText: CharSequence? = this.durationText,
@@ -259,7 +286,8 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         seasonBadgeText: CharSequence? = this.seasonBadgeText,
         seasonBadgeColor: Int = this.seasonBadgeColor,
         statusBadgeText: CharSequence? = this.statusBadgeText,
-        statusBadgeColor: Int = this.statusBadgeColor
+        statusBadgeColor: Int = this.statusBadgeColor,
+        statusBadgeTextColor: Int = this.statusBadgeTextColor
     ) {
         val nextPlayCount = playCountText?.toString().orEmpty()
         val nextDanmaku = danmakuText?.toString().orEmpty()
@@ -280,10 +308,12 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
             this.seasonBadgeColor == seasonBadgeColor &&
             TextUtils.equals(this.statusBadgeText, nextStatusBadge) &&
             this.statusBadgeColor == statusBadgeColor &&
+            this.statusBadgeTextColor == statusBadgeTextColor &&
             this.showPlayCount == showPlayCount &&
             this.showDanmakuCount == showDanmakuCount &&
             this.showInteractionBadge == showInteractionBadge &&
-            this.showChargeBadge == showChargeBadge
+            this.showChargeBadge == showChargeBadge &&
+            this.useHeatIcon == useHeatIcon
         ) {
             return
         }
@@ -299,10 +329,12 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         this.seasonBadgeColor = seasonBadgeColor
         this.statusBadgeText = nextStatusBadge
         this.statusBadgeColor = statusBadgeColor
+        this.statusBadgeTextColor = statusBadgeTextColor
         this.showPlayCount = showPlayCount
         this.showDanmakuCount = showDanmakuCount
         this.showInteractionBadge = showInteractionBadge
         this.showChargeBadge = showChargeBadge
+        this.useHeatIcon = useHeatIcon
         badgeFitDirty = true
         invalidate()
     }
@@ -372,7 +404,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         val iconTop = centerY - iconSize / 2f
         var x = metrics.coverMetaStart.toFloat()
         if (showPlayCount && playCountText.isNotBlank()) {
-            drawIconScaled(canvas, assets.playCountIcon, x, iconTop, iconSize)
+            drawIconScaled(canvas, if (useHeatIcon) assets.heatIcon else assets.playCountIcon, x, iconTop, iconSize)
             x += iconSize + metrics.metaTextStart * badgeFitScale
             x = drawMetaText(canvas, playCountText, x, centerY) + metrics.metaGroupGap * badgeFitScale
         }
@@ -428,7 +460,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
             flushRight = drawBadgeFlushRight(canvas, seasonBadgeText, flushRight, seasonBadgeColor) - metrics.badgeGap
         }
         if (statusBadgeText.isNotBlank()) {
-            drawBadgeFlushRight(canvas, statusBadgeText, flushRight, statusBadgeColor)
+            drawBadgeFlushRight(canvas, statusBadgeText, flushRight, statusBadgeColor, statusBadgeTextColor)
         }
         if (showChargeBadge) {
             right = drawBadge(canvas, context.getString(R.string.core_badge_charge_exclusive), right, top, 0xFFF6A11B.toInt()) - metrics.badgeGap
@@ -467,8 +499,15 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         badgeTextPaint.color = Color.WHITE
     }
 
-    /** 右上贴角标签：右上/右下直角贴边，左侧两角圆角；返回左边界（供链式排布）。 */
-    private fun drawBadgeFlushRight(canvas: Canvas, text: String, rightEdge: Float, color: Int): Float {
+    /** 右上贴角标签：右上/右下直角贴边，左侧两角圆角；返回左边界（供链式排布）。
+     *  [textColor] 默认白字，浅底标（红果首发白底红字）画完恢复白防污染。 */
+    private fun drawBadgeFlushRight(
+        canvas: Canvas,
+        text: String,
+        rightEdge: Float,
+        color: Int,
+        textColor: Int = Color.WHITE
+    ): Float {
         val fm = badgeTextPaint.fontMetrics
         val textWidth = badgeTextPaint.measureText(text)
         val w = textWidth + metrics.px8 * 2
@@ -487,7 +526,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         path.offset(left, 0f)
         badgePaint.color = color
         canvas.drawPath(path, badgePaint)
+        badgeTextPaint.color = textColor
         canvas.drawText(text, left + metrics.px8, metrics.px3.toFloat() - fm.top, badgeTextPaint)
+        badgeTextPaint.color = Color.WHITE
         return left
     }
 
@@ -553,7 +594,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
 
     private class OverlayAssets(
         val playCountIcon: Bitmap,
-        val danmakuIcon: Bitmap
+        val danmakuIcon: Bitmap,
+        /** 热度火焰图标（红果底部行官方同款，橙色 tint），useHeatIcon 时替代播放三角。 */
+        val heatIcon: Bitmap
     ) {
         companion object {
             private val cache = java.util.WeakHashMap<android.content.res.Resources, MutableMap<Int, OverlayAssets>>()
@@ -565,15 +608,17 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
                     return bySize.getOrPut(iconSize) {
                         OverlayAssets(
                             playCountIcon = loadBitmap(context, R.drawable.ic_video_play_count, iconSize),
-                            danmakuIcon = loadBitmap(context, R.drawable.ic_video_danmaku, iconSize)
+                            danmakuIcon = loadBitmap(context, R.drawable.ic_video_danmaku, iconSize),
+                            heatIcon = loadBitmap(context, R.drawable.ic_hot, iconSize, tint = 0xFFFF6A2B.toInt())
                         )
                     }
                 }
             }
 
-            private fun loadBitmap(context: Context, resId: Int, size: Int): Bitmap {
+            private fun loadBitmap(context: Context, resId: Int, size: Int, tint: Int? = null): Bitmap {
                 val drawable = ContextCompat.getDrawable(context, resId)
                     ?: return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                if (tint != null) drawable.setTint(tint)
                 return drawable.toBitmap(size, size)
             }
 

@@ -13,7 +13,9 @@ import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
 import com.mytvb.core.ui.focus.tv.TvListFocusController
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
+import com.mytvb.core.ui.refresh.SwipeRefreshHelper
 import com.mytvb.databinding.FragmentHongguoFeedBinding
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoCoverUrl
@@ -21,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 /**
  * 红果列表页：推荐/历史/收藏/分类共用（榜单是独立横排行页不走本页）。
@@ -42,6 +45,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         }
     )
     private var tvFocusController: TvListFocusController? = null
+    private var swipeRefreshLayout: SwipeRefreshLayout? = null
 
     // 竖版 4:5 卡片列数对齐 CCTV 片库（6 列/超宽 12 列）
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
@@ -136,7 +140,18 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 }
             }
         })
-        refresh(mode, genre)
+        // 触摸下拉刷新（B 站首页推荐同款；SwipeRefreshLayout 只拦触摸手势，遥控焦点链不受影响；
+        // 转圈色取全 app 高亮统一粉，与本页中央圈一致）
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
+            binding.recyclerFeed,
+            onRefresh = {
+                AppLog.d("Hongguo", "swipe refresh mode=$mode")
+                refresh()
+            }
+        ) {
+            setColorSchemeResources(R.color.tab_highlightClassic)
+        }
+        reload(mode, genre)
     }
 
     /** 列表 UP 边缘回红果页顶部 tab 栏（宿主 HongguoFragment）。 */
@@ -192,7 +207,29 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         }
     }
 
-    private fun refresh(mode: String, genre: String) {
+    /**
+     * 菜单键/重选一级 tab/触摸下拉三入口的统一刷新（宿主 HongguoFragment 转发）。
+     * 重拉 + 回顶：feed 模式清列表后自然回顶，历史/收藏本地数据同步秒显后
+     * scrollToPosition 立即生效，云端合并静默不打断（loadJob 自取消重入安全）。
+     */
+    override fun refresh() {
+        val mode = requireArguments().getString(ARG_MODE, MODE_FEED)
+        val genre = requireArguments().getString(ARG_GENRE, "")
+        AppLog.d("Hongguo", "feed refresh enter mode=$mode itemsBefore=${adapter.itemCount}")
+        reload(mode, genre)
+        binding.recyclerFeed.scrollToPosition(0)
+    }
+
+    private fun reload(mode: String, genre: String) {
+        AppLog.d("Hongguo", "reload mode=$mode clearFrom=${adapter.itemCount}")
+        // 历史/收藏刷新不清列表：当前已是本地+云端合并视图，clear+本地秒显会先闪回
+        // 纯本机列表（缺云端条目且顺序不同）再跳回 merged（日志实锤两次内容跳变）；
+        // 保留旧视图直接重拉云端合并，DiffUtil 平滑落地。feed 仍需清（重开会话分页流）
+        if (mode == MODE_HISTORY || mode == MODE_FAVORITE) {
+            offset = 0; sessionId = ""; hasMore = false
+            load(mode, genre, withPanel = false)
+            return
+        }
         offset = 0; sessionId = ""; hasMore = true
         adapter.clear()
         adapter.notifyDataSetChanged()
@@ -207,21 +244,29 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     private fun load(mode: String, genre: String, withPanel: Boolean) {
         when (mode) {
             MODE_HISTORY -> {
-                // 本地记录秒显；登录态再拉云端合并刷新（手机 App 同账号记录）
-                adapter.setDataDeduplicated(repository.history().map { it.toUi() })
-                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                // 首屏（列表空）本地记录秒显；刷新时保留当前视图直接重拉云端合并
+                if (adapter.contentCount() == 0) {
+                    val localItems = repository.history().map { it.toUi() }
+                    AppLog.d("Hongguo", "local shown mode=history count=${localItems.size} " +
+                        "top3=${localItems.take(3).joinToString { it.seriesId }}")
+                    adapter.setDataDeduplicated(localItems)
+                    binding.textEmpty.visibility =
+                        if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                }
                 hasMore = false
-                if (!repository.loggedIn) return
                 loadJob?.cancel()
                 loadJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
-                        // 本地记录已秒显，云端合并静默进行；仅本地也空时给中央圈反馈
+                        // 云端合并静默进行；仅列表空（未登录/无记录）时给中央圈反馈
                         val wasEmpty = adapter.contentCount() == 0
                         if (wasEmpty) {
                             binding.progressLoading.visibility = View.VISIBLE
                         }
                         val merged = repository.mergedHistory()
-                        adapter.setDataDeduplicated(merged.map { it.toUi() })
+                        val mergedItems = merged.map { it.toUi() }
+                        AppLog.d("Hongguo", "merged shown mode=history count=${mergedItems.size} " +
+                            "top3=${mergedItems.take(3).joinToString { it.seriesId }}")
+                        adapter.setDataDeduplicated(mergedItems)
                         binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
                         // 页面预载（未登录空表）→ 登录后才填进云端 30 条：首次填充回顶，
                         // 否则切到本 tab 时停在预载期的滚动/焦点残留位置
@@ -232,16 +277,23 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                         throw e
                     } finally {
                         binding.progressLoading.visibility = View.GONE
+                        swipeRefreshLayout?.isRefreshing = false
                     }
                 }
                 return
             }
             MODE_FAVORITE -> {
-                // 本地秒显；登录态再拉云端书架合并（2026-11-14 前纯本地——用户反馈收藏不是云端数据）
-                adapter.setDataDeduplicated(repository.favorites().map { it.toUi() })
-                binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                // 首屏（列表空）本地秒显；刷新时保留当前视图直接重拉云端书架合并
+                // （2026-11-14 补云端；当日再修刷新闪卡：不再 clear+本地秒显中间态）
+                if (adapter.contentCount() == 0) {
+                    val localItems = repository.favorites().map { it.toUi() }
+                    AppLog.d("Hongguo", "local shown mode=favorite count=${localItems.size} " +
+                        "top3=${localItems.take(3).joinToString { it.seriesId }}")
+                    adapter.setDataDeduplicated(localItems)
+                    binding.textEmpty.visibility =
+                        if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                }
                 hasMore = false
-                if (!repository.loggedIn) return
                 loadJob?.cancel()
                 loadJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
@@ -250,7 +302,10 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                             binding.progressLoading.visibility = View.VISIBLE
                         }
                         val merged = repository.mergedFavorites()
-                        adapter.setDataDeduplicated(merged.map { it.toUi() })
+                        val mergedItems = merged.map { it.toUi() }
+                        AppLog.d("Hongguo", "merged shown mode=favorite count=${mergedItems.size} " +
+                            "top3=${mergedItems.take(3).joinToString { it.seriesId }}")
+                        adapter.setDataDeduplicated(mergedItems)
                         binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
                         if (wasEmpty && adapter.contentCount() > 0) {
                             binding.recyclerFeed.scrollToPosition(0)
@@ -259,6 +314,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                         throw e
                     } finally {
                         binding.progressLoading.visibility = View.GONE
+                        swipeRefreshLayout?.isRefreshing = false
                     }
                 }
                 return
@@ -298,6 +354,10 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             } finally {
                 loading = false
                 binding.progressLoading.visibility = View.GONE
+                swipeRefreshLayout?.isRefreshing = false
+                // 刷新清列表会让卡片焦点悬空（数据异步回来前）：落地后校一次焦点，
+                // 无效则回锚点/首卡；loadMore 时焦点有效，ensureValidFocus 零开销直通
+                tvFocusController?.ensureValidFocus("feedLoad")
             }
         }
     }
@@ -307,7 +367,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         if (itemId.isEmpty()) selectedFilters.remove(row.type)
         else selectedFilters[row.type] = itemId
         filterAdapter.notifyDataSetChanged()
-        refresh(requireArguments().getString(ARG_MODE, MODE_FEED), requireArguments().getString(ARG_GENRE, ""))
+        reload(requireArguments().getString(ARG_MODE, MODE_FEED), requireArguments().getString(ARG_GENRE, ""))
     }
 
     /**
@@ -330,8 +390,8 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             ?: genderRow.items.firstOrNull { it.name.contains(want) } ?: return
         selectedFilters["gender"] = matched.id
         filterAdapter.notifyDataSetChanged()
-        // 面板已就位，refresh 走 withPanel=false 只重拉内容
-        refresh(mode, genre)
+        // 面板已就位，reload 走 withPanel=false 只重拉内容
+        reload(mode, genre)
     }
 
     // ---- 筛选 chip：每维度一枚，显示当前值，点击弹 ChoiceDialog ----
@@ -390,7 +450,18 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         }
     }
 
-    private fun HongguoClient.Drama.toUi(): DramaUi = toDramaUi()
+    // 分类页卡片副标题=评分 + 类型行（8.6 · 玄幻 · 科幻…，官方副标题同构）；tags 缺失时
+    // 退回 toDramaUi 的评分/集数行兜底
+    private fun HongguoClient.Drama.toUi(): DramaUi =
+        toDramaUi().let {
+            if (tags.isNotEmpty()) {
+                val line = (listOf(score.takeIf { s -> s.isNotBlank() }) + tags)
+                    .filterNotNull().joinToString(" · ")
+                it.copy(subtitle = line)
+            } else {
+                it
+            }
+        }
 
     private fun HongguoRepository.WatchRecord.toUi(): DramaUi {
         val percent = if (durationMs > 0) (positionMs * 100 / durationMs).toInt() else 0
@@ -403,8 +474,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 episodeCount <= 0 -> ""
                 // WatchRecord.episodeIndex 0-based（与 Mine/Shelf 的 seen=e+1 同口径）
                 episodeIndex + 1 >= episodeCount -> "已看完"
-                else -> "看到${episodeIndex + 1}/${episodeCount}集"
+                else -> "${episodeIndex + 1}集/${episodeCount}集"
             },
+            // 封面右下共 N 集 + 右上形态标签（AI剧/漫剧/真人剧，与货架页同口径；
+            // contentType 来自云端历史行 content_type，本地记录由 fillFrom 云端互补）
+            episodeCount = episodeCount,
+            statusTag = if (contentType.isNotEmpty()) formLabelOf(contentType) else "",
             progressPercent = percent.coerceIn(0, 100)
         )
     }

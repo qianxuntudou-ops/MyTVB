@@ -38,16 +38,32 @@ data class DramaUi(
     val score: String = ""
 )
 
-/** [HongguoClient.Drama] → 卡片 UI 模型（副标题=评分/集数/热度，各列表页与长按菜单弹窗共用）。 */
+/** 内容形态标签（官方右上角标口径）：1004=漫剧；AI 剧 content_type 值待日志实证后补；
+ *  其余（1/7/空）=真人短剧。历史/收藏/预约无状态标时占右上。 */
+fun formLabelOf(contentType: String): String = when (contentType) {
+    "1004" -> "漫剧"
+    else -> "真人剧"
+}
+
+/** [HongguoClient.Drama] → 卡片 UI 模型（各列表页与长按菜单弹窗共用）。
+ *  副标题=评分/集数（热度与集数画在封面底部行，2026-11-14 官方对齐）；分类行由分类页覆写。 */
 fun HongguoClient.Drama.toDramaUi(): DramaUi = DramaUi(
     seriesId = seriesId,
     title = title,
     cover = cover,
     subtitle = listOf(
         score.takeIf { it.isNotBlank() },
-        if (episodeCount > 0) "共${episodeCount}集" else null,
-        heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万播放" else null }
-    ).filterNotNull().joinToString(" · ")
+        if (episodeCount > 0) "共${episodeCount}集" else null
+    ).filterNotNull().joinToString(" · "),
+    // 底部行热度：官方 sub_title_list 现成值（normalizeDrama 解析）缺省退 play_cnt 换算
+    heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
+    episodeCount = episodeCount,
+    statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
+    // 季数标题前缀：官方 sub_title_list「第N季」优先，缺省 seasonIndex 生成
+    // （官方对第 1 季也下发，不做 N≥2 过滤）
+    seasonText = seasonText.ifEmpty {
+        if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else ""
+    }
 )
 
 /**
@@ -92,7 +108,10 @@ class HongguoDramaAdapter(
             VideoLightCardFactory.create(
                 parent = parent,
                 source = "HongguoDramaAdapter.light",
-                coverRatio = VideoCardCoverRatio.POSTER_4_5
+                coverRatio = VideoCardCoverRatio.POSTER_4_5,
+                // 竖版高卡渐变带按封面高 22%（纯黑基准调试定档）：刚好罩住热度/集数
+                // 文字行+少许余量，三色 scrim 顶部全透明不压海报主体
+                coverMetaGradientRatio = 0.22f
             )
         }
         itemWidthPx?.let { width ->
@@ -177,7 +196,14 @@ class HongguoDramaAdapter(
 
         fun bind(item: DramaUi) {
             currentItem = item
-            views.textLayer.setTitle(item.title, lines = 1)
+            // 季数进标题前缀（[第N季]名字，2026-11-14 用户定案），右上角让位状态标；
+            // 标题自带同款季数尾缀（「凡人百世书第九季」）时去尾防重复
+            val displayTitle = if (item.seasonText.isNotEmpty()) {
+                "[${item.seasonText}]${item.title.removeSuffix(item.seasonText)}"
+            } else {
+                item.title
+            }
+            views.textLayer.setTitle(displayTitle, lines = 1)
             views.textLayer.setOwner(
                 ownerText = item.subtitle,
                 showAvatar = false,
@@ -192,13 +218,11 @@ class HongguoDramaAdapter(
                 views.progressBar.visibility = View.GONE
             }
             val hasCoverMeta = item.rank > 0 || item.statusTag.isNotBlank() ||
-                item.heatText.isNotBlank() || item.episodeCount > 0 || item.seasonText.isNotBlank()
+                item.heatText.isNotBlank() || item.episodeCount > 0
             if (hasCoverMeta) {
-                // 槽位口径（2026-11-11 重设计定案①③）：左上=名次/状态二选一，右上=季/更新，
-                // 底部左热度右集数（去「共」字）。名次徽章纯数字保障与右上角标并列不超卡宽；
-                // 前三名金银铜浅底深字（独立语义色），第 4 名起主题强调色底深字。
-                // 状态标（爆剧/漫剧紫）让位给名次徽章：榜单卡右上仅保留「新剧」（上新提示语义），
-                // 其余状态只用于非榜单场景（rank=0 的 feed/搜索/我的页）。
+                // 槽位口径（2026-11-14 官方截图对齐）：左上=榜单名次（金银铜/主题色），
+                // 右上=状态标（爆剧蓝 #4C6DF7 / 新剧绿 #00AE83 官方单色近似），
+                // 底部左火焰热度右集数。季数不再占角标（进标题前缀）。
                 val ctx = views.root.context
                 val accent = com.google.android.material.color.MaterialColors.getColor(
                     views.root, androidx.appcompat.R.attr.colorAccent
@@ -215,18 +239,13 @@ class HongguoDramaAdapter(
                             else -> Triple(item.rank.toString(), accent, android.graphics.Color.WHITE)
                         }
                     } else {
-                    when (item.statusTag) {
-                        "爆剧" -> Triple(item.statusTag, 0xFFFF4D26.toInt(), android.graphics.Color.WHITE)
-                        "新剧" -> Triple(item.statusTag, 0xFF3FA45B.toInt(), android.graphics.Color.WHITE)
-                        "" -> Triple("", 0x66000000.toInt(), android.graphics.Color.WHITE)
-                        else -> Triple(item.statusTag, 0xFF6A5AE0.toInt(), android.graphics.Color.WHITE)
-                    }
+                    Triple("", 0x66000000.toInt(), android.graphics.Color.WHITE)
                 }
-                val rightStatus = if (item.rank > 0 && item.statusTag == "新剧") item.statusTag else ""
                 views.coverMetaOverlay.visibility = View.VISIBLE
                 views.coverMetaOverlay.bind(
                     playCountText = item.heatText,
                     showPlayCount = item.heatText.isNotBlank(),
+                    useHeatIcon = true,
                     showDanmakuCount = false,
                     showInteractionBadge = false,
                     showChargeBadge = false,
@@ -234,10 +253,24 @@ class HongguoDramaAdapter(
                     rankBadgeText = leftText,
                     rankBadgeColor = leftColor,
                     rankBadgeTextColor = leftTextColor,
-                    seasonBadgeText = item.seasonText,
+                    seasonBadgeText = "",
                     seasonBadgeColor = 0x66000000.toInt(),
-                    statusBadgeText = rightStatus,
-                    statusBadgeColor = if (rightStatus == "新剧") 0xFF3FA45B.toInt() else 0x66000000.toInt()
+                    statusBadgeText = item.statusTag,
+                    statusBadgeColor = when (item.statusTag) {
+                        // 官方渐变 #FF6868/#4C6DF7/#EFB662 的单色近似取主色蓝
+                        "爆剧" -> 0xFF4C6DF7.toInt()
+                        // 官方 tag_info bg_color 实值
+                        "新剧" -> 0xFF00AE83.toInt()
+                        // 官方白底红字（tag_info bg_color=null 自带 icon 体系）
+                        "红果首发" -> 0xFFFFFFFF.toInt()
+                        // 形态标签（AI剧/漫剧/真人剧）：半透明黑底白字，不与状态标抢视觉
+                        "漫剧", "真人剧", "AI剧" -> 0x99000000.toInt()
+                        // 预约「预告」标：官方 tag_info bg_color 实值金
+                        "预告" -> 0xFFD7A461.toInt()
+                        else -> 0xFF6A5AE0.toInt()
+                    },
+                    statusBadgeTextColor = if (item.statusTag == "红果首发")
+                        0xFFE53935.toInt() else android.graphics.Color.WHITE
                 )
             } else {
                 views.coverMetaOverlay.visibility = View.GONE

@@ -19,4 +19,11 @@ interface HongguoPageFocus {
      * （用户口径：首次打开在顶部，来回切 tab 不丢位置）。
      */
     fun scrollToListTop() {}
+
+    /**
+     * 刷新当前页：菜单键 / 重选一级 tab / 触摸下拉三入口统一出口
+     * （对齐 B 站首页推荐三件套，宿主 HongguoFragment 转发）。
+     * 无数据可刷的页（分类入口网格）用默认空实现。
+     */
+    fun refresh() {}
 }

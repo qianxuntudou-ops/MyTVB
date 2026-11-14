@@ -614,7 +614,9 @@ class HongguoRepository private constructor(context: Context) {
     data class WatchRecord(
         val seriesId: String, val title: String, val cover: String,
         val episodeIndex: Int, val episodeCount: Int,
-        val positionMs: Long, val durationMs: Long, val updatedAt: Long
+        val positionMs: Long, val durationMs: Long, val updatedAt: Long,
+        /** 内容形态（content_type：1004=漫剧；云端历史/收藏行携带，本地记录默认空）。 */
+        val contentType: String = ""
     )
 
     private val localPrefs by lazy { appContext.getSharedPreferences("hongguo_local", Context.MODE_PRIVATE) }
@@ -668,10 +670,14 @@ class HongguoRepository private constructor(context: Context) {
                 WatchRecord(
                     seriesId = c.seriesId, title = c.title, cover = c.cover,
                     episodeIndex = (c.episodeIndex1 - 1).coerceAtLeast(0), episodeCount = c.episodeCount,
-                    positionMs = c.positionMs, durationMs = c.durationMs, updatedAt = c.lastPlayedAtMs
+                    positionMs = c.positionMs, durationMs = c.durationMs, updatedAt = c.lastPlayedAtMs,
+                    contentType = c.contentType
                 )
             }
-            mergeByIdNewerWins(local, cloud)
+            mergeByIdNewerWins(local, cloud).also {
+                AppLog.d("Hongguo", "merged history local=${local.size} cloud=${cloud.size} " +
+                    "out=${it.size} top3=${it.take(3).joinToString { r -> r.seriesId }}")
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -685,7 +691,8 @@ class HongguoRepository private constructor(context: Context) {
         title = title.ifEmpty { other.title },
         cover = cover.ifEmpty { other.cover },
         episodeCount = if (episodeCount > 0) episodeCount else other.episodeCount,
-        durationMs = if (durationMs > 0) durationMs else other.durationMs
+        durationMs = if (durationMs > 0) durationMs else other.durationMs,
+        contentType = contentType.ifEmpty { other.contentType }
     )
 
     /** 云端历史删除（本地历史清空时同步）。 */
@@ -707,7 +714,8 @@ class HongguoRepository private constructor(context: Context) {
                 val base = WatchRecord(
                     seriesId = c.seriesId, title = c.title, cover = c.cover,
                     episodeIndex = 0, episodeCount = c.episodeCount,
-                    positionMs = 0L, durationMs = 0L, updatedAt = c.collectedAtMs
+                    positionMs = 0L, durationMs = 0L, updatedAt = c.collectedAtMs,
+                    contentType = c.contentType
                 )
                 val borrowed = localById[c.seriesId]
                 if (borrowed != null && borrowed.title.isNotEmpty() && borrowed.cover.isNotEmpty()) {
@@ -729,7 +737,10 @@ class HongguoRepository private constructor(context: Context) {
                     rec
                 }
             }
-            mergeByIdNewerWins(local, enriched)
+            mergeByIdNewerWins(local, enriched).also {
+                AppLog.d("Hongguo", "merged favorites local=${local.size} cloud=${enriched.size} " +
+                    "out=${it.size} top3=${it.take(3).joinToString { r -> r.seriesId }}")
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

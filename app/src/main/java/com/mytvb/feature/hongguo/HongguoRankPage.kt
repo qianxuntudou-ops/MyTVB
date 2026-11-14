@@ -8,6 +8,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.tabs.TabLayout
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
@@ -16,6 +17,7 @@ import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
 import com.mytvb.core.ui.focus.tv.TvListFocusController
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
+import com.mytvb.core.ui.refresh.SwipeRefreshHelper
 import com.mytvb.core.ui.tab.enableDirectTabNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoRankBinding
@@ -46,6 +48,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         }
     )
     private var tvFocusController: TvListFocusController? = null
+    private var swipeRefreshLayout: SwipeRefreshLayout? = null
 
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
@@ -130,6 +133,13 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             onEdgeLeft = { (activity as? MainActivity)?.focusSidebarCurrentTab() == true },
             onEdgeRight = { true }
         )
+        // 触摸下拉刷新（转圈色与本页中央圈同款统一粉）
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
+            binding.recyclerRank,
+            onRefresh = { refresh() }
+        ) {
+            setColorSchemeResources(R.color.tab_highlightClassic)
+        }
         refresh()
     }
 
@@ -162,7 +172,8 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
     }
 
-    private fun refresh() {
+    /** 菜单键/重选一级 tab/触摸下拉/空态重试的统一刷新；clear 后列表自然回顶。 */
+    override fun refresh() {
         offset = 0; sessionId = ""; hasMore = false
         adapter.clear()
         adapter.notifyDataSetChanged()
@@ -193,6 +204,9 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             } finally {
                 loading = false
                 showLoading(false)
+                swipeRefreshLayout?.isRefreshing = false
+                // 刷新清列表会让卡片焦点悬空：落地后校一次（焦点有效时零开销直通）
+                tvFocusController?.ensureValidFocus("rankLoad")
                 syncEmptyState()
             }
         }
@@ -212,13 +226,14 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         seriesId = seriesId,
         title = title,
         cover = cover,
-        // 卡片下方类型行（家庭 · 家庭温情 · 治愈…，榜单来自 category_schema），对齐红果官方榜单卡
-        subtitle = tags.joinToString(" · "),
+        // 卡片下方类型行（8.6 · 家庭 · 治愈…，榜单来自 category_schema），评分前置对齐分类卡
+        subtitle = (listOf(score.takeIf { it.isNotBlank() }) + tags)
+            .filterNotNull().joinToString(" · "),
         rank = rank,
         statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
         heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
         episodeCount = episodeCount,
-        seasonText = if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else "",
+        seasonText = seasonText.ifEmpty { if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else "" },
         score = score
     )
 

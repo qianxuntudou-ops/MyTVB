@@ -52,6 +52,8 @@ class HongguoClient(
         val statusTags: List<String>,
         val seasonIndex: Int,
         val multiSeason: Boolean,
+        /** 季数文本（「第2季」）：列表 sub_title_list[data_type=0] 官方下发，缺省由 seasonIndex 生成。 */
+        val seasonText: String = "",
         val contentType: String,
         val seriesStatus: String,
         /** 榜单推荐位状态标签（爆剧/新剧…），来自 recommend_reason_list.tag_info。 */
@@ -1009,6 +1011,8 @@ class HongguoClient(
             }
         }
         val heatTextResolved = obj.optString("heatText").ifEmpty {
+            // 热度三来源：heatText 原生（榜单）→ secondary_info_list「xx热度」后缀（bookmall）
+            // → sub_title_list[data_type=27]（分类 landpage 官方热度行，如"1788万"）
             val infos = obj.optJSONArray("secondary_info_list")
             var resolved = ""
             if (infos != null) {
@@ -1020,13 +1024,40 @@ class HongguoClient(
                     }
                 }
             }
+            if (resolved.isEmpty()) {
+                val subs = obj.optJSONArray("sub_title_list")
+                if (subs != null) {
+                    for (i in 0 until subs.length()) {
+                        val sub = subs.optJSONObject(i) ?: continue
+                        if (sub.optInt("data_type") == 27) {
+                            val content = sub.optString("content")
+                            if (content.isNotEmpty()) {
+                                resolved = content
+                                break
+                            }
+                        }
+                    }
+                }
+            }
             resolved
         }
+        // recommend_reason_list 双形态：对象（landpage）与字符串化 JSON（multi_video_detail 等）
         val statusTag = runCatching {
-            obj.optJSONObject("recommend_reason_list")
-                ?.optJSONObject("tag_info")
-                ?.optString("text")
-                .orEmpty()
+            val rr = obj.optJSONObject("recommend_reason_list")
+                ?: runCatching { JSONObject(obj.optString("recommend_reason_list")) }.getOrNull()
+            rr?.optJSONObject("tag_info")?.optString("text").orEmpty()
+        }.getOrDefault("")
+        // 季数文本：landpage sub_title_list 官方下发「第2季」（2026-11-14 抓包实证，
+        // data_type=0 杂项条目）；榜单通道（bookmall）不下发季数条目，但标题尾部
+        // 自带「第九季」中文形态（凡人百世书实证），按字面提取显示原文不转数字
+        val seasonTextResolved = runCatching {
+            val subs = obj.optJSONArray("sub_title_list")
+            val fromSubs = if (subs != null) {
+                (0 until subs.length())
+                    .mapNotNull { subs.optJSONObject(it)?.optString("content") }
+                    .firstOrNull { SEASON_TEXT_PATTERN.matches(it) }
+            } else null
+            fromSubs ?: SEASON_TEXT_PATTERN.find(title ?: "")?.value.orEmpty()
         }.getOrDefault("")
 
         return Drama(
@@ -1044,6 +1075,7 @@ class HongguoClient(
             statusTags = stringList(obj.optJSONArray("statusTags")),
             seasonIndex = obj.optInt("season_index", 0),
             multiSeason = obj.optBoolean("is_multi_season", false),
+            seasonText = seasonTextResolved,
             contentType = str("content_type", "contentType"),
             seriesStatus = seriesStatus
         )
@@ -1066,6 +1098,9 @@ class HongguoClient(
     }
 
     companion object {
+        /** 季数文本形态（「第2季」/「第九季」，阿拉伯与中文数字并存在官方数据）。 */
+        private val SEASON_TEXT_PATTERN = Regex("第[0-9一二三四五六七八九十]+季")
+
         /**
          * 接口版本档案：全通道统一 74532（2026-11-14 抓包实证官方真机单一 7.4.5.32，
          * 此前 73532/73932/72232 并存的大力出奇迹时代收编归一），唯 plan/v1 相关

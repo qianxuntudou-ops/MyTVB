@@ -24,7 +24,13 @@ class HongguoSearch(private val client: HongguoClient) {
         val intro: String,
         val playCount: Long,
         /** 发布者名（官方口径：video_data 内嵌 user_info.user_name；空=该结果未带发布者）。 */
-        val author: String = ""
+        val author: String = "",
+        /** 右上状态标（爆剧/新剧…，recommend_reason_list.tag_info.text；空=无标）。 */
+        val statusTag: String = "",
+        /** 封面底部热度行（sub_title_list「xx热度」条目去后缀；空=卡片层退 play_cnt 换算）。 */
+        val heatText: String = "",
+        /** 季数文本（sub_title_list「第N季」条目；空=无季数）。 */
+        val seasonText: String = ""
     )
 
     data class SearchPage(
@@ -203,7 +209,27 @@ class HongguoSearch(private val client: HongguoClient) {
                             .ifEmpty { cell.optString("series_intro") }
                     ),
                     playCount = video.optLong("play_cnt", 0L),
-                    author = parseVideoAuthor(video)
+                    author = parseVideoAuthor(video),
+                    // 搜索通道 recommend_reason_list 恒字符串化 JSON（2026-11-14 抓包实证）
+                    statusTag = runCatching {
+                        JSONObject(video.optString("recommend_reason_list"))
+                            .optJSONObject("tag_info")?.optString("text").orEmpty()
+                    }.getOrDefault(""),
+                    // 热度行=「5461万热度」条目去后缀（与 landpage sub_title_list 同体系）
+                    heatText = runCatching {
+                        JSONArray(video.optString("sub_title_list")).let { subs ->
+                            (0 until subs.length()).mapNotNull { i ->
+                                subs.optJSONObject(i)?.optString("content")
+                            }.firstOrNull { it.endsWith("热度") }?.removeSuffix("热度") ?: ""
+                        }
+                    }.getOrDefault(""),
+                    seasonText = runCatching {
+                        JSONArray(video.optString("sub_title_list")).let { subs ->
+                            (0 until subs.length()).mapNotNull { i ->
+                                subs.optJSONObject(i)?.optString("content")
+                            }.firstOrNull { SEASON_TEXT_PATTERN.matches(it) } ?: ""
+                        }
+                    }.getOrDefault("")
                 )
             )
         }
@@ -295,6 +321,9 @@ class HongguoSearch(private val client: HongguoClient) {
     }
 
     companion object {
+
+        /** 季数文本形态（sub_title_list 官方值「第2季」）。 */
+        private val SEASON_TEXT_PATTERN = Regex("第\\d+季")
 
         /**
          * 发布者名（官方口径，2026-11-13 抓包实证 video_data 内嵌）：优先出品方

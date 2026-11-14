@@ -436,14 +436,21 @@ class HongguoSearchPage : Fragment() {
         seriesId = seriesId,
         title = title,
         cover = cover,
+        // 热度/集数画在封面底部行（全卡统一），副标题行只留作者/集数
         subtitle = listOf(
-            if (episodeCount > 0) "共${episodeCount}集" else null,
+            author.takeIf { it.isNotBlank() },
+            if (episodeCount > 0) "共${episodeCount}集" else null
+        ).filterNotNull().joinToString(" · "),
+        heatText = heatText.ifEmpty {
             when {
-                playCount >= 10_000 -> "${playCount / 10000}万播放"
-                playCount > 0 -> "${playCount}播放"
-                else -> null
+                playCount >= 10_000 -> "${playCount / 10000}万"
+                playCount > 0 -> "${playCount}"
+                else -> ""
             }
-        ).filterNotNull().joinToString(" · ")
+        },
+        episodeCount = episodeCount,
+        statusTag = statusTag,
+        seasonText = seasonText
     )
 
     override fun onDestroyView() {

@@ -106,6 +106,16 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
             lane.cell.buttonLaneMore.requestFocus()
     }
 
+    /**
+     * 菜单键/重选一级 tab 刷新：重读登录态+本地统计+预约 lane（refreshLoginState
+     * 幂等，内部含 bootVerify/fetchSubscribe 各自防重入）。本页是 ScrollView 布局，
+     * 触摸下拉这路不适用（wrapRecyclerView 只包 RecyclerView），只有两入口。
+     */
+    override fun refresh() {
+        if (_binding == null) return
+        refreshLoginState()
+    }
+
     private fun showLoginDialog() {
         // 登录成功立即同步云端（历史/收藏落本地，预约 lane 由 refreshLoginState 重拉），
         // 修复此前「登录后要重启才见云数据」——已加载的 tab 不会自己刷新，落库后读本地即见
@@ -269,10 +279,15 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         seriesId = seriesId,
         title = title,
         cover = cover,
-        subtitle = if (onlineTimeSec > 0)
-            getString(R.string.hongguo_subscribe_online_at, formatOnlineTime(onlineTimeSec))
-        else
-            getString(R.string.hongguo_subscribe_pending)
+        subtitle = onlineText.ifEmpty {
+            if (onlineTimeSec > 0)
+                getString(R.string.hongguo_subscribe_online_at, formatOnlineTime(onlineTimeSec))
+            else
+                getString(R.string.hongguo_subscribe_pending)
+        },
+        // 封面右下「共 N 集」（与 HongguoShelfPage 同口径）
+        episodeCount = episodeCount,
+        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(contentType) else "" }
     )
 
     private fun formatOnlineTime(sec: Long): String {

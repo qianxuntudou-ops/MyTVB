@@ -23,7 +23,17 @@ class HongguoSync(
     /** 预约条目（subscribe/list/v1 的 subscribe_items，对照 HGTV 1551 解析）。 */
     data class SubscribeItem(
         val seriesId: String, val title: String, val cover: String,
-        val onlineTimeSec: Long, val isOnline: Boolean
+        val onlineTimeSec: Long, val isOnline: Boolean,
+        /** 总集数（封面右下「共 N 集」，video_data 多名兜底解析）。 */
+        val episodeCount: Int = 0,
+        /** 分类标签（category_schema[].name，HGTV 同族响应实证字段）。 */
+        val tags: List<String> = emptyList(),
+        /** 内容形态（content_type 防御解析，同 [CloudHistoryItem] 口径）。 */
+        val contentType: String = "",
+        /** 状态标（tag_info.text 如「预告」，官方金 #D7A461；2026-11-14 实机日志实证）。 */
+        val statusTag: String = "",
+        /** 官方上线文案（sub_title_list 首条 content 如「11月15日上线」，优于本地拼时间）。 */
+        val onlineText: String = ""
     )
 
     private val http get() = HongguoHttp.ok
@@ -156,7 +166,9 @@ class HongguoSync(
     data class CloudHistoryItem(
         val seriesId: String, val title: String, val cover: String,
         val episodeIndex1: Int, val episodeCount: Int,
-        val positionMs: Long, val durationMs: Long, val lastPlayedAtMs: Long
+        val positionMs: Long, val durationMs: Long, val lastPlayedAtMs: Long,
+        /** 内容形态（content_type：1004=漫剧，1/7/空=真人短剧；AI 剧值待日志实证）。 */
+        val contentType: String = ""
     )
 
     /**
@@ -181,7 +193,12 @@ class HongguoSync(
             if (old == null || item.lastPlayedAtMs > old.lastPlayedAtMs) byId[item.seriesId] = item
         }
         val out = byId.values.sortedByDescending { it.lastPlayedAtMs }
-        android.util.Log.d("HongguoSync", "cloud history rows=${rows.length()} merged=${out.size}")
+        android.util.Log.d(
+            "HongguoSync",
+            "cloud history rows=${rows.length()} merged=${out.size} " +
+                "ct=${rows.optJSONObject(0)?.optString("content_type")} " +
+                "keys=${rows.optJSONObject(0)?.keys()?.asSequence()?.take(24)?.toList()}"
+        )
         return out.take(maxItems)
     }
 
@@ -226,7 +243,9 @@ class HongguoSync(
             episodeCount = r.optInt("episode_cnt", 0),
             positionMs = r.optLong("current_play_position", 0L).coerceAtLeast(0L),
             durationMs = r.optLong("duration", 0L).coerceAtLeast(0L),
-            lastPlayedAtMs = atMs
+            lastPlayedAtMs = atMs,
+            // 同族响应的 content_type 防御两态解析（1004=漫剧；AI 剧值未知日志实证）
+            contentType = r.optString("content_type").ifEmpty { r.optString("contentType") }
         )
     }
 
@@ -258,6 +277,38 @@ class HongguoSync(
             val subInfo = cell.optJSONObject("sub_info")
             val sid = idOf(video, cell)
             if (sid.isEmpty()) continue
+            // 集数/分类多名防御解析（HGTV b.java K()/I() 同族字段：episode_cnt/
+            // episode_count/serial_count/drama_chapter_number、category_schema[].name）；
+            // 命中不了就空值，首条打原始 key 供热度/评分回填的后续实证
+            val episodeCount = listOf(video, cell).firstNotNullOfOrNull { o ->
+                listOf("episode_cnt", "episode_count", "serial_count", "drama_chapter_number")
+                    .firstNotNullOfOrNull { o.optInt(it, 0).takeIf { v -> v > 0 } }
+            } ?: 0
+            val tags = listOf(video, cell).firstNotNullOfOrNull { o ->
+                o.optJSONArray("category_schema")?.let { arr ->
+                    (0 until arr.length()).mapNotNull { i ->
+                        arr.optJSONObject(i)?.optString("name")?.takeIf { it.isNotEmpty() }
+                    }.takeIf { it.isNotEmpty() }
+                }
+            } ?: emptyList()
+            if (i == 0) {
+                android.util.Log.d(
+                    "HongguoSync",
+                    "subscribe item keys=${video.keys().asSequence().toList()} " +
+                        "cellKeys=${cell.keys().asSequence().toList()} ep=$episodeCount tags=${tags.size} " +
+                        "category=${cell.optString("category")} categories=${cell.optJSONArray("categories")} " +
+                        "item_type=${cell.opt("item_type")} sub_title_list=${cell.optJSONArray("sub_title_list")} " +
+                        "tag_info=${cell.optJSONObject("tag_info")}"
+                )
+            }
+            val contentType = video.optString("content_type").ifEmpty {
+                cell.optString("content_type").ifEmpty { video.optString("contentType") }
+            }
+            // tag_info 状态标 + sub_title_list 官方上线文案（2026-11-14 实机日志实证字段）
+            val statusTag = cell.optJSONObject("tag_info")?.optString("text")
+                ?.takeIf { it.isNotEmpty() } ?: ""
+            val onlineText = cell.optJSONArray("sub_title_list")?.optJSONObject(0)
+                ?.optString("content")?.takeIf { it.isNotEmpty() } ?: ""
             out.add(
                 SubscribeItem(
                     seriesId = sid,
@@ -268,7 +319,12 @@ class HongguoSync(
                         ?.takeIf { it > 0 }
                         ?: cell.optLong("schedule_publish_time", 0L),
                     isOnline = subInfo?.optInt("is_online", -1)?.let { it == 1 }
-                        ?: cell.optBoolean("is_online", false)
+                        ?: cell.optBoolean("is_online", false),
+                    episodeCount = episodeCount,
+                    tags = tags,
+                    contentType = contentType,
+                    statusTag = statusTag,
+                    onlineText = onlineText
                 )
             )
         }
@@ -315,7 +371,9 @@ class HongguoSync(
     /** 云端收藏条目（video_shelf_info[]：video_data 剧卡 + 条目层 collect_time，秒）。 */
     data class CloudFavoriteItem(
         val seriesId: String, val title: String, val cover: String,
-        val episodeCount: Int, val collectedAtMs: Long
+        val episodeCount: Int, val collectedAtMs: Long,
+        /** 内容形态（条目层 content_type 防御解析，同 [CloudHistoryItem] 口径）。 */
+        val contentType: String = ""
     )
 
     fun cloudFavorites(): List<CloudFavoriteItem> {
@@ -341,11 +399,17 @@ class HongguoSync(
                         .takeIf { it.startsWith("http") } ?: "",
                     episodeCount = eps,
                     // 防御两态：>1e12 已是毫秒，否则当秒转
-                    collectedAtMs = if (collectRaw > 1_000_000_000_000L) collectRaw else collectRaw * 1000L
+                    collectedAtMs = if (collectRaw > 1_000_000_000_000L) collectRaw else collectRaw * 1000L,
+                    contentType = cell.optString("content_type").ifEmpty { cell.optString("contentType") }
                 )
             )
         }
-        android.util.Log.d("HongguoSync", "cloud favorites rows=${rows.length()} parsed=${out.size}")
+        android.util.Log.d(
+            "HongguoSync",
+            "cloud favorites rows=${rows.length()} parsed=${out.size} " +
+                "ct=${rows.optJSONObject(0)?.optString("content_type")} " +
+                "keys=${rows.optJSONObject(0)?.keys()?.asSequence()?.take(24)?.toList()}"
+        )
         if (out.size != rows.length() || out.any { it.title.isEmpty() || it.cover.isEmpty() }) {
             android.util.Log.w(
                 "HongguoSync",

@@ -157,8 +157,9 @@
     <string name="hongguo_lane_count_series">共 %1$d 部</string>
     <string name="hongguo_mine_empty_guest">登录红果账号后可同步我的预约，收藏与历史保留本机记录</string>
     <string name="hongguo_login_sync_hint">登录后同步云端数据</string>
-    <string name="hongguo_seen_episode">看到 %1$d/%2$d 集</string>
+    <string name="hongguo_seen_episode">%1$d集/%2$d集</string>
     <string name="hongguo_seen_done">已看完</string>
+    <string name="hongguo_episode_count">共 %1$d 集</string>
     <string name="hongguo_shelf_count">共 %1$d 条</string>
     <string name="hongguo_subscribe_online_at">%1$s 上线</string>
     <string name="hongguo_subscribe_pending">上线时间待定</string>

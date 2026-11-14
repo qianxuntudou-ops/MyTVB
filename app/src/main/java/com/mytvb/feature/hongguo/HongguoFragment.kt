@@ -5,6 +5,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.google.android.material.tabs.TabLayoutMediator
 import com.mytvb.R
@@ -14,7 +18,10 @@ import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoBinding
 import com.mytvb.ui.activity.MainActivity
+import com.mytvb.ui.fragment.main.MainNavigationViewModel
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /**
  * 红果短剧主页面：五页签（榜单/历史/收藏/分类/我的）+ 右上搜索入口。
@@ -29,6 +36,7 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
 
     private var _binding: FragmentHongguoBinding? = null
     private val binding get() = _binding!!
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -43,6 +51,7 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         super.onViewCreated(view, savedInstanceState)
         setupTabsAndViewPager()
         setupSearchEntry()
+        observeMenuKeyRefresh()
         // 搜索层/货架层显示时 BACK 先收层，不退出红果页
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
@@ -109,7 +118,12 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
             onNavigateLeft = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             },
-            onNavigateRight = { binding.buttonHongguoSearch.requestFocus() }
+            onNavigateRight = { binding.buttonHongguoSearch.requestFocus() },
+            onTabReselected = { index ->
+                // 重选当前一级 tab = 刷新（B 站首页 v2.0.9 同语义，OK/触摸点已选 tab 均触发）
+                com.mytvb.core.common.log.AppLog.d("Hongguo", "tab reselect refresh -> page $index")
+                (childFragmentManager.findFragmentByTag("f$index") as? HongguoPageFocus)?.refresh()
+            }
         )
         // enableTouchNavigation 内部强制开启触摸滑动，恢复 TV 页面禁滑动的原设计
         binding.viewPager.isUserInputEnabled = false
@@ -119,6 +133,29 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
     private fun focusCurrentPageContent(): Boolean {
         val page = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
         return (page as? HongguoPageFocus)?.focusFirstCard() == true
+    }
+
+    /**
+     * 菜单键刷新（对齐 B 站首页推荐：MainActivity 在焦点位于 RecyclerView/TabLayout
+     * 内时派发 MenuPressed，宿主统一订阅转发当前页，子页不各自订阅）。
+     * isShown 守卫防主 tab 切走后后台刷新（红果页被 hide 时 view 不可见）；
+     * 搜索/货架覆盖层打开时刷新归覆盖层自身数据，不动被盖住的底层页。
+     */
+    private fun observeMenuKeyRefresh() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (event !is MainNavigationViewModel.Event.MenuPressed) return@collectLatest
+                    if (!isResumed || view?.isShown != true) return@collectLatest
+                    if (searchShown || shelfShown) return@collectLatest
+                    com.mytvb.core.common.log.AppLog.d(
+                        "Hongguo", "menu key refresh -> page ${binding.viewPager.currentItem}"
+                    )
+                    (childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+                        as? HongguoPageFocus)?.refresh()
+                }
+            }
+        }
     }
 
     /**
