@@ -140,10 +140,8 @@
         app:layout_constraintStart_toStartOf="@id/recycler_view"
         app:layout_constraintTop_toTopOf="@id/recycler_view" />
 
-    <!-- 加载圈：B 站同款 load_data.gif（initView 挂帧动画；裸 ProgressBar 在电视 ROM 动画缩放=0 下静止） -->
-    <androidx.appcompat.widget.AppCompatImageView
+    <ProgressBar
         android:id="@+id/loading_progress"
-        android:contentDescription="@string/loading"
         android:layout_width="@dimen/px80"
         android:layout_height="@dimen/px80"
         android:visibility="gone"

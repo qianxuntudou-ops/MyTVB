@@ -15,9 +15,8 @@
     <color name="hongguo_boom">#FF4D26</color>
     <color name="hongguo_new">#3FA45B</color>
     <color name="hongguo_tag_purple">#6A5AE0</color>
-    <!-- 功能卡/骨架中性面（不随主题） -->
+    <!-- 功能卡中性面（不随主题） -->
     <color name="hongguo_card_face">#141418</color>
     <color name="hongguo_card_face_focused">#1C1C22</color>
     <color name="hongguo_card_line">#2A2A31</color>
-    <color name="hongguo_skeleton_block">#1E1E26</color>
 </resources>

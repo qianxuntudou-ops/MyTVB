@@ -19,7 +19,6 @@ import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
 import com.mytvb.core.ui.focus.tv.TvListFocusController
-import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.FragmentHongguoSearchBinding
 import com.mytvb.feature.hongguo.net.HongguoClient
@@ -87,8 +86,6 @@ class HongguoSearchPage : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
-        ImageLoader.loadDrawableRes(binding.progressHongguoSearch, R.drawable.load_data)
         setupDiscover()
         setupSuggest()
         setupResult()

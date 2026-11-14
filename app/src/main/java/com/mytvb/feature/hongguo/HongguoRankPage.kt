@@ -1,6 +1,5 @@
 package com.mytvb.feature.hongguo
 
-import android.animation.ValueAnimator
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,8 +29,8 @@ import kotlinx.coroutines.launch
  * 红果四板官方榜单（bookmall cell/change）：热播榜/真人榜/漫剧榜/AI剧榜。
  * 子板切换重开会话；滚动/焦点触底加载。
  * 2026-11-10 卡片迁移：横排行卡 → 统一竖版卡 + 排名角标。
- * 2026-11-11 重设计：前三名金银铜徽章（colors_hongguo 独立语义色）；首屏骨架替代裸
- * ProgressBar，空态组件（图标+文案+重试）替代灰字。
+ * 2026-11-11 重设计：前三名金银铜徽章（colors_hongguo 独立语义色）；
+ * 空态组件（图标+文案+重试）替代灰字。
  * 2026-11-12 二次重构：四板 RadioButton/分段控件 → App 一贯 TabLayout 文字+accent
  * 下划线（同分类子档 tab，enableDirectTabNavigation 接线），说明行删除。
  */
@@ -47,7 +46,6 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         }
     )
     private var tvFocusController: TvListFocusController? = null
-    private var skeletonAnimator: ValueAnimator? = null
 
     private val spanCount by lazy { resources.adaptiveSpanCount(base = 6, wide = 12) }
 
@@ -165,8 +163,8 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
     private fun load() {
         if (loading) return
         loading = true
-        // 首屏骨架（呼吸动画），翻页静默
-        if (adapter.contentCount() == 0) showSkeleton(true)
+        // 首屏中央圈，翻页静默追加（对齐历史/分类页与 B 站列表）
+        if (adapter.contentCount() == 0) showLoading(true)
         loadJob?.cancel()
         loadJob = viewLifecycleOwner.lifecycleScope.launch {
             try {
@@ -185,29 +183,15 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
                 AppToast.show(requireContext(), e.message ?: "榜单加载失败")
             } finally {
                 loading = false
-                showSkeleton(false)
+                showLoading(false)
                 syncEmptyState()
             }
         }
     }
 
-    /** 骨架显隐 + alpha 呼吸动画（0.35↔1 循环）。 */
-    private fun showSkeleton(show: Boolean) {
-        binding.skeletonRank.root.visibility = if (show) View.VISIBLE else View.GONE
-        if (show) {
-            if (skeletonAnimator == null) {
-                skeletonAnimator = ValueAnimator.ofFloat(0.35f, 1f).apply {
-                    duration = 900
-                    repeatCount = ValueAnimator.INFINITE
-                    repeatMode = ValueAnimator.REVERSE
-                    addUpdateListener { binding.skeletonRank.root.alpha = it.animatedValue as Float }
-                }
-            }
-            skeletonAnimator?.start()
-        } else {
-            skeletonAnimator?.cancel()
-            binding.skeletonRank.root.alpha = 1f
-        }
+    /** 中央加载圈显隐（load_data.gif 帧动画自驱动，不依赖系统动画设置）。 */
+    private fun showLoading(show: Boolean) {
+        binding.progressLoading.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     private fun syncEmptyState() {
@@ -231,8 +215,6 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
 
     override fun onDestroyView() {
         loadJob?.cancel()
-        skeletonAnimator?.cancel()
-        skeletonAnimator = null
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()
