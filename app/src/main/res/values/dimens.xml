@@ -113,6 +113,7 @@
     <dimen name="px1100">1100dip</dimen>
     <dimen name="px1200">1200dip</dimen>
     <dimen name="px1400">1400dip</dimen>
+    <dimen name="px1800">1800dip</dimen>
 
     <!-- media3 播放器内置错误提示浮层（exo_error_message，setCustomErrorMessage
          的载体）默认 14sp/32dp 小字，是全项目唯一游离在 px 池外的 UI——电视远距离

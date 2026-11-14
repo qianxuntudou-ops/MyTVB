@@ -7,6 +7,7 @@ import android.view.Window
 import androidx.appcompat.app.AppCompatDialog
 import androidx.recyclerview.widget.GridLayoutManager
 import com.mytvb.R
+import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.databinding.DialogHongguoDramaListBinding
@@ -14,8 +15,9 @@ import com.mytvb.feature.hongguo.net.HongguoClient
 
 /**
  * 红果长按菜单结果列表（创作者作品/相关作品共用弹窗）：
- * 竖版 4:5 网格（[HongguoDramaAdapter]，尺寸与详情弹窗同款 px1400×px900），
- * 点卡片关本弹窗进 [HongguoDetailDialog]。
+ * 竖版 4:5 网格（[HongguoDramaAdapter]）。宽 px1800（overlay 自动钳 92% 屏宽）
+ * + 列数走 [adaptiveSpanCount]（与 feed/搜索/榜单页同口径），卡片大小与
+ * 列表页标准卡一致；点卡片关本弹窗进 [HongguoDetailDialog]。
  */
 class HongguoDramaListDialog(
     context: Context,
@@ -37,18 +39,21 @@ class HongguoDramaListDialog(
         com.mytvb.core.ui.base.DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,
-            widthPx = context.resources.getDimensionPixelSize(R.dimen.px1400),
-            heightPx = context.resources.getDimensionPixelSize(R.dimen.px900),
+            widthPx = context.resources.getDimensionPixelSize(R.dimen.px1800),
+            heightPx = context.resources.getDimensionPixelSize(R.dimen.px1000),
             tag = "hongguo_drama_list"
         )
         binding.textTitle.text = title
-        val lm: GridLayoutManager = WrapContentGridLayoutManager(context, GRID_COLUMNS)
+        // 列数与列表页同口径（含超宽屏 wide 档 + 用户界面缩放/卡片大小偏移），
+        // 弹窗宽钳 92% 屏宽后卡片大小≈列表页标准卡
+        val spanCount = context.resources.adaptiveSpanCount(base = 6, wide = 12)
+        val lm: GridLayoutManager = WrapContentGridLayoutManager(context, spanCount)
         binding.recyclerDramas.layoutManager = lm
         binding.recyclerDramas.adapter = adapter
         binding.recyclerDramas.itemAnimator = null
         binding.recyclerDramas.addItemDecoration(
             GridSpacingItemDecoration(
-                GRID_COLUMNS,
+                spanCount,
                 context.resources.getDimensionPixelSize(R.dimen.px16),
                 false
             )
@@ -70,8 +75,4 @@ class HongguoDramaListDialog(
         }
     }
 
-    companion object {
-        /** 与 Feed 页同款 6 列档（弹窗固定宽 px1400，直接取 6 列）。 */
-        private const val GRID_COLUMNS = 6
-    }
 }
