@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 红果详情选集分页 chip（当前页=选中态）：状态集与全 App 通用按钮（tab_round_background，侧栏功能钮）完全同序同色——
      点击=colorPrimary、激活(聚焦)=colorControlHighlight、选中=tabBarHighlight、常态=#14FFFFFF；
-     圆角保留 px15（格子形态，非侧栏圆形）。 -->
+     圆角保留 px15（格子形态，非侧栏圆形）。
+     选中态额外叠首页 tab 同款紫色横线（underline：居中宽 px56 高 px5 colorAccent，
+     底边内缩 px8 上移）——
+     tabBarHighlight 亮块与常态对比不足，用户反馈区分不开；聚焦+选中组合项单独列出，
+     保证当前页 chip 聚焦时横线不消失（否则焦点一落上去激活标记就闪没）。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
     <item android:state_pressed="true">
@@ -10,6 +14,23 @@
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>
+    <item android:state_focused="true" android:state_selected="true">
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="?attr/colorControlHighlight"/>
+                    <corners android:radius="@dimen/px15"/>
+                </shape>
+            </item>
+            <item android:bottom="@dimen/px8" android:gravity="bottom|center_horizontal">
+                <shape>
+                    <size android:width="@dimen/px56" android:height="@dimen/px5"/>
+                    <corners android:radius="@dimen/px5"/>
+                    <solid android:color="?attr/colorAccent"/>
+                </shape>
+            </item>
+        </layer-list>
+    </item>
     <item android:state_focused="true">
         <shape>
             <solid android:color="?attr/colorControlHighlight"/>
@@ -17,10 +38,21 @@
         </shape>
     </item>
     <item android:state_selected="true">
-        <shape>
-            <solid android:color="?attr/tabBarHighlight"/>
-            <corners android:radius="@dimen/px15"/>
-        </shape>
+        <layer-list>
+            <item>
+                <shape>
+                    <solid android:color="?attr/tabBarHighlight"/>
+                    <corners android:radius="@dimen/px15"/>
+                </shape>
+            </item>
+            <item android:bottom="@dimen/px8" android:gravity="bottom|center_horizontal">
+                <shape>
+                    <size android:width="@dimen/px56" android:height="@dimen/px5"/>
+                    <corners android:radius="@dimen/px5"/>
+                    <solid android:color="?attr/colorAccent"/>
+                </shape>
+            </item>
+        </layer-list>
     </item>
     <item>
         <shape>
