@@ -21,6 +21,7 @@ import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.ChoiceDialog
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.system.ViewUtils
 import com.mytvb.databinding.ActivityCctvVodPlayerBinding
 import com.mytvb.feature.cctv.h5e.CctvH5eDataSource
@@ -252,6 +253,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
+        ImageLoader.loadDrawableRes(binding.loading, R.drawable.load_data)
         pageUrl = intent.getStringExtra(EXTRA_PAGE_URL).orEmpty()
         albumId = intent.getStringExtra(EXTRA_ALBUM_ID).orEmpty()
         episodeMode = intent.getIntExtra(EXTRA_EPISODE_MODE, 0)

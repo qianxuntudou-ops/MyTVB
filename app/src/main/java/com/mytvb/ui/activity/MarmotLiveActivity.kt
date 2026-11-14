@@ -28,6 +28,7 @@ import com.mytvb.core.common.ext.toast
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.ui.base.ChoiceDialog
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.system.ViewUtils
 import com.mytvb.databinding.ActivityMarmotLiveBinding
 import com.mytvb.feature.cctv.CctvLiveQuality
@@ -202,6 +203,8 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun initView() {
+        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
+        ImageLoader.loadDrawableRes(binding.progressBar, R.drawable.load_data)
         jsBridge = MarmotJsBridge(this, jsCallbacks)
         // BACK 兜底：手势返回等非按键路径统一走 handleBackKey，
         // 防止 OnBackPressedDispatcher 无回调时落到默认 fallback 直接 finish

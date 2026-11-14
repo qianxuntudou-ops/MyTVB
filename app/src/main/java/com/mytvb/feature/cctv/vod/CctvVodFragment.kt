@@ -26,6 +26,7 @@ import com.mytvb.core.ui.base.adaptiveSpanCount
 import com.mytvb.core.ui.decoration.GridSpacingItemDecoration
 import com.mytvb.core.ui.focus.tv.GridTvFocusStrategy
 import com.mytvb.core.ui.focus.tv.TvListFocusController
+import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.core.ui.tab.enableDirectTabNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
@@ -98,6 +99,8 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
     override fun useLightBaseContainer(): Boolean = true
 
     override fun initView() {
+        // 加载圈换 B 站同款 load_data.gif 帧动画（裸 ProgressBar 的 indeterminate 动画在电视 ROM 动画缩放=0 下静止）
+        ImageLoader.loadDrawableRes(binding.loadingProgress, R.drawable.load_data)
         adapter = CctvVodAdapter(onItemClick = ::openAlbumDetail)
         adapter.bindTopEdgeUp(::focusSourceTabs)
         binding.recyclerView.layoutManager = WrapContentGridLayoutManager(requireContext(), spanCount)

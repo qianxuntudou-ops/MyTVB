@@ -35,8 +35,11 @@
         android:background="@android:color/black"
         android:visibility="gone" />
 
-    <ProgressBar
+    <!-- 加载圈：B 站同款 load_data.gif（onCreate 挂帧动画；裸 ProgressBar 的 indeterminate
+         走 ObjectAnimator，电视 ROM 动画缩放=0 时圈静止不转） -->
+    <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/loading"
+        android:contentDescription="@string/loading"
         android:layout_width="@dimen/px80"
         android:layout_height="@dimen/px80"
         android:layout_gravity="center"
