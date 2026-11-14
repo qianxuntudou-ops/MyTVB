@@ -106,7 +106,9 @@
     <string name="hongguo_play_continue">继续播放</string>
     <string name="hongguo_favorite">收藏</string>
     <string name="hongguo_unfavorite">取消收藏</string>
-    <string name="hongguo_menu_subtitle">查看这部短剧的创作者与同类作品</string>
+    <string name="hongguo_menu_subtitle">收藏这部短剧，查看创作者与同类作品</string>
+    <string name="hongguo_menu_favorite_summary">收藏后可在收藏页找到</string>
+    <string name="hongguo_menu_unfavorite_summary">已收藏，点击取消</string>
     <string name="hongguo_menu_creator">创作者</string>
     <string name="hongguo_menu_creator_summary">查看该创作者的其它作品</string>
     <string name="hongguo_menu_creator_unknown">暂无创作者信息</string>

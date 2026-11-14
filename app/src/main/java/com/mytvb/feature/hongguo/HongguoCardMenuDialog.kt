@@ -19,9 +19,10 @@ import kotlinx.coroutines.launch
 
 /**
  * 红果剧卡片长按菜单（弹出形式对齐 [com.mytvb.ui.dialog.VideoCardMenuDialog]）：
+ * 「收藏」= [HongguoRepository.toggleFavorite] 本地切换 + 登录态云同步（详情弹窗同款）；
  * 「创作者」= multi-detail 查作者名 → 搜作者 + 归一精确匹配过滤（HGTV authorBox 同款）；
  * 「相关作品」= plan/v1 from=detail_page_more_related（HGTV relatedBox 同款）。
- * 两个入口都弹 [HongguoDramaListDialog] 网格展示，点卡片进详情弹窗。
+ * 后两个入口都弹 [HongguoDramaListDialog] 网格展示，点卡片进详情弹窗。
  */
 class HongguoCardMenuDialog(
     context: Context,
@@ -63,11 +64,45 @@ class HongguoCardMenuDialog(
                 false
             }
         }
+        binding.buttonFavorite.setOnClickListener { toggleFavorite() }
         binding.buttonCreator.setOnClickListener { openCreatorWorks() }
         binding.buttonRelated.setOnClickListener { openRelated() }
+        refreshFavoriteState()
         setOnShowListener {
-            binding.root.post { binding.buttonCreator.requestFocus() }
+            binding.root.post { binding.buttonFavorite.requestFocus() }
         }
+    }
+
+    // ---- 收藏（第一个选项；本地秒切，登录态后台云同步） ----
+
+    /** 收藏按钮态：主标题「收藏/取消收藏」+ 副标题当前状态，点击后原地刷新。 */
+    private fun refreshFavoriteState() {
+        val favorite = repository.isFavorite(item.seriesId)
+        binding.textFavoriteTitle.setText(
+            if (favorite) R.string.hongguo_unfavorite else R.string.hongguo_favorite
+        )
+        binding.textFavoriteSummary.setText(
+            if (favorite) R.string.hongguo_menu_unfavorite_summary
+            else R.string.hongguo_menu_favorite_summary
+        )
+    }
+
+    private fun toggleFavorite() {
+        // 有观看记录则沿用其进度（收藏页「看到 N/M 集」不丢），否则用卡片信息新建
+        val progress = repository.progressOf(item.seriesId)
+        repository.toggleFavorite(
+            HongguoRepository.WatchRecord(
+                seriesId = item.seriesId,
+                title = item.title,
+                cover = item.cover,
+                episodeIndex = progress?.episodeIndex ?: 0,
+                episodeCount = if (item.episodeCount > 0) item.episodeCount else progress?.episodeCount ?: 0,
+                positionMs = progress?.positionMs ?: 0L,
+                durationMs = progress?.durationMs ?: 0L,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+        refreshFavoriteState()
     }
 
     private fun openCreatorWorks() {
