@@ -38,7 +38,6 @@ import com.mytvb.model.user.UserDetailInfoModel
 import com.mytvb.model.video.VideoModel
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.category.CategoryFragment
-import com.mytvb.feature.cctv.CctvLiveFragment
 import com.mytvb.feature.cctv.vod.CctvVodFragment
 import com.mytvb.feature.detail.VideoDetailFragment
 import com.mytvb.feature.dynamic.DynamicFragment
@@ -169,12 +168,13 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     // tab 顺序固定（与 fragmentFactories 一一对应）：
     // 0 推荐 / 1 分类 / 2 动态 / 3 直播 / 4 CCTV直播 / 5 CCTV影视 / 6 红果短剧 / 7 我的 / 8 搜索。
     // 用 lazy factory 让非首屏 tab 真正点中时再构造，省去 1.1s 的 onCreate 大段时间。
+    // tab4 CCTV直播：onTabSelected 直进 MarmotLiveActivity，不持有 Fragment（占位仅保持下标对齐）。
     private val fragmentFactories: List<() -> Fragment> = listOf(
         { HomeFragment.newInstance() },
         { CategoryFragment.newInstance() },
         { DynamicFragment.newInstance() },
         { LiveFragment.newInstance() },
-        { CctvLiveFragment.newInstance() },
+        { error("tab4 CCTV 直播不持有 Fragment") },
         { CctvVodFragment.newInstance() },
         { com.mytvb.feature.hongguo.HongguoFragment.newInstance() },
         { MeFragment.newInstance() },
@@ -538,7 +538,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (index < 0 || index >= fragments.size) return
         if (index == 1 && !binding.myTabView.isCategoryButtonVisible()) return
         if (index == 3 && !binding.myTabView.isLiveButtonVisible()) return
-        if (index == CCTV_TAB_INDEX && !binding.myTabView.isCctvLiveButtonVisible()) return
+        // tab4 恒不构造 Fragment（选中即直进 MarmotLiveActivity，与按钮可见性无关）
+        if (index == CCTV_TAB_INDEX) return
         if (index == CCTV_VOD_TAB_INDEX && !binding.myTabView.isCctvVodButtonVisible()) return
         if (index == HONGGUO_TAB_INDEX && !binding.myTabView.isHongguoButtonVisible()) return
         if (index == ME_TAB_INDEX && !binding.myTabView.isMeButtonVisible()) return

@@ -130,7 +130,20 @@ android {
         }
     }
 
+    androidResources {
+        // 只保留中英资源：依赖库自带 80+ 语言各 ~147 条 arsc 条目（vi/ur/tr/ta...），
+        // 剔除后 arsc 显著缩水。简中=values 默认目录不受影响；zh-rTW 必须显式列出
+        // （只写 zh 不会连带保留区域变体，实测滤丢繁中）；App 内三语显示另走 SettingLabels
+        localeFilters += listOf("zh", "zh-rTW", "en")
+    }
+
     packaging {
+        // so 在 APK 内 deflate 压缩存储（默认 Stored 零压缩，6.4MB so 全额占体积，
+        // 其中 wasm2c 数据段高冗余压缩率最好）；代价=安装后磁盘双份 + 首装稍慢。
+        // minSdk 23 满足门槛。下载体积敏感的 TV 盒子场景划算。
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += setOf(
                 "META-INF/DEPENDENCIES",
