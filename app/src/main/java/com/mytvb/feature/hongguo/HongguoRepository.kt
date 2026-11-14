@@ -12,6 +12,7 @@ import com.mytvb.feature.hongguo.net.HongguoSync
 import com.mytvb.feature.hongguo.net.HongguoWeb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -261,12 +262,13 @@ class HongguoRepository private constructor(context: Context) {
         val cacheKey = "related|$seriesId"
         contentCacheGet<List<HongguoClient.Drama>>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
         val list = withContext(Dispatchers.IO) {
-            val exact = runCatching { client.related(seriesId) }.getOrDefault(emptyList())
-            if (exact.isNotEmpty()) {
-                exact
-            } else {
-                relatedByTitleSearch(seriesId, title)
-            }
+            coroutineScope {
+                // 系列/推荐两路并行（原串行：单季剧系列跳常态 101116 空等，白付一跳 RTT；
+                // 并行后总耗时=max，系列季命中时推荐路仅多一路轻请求）
+                val seasons = async { runCatching { client.planSeriesSeasons(seriesId) }.getOrDefault(emptyList()) }
+                val recommend = async { runCatching { client.planRecommend(seriesId) }.getOrDefault(emptyList()) }
+                seasons.await().ifEmpty { recommend.await() }
+            }.ifEmpty { relatedByTitleSearch(seriesId, title) }
         }
         contentCachePut(cacheKey, list)
         return list
@@ -314,9 +316,18 @@ class HongguoRepository private constructor(context: Context) {
         val cacheKey = "creator|$seriesId"
         contentCacheGet<HongguoClient.Creator>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
         val creator = withContext(Dispatchers.IO) {
-            client.innerFeedDetailCreators(listOf(seriesId))[seriesId]
-                ?: client.authorsOf(listOf(seriesId))[seriesId]?.takeIf { it.isNotEmpty() }
+            coroutineScope {
+                // 两路并行（原串行 miss 才发第二跳；并行后总耗时=max。HGTV 详情页
+                // 出品方批量预取+LRU 命中的同思路——压缩首响延迟）
+                val inner = async {
+                    runCatching { client.innerFeedDetailCreators(listOf(seriesId))[seriesId] }.getOrNull()
+                }
+                val fallback = async {
+                    runCatching { client.authorsOf(listOf(seriesId))[seriesId] }.getOrNull()
+                }
+                inner.await() ?: fallback.await()?.takeIf { it.isNotEmpty() }
                     ?.let { HongguoClient.Creator(userId = "", name = it) }
+            }
         }
         if (creator != null) contentCachePut(cacheKey, creator)
         return creator
@@ -332,29 +343,28 @@ class HongguoRepository private constructor(context: Context) {
     suspend fun authorWorks(creator: HongguoClient.Creator?, excludeSeriesId: String): List<HongguoClient.Drama> {
         val author = creator?.name.orEmpty()
         if (normalizeAuthor(author).isEmpty()) return emptyList()
-        val cacheKey = "authorworks|$author|$excludeSeriesId"
+        // 缓存键不含本剧 id：同作者全局一份（原键含 excludeSeriesId 致同作者每部剧
+        // 各拉各的；HGTV 按出品方全局去重同款）。存全量、排除本剧在读取端过滤。
+        val cacheKey = "authorworks|$author"
         contentCacheGet<List<HongguoClient.Drama>>(cacheKey, ttlMs = DETAIL_TTL_MS)
-            ?.let { return it }
+            ?.let { return it.filter { d -> d.seriesId != excludeSeriesId } }
         val works = withContext(Dispatchers.IO) {
             // ① 官方直拉：主页的「剧作」tab（有 userId 才能走）
             val direct = creator?.userId?.takeIf { it.isNotEmpty() }
-                ?.let { uid ->
-                    client.personWorks(uid).filter { it.seriesId != excludeSeriesId }
-                }.orEmpty()
+                ?.let { uid -> client.personWorks(uid) }.orEmpty()
             if (direct.isNotEmpty()) {
                 direct
             } else {
-                worksBySearchMatch(author, excludeSeriesId)
+                worksBySearchMatch(author)
             }
         }
         contentCachePut(cacheKey, works)
-        return works
+        return works.filter { it.seriesId != excludeSeriesId }
     }
 
     /** 搜索名匹配兜底（无 userId 时）：搜索结果内嵌发布者 user_info 直配。 */
     private suspend fun worksBySearchMatch(
-        author: String,
-        excludeSeriesId: String
+        author: String
     ): List<HongguoClient.Drama> = withContext(Dispatchers.IO) {
         val page = try {
             searchRaw(author)
@@ -364,7 +374,6 @@ class HongguoRepository private constructor(context: Context) {
             return@withContext emptyList()
         }
         page.items.asSequence()
-            .filter { it.seriesId != excludeSeriesId }
             .filter { matchesAuthor(it.author, author) }
             .map { it.toDrama() }
             .toList()
