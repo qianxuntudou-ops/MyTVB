@@ -85,6 +85,10 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         binding.viewPager.registerOnPageChangeCallback(object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 syncPageFocusability(position)
+                // tab 选中即回顶：离屏页全 retain，历史/收藏切走再切回会停在上次
+                // 滚动位置（用户预期=打开在最上方）
+                (childFragmentManager.findFragmentByTag("f$position") as? HongguoPageFocus)
+                    ?.scrollToListTop()
             }
         })
         binding.viewPager.post { syncPageFocusability(binding.viewPager.currentItem) }

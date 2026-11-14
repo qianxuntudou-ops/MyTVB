@@ -21,8 +21,13 @@ import java.util.concurrent.TimeUnit
  * 隔离约束：自建 OkHttpClient，禁复用 B 站 NetworkManager。
  */
 class HongguoClient(
-    private val apiBase: String = "https://api5-normal-sinfonlineb.fqnovel.com"
+    private val apiBase: String = "https://api5-normal-sinfonlineb.fqnovel.com",
+    /** 登录态请求（authPost/authGet）的身份与 Cookie 源；匿名通道不依赖。 */
+    private val session: HongguoSession? = null
 ) {
+
+    /** plan/搜索/账号同步族通道域名（HGTV 口径 sinfonlinea，与 feed 的 sinfonlineb 并存）。 */
+    private val altBase = "https://api5-normal-sinfonlinea.fqnovel.com"
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -309,108 +314,25 @@ class HongguoClient(
 
     private fun planFeed(bookId: String, from: String, extraFilterIds: Boolean): List<Drama> {
         require(bookId.matches(Regex("\\d{1,30}"))) { "series_id 无效" }
-        var lastError: Exception? = null
-        for (attempt in 0 until 3) {
-            try {
-                val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
-                return planOnce(bookId, from, extraFilterIds, identity)
-            } catch (e: EmptyResponseException) {
-                lastError = e
-                apiIdentity = null
-                if (attempt == 2) break
-                Thread.sleep(100)
-            } catch (e: PlanNoSeasonException) {
-                return emptyList()   // 101116：单季剧，无系列 cell，非错误
-            }
-        }
-        throw lastError ?: IllegalStateException("红果接口无响应")
-    }
-
-    private class PlanNoSeasonException : IllegalStateException("plan no season")
-
-    /** plan feed 单次请求（searchTab 同款 72232 搜索中段页签名全家桶）。 */
-    private fun planOnce(
-        bookId: String, from: String, extraFilterIds: Boolean,
-        identity: HongguoDeviceRegister.Identity
-    ): List<Drama> {
-        val q = java.util.LinkedHashMap<String, String>()
-        q["iid"] = identity.installId
-        q["device_id"] = identity.deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType
-        q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"
-        q["os_api"] = HongguoEnv.osApi
-        q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "72232"
-        q["resolution"] = HongguoEnv.resolution
-        q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = "72232"; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "72232"
-        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
-        q["cdid"] = identity.cdid
         // 业务参数（openhongguo SignedPlanPairsFrom，官方客户端观察值）
-        q["book_id"] = bookId
-        q["from"] = from
-        q["scene"] = "10"
-        q["session_uuid"] = java.util.UUID.randomUUID().toString()
-        q["user_is_login"] = "0"
-        if (extraFilterIds) q["filter_ids"] = bookId
-
-        val nowMs = System.currentTimeMillis()
-        val versionName = "7.2.2.32"
-        val signed = HongguoCrypto.signRequest(
-            q, null, nowMs, identity.deviceId,
-            targetBranch = 0, version = versionName
+        val values = linkedMapOf(
+            "book_id" to bookId,
+            "from" to from,
+            "scene" to "10",
+            "session_uuid" to java.util.UUID.randomUUID().toString(),
+            "user_is_login" to "0"
         )
-        val ts = signed.headers["X-Khronos"]?.toIntOrNull() ?: (nowMs / 1000).toInt()
-        val realLadonArgus = HongguoArgus.generate(
-            signed.query, null, ts, versionName, identity.deviceId,
-            deviceProfile = HongguoEnv.argusProfile
-        )
-        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val traceHex = java.util.UUID.randomUUID().toString().replace("-", "")
-        val ua = HongguoEnv.ua("72232")
-        val req = Request.Builder()
-            .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/plan/v1/?${signed.query}")
-            .get()
-            .header("User-Agent", ua)
-            .header("Accept-Language", "zh-CN,zh;q=0.9")
-            .header("X-SS-DP", "8662")
-            .header("X-Tt-Store-Region", "cn")
-            .header("X-Tt-Store-Region-Src", "did")
-            .header("X-XS-From-Web", "0")
-            .header("Sdk-Version", "2")
-            .header("User-Agent", ua)
-            .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
-            .header("x-ss-req-ticket", ticket)
-            .header("sdk-version", "2")
-            .header("passport-sdk-version", "5051452")
-            .header("x-xs-from-web", "0")
-            .header("x-khronos", signed.headers["X-Khronos"] ?: "")
-            .header("x-ladon", realLadonArgus.ladon)
-            .header("x-argus", realLadonArgus.argus)
-            .header("x-gorgon", signed.headers["X-Gorgon"] ?: "")
-            .header("x-helios", HongguoArgus.helios(ts))
-            .header("lc", "101")
-            .header("x-ss-dp", "8662")
-            .header("x-tt-trace-id", "00-$traceHex-${traceHex.substring(0, 16)}-01")
-            .build()
-        http.newCall(req).execute().use { resp ->
-            val bytes = resp.body?.bytes() ?: ByteArray(0)
-            android.util.Log.d("Hongguo", "plan from=$from http=${resp.code} len=${bytes.size}")
-            if (!resp.isSuccessful) throw IllegalStateException("相关作品 HTTP ${resp.code}")
-            if (bytes.isEmpty()) throw EmptyResponseException()
-            val payload = JSONObject(String(bytes, Charsets.UTF_8))
-            val code = payload.optString("code", "0")
-            if (code == "101116") throw PlanNoSeasonException()
-            if (code != "0") throw EmptyResponseException()
+        if (extraFilterIds) values["filter_ids"] = bookId
+        return try {
+            val payload = getSignedJson(
+                "/reading/bookapi/plan/v1/", values,
+                baseUrl = altBase, version = HongguoApiVersion.V72232
+            )
             // 系列剧只认 547 cell；相关推荐接受任意带剧数据的 cell（匿名回 401 通用推荐）
-            return parseRelatedCells(payload, bookId, exactOnly = from == "single_col_same_ip_series")
+            parseRelatedCells(payload, bookId, exactOnly = from == "single_col_same_ip_series")
+        } catch (e: ApiException) {
+            // 101116：单季剧，无系列 cell（服务端正常语义），非错误
+            if (e.code == "101116") emptyList() else throw e
         }
     }
 
@@ -535,11 +457,71 @@ class HongguoClient(
     }
 
     /**
+     * 剧集详情（POST /novel/player/video_detail/v1/，query 带 series_id、body 空——
+     * HGTV core/b.H 同款）：原生 JSON ~18KB/~170ms，替代 SSR 网页通道（450KB HTML
+     * 先下载再抠 2.6KB seriesDetail，冷路径 0.8~1.7s）。2026-11-14 抓包实测口径：
+     * video_data 字段与 normalizeDrama 全兼容（含 category_schema 标签降级），
+     * 选集 vid 列表在 video_list[]（vid/vid_index/title/disable_play）。
+     * score 原生不下发（与 SSR 一致，靠入口 scoreHint 兜底）；related 由
+     * Repository.related() 通道自取，这里恒空。
+     */
+    fun videoDetail(seriesId: String): HongguoWeb.SeriesDetail {
+        require(seriesId.matches(Regex("\\d{1,30}"))) { "series_id 无效" }
+        val started = android.os.SystemClock.elapsedRealtime()
+        val payload = postSignedJson(
+            "/novel/player/video_detail/v1/",
+            JSONObject(),
+            extraQuery = linkedMapOf("series_id" to seriesId)
+        )
+        val videoData = payload.optJSONObject("data")?.optJSONObject("video_data")
+            ?: throw IllegalStateException("详情响应缺少 video_data")
+        val drama = normalizeDrama(videoData)
+            ?: throw IllegalStateException("详情响应缺少剧集信息")
+        val videoList = videoData.optJSONArray("video_list")
+        val episodes = ArrayList<HongguoWeb.Episode>(videoList?.length() ?: 0)
+        if (videoList != null) {
+            for (i in 0 until videoList.length()) {
+                val item = videoList.optJSONObject(i) ?: continue
+                val vid = item.optString("vid")
+                if (vid.isEmpty()) continue
+                // vid_index 官方从 1 起；异常值（0/越界）退回数组序号，与 SSR 口径一致
+                val idx = item.optInt("vid_index", i + 1).let {
+                    if (it in 1..videoList.length()) it else i + 1
+                }
+                episodes.add(
+                    HongguoWeb.Episode(
+                        index = idx,
+                        videoId = vid,
+                        title = item.optString("title").ifEmpty { "第${idx}集" },
+                        locked = item.optBoolean("disable_play", false)
+                    )
+                )
+            }
+        }
+        if (episodes.isEmpty()) {
+            // 未开播预约剧（官方详情页为「即将上线+预告」形态，2026-11-14 MuMu 实证
+            // 2.4KB 响应无 video_list 但带剧卡）：空选集不是错误——返回剧卡+空列表由
+            // 弹窗渲染未上线形态；响应分两段打全量（logcat 单行截断）留预告 vid 线索
+            val full = payload.toString()
+            android.util.Log.d("Hongguo", "未开播a series=$seriesId ${full.take(1300)}")
+            if (full.length > 1300) {
+                android.util.Log.d("Hongguo", "未开播b ${full.substring(1300, minOf(full.length, 2600))}")
+            }
+            return HongguoWeb.SeriesDetail(drama, emptyList(), emptyList())
+        }
+        android.util.Log.d(
+            "Hongguo",
+            "video_detail series=$seriesId eps=${episodes.size} " +
+                "cost=${android.os.SystemClock.elapsedRealtime() - started}ms"
+        )
+        return HongguoWeb.SeriesDetail(drama, episodes, emptyList())
+    }
+
+    /**
      * 演员主页（GET /reading/user/profile/get/v1/，openhongguo 同款）：名字+简介+
      * 头像+粉丝/获赞。查不到返回 null（名字为空即无此人）。
      */
-    fun person(userId: String): Person? {
-        if (!userId.matches(Regex("\\d{1,30}"))) return null
+    fun person(userId: String): Person? {        if (!userId.matches(Regex("\\d{1,30}"))) return null
         return try {
             val payload = getSignedJson(
                 "/reading/user/profile/get/v1/",
@@ -582,8 +564,7 @@ class HongguoClient(
             }
             val payload = postSignedJson(
                 "/novel/commentapi/user/profile/$userId/v1", body,
-                baseUrl = "https://api5-normal-sinfonlinec.fqnovel.com",
-                version = HongguoApiVersion.V74532
+                baseUrl = "https://api5-normal-sinfonlinec.fqnovel.com"
             )
             parsePersonWorks(payload)
         } catch (e: Exception) {
@@ -753,36 +734,72 @@ class HongguoClient(
         return collapsed.takeIf { it.isNotEmpty() }
     }
 
-    /** 匿名签名 GET（空响应轮换重试；GET 无 body，无 STUB/Content-Type）。与 feed 共用一号。 */
-    private fun getSignedJson(
-        path: String, values: LinkedHashMap<String, String>,
-        version: HongguoApiVersion = HongguoApiVersion.V73532
+    // ---- 统一签名信封（POST/GET 共用；2026-11-14 收编 Sync/Search/plan 三套手写样板） ----
+
+    /** 业务 code 非 0（code 随异常携带，调用方按码决定重试/降级）。 */
+    class ApiException(val code: String) : IllegalStateException("红果接口 code=$code")
+
+    /** 登录态失效（error_name=session_expired）：调用方应引导重新登录。 */
+    class SessionExpiredException : IllegalStateException("登录态已过期")
+
+    /**
+     * 签名请求重试信封：匿名通道空响应/指定 code 轮换注册号重试（feed 翻页高频，
+     * 不能每页注册——attempt 0 复用）；登录态身份与账号 Cookie 同源绑定，单次直发不轮换。
+     */
+    private fun signedJson(
+        method: String, path: String, raw: ByteArray?,
+        baseUrl: String, version: HongguoApiVersion,
+        extraQuery: Map<String, String>, auth: Boolean,
+        attempts: Int, retryOn: (ApiException) -> Boolean
     ): JSONObject {
+        if (auth) {
+            val s = session ?: throw IllegalStateException("登录态请求需要 HongguoSession")
+            val identity = HongguoDeviceRegister.Identity(
+                s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies,
+                s.klinkEgdi, s.deviceToken, s.clientUdid
+            )
+            return once(method, path, raw, identity, baseUrl, version, extraQuery, auth = true)
+        }
         var lastError: Exception? = null
-        for (attempt in 0 until 3) {
+        for (attempt in 0 until attempts.coerceIn(1, 3)) {
             try {
                 // 号复用+空响应轮换（apiIdentity 共享；随机假身份在模拟器出口全空——实证）
                 val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
-                return getOnce(path, values, identity.deviceId, identity.installId, version)
+                return once(method, path, raw, identity, baseUrl, version, extraQuery, auth = false)
             } catch (e: EmptyResponseException) {
                 lastError = e
                 apiIdentity = null
-                if (attempt == 2) break
+                if (attempt == attempts - 1) break
+                Thread.sleep(100)
+            } catch (e: ApiException) {
+                if (!retryOn(e)) throw e
+                lastError = e
+                apiIdentity = null
+                if (attempt == attempts - 1) break
                 Thread.sleep(100)
             }
         }
         throw lastError ?: IllegalStateException("红果接口无响应")
     }
 
-    /** GET 签名（bookmall 等）：F0.x1 形态（HongguoEnv+真版签名头集）。 */
-    private fun getOnce(
-        path: String, values: LinkedHashMap<String, String>,
-        deviceId: String, installId: String,
-        version: HongguoApiVersion = HongguoApiVersion.V73532
+    /**
+     * 单次签名请求（74532 信封+HongguoEnv 动态环境+插入序 query+真版
+     * Ladon/Argus/Helios/Gorgon+HGTV 同款头集；2026-11-10 与 F0.x1 逐字段对拍，
+     * L1 字节码通道已拆除）。POST/GET 差异仅在 body 三头与签名 body 位；auth 时
+     * 随带 klink_egdi/device_token query 与 Cookie/x-tt-token 头，并做 token 滚动续期。
+     */
+    private fun once(
+        method: String, path: String, raw: ByteArray?,
+        identity: HongguoDeviceRegister.Identity,
+        baseUrl: String, version: HongguoApiVersion,
+        extraQuery: Map<String, String>, auth: Boolean
     ): JSONObject {
         val q = java.util.LinkedHashMap<String, String>()
-        q["iid"] = installId
-        q["device_id"] = deviceId
+        q["iid"] = identity.installId
+        q["device_id"] = identity.deviceId
+        if (identity.cdid.isNotEmpty()) q["cdid"] = identity.cdid
+        if (identity.klinkEgdi.isNotEmpty()) q["klink_egdi"] = identity.klinkEgdi
+        if (identity.deviceToken.isNotEmpty()) q["device_token"] = identity.deviceToken
         q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
         q["app_name"] = "novelread"
         q["version_code"] = version.code; q["version_name"] = version.versionName
@@ -800,137 +817,16 @@ class HongguoClient(
         q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
         q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
         q["ts"] = (System.currentTimeMillis() / 1000).toString()
-        q.putAll(values)
+        q.putAll(extraQuery)
 
         val versionName = version.versionName
-        val signed = HongguoCrypto.signRequest(q, null, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
-        val realLadonArgus = HongguoArgus.generate(
-            signed.query, null, nowSec, versionName, deviceId,
-            deviceProfile = HongguoEnv.argusProfile
+        val signed = HongguoCrypto.signRequest(
+            q, raw, System.currentTimeMillis(), identity.deviceId,
+            targetBranch = 0, version = versionName
         )
-        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val ua = HongguoEnv.ua(version.code)
-        val traceId = java.util.UUID.randomUUID().toString().replace("-", "")
-            .let { "00-$it-${it.substring(0, 16)}-01" }
-        val req = Request.Builder()
-            .url("$apiBase$path?${signed.query}")
-            .get()
-            .header("User-Agent", ua)
-            .header("Accept-Language", "zh-CN,zh;q=0.9")
-            .header("X-SS-DP", "8662")
-            .header("X-Tt-Store-Region", "cn")
-            .header("X-Tt-Store-Region-Src", "did")
-            .header("X-XS-From-Web", "0")
-            .header("Sdk-Version", "2")
-            .header("User-Agent", ua)
-            .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
-            .header("x-ss-req-ticket", ticket)
-            .header("sdk-version", "2")
-            .header("passport-sdk-version", "5051452")
-            .header("x-xs-from-web", "0")
-            .header("x-khronos", (signed.headers["X-Khronos"] ?: ""))
-            .header("x-ladon", realLadonArgus.ladon)
-            .header("x-argus", realLadonArgus.argus)
-            .header("x-gorgon", (signed.headers["X-Gorgon"] ?: ""))
-            .header("x-helios", HongguoArgus.helios(nowSec))
-            .header("lc", "101")
-            .header("x-ss-dp", "8662")
-            .header("x-tt-trace-id", traceId)
-            .build()
-        http.newCall(req).execute().use { resp ->
-            val bytes = resp.body?.bytes() ?: ByteArray(0)
-            android.util.Log.d(
-                "Hongguo",
-                "rank $path vc=${version.code} http=${resp.code} len=${bytes.size}"
-            )
-            if (!resp.isSuccessful) throw IllegalStateException("红果接口 HTTP ${resp.code}")
-            if (bytes.isEmpty()) throw EmptyResponseException()
-            val text = String(bytes, Charsets.UTF_8)
-            if (text.isBlank()) throw EmptyResponseException()
-            val payload = JSONObject(text)
-            if (payload.optString("code", "0") != "0") {
-                throw IllegalStateException("红果接口 code=${payload.optString("code")}")
-            }
-            return payload
-        }
-    }
-
-    // ---- 签名请求身份：feed(POST)/rank(GET) 共用一号，注册互斥 + 空响应轮换 ----
-    @Volatile private var apiIdentity: HongguoDeviceRegister.Identity? = null
-
-    /** 注册互斥（多页并发首启时防竞态各注册一号——2026-11-10 实测一次启动烧 3 个号）。 */
-    private val registerLock = Any()
-
-    private fun obtainApiIdentity(): HongguoDeviceRegister.Identity =
-        apiIdentity ?: synchronized(registerLock) {
-            apiIdentity ?: HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
-        }
-
-    private fun rotateApiIdentity(): HongguoDeviceRegister.Identity =
-        synchronized(registerLock) {
-            HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
-        }
-
-    private fun postSignedJson(
-        path: String, body: JSONObject,
-        baseUrl: String = apiBase,
-        version: HongguoApiVersion = HongguoApiVersion.V73532
-    ): JSONObject {
-        val raw = body.toString().toByteArray(Charsets.UTF_8)
-        var lastError: Exception? = null
-        for (attempt in 0 until 3) {
-            try {
-                // 注册号复用，空响应才换新（feed 翻页高频，不能每页注册）
-                val identity = if (attempt == 0) obtainApiIdentity() else rotateApiIdentity()
-                return postOnce(path, raw, identity.deviceId, identity.installId, baseUrl, version)
-            } catch (e: EmptyResponseException) {
-                apiIdentity = null
-                lastError = e
-                if (attempt == 2) break
-                Thread.sleep(100)
-            }
-        }
-        throw lastError ?: IllegalStateException("红果接口无响应")
-    }
-
-    private class EmptyResponseException : IllegalStateException("empty body")
-
-
-    private fun postOnce(
-        path: String, raw: ByteArray, deviceId: String, installId: String,
-        baseUrl: String = apiBase,
-        version: HongguoApiVersion = HongguoApiVersion.V73532
-    ): JSONObject {
-        // Kotlin 签名链（2026-11-10 与 F0.x1 逐字段对拍后，L1 字节码通道已拆除）：
-        // （73532+HongguoEnv 动态环境+插入序）+ 真版 Ladon/Argus/Helios/Gorgon +
-        // HGTV 同款头集（E0 外层+G0 改写后形态）。播放接口三通道实测与 L1 字节码等价。
-        val q = java.util.LinkedHashMap<String, String>()
-        q["iid"] = installId
-        q["device_id"] = deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = version.code; q["version_name"] = version.versionName
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType
-        q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"
-        q["os_api"] = HongguoEnv.osApi
-        q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = version.code
-        q["resolution"] = HongguoEnv.resolution
-        q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = version.code; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = version.code
-        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
-        q["ts"] = (System.currentTimeMillis() / 1000).toString()
-
-        val versionName = version.versionName
-        val signed = HongguoCrypto.signRequest(q, raw, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
         val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
         val realLadonArgus = HongguoArgus.generate(
-            signed.query, raw, nowSec, versionName, deviceId,
+            signed.query, raw, nowSec, versionName, identity.deviceId,
             deviceProfile = HongguoEnv.argusProfile
         )
         val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
@@ -958,26 +854,39 @@ class HongguoClient(
             "x-argus" to realLadonArgus.argus,
             "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
             "x-helios" to HongguoArgus.helios(nowSec),
-            "Content-Type" to "application/json; charset=UTF-8",
-            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
-            "x-reading-request" to "$ticket-${java.security.SecureRandom().nextLong() and 0xffffffffL}",
-            "x-ss-stub" to (signed.headers["X-SS-STUB"] ?: ""),
-            // G0 追加（feed 明文 body，无 Content-Encoding）
+            // G0 追加；body 三头仅 POST（GET 无 STUB/Content-Type）
             "lc" to "101",
             "x-ss-dp" to "8662",
             "x-tt-trace-id" to traceId
-        )
+        ) + if (raw != null) listOf(
+            "Content-Type" to "application/json; charset=UTF-8",
+            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
+            "x-reading-request" to "$ticket-${java.security.SecureRandom().nextLong() and 0xffffffffL}",
+            "x-ss-stub" to (signed.headers["X-SS-STUB"] ?: "")
+        ) else emptyList()
+        val cookieHeader = if (auth) HongguoCookieStoreParser.COOKIE_ORDER.mapNotNull { name ->
+            session?.accountCookies?.get(name)?.takeIf { it.isNotEmpty() }?.let { "$name=$it" }
+        }.joinToString("; ") else ""
 
         val req = Request.Builder()
             .url("$baseUrl$path?${signed.query}")
-            .post(raw.toRequestBody("application/json; charset=UTF-8".toMediaType()))
-            .apply { headers.forEach { (k, v) -> header(k, v) } }
+            .apply {
+                headers.forEach { (k, v) -> header(k, v) }
+                if (raw != null) post(raw.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                else get()
+                if (cookieHeader.isNotEmpty()) addHeader("Cookie", cookieHeader)
+                // 登录第二票据（b.java b1()：有才带）
+                if (auth && session?.accountToken?.isNotEmpty() == true) {
+                    addHeader("x-tt-token", session.accountToken)
+                }
+            }
             .build()
         http.newCall(req).execute().use { resp ->
+            if (auth) session?.rollTokenFrom(resp.headers)
             val bytes = resp.body?.bytes() ?: ByteArray(0)
             android.util.Log.d(
-                "Hongguo", "feed $path http=${resp.code} len=${bytes.size} " +
-                    "tls=${resp.handshake?.tlsVersion} logid=${resp.header("x-tt-logid")}"
+                "Hongguo", "$method $path vc=${version.code} http=${resp.code} len=${bytes.size} " +
+                    "logid=${resp.header("x-tt-logid")}"
             )
             if (HongguoClientDebug.enabled) {
                 println("HG-HTTP code=${resp.code} len=${bytes.size} logid=${resp.header("x-tt-logid")}")
@@ -990,12 +899,74 @@ class HongguoClient(
             val text = String(bytes, Charsets.UTF_8)
             if (text.isBlank()) throw EmptyResponseException()
             val payload = JSONObject(text)
-            if (payload.optString("code", "0") != "0") {
-                throw IllegalStateException("红果接口 code=${payload.optString("code")}")
+            val code = payload.optString("code", "0")
+            if (code != "0") {
+                if (auth && (payload.optString("error_name") == "session_expired" ||
+                        payload.optJSONObject("data")?.optString("error_name") == "session_expired")
+                ) throw SessionExpiredException()
+                throw ApiException(code)
             }
             return payload
         }
     }
+
+    /** 匿名签名 POST（默认 74532 官方抓包口径；空响应轮换重试）。 */
+    private fun postSignedJson(
+        path: String, body: JSONObject,
+        baseUrl: String = apiBase,
+        version: HongguoApiVersion = HongguoApiVersion.V74532,
+        extraQuery: Map<String, String> = emptyMap()
+    ): JSONObject = signedJson(
+        "POST", path, body.toString().toByteArray(Charsets.UTF_8),
+        baseUrl, version, extraQuery, auth = false, attempts = 3, retryOn = { false }
+    )
+
+    /** 匿名签名 GET（bookmall/plan/multi-detail 族；GET 无 body，无 STUB/Content-Type）。 */
+    private fun getSignedJson(
+        path: String, values: Map<String, String>,
+        baseUrl: String = apiBase,
+        version: HongguoApiVersion = HongguoApiVersion.V74532
+    ): JSONObject = signedJson(
+        "GET", path, null,
+        baseUrl, version, values, auth = false, attempts = 3, retryOn = { false }
+    )
+
+    /** 登录态 POST（账号同步族：Cookie+x-tt-token+token 滚动；身份与账号同源，失败不轮换）。 */
+    internal fun authPost(path: String, body: JSONObject): JSONObject = signedJson(
+        "POST", path, body.toString().toByteArray(Charsets.UTF_8),
+        altBase, HongguoApiVersion.V74532, emptyMap(), auth = true, attempts = 1, retryOn = { false }
+    )
+
+    /** 登录态 GET（云端历史/预约列表族）。 */
+    internal fun authGet(path: String, values: Map<String, String>): JSONObject = signedJson(
+        "GET", path, null,
+        altBase, HongguoApiVersion.V74532, values, auth = true, attempts = 1, retryOn = { false }
+    )
+
+    /** 搜索 tab（空响应/100103 游标失效自动轮换身份，其余 code 直接抛给调用方降级）。 */
+    internal fun searchTabRequest(values: Map<String, String>): JSONObject = signedJson(
+        "GET", "/reading/bookapi/search/tab/v", null,
+        altBase, HongguoApiVersion.V74532, values, auth = false, attempts = 3,
+        retryOn = { it.code == "100103" }
+    )
+
+    // ---- 签名请求身份：feed(POST)/rank(GET) 共用一号，注册互斥 + 空响应轮换 ----
+    @Volatile private var apiIdentity: HongguoDeviceRegister.Identity? = null
+
+    /** 注册互斥（多页并发首启时防竞态各注册一号——2026-11-10 实测一次启动烧 3 个号）。 */
+    private val registerLock = Any()
+
+    private fun obtainApiIdentity(): HongguoDeviceRegister.Identity =
+        apiIdentity ?: synchronized(registerLock) {
+            apiIdentity ?: HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
+        }
+
+    private fun rotateApiIdentity(): HongguoDeviceRegister.Identity =
+        synchronized(registerLock) {
+            HongguoDeviceRegister.registerFresh().also { apiIdentity = it }
+        }
+
+    internal class EmptyResponseException : IllegalStateException("empty body")
 
     // ---- Drama 归一化，对照 normalizeDrama（列表/详情两种形态字段归并） ----
     private fun normalizeDrama(value: Any?): Drama? {
@@ -1096,18 +1067,16 @@ class HongguoClient(
 
     companion object {
         /**
-         * 接口版本档案：不同接口须按 HGTV 各自的 App 版本口径请求——服务端按
-         * version_code 下发不同 cell 结构（实证 2026-11-13：plan/v1 相关作品
+         * 接口版本档案：全通道统一 74532（2026-11-14 抓包实证官方真机单一 7.4.5.32，
+         * 此前 73532/73932/72232 并存的大力出奇迹时代收编归一），唯 plan/v1 相关
+         * 作品钉 72232——服务端按 version_code 下发不同 cell 结构（实证 2026-11-13：
          * 73532 只回「猜你喜欢」st=506，72232 才回「相关作品」st=547）。
          */
         enum class HongguoApiVersion(val code: String, val versionName: String) {
-            /** feed/landpage/bookmall 通道（线上验证）。 */
-            V73532("73532", "7.3.5.32"),
-
-            /** plan/v1 相关作品通道（HGTV t0 同款）+ 搜索（searchTab 已同款）。 */
+            /** plan/v1 相关作品通道（HGTV t0 同款，服务端版本敏感）。 */
             V72232("72232", "7.2.2.32"),
 
-            /** commentapi 用户主页通道（官方 7.4.5 实测口径）。 */
+            /** 默认全通道（官方 7.4.5 抓包口径；播放/详情/commentapi 已实证）。 */
             V74532("74532", "7.4.5.32")
         }
 

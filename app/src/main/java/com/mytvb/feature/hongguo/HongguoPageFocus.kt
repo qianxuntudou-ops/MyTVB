@@ -12,4 +12,11 @@ interface HongguoPageFocus {
      * 无二级 tab 的页（历史/收藏/我的）用默认 false，卡片 UP 直接回顶部一级 tab。
      */
     fun focusSecondaryTab(): Boolean = false
+
+    /**
+     * tab **首次**选中回顶：离屏页全 retain + 进程重启会恢复旧滚动位置（表现为
+     * 「打开停在半路」），首次选中强制回第一行；之后切换保持用户滚动位置
+     * （用户口径：首次打开在顶部，来回切 tab 不丢位置）。
+     */
+    fun scrollToListTop() {}
 }

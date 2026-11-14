@@ -29,14 +29,18 @@ import kotlinx.coroutines.launch
  * + 选集区（分页 chip 20集/页 + 8 列网格，正在看集主题色高亮）。
  * 焦点链：按钮行 ↓ 落分页/选集；选集与分页顶行 ↑ 回按钮行；BACK 关弹窗。
  *
- * [scoreHint] 由入口卡片带过来：详情 SSR 的 seriesDetail 不下发评分（实测无 score 字段，
+ * [scoreHint] 由入口卡片带过来：详情接口不下发评分（实测无 score 字段，
  * 列表接口才有），入口有评分时用它兜底，否则评分行隐藏。
+ *
+ * [hint] 入口卡片数据（乐观渲染）：打开立即填标题/封面/评分/集数/季数，
+ * 不等网络——原生通道 ~200ms 内到达后 load() 重填修正（相同值无感）。
  */
 class HongguoDetailDialog(
     context: Context,
     private val seriesId: String,
     private val repository: HongguoRepository,
-    private val scoreHint: String = ""
+    private val scoreHint: String = "",
+    private val hint: DramaUi? = null
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
     private lateinit var binding: DialogHongguoDetailBinding
@@ -88,7 +92,38 @@ class HongguoDetailDialog(
         }
         // 内容就绪前先把焦点钉在「继续播放」（不等网络，load 回调里还会再钉一次）
         requestInitialFocus()
+        applyHint()
         load()
+    }
+
+    /**
+     * 乐观渲染：入口卡片已有的字段先填，消除「弹窗先空白等网络」的观感
+     * （网络回来 load() 全量重填，相同值 setText 无闪烁）。
+     */
+    private fun applyHint() {
+        val h = hint ?: return
+        binding.textTitle.text = h.title
+        val score = h.score.ifBlank { scoreHint }.trim()
+        val scoreValid = score.isNotBlank() && (score.toFloatOrNull() ?: 0f) > 0f
+        binding.textScore.text = "$score 分"
+        binding.textScore.visibility = if (scoreValid) View.VISIBLE else View.GONE
+        if (h.episodeCount > 0) {
+            binding.textMeta.text = listOf(
+                h.seasonText.takeIf { it.isNotBlank() },
+                "共${h.episodeCount}集"
+            ).filterNotNull().joinToString(" · ")
+            // 集数已知时高度先收缩到位，避免详情到达后弹窗跳变
+            val pages = (h.episodeCount + PAGE_SIZE - 1) / PAGE_SIZE
+            applyAdaptiveHeight(h.episodeCount, pages)
+        }
+        if (h.cover.isNotBlank()) {
+            ImageLoader.load(
+                imageView = binding.imageCover,
+                url = h.cover,
+                placeholder = R.drawable.default_video,
+                error = R.drawable.default_video
+            )
+        }
     }
 
     /**
@@ -122,6 +157,12 @@ class HongguoDetailDialog(
             try {
                 val d = repository.detail(seriesId)
                 detail = d
+                if (d.episodes.isEmpty()) {
+                    // 未开播预约剧（官方详情页同款「即将上线」形态）：剧卡+简介+
+                    // 预约文案，无选集区；收藏保留可用
+                    bindNotYetOnline(d)
+                    return@launch
+                }
                 refreshProgress()
                 binding.textTitle.text = d.drama.title
                 // 评分单独强调（强调色）；无评分数据时整格隐藏，标签行不再带评分前缀
@@ -151,13 +192,54 @@ class HongguoDetailDialog(
                 showPage(pageForEpisode(lastEpisodeIndex))
                 applyAdaptiveHeight(d.episodes.size, ranges.size)
                 requestInitialFocus()
+                // 云端单剧进度（官方进播放页必拉）：登录态换设备续播，异步拉不挡首帧，
+                // 云端比本地新才落库并重算「正在看」/按钮文案/选集页
+                scope.launch {
+                    if (repository.refreshProgressFromCloud(seriesId)) refreshProgress()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(context, e.message ?: "详情加载失败")
-                dismiss()
+                if (hint != null) {
+                    // 预约未开播剧：video_detail 无选集、SSR 回退 404（2026-11-14 MuMu 实证）。
+                    // 保留乐观渲染的剧名/封面，按钮置灰提示即将上线（不关弹窗）
+                    binding.buttonPlay.isEnabled = false
+                    binding.textButtonPlay.text = hint.subtitle.ifBlank { "即将上线，敬请期待" }
+                    binding.buttonFavorite.isEnabled = false
+                    AppToast.show(context, "该剧暂未开播")
+                } else {
+                    AppToast.show(context, e.message ?: "详情加载失败")
+                    dismiss()
+                }
             }
         }
+    }
+
+    /** 未开播（预约剧）形态：官方同款「即将上线」页面，无选集区、播放置灰。 */
+    private fun bindNotYetOnline(d: HongguoWeb.SeriesDetail) {
+        binding.textTitle.text = d.drama.title.ifBlank { hint?.title.orEmpty() }
+        val score = d.drama.score.ifBlank { scoreHint }.trim()
+        val scoreValid = score.isNotBlank() && (score.toFloatOrNull() ?: 0f) > 0f
+        binding.textScore.text = "$score 分"
+        binding.textScore.visibility = if (scoreValid) View.VISIBLE else View.GONE
+        binding.textTags.text = d.drama.tags.take(4).joinToString(" · ")
+        binding.textIntro.text = d.drama.intro
+        binding.textMeta.text = listOf(
+            d.drama.seasonIndex.takeIf { it > 0 }?.let { "第${it}季" },
+            "即将上线"
+        ).filterNotNull().joinToString(" · ")
+        ImageLoader.load(
+            imageView = binding.imageCover,
+            url = d.drama.cover.ifBlank { hint?.cover.orEmpty() },
+            placeholder = R.drawable.default_video,
+            error = R.drawable.default_video
+        )
+        binding.recyclerPageChips.visibility = View.GONE
+        binding.buttonPlay.isEnabled = false
+        binding.textButtonPlay.text = hint?.subtitle?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.hongguo_subscribe_pending)
+        refreshFavoriteState()
+        requestInitialFocus()
     }
 
     /**
@@ -168,6 +250,7 @@ class HongguoDetailDialog(
      */
     private fun refreshProgress() {
         val d = detail ?: return
+        if (d.episodes.isEmpty()) return   // 未开播无进度语义（防焦点回调覆盖未上线文案）
         val rec = repository.progressOf(seriesId)
         hasWatched = rec != null
         // WatchRecord.episodeIndex 是 0-based「最后在看的集」：+1 = 1-based 当前集。
@@ -219,6 +302,11 @@ class HongguoDetailDialog(
         val d = detail ?: return
         binding.textButtonPlay.text =
             if (hasWatched) "继续播放 第${lastEpisodeIndex}集" else "开始观看 第1集"
+        refreshFavoriteState()
+    }
+
+    /** 收藏按钮态（已开播/未开播两种形态共用）。 */
+    private fun refreshFavoriteState() {
         val favorite = repository.isFavorite(seriesId)
         binding.buttonFavorite.text =
             if (favorite) R.string.hongguo_unfavorite.asText() else R.string.hongguo_favorite.asText()
@@ -237,6 +325,7 @@ class HongguoDetailDialog(
 
     private fun playEpisode(index: Int) {
         val d = detail ?: return
+        if (d.episodes.isEmpty()) return   // 未开播：按钮已置灰，双保险
         val episode = d.episodes.getOrNull(index - 1) ?: return
         val resumeMs = repository.progressOf(d.drama.seriesId)
             // 0-based 存档 +1 对齐 1-based 入参：正在看的集且未播完才续位
@@ -436,9 +525,10 @@ class HongguoDetailDialog(
             context: Context,
             repository: HongguoRepository,
             seriesId: String,
-            scoreHint: String = ""
+            scoreHint: String = "",
+            hint: DramaUi? = null
         ) {
-            HongguoDetailDialog(context, seriesId, repository, scoreHint).show()
+            HongguoDetailDialog(context, seriesId, repository, scoreHint, hint).show()
         }
     }
 }

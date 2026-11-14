@@ -12,6 +12,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.ui.base.AppToast
+import com.mytvb.core.ui.base.adaptiveSpanCount
+import com.mytvb.core.ui.decoration.LinearSpacingItemDecoration
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.CellHongguoLaneBinding
 import com.mytvb.databinding.FragmentHongguoMineBinding
@@ -105,7 +107,12 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
     }
 
     private fun showLoginDialog() {
-        HongguoLoginDialog.show(requireContext(), repository) { refreshLoginState() }
+        // 登录成功立即同步云端（历史/收藏落本地，预约 lane 由 refreshLoginState 重拉），
+        // 修复此前「登录后要重启才见云数据」——已加载的 tab 不会自己刷新，落库后读本地即见
+        HongguoLoginDialog.show(requireContext(), repository) {
+            repository.syncAfterLogin()
+            refreshLoginState()
+        }
     }
 
     private fun openShelf(source: HongguoShelfPage.Source) {
@@ -117,13 +124,14 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         lanes.clear()
         fun newAdapter() = HongguoDramaAdapter(
             onItemClick = { item, _ ->
-                HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
+                // 预约 lane 传 hint：未开播剧详情 404 时保留剧名/封面+「即将上线」
+                HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
             },
             onItemLongPress = { item, _ ->
                 HongguoCardMenuDialog.show(requireContext(), repository, item)
             },
             // 横向单行卡根默认 MATCH_PARENT 会撑满整屏宽，必须给定实际像素（Fragment 属性初始化无 resources，走方法内）
-            itemWidthPx = resources.getDimensionPixelSize(R.dimen.px135)
+            itemWidthPx = standardCardWidthPx()
         )
         lanes += Lane(binding.laneSubscribe, newAdapter(), HongguoShelfPage.Source.SUBSCRIBE, true)
         lanes += Lane(binding.laneFavorite, newAdapter(), HongguoShelfPage.Source.FAVORITE, true)
@@ -131,13 +139,28 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         lanes[0].cell.textLaneTitle.setText(R.string.hongguo_my_subscribe)
         lanes[1].cell.textLaneTitle.setText(R.string.hongguo_tab_favorite)
         lanes[2].cell.textLaneTitle.setText(R.string.hongguo_tab_history)
+        val laneSpacing = resources.getDimensionPixelSize(R.dimen.px16)
         lanes.forEach { lane ->
             lane.cell.rvLane.layoutManager =
                 LinearLayoutManager(requireContext(), RecyclerView.HORIZONTAL, false)
             lane.cell.rvLane.adapter = lane.adapter
             lane.cell.rvLane.itemAnimator = null
+            lane.cell.rvLane.addItemDecoration(
+                LinearSpacingItemDecoration(laneSpacing, orientation = LinearSpacingItemDecoration.HORIZONTAL)
+            )
             lane.cell.buttonLaneMore.setOnClickListener { openShelf(lane.source) }
         }
+    }
+
+    /**
+     * 与 feed/货架网格标准卡同宽（dip，随分辨率档与用户列数偏好自适应）：
+     * 屏宽扣 feed 网格 RV 左右 padding(px20×2) 与列间距(px16×(span-1)) 后按列均分。
+     */
+    private fun standardCardWidthPx(): Int {
+        val span = resources.adaptiveSpanCount(base = 6, wide = 12)
+        val spacing = resources.getDimensionPixelSize(R.dimen.px16)
+        val gridPadding = resources.getDimensionPixelSize(R.dimen.px20) * 2
+        return (resources.displayMetrics.widthPixels - gridPadding - spacing * (span - 1)) / span
     }
 
     private fun refreshLoginState() {

@@ -91,6 +91,13 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
         return (page as? HongguoPageFocus)?.focusFirstCard() == true
     }
 
+    /** tab 选中回顶：转发当前子档。 */
+    override fun scrollToListTop() {
+        if (!isAdded || view == null) return
+        (childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
+            as? HongguoPageFocus)?.scrollToListTop()
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

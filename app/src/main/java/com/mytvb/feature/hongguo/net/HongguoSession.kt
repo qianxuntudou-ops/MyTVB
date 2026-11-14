@@ -117,6 +117,20 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
     val loggedIn: Boolean
         get() = !accountCookies["sessionid"].isNullOrEmpty() || !accountCookies["sessionid_ss"].isNullOrEmpty()
 
+    /** x-tt-token 滚动续期（C0051b:68：X-Tt-Token 响应头 / Set-Cookie，>=99 字符直接收）。 */
+    fun rollTokenFrom(headers: okhttp3.Headers) {
+        headers.values("X-Tt-Token").firstOrNull()?.takeIf { it.length >= 99 }?.let {
+            accountToken = it
+            return
+        }
+        headers.values("Set-Cookie").forEach { raw ->
+            if (raw.startsWith("x-tt-token=", ignoreCase = true)) {
+                raw.substringAfter('=').substringBefore(';').takeIf { it.length >= 99 }
+                    ?.let { accountToken = it }
+            }
+        }
+    }
+
     /** 仅清账号票据（登出），设备身份保留。 */
     fun clearAccount() {
         prefs.edit()

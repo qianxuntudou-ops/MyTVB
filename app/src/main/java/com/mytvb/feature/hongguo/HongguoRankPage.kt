@@ -149,8 +149,17 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
     }
 
+    /** tab 首次选中回顶；之后切换保持位置。 */
+    private var topRestoredOnce = false
+
+    override fun scrollToListTop() {
+        if (_binding == null || topRestoredOnce) return
+        topRestoredOnce = true
+        binding.recyclerRank.scrollToPosition(0)
+    }
+
     private fun openDetail(item: DramaUi, position: Int) {
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
     }
 
     private fun refresh() {

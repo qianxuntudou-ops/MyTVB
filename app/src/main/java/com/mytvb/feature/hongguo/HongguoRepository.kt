@@ -12,6 +12,7 @@ import com.mytvb.feature.hongguo.net.HongguoSync
 import com.mytvb.feature.hongguo.net.HongguoWeb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -23,11 +24,11 @@ class HongguoRepository private constructor(context: Context) {
 
     private val appContext = context.applicationContext
     private val session = HongguoSession(appContext)
-    private val client = HongguoClient()
+    private val client = HongguoClient(session = session)
     private val web = HongguoWeb()
     // 设备自愈钩子（HGTV "device healed" 同款）：空响应=号被拒 → 换新号并持久化
     private val play = HongguoPlay(rotateIdentity = { registerAndSave() })
-    private val search = HongguoSearch()
+    private val search = HongguoSearch(client)
     val account = HongguoAccount(session)
 
     // ---- 身份（真注册，multi_video_model 需要） ----
@@ -104,8 +105,8 @@ class HongguoRepository private constructor(context: Context) {
     /** 缓存时长：30 分钟。 */
     private val contentTtlMs = 30L * 60_000L
 
-    /** 详情短缓存：5 分钟（同剧反复打开/逐集连播去重）。 */
-    private val DETAIL_TTL_MS = 5L * 60_000L
+    /** 详情缓存：30 分钟（对齐 HGTV），倒计时到点释放。 */
+    private val DETAIL_TTL_MS = 30L * 60_000L
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> contentCacheGet(key: String, ttlMs: Long = contentTtlMs): T? = synchronized(contentCacheLock) {
@@ -116,8 +117,13 @@ class HongguoRepository private constructor(context: Context) {
         entry.data as? T
     }
 
+    /** 写入时顺手清扫全表过期条目：从不被 get 的条目到点也释放，缓存总量不随时间膨胀。 */
     private fun contentCachePut(key: String, data: Any) = synchronized(contentCacheLock) {
-        contentCache[key] = ContentEntry(data, System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        if (contentCache.isNotEmpty()) {
+            contentCache.values.removeAll { now - it.at > contentTtlMs }
+        }
+        contentCache[key] = ContentEntry(data, now)
     }
 
     // ---- feed ----
@@ -151,8 +157,9 @@ class HongguoRepository private constructor(context: Context) {
     // ---- 搜索 ----
     /**
      * 按设置分流（存储值 hongguo_search_source："App"/"官网"，默认 App）。
-     * 官网源直接走免登录分页接口（offset 即页码-1）；App 源空响应轮换新注册身份重试，
-     * 三次全败再自动回退官网一次（HGTV「App 搜索接口没有数据，已自动改用官网搜索」同款）。
+     * 官网源直接走免登录分页接口（offset 即页码-1）；App 源空响应在签名通道内
+     * 已轮换身份重试 3 次，全败自动回退官网一次（HGTV「App 搜索接口没有数据，
+     * 已自动改用官网搜索」同款），官网也败抛原始错。
      */
     suspend fun search(
         keyword: String, offset: Int,
@@ -161,25 +168,16 @@ class HongguoRepository private constructor(context: Context) {
         if (appSettings.getCachedString("hongguo_search_source") == "官网") {
             return@withContext search.searchWeb(keyword, offset + 1)
         }
-        var current = identity()
-        var lastError: Exception? = null
-        for (attempt in 0 until 3) {
-            try {
-                return@withContext search.searchTab(keyword, offset, cursor, current)
-            } catch (e: HongguoSearch.EmptyResponseException) {
-                lastError = e
-                if (attempt == 2) break
-                current = registerAndSave()
-                Thread.sleep(120)
-            }
-        }
-        // App 源全败兜底：官网接口无身份要求，成功即接管本会话后续翻页
         try {
-            search.searchWeb(keyword, offset + 1)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            throw lastError ?: IllegalStateException("搜索接口无响应")
+            search.searchTab(keyword, offset, cursor)
+        } catch (e: HongguoSearch.EmptyResponseException) {
+            try {
+                search.searchWeb(keyword, offset + 1)
+            } catch (e2: kotlinx.coroutines.CancellationException) {
+                throw e2
+            } catch (_: Exception) {
+                throw e
+            }
         }
     }
 
@@ -231,12 +229,22 @@ class HongguoRepository private constructor(context: Context) {
     fun accountMethod(): String = session.loginMethod
 
     // ---- 详情 ----
-    // 短 TTL（5 分钟）：详情弹窗反复打开、播放器逐集连播（切集只为拿 episode vid）
-    // 都重复拉同一部剧；5 分钟短于追更感知周期，集数更新不受影响。
+    // 内存缓存(30min 倒计时过期) → 原生 video_detail/v1（~18KB/170ms，2026-11-14 替换
+    // SSR 网页主通道——450KB HTML 冷路径 0.8~1.7s）→ SSR 回退兜底。30 分钟对齐 HGTV，
+    // 短于追更感知周期，集数更新不受影响。
     suspend fun detail(seriesId: String): HongguoWeb.SeriesDetail {
         val cacheKey = "detail|$seriesId"
         contentCacheGet<HongguoWeb.SeriesDetail>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
-        val d = withContext(Dispatchers.IO) { web.seriesDetail(seriesId) }
+        val d = withContext(Dispatchers.IO) {
+            try {
+                client.videoDetail(seriesId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.d("Hongguo", "video_detail fail, fallback SSR: ${e.message}")
+                web.seriesDetail(seriesId)
+            }
+        }
         contentCachePut(cacheKey, d)
         return d
     }
@@ -362,22 +370,9 @@ class HongguoRepository private constructor(context: Context) {
             .toList()
     }
 
-    /** 原始搜索（关闭相关性过滤 + 不落搜索历史；身份三败抛错由调用方兜底）。 */
-    private suspend fun searchRaw(keyword: String): HongguoSearch.SearchPage {
-        var current = identity()
-        var lastError: Exception? = null
-        for (attempt in 0 until 3) {
-            try {
-                return search.searchTab(keyword, 0, null, current, relevanceFilter = false)
-            } catch (e: HongguoSearch.EmptyResponseException) {
-                lastError = e
-                if (attempt == 2) break
-                current = registerAndSave()
-                Thread.sleep(120)
-            }
-        }
-        throw lastError ?: IllegalStateException("搜索接口无响应")
-    }
+    /** 原始搜索（关闭相关性过滤 + 不落搜索历史；通道内已重试，失败抛错由调用方兜底）。 */
+    private suspend fun searchRaw(keyword: String): HongguoSearch.SearchPage =
+        withContext(Dispatchers.IO) { search.searchTab(keyword, 0, null, relevanceFilter = false) }
 
     /** 作者名归一（HGTV E0：去空白 + 小写）。 */
     private fun normalizeAuthor(value: String): String =
@@ -617,7 +612,7 @@ class HongguoRepository private constructor(context: Context) {
 
     // ---- 账号云同步（登录态才发；本地为准、云端尽力，失败静默不影响主流程） ----
 
-    val sync: HongguoSync by lazy { HongguoSync(session) { identity() } }
+    val sync: HongguoSync by lazy { HongguoSync(session, client) }
 
     private val cloudScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()
@@ -667,16 +662,7 @@ class HongguoRepository private constructor(context: Context) {
                     positionMs = c.positionMs, durationMs = c.durationMs, updatedAt = c.lastPlayedAtMs
                 )
             }
-            val byId = LinkedHashMap<String, WatchRecord>()
-            for (r in local + cloud) {
-                val old = byId[r.seriesId]
-                byId[r.seriesId] = when {
-                    old == null -> r
-                    r.updatedAt > old.updatedAt -> r.fillFrom(old)
-                    else -> old.fillFrom(r)
-                }
-            }
-            byId.values.sortedByDescending { it.updatedAt }
+            mergeByIdNewerWins(local, cloud)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -696,6 +682,113 @@ class HongguoRepository private constructor(context: Context) {
     /** 云端历史删除（本地历史清空时同步）。 */
     fun deleteHistoryCloud(seriesIds: List<String>) =
         cloudAsync { deleteHistory(seriesIds) }
+
+    /**
+     * 收藏 tab 数据源：本地记录 + 登录态拉云端书架合并（同剧集新者胜）；
+     * 云端失败回落本地。2026-11-14 补云端（此前只有本地，用户反馈收藏不是云端数据）。
+     * 书架接口只回 id+collect_time（无剧卡），云端条目缺 title 时走 detail 通道补卡
+     * （contentCache 30min 复用——点开详情弹窗同源秒开）；本地已有的直接借本地卡面。
+     */
+    suspend fun mergedFavorites(): List<WatchRecord> {
+        val local = favorites()
+        if (!session.loggedIn) return local
+        return try {
+            val localById = local.associateBy { it.seriesId }
+            val cloud = withContext(Dispatchers.IO) { sync.cloudFavorites() }.map { c ->
+                val base = WatchRecord(
+                    seriesId = c.seriesId, title = c.title, cover = c.cover,
+                    episodeIndex = 0, episodeCount = c.episodeCount,
+                    positionMs = 0L, durationMs = 0L, updatedAt = c.collectedAtMs
+                )
+                val borrowed = localById[c.seriesId]
+                if (borrowed != null && borrowed.title.isNotEmpty() && borrowed.cover.isNotEmpty()) {
+                    // 本机收藏过：直接借本地卡面（零请求）
+                    base.copy(title = borrowed.title, cover = borrowed.cover,
+                        episodeCount = if (base.episodeCount > 0) base.episodeCount else borrowed.episodeCount)
+                } else base
+            }
+            // 云端新条目（本机没收藏过）逐条补剧卡（title/cover 任缺即补）；补失败保留原条
+            val enriched = cloud.map { rec ->
+                if (rec.title.isNotEmpty() && rec.cover.isNotEmpty()) return@map rec
+                try {
+                    val d = detail(rec.seriesId)
+                    rec.copy(title = d.drama.title, cover = d.drama.cover,
+                        episodeCount = d.drama.episodeCount)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    rec
+                }
+            }
+            mergeByIdNewerWins(local, enriched)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLog.w("Hongguo", "cloud favorites merge fail: ${e.message}")
+            local
+        }
+    }
+
+    /** 同剧集新者胜（updatedAt），缺失字段互补；结果按 updatedAt 倒序。 */
+    private fun mergeByIdNewerWins(local: List<WatchRecord>, cloud: List<WatchRecord>): List<WatchRecord> {
+        val byId = LinkedHashMap<String, WatchRecord>()
+        for (r in local + cloud) {
+            val old = byId[r.seriesId]
+            byId[r.seriesId] = when {
+                old == null -> r
+                r.updatedAt > old.updatedAt -> r.fillFrom(old)
+                else -> old.fillFrom(r)
+            }
+        }
+        return byId.values.sortedByDescending { it.updatedAt }
+    }
+
+    /**
+     * 登录态数据就绪事件（登录成功+云端同步落库后 emit）：红果页 ViewPager2 打开时就
+     * 预载了历史/收藏/我的子页，未登录时它们已用空数据初始化，登录后不会自己刷新——
+     * 各子页 collect 本事件重拉。同步失败也 emit（页面至少能重拉本地）。
+     */
+    val loginEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * 登录成功后立即同步（2026-11-14：此前登录后要重启才见云历史/收藏——回调只刷了
+     * 账号行，云端数据没落本地，已加载的 tab 不会自己刷新）：bootVerify 保活 + 云历史/
+     * 云收藏合并**落本地库**（writeRecords 直写不走 saveProgress，避免同值回传云端），
+     * 完成后发 [loginEvents] 通知已预载子页重拉。
+     */
+    fun syncAfterLogin() {
+        if (!session.loggedIn) return
+        cloudScope.launch {
+            runCatching {
+                sync.bootVerify()
+                // 云历史 → 本地（同 mergedHistory 语义，新者胜）
+                val cloudHistory = sync.cloudHistory().map { c ->
+                    WatchRecord(
+                        seriesId = c.seriesId, title = c.title, cover = c.cover,
+                        episodeIndex = (c.episodeIndex1 - 1).coerceAtLeast(0),
+                        episodeCount = c.episodeCount,
+                        positionMs = c.positionMs, durationMs = c.durationMs,
+                        updatedAt = c.lastPlayedAtMs
+                    )
+                }
+                val mergedHistory = mergeByIdNewerWins(history(), cloudHistory)
+                writeRecords("history", mergedHistory.take(200))
+                // 云收藏 → 本地：只同步本地已有条目的时间戳（云端新条目不落库——书架
+                // 接口无剧卡，完整列表由 mergedFavorites 动态补卡，本地库保持纯本机操作记录）
+                val localFav = favorites().associateBy { it.seriesId }
+                val cloudFavIds = sync.cloudFavorites().associateBy { it.seriesId }
+                val syncedFav = localFav.values.map { l ->
+                    val c = cloudFavIds[l.seriesId]
+                    if (c != null && c.collectedAtMs > l.updatedAt) l.copy(updatedAt = c.collectedAtMs) else l
+                }
+                writeRecords("favorites", syncedFav)
+                AppLog.d("Hongguo", "syncAfterLogin done: history=${mergedHistory.size} favorites=${syncedFav.size}")
+            }.onFailure {
+                AppLog.d("HongguoSync", "sync after login fail: ${it.message}")
+            }
+            loginEvents.tryEmit(Unit)
+        }
+    }
 
     /** 登录态保活（播放启动等低频场景调用；30 分钟阈值内部判定）。 */
     fun beatIfNeeded() {
@@ -726,14 +819,15 @@ class HongguoRepository private constructor(context: Context) {
 
     fun history(): List<WatchRecord> = readRecords("history")
 
-    fun saveProgress(record: WatchRecord, vid: String = record.seriesId) {
+    fun saveProgress(record: WatchRecord, vid: String = record.seriesId, pushCloud: Boolean = true) {
         val list = history().filter { it.seriesId != record.seriesId }.toMutableList()
         list.add(0, record)
         writeRecords("history", list.take(200))
-        // 云同步（进度+历史双通道：read_progress/upload 支持跨设备续播；节流 20s 防连发）
+        // 云同步（进度+历史双通道：read_progress/upload 支持跨设备续播；节流 20s 防连发；
+        // 云端进度回落本地时 pushCloud=false 防同值回传）
         val now = System.currentTimeMillis()
         val key = "last_cloud_push_${record.seriesId}"
-        if (now - localPrefs.getLong(key, 0L) > 20_000L) {
+        if (pushCloud && now - localPrefs.getLong(key, 0L) > 20_000L) {
             localPrefs.edit().putLong(key, now).apply()
             cloudAsync {
                 uploadProgress(
@@ -751,6 +845,43 @@ class HongguoRepository private constructor(context: Context) {
 
     fun progressOf(seriesId: String): WatchRecord? =
         history().firstOrNull { it.seriesId == seriesId }
+
+    /**
+     * 云端单剧进度刷新（read_progress/get，官方进播放页必拉）：详情弹窗打开时异步调，
+     * 云端比本地新（换设备/重装场景）则落本地（不回传云端）并返回 true 由调用方重算 UI；
+     * 未登录/无云端记录/失败一律返回 false 静默。
+     */
+    suspend fun refreshProgressFromCloud(seriesId: String): Boolean {
+        if (!session.loggedIn) return false
+        return try {
+            val cloud = withContext(Dispatchers.IO) { sync.cloudProgress(seriesId) } ?: return false
+            val local = progressOf(seriesId)
+            if (local == null || cloud.lastPlayedAtMs > local.updatedAt) {
+                saveProgress(
+                    WatchRecord(
+                        seriesId = cloud.seriesId,
+                        title = cloud.title.ifEmpty { local?.title.orEmpty() },
+                        cover = cloud.cover.ifEmpty { local?.cover.orEmpty() },
+                        episodeIndex = (cloud.episodeIndex1 - 1).coerceAtLeast(0),
+                        episodeCount = if (cloud.episodeCount > 0) cloud.episodeCount else local?.episodeCount ?: 0,
+                        positionMs = cloud.positionMs,
+                        durationMs = cloud.durationMs,
+                        updatedAt = cloud.lastPlayedAtMs
+                    ),
+                    pushCloud = false
+                )
+                AppLog.d("Hongguo", "cloud progress applied: $seriesId ep=${cloud.episodeIndex1} pos=${cloud.positionMs}")
+                true
+            } else {
+                false
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLog.d("Hongguo", "cloud progress refresh fail: ${e.message}")
+            false
+        }
+    }
 
     private fun readRecords(key: String): List<WatchRecord> {
         val raw = localPrefs.getString(key, null) ?: return emptyList()

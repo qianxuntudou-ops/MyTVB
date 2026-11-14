@@ -99,7 +99,8 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     private fun host(): HongguoFragment? = parentFragment as? HongguoFragment
 
     private fun openDetail(item: DramaUi, position: Int) {
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
+        // 预约源传 hint：未开播剧详情 404 时保留剧名/封面+「即将上线」（乐观渲染兜底）
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
     }
 
     private fun load(source: Source) {
@@ -131,8 +132,9 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     }
 
     private suspend fun fetch(source: Source): List<DramaUi> = when (source) {
-        Source.FAVORITE -> repository.favorites().map { it.toDramaUi() }
-        Source.HISTORY -> repository.history().map { it.toDramaUi() }
+        // 收藏/历史登录态拉云端合并（2026-11-14：此前纯本地，用户反馈收藏不是云端数据）
+        Source.FAVORITE -> repository.mergedFavorites().map { it.toDramaUi() }
+        Source.HISTORY -> repository.mergedHistory().map { it.toDramaUi() }
         Source.SUBSCRIBE -> repository.subscribeList(onlyOnline = false).map { it.toDramaUi() }
     }
 

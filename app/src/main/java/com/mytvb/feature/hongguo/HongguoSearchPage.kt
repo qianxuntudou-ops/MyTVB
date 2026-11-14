@@ -350,7 +350,7 @@ class HongguoSearchPage : Fragment() {
     }
 
     private fun openDetail(item: DramaUi, position: Int) {
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
     }
 
     /** 发现/联想条目统一入口：带剧 ID 的弹详情，纯词直接搜索。 */

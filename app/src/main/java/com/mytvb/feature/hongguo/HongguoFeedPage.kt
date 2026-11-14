@@ -121,6 +121,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         // 全部入口都显式落子项（TvListFocusController/chip 绑定），无人依赖 RV 自身。
         binding.recyclerFeed.isFocusable = false
         binding.recyclerFilters.isFocusable = false
+        // 登录后云端数据落库事件：历史/收藏页未登录时已被预载成空列表，这里重拉
+        viewLifecycleOwner.lifecycleScope.launch {
+            repository.loginEvents.collect {
+                if (mode == MODE_HISTORY || mode == MODE_FAVORITE) load(mode, genre, withPanel = false)
+            }
+        }
         binding.recyclerFeed.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 if (dy <= 0 || !hasMore || loading) return
@@ -161,9 +167,18 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         return tvFocusController?.requestFocusPosition(0, allowOutsideFocus = true) == true
     }
 
+    /** tab 首次选中回顶（retain/进程重启恢复的旧滚动位置）；之后切换保持位置。 */
+    private var topRestoredOnce = false
+
+    override fun scrollToListTop() {
+        if (_binding == null || topRestoredOnce) return
+        topRestoredOnce = true
+        binding.recyclerFeed.scrollToPosition(0)
+    }
+
     private fun openDetail(item: DramaUi, position: Int) {
         lastOpenedPosition = position
-        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score)
+        HongguoDetailDialog.show(requireContext(), repository, item.seriesId, item.score, item)
     }
 
     /** 焦点是否落在 tab 行（一级页签 TabLayout / 分类子档 tab / 榜单分段控件）。 */
@@ -201,12 +216,18 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 loadJob = viewLifecycleOwner.lifecycleScope.launch {
                     try {
                         // 本地记录已秒显，云端合并静默进行；仅本地也空时给中央圈反馈
-                        if (adapter.contentCount() == 0) {
+                        val wasEmpty = adapter.contentCount() == 0
+                        if (wasEmpty) {
                             binding.progressLoading.visibility = View.VISIBLE
                         }
                         val merged = repository.mergedHistory()
                         adapter.setDataDeduplicated(merged.map { it.toUi() })
                         binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                        // 页面预载（未登录空表）→ 登录后才填进云端 30 条：首次填充回顶，
+                        // 否则切到本 tab 时停在预载期的滚动/焦点残留位置
+                        if (wasEmpty && adapter.contentCount() > 0) {
+                            binding.recyclerFeed.scrollToPosition(0)
+                        }
                     } catch (e: CancellationException) {
                         throw e
                     } finally {
@@ -216,9 +237,30 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
                 return
             }
             MODE_FAVORITE -> {
+                // 本地秒显；登录态再拉云端书架合并（2026-11-14 前纯本地——用户反馈收藏不是云端数据）
                 adapter.setDataDeduplicated(repository.favorites().map { it.toUi() })
-                hasMore = false
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                hasMore = false
+                if (!repository.loggedIn) return
+                loadJob?.cancel()
+                loadJob = viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        val wasEmpty = adapter.contentCount() == 0
+                        if (wasEmpty) {
+                            binding.progressLoading.visibility = View.VISIBLE
+                        }
+                        val merged = repository.mergedFavorites()
+                        adapter.setDataDeduplicated(merged.map { it.toUi() })
+                        binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
+                        if (wasEmpty && adapter.contentCount() > 0) {
+                            binding.recyclerFeed.scrollToPosition(0)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } finally {
+                        binding.progressLoading.visibility = View.GONE
+                    }
+                }
                 return
             }
         }

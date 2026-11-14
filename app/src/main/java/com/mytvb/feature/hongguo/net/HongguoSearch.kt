@@ -1,17 +1,17 @@
 package com.mytvb.feature.hongguo.net
 
-import android.util.Base64
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 红果短剧搜索：/reading/bookapi/search/tab/v（GET 签名，72232 profile）。
- * 对照 Node signedSearchRequest / Go lists.go searchDiscrete——线上验证链路。
+ * 红果短剧搜索：/reading/bookapi/search/tab/v（GET 签名）。
+ * 2026-11-14 起传输层收编 HongguoClient 统一签名通道（74532 官方抓包口径，
+ * 空/100103 通道内轮换身份重试），本类只保留搜索专属参数与解析。
  * 联想词走 hongguoduanju.com 无签名接口（Go 版同款）。
  */
-class HongguoSearch {
+class HongguoSearch(private val client: HongguoClient) {
 
     /** TLS 定制共享 client（HongguoTls；搜索接口同样校验 TLS 形态）。 */
     private val http: OkHttpClient by lazy { HongguoHttp.ok }
@@ -36,8 +36,9 @@ class HongguoSearch {
     }
 
     /**
-     * @param identity 真注册设备身份（搜索校验 device_id/iid 真实性 + cdid UUID 格式）。
-     * 空响应或 100103 时抛 [EmptyResponseException]，调用方轮换身份重试。
+     * 短剧 tab 搜索（tab_type=11，其他 tab 的 cell 无 video_data 自然被过滤）。
+     * 通道内空响应/100103 已轮换身份重试 3 次，全败抛 [EmptyResponseException]
+     * 由调用方回退官网（HGTV「已自动改用官网搜索」同款）。
      * @param relevanceFilter 分词相关性过滤（默认开；作者名搜索时必须关——作者名
      *   不在 title/intro/tags 元数据里，开着会把结果全过滤光，对照 HGTV 作者作品
      *   走原始搜索后按 multi-detail 补的 author 精确匹配过滤）
@@ -45,97 +46,32 @@ class HongguoSearch {
     fun searchTab(
         keyword: String, offset: Int,
         cursor: SearchPage.Cursor?,
-        identity: HongguoDeviceRegister.Identity,
         relevanceFilter: Boolean = true
     ): SearchPage {
         val kw = keyword.trim().take(80)
         require(kw.isNotEmpty()) { "搜索词为空" }
-        // 2026-11-10 对齐 HGTV F0.x1 形态：插入序 query（72232 档案+HongguoEnv 真实环境）+
-        // 真版 Ladon/Argus/Helios（占位版被空响应拒）+ G0 改写后头集 + TLS 定制传输。
-        val q = java.util.LinkedHashMap<String, String>()
-        q["iid"] = identity.installId
-        q["device_id"] = identity.deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType
-        q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"
-        q["os_api"] = HongguoEnv.osApi
-        q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "72232"
-        q["resolution"] = HongguoEnv.resolution
-        q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = "72232"; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "72232"
-        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
-        q["cdid"] = identity.cdid
-        q["query"] = kw
-        q["count"] = "20"
-        q["tab_type"] = "11"          // 短剧 tab（其他 tab 的 cell 无 video_data 自然被过滤）
-        q["bookshelf_search_plan"] = "4"
-        q["use_correct"] = "true"
-        q["user_is_login"] = "0"
-        cursor?.searchId?.takeIf { it.isNotEmpty() }?.let { q["search_id"] = it }
-        cursor?.passback?.takeIf { it.isNotEmpty() }?.let { q["passback"] = it }
-        q["offset"] = offset.toString()
-
-        val nowMs = System.currentTimeMillis()
-        val versionName = "7.2.2.32"
-        val signed = HongguoCrypto.signRequest(
-            q, null, nowMs, identity.deviceId,
-            targetBranch = 0, version = versionName
+        val values = linkedMapOf(
+            "query" to kw,
+            "count" to "20",
+            "tab_type" to "11",
+            "bookshelf_search_plan" to "4",
+            "use_correct" to "true",
+            "user_is_login" to "0",
+            "offset" to offset.toString()
         )
-        val ts = signed.headers["X-Khronos"]?.toIntOrNull() ?: (nowMs / 1000).toInt()
-        val realLadonArgus = HongguoArgus.generate(
-            signed.query, null, ts, versionName, identity.deviceId,
-            deviceProfile = HongguoEnv.argusProfile
-        )
-        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val traceHex = java.util.UUID.randomUUID().toString().replace("-", "")
-
-        val req = Request.Builder()
-            .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/search/tab/v?${signed.query}")
-            .get()
-            // E0 外层
-            .header("User-Agent", SEARCH_UA)
-            .header("Accept-Language", "zh-CN,zh;q=0.9")
-            .header("X-SS-DP", "8662")
-            .header("X-Tt-Store-Region", "cn")
-            .header("X-Tt-Store-Region-Src", "did")
-            .header("X-XS-From-Web", "0")
-            .header("Sdk-Version", "2")
-            // F0.x1.d 签名头集（G0 改写后，GET 无 body 头）
-            .header("User-Agent", SEARCH_UA)
-            .header("Accept", "application/json; charset=utf-8,application/x-protobuf")
-            .header("x-ss-req-ticket", ticket)
-            .header("sdk-version", "2")
-            .header("passport-sdk-version", "5051452")
-            .header("x-xs-from-web", "0")
-            .header("x-khronos", signed.headers["X-Khronos"] ?: "")
-            .header("x-ladon", realLadonArgus.ladon)
-            .header("x-argus", realLadonArgus.argus)
-            .header("x-gorgon", signed.headers["X-Gorgon"] ?: "")
-            .header("x-helios", HongguoArgus.helios(ts))
-            // G0 追加
-            .header("lc", "101")
-            .header("x-ss-dp", "8662")
-            .header("x-tt-trace-id", "00-$traceHex-${traceHex.substring(0, 16)}-01")
-            .build()
-        http.newCall(req).execute().use { resp ->
-            val bytes = resp.body?.bytes() ?: ByteArray(0)
-            android.util.Log.d("Hongguo", "search http=${resp.code} len=${bytes.size} logid=${resp.header("x-tt-logid")}")
-            if (!resp.isSuccessful) throw IllegalStateException("搜索接口 HTTP ${resp.code}")
-            if (bytes.isEmpty()) throw EmptyResponseException()
-            val payload = JSONObject(String(bytes, Charsets.UTF_8))
-            if (payload.optInt("code", 0) != 0) {
-                // 100103=游标会话失效：按 APK 行为可原签名重试，这里简化为身份轮换
-                throw EmptyResponseException()
-            }
-            return parsePage(payload, kw, offset, relevanceFilter)
+        cursor?.searchId?.takeIf { it.isNotEmpty() }?.let { values["search_id"] = it }
+        cursor?.passback?.takeIf { it.isNotEmpty() }?.let { values["passback"] = it }
+        val payload = try {
+            client.searchTabRequest(values)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: HongguoClient.EmptyResponseException) {
+            throw EmptyResponseException()
+        } catch (e: Exception) {
+            // HTTP/code 级失败同样走官网回退口径（与空响应一致）
+            throw EmptyResponseException()
         }
+        return parsePage(payload, kw, offset, relevanceFilter)
     }
 
     /**
@@ -359,10 +295,6 @@ class HongguoSearch {
     }
 
     companion object {
-        /** 搜索 UA（GET 模板：72232 无 Cronet 后缀）+真实环境（与 query 同源防矛盾）。 */
-        private val SEARCH_UA: String
-            get() = "com.phoenix.read/72232 (Linux; U; Android ${HongguoEnv.osVersion}; " +
-                "zh_CN; ${HongguoEnv.deviceType}; Build/${android.os.Build.ID ?: "V417IR"})"
 
         /**
          * 发布者名（官方口径，2026-11-13 抓包实证 video_data 内嵌）：优先出品方

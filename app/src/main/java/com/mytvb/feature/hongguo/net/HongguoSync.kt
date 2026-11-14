@@ -1,25 +1,21 @@
 package com.mytvb.feature.hongguo.net
 
-import okhttp3.Headers
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 
 /**
  * 红果账号云同步 + 登录态保活（对照 HGTV 1.3.6 账号模块逐接口对齐）：
- * - 业务写接口（core/b.java h() 通道，73932 档案+明文 JSON body+登录头）：
- *   read_progress/upload（播放进度→跨设备续播）、bookshelf/video/update（收藏云同步）、
- *   read_history/update|delete（观看历史）、user/subscribe/list|delete（预约）；
+ * - 业务读写接口（read_progress、bookshelf/video、read_history、user/subscribe）——
+ *   2026-11-14 起传输层收编 HongguoClient 统一签名通道（74532+Cookie/x-tt-token，
+ *   原三套手写 73932/72232 样板删除），本类只保留 body 构造与解析；
  * - 保活（H0/g.java）：passport/token/beat/v2 心跳（30 分钟阈值）+ account/info/v2 boot 校验 +
- *   sid_guard 临期 3 天预警 + x-tt-token 滚动续期（响应头 X-Tt-Token / H0/b.java）。
- * 登录态请求头（b.java b1()）：Cookie 白名单串 + x-tt-token（有才带）。
+ *   sid_guard 临期 3 天预警 + x-tt-token 滚动续期（HongguoSession.rollTokenFrom）。
  */
 class HongguoSync(
     private val session: HongguoSession,
-    private val identity: () -> HongguoDeviceRegister.Identity
+    private val client: HongguoClient
 ) {
 
     class SyncException(message: String, val code: String = "SYNC_ERROR") : IllegalStateException(message)
@@ -32,104 +28,34 @@ class HongguoSync(
 
     private val http get() = HongguoHttp.ok
 
-    // ---- 通用登录态 POST（core/b.java h()：73932 档案+明文 body+x-tt-token/Cookie） ----
+    // ---- 通用登录态通道（client.authPost/authGet：74532+登录头+token 滚动） ----
 
-    private fun accountPost(path: String, body: JSONObject): JSONObject {
-        val id = identity()
-        val q = LinkedHashMap<String, String>()
-        if (id.klinkEgdi.isNotEmpty()) q["klink_egdi"] = id.klinkEgdi
-        if (id.deviceToken.isNotEmpty()) q["device_token"] = id.deviceToken
-        q["iid"] = id.installId
-        q["device_id"] = id.deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = "73932"; q["version_name"] = "7.3.9.32"
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType
-        q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"
-        q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "73932"
-        q["resolution"] = HongguoEnv.resolution; q["dpi"] = HongguoEnv.dpi
-        q["update_version_code"] = "73932"; q["host_abi"] = HongguoEnv.HOST_ABI
-        q["dragon_device_type"] = "phone"; q["pv_player"] = "73932"
-        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "0"
-        q["cdid"] = id.cdid
-        val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
-        val signed = HongguoCrypto.signRequest(
-            q, bodyBytes, System.currentTimeMillis(), id.deviceId,
-            targetBranch = 0, version = "7.3.9.32"
-        )
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
-        val argus = HongguoArgus.generate(
-            signed.query, bodyBytes, nowSec, "7.3.9.32", id.deviceId,
-            deviceProfile = HongguoEnv.argusProfile
-        )
-        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val cookieHeader = HongguoCookieStoreParser.COOKIE_ORDER.mapNotNull { name ->
-            session.accountCookies[name]?.takeIf { it.isNotEmpty() }?.let { "$name=$it" }
-        }.joinToString("; ")
-        val traceHex = java.util.UUID.randomUUID().toString().replace("-", "")
-        val req = Request.Builder()
-            .url("https://api5-normal-sinfonlinea.fqnovel.com$path?${signed.query}")
-            .post(bodyBytes.toRequestBody("application/json; charset=UTF-8".toMediaType()))
-            .apply {
-                for ((k, v) in listOf(
-                    "User-Agent" to HongguoEnv.ua("73932"),
-                    "Accept-Language" to "zh-CN,zh;q=0.9",
-                    "X-SS-DP" to "8662", "X-Tt-Store-Region" to "cn",
-                    "X-Tt-Store-Region-Src" to "did", "X-XS-From-Web" to "0", "Sdk-Version" to "2",
-                    "Accept" to "application/json; charset=utf-8,application/x-protobuf",
-                    "x-ss-req-ticket" to ticket, "sdk-version" to "2",
-                    "passport-sdk-version" to "5051452",
-                    "x-khronos" to (signed.headers["X-Khronos"] ?: ""),
-                    "x-ladon" to argus.ladon, "x-argus" to argus.argus,
-                    "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
-                    "x-helios" to HongguoArgus.helios(nowSec),
-                    "Content-Type" to "application/json; charset=UTF-8",
-                    "x-vc-bdturing-sdk-version" to "4.0.3.cn",
-                    "x-ss-stub" to (signed.headers["X-SS-STUB"] ?: ""),
-                    "lc" to "101", "x-ss-dp" to "8662",
-                    "x-tt-trace-id" to "00-$traceHex-${traceHex.substring(0, 16)}-01"
-                )) addHeader(k, v)
-                if (cookieHeader.isNotEmpty()) addHeader("Cookie", cookieHeader)
-                // 登录第二票据（b.java b1()：有才带）
-                if (session.accountToken.isNotEmpty()) addHeader("x-tt-token", session.accountToken)
-            }
-            .build()
-        http.newCall(req).execute().use { resp ->
-            rollToken(resp.headers)
-            val text = resp.body?.string().orEmpty()
-            android.util.Log.d("HongguoSync", "$path http=${resp.code} len=${text.length}")
-            if (text.isEmpty()) throw SyncException("账号接口空响应")
-            val payload = JSONObject(text)
-            if (payload.optInt("code", -1) != 0) {
-                if (payload.optString("error_name") == "session_expired" ||
-                    payload.optJSONObject("data")?.optString("error_name") == "session_expired"
-                ) throw SyncException("登录态已过期", "SESSION_EXPIRED")
-                throw SyncException(
-                    payload.optString("message").ifEmpty { "code=${payload.optInt("code", -1)}" },
-                    "API_${payload.optInt("code", -1)}"
-                )
-            }
-            return payload
+    /** 通道异常翻译：session_expired → SESSION_EXPIRED（调用方引导重登），其余归 SyncException。 */
+    private fun accountPost(path: String, body: JSONObject): JSONObject =
+        try {
+            client.authPost(path, body)
+        } catch (e: HongguoClient.SessionExpiredException) {
+            throw SyncException("登录态已过期", "SESSION_EXPIRED")
+        } catch (e: HongguoClient.EmptyResponseException) {
+            throw SyncException("账号接口空响应")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncException(e.message ?: "账号接口失败")
         }
-    }
 
-    /** x-tt-token 滚动续期（C0051b:68：X-Tt-Token 响应头 / Set-Cookie，>=99 字符直接收）。 */
-    private fun rollToken(headers: Headers) {
-        headers.values("X-Tt-Token").firstOrNull()?.takeIf { it.length >= 99 }?.let {
-            session.accountToken = it
-            return
+    private fun accountGet(path: String, values: Map<String, String>): JSONObject =
+        try {
+            client.authGet(path, values)
+        } catch (e: HongguoClient.SessionExpiredException) {
+            throw SyncException("登录态已过期", "SESSION_EXPIRED")
+        } catch (e: HongguoClient.EmptyResponseException) {
+            throw SyncException("账号接口空响应")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncException(e.message ?: "账号接口失败")
         }
-        headers.values("Set-Cookie").forEach { raw ->
-            if (raw.startsWith("x-tt-token=", ignoreCase = true)) {
-                raw.substringAfter('=').substringBefore(';').takeIf { it.length >= 99 }
-                    ?.let { session.accountToken = it }
-            }
-        }
-    }
 
     // ---- 1. 播放进度上传（b.java m()：跨设备断点续播） ----
 
@@ -239,182 +165,194 @@ class HongguoSync(
      * 按 series_id 去重保留最近播放，按时间倒序。
      */
     fun cloudHistory(maxItems: Int = 100): List<CloudHistoryItem> {
-        val id = identity()
-        val q = LinkedHashMap<String, String>()
-        q["iid"] = id.installId
-        q["device_id"] = id.deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType; q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"; q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "72232"; q["resolution"] = HongguoEnv.resolution
-        q["dpi"] = HongguoEnv.dpi; q["update_version_code"] = "72232"
-        q["host_abi"] = HongguoEnv.HOST_ABI; q["cdid"] = id.cdid
-        q["limit"] = "0"; q["offset"] = "0"; q["book_type"] = "2"
-        q["full_field"] = "false"; q["query_soft_deleted"] = "false"
-        q["last_min_read_timestamp_ms"] = "0"; q["is_first_load"] = "true"
-        val bodyBytes = ByteArray(0)
-        val signed = HongguoCrypto.signRequest(
-            q, null, System.currentTimeMillis(), id.deviceId,
-            targetBranch = 0, version = "7.2.2.32"
+        val payload = accountGet(
+            "/reading/bookapi/read_history/list/v/",
+            linkedMapOf(
+                "limit" to "0", "offset" to "0", "book_type" to "2",
+                "full_field" to "false", "query_soft_deleted" to "false",
+                "last_min_read_timestamp_ms" to "0", "is_first_load" to "true"
+            )
         )
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
-        val argus = HongguoArgus.generate(
-            signed.query, null, nowSec, "7.2.2.32", id.deviceId,
-            deviceProfile = HongguoEnv.argusProfile
-        )
-        val cookieHeader = HongguoCookieStoreParser.COOKIE_ORDER.mapNotNull { name ->
-            session.accountCookies[name]?.takeIf { it.isNotEmpty() }?.let { "$name=$it" }
-        }.joinToString("; ")
-        val req = Request.Builder()
-            .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/bookapi/read_history/list/v/?${signed.query}")
-            .get()
-            .apply {
-                for ((k, v) in listOf(
-                    "User-Agent" to HongguoEnv.ua("72232"),
-                    "Accept-Language" to "zh-CN,zh;q=0.9",
-                    "X-SS-DP" to "8662", "X-Tt-Store-Region" to "cn",
-                    "X-Tt-Store-Region-Src" to "did", "X-XS-From-Web" to "0", "Sdk-Version" to "2",
-                    "Accept" to "application/json; charset=utf-8,application/x-protobuf",
-                    "x-ss-req-ticket" to (signed.headers["X-SS-Req-Ticket"] ?: ""),
-                    "sdk-version" to "2", "passport-sdk-version" to "5051452",
-                    "x-khronos" to (signed.headers["X-Khronos"] ?: ""),
-                    "x-ladon" to argus.ladon, "x-argus" to argus.argus,
-                    "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
-                    "x-helios" to HongguoArgus.helios(nowSec),
-                    "lc" to "101", "x-ss-dp" to "8662"
-                )) addHeader(k, v)
-                if (cookieHeader.isNotEmpty()) addHeader("Cookie", cookieHeader)
-                if (session.accountToken.isNotEmpty()) addHeader("x-tt-token", session.accountToken)
-            }
-            .build()
-        http.newCall(req).execute().use { resp ->
-            rollToken(resp.headers)
-            val text = resp.body?.string().orEmpty()
-            if (text.isEmpty()) throw SyncException("云端历史空响应")
-            val payload = JSONObject(text)
-            if (payload.optInt("code", -1) != 0) throw SyncException(payload.optString("message"))
-            val data = payload.optJSONObject("data") ?: JSONArray()
-            val rows = (data as? JSONObject)?.optJSONArray("data_list") ?: JSONArray()
-            val byId = LinkedHashMap<String, CloudHistoryItem>()
-            for (i in 0 until rows.length()) {
-                val r = rows.optJSONObject(i) ?: continue
-                if (r.optBoolean("is_delete", false)) continue
-                val sid = r.optString("book_id_str").ifEmpty { r.optLong("book_id", 0L).takeIf { it > 0 }?.toString().orEmpty() }
-                if (sid.isEmpty()) continue
-                val idx1 = r.optInt("vid_index", 0)
-                val atMs = r.optLong("read_timestamp_ms", 0L)
-                if (idx1 < 1 || atMs <= 0) continue
-                val item = CloudHistoryItem(
-                    seriesId = sid,
-                    title = r.optString("book_name"),
-                    cover = r.optString("thumb_url").takeIf { it.startsWith("http") } ?: "",
-                    episodeIndex1 = idx1,
-                    episodeCount = r.optInt("episode_cnt", 0),
-                    positionMs = r.optLong("current_play_position", 0L).coerceAtLeast(0L),
-                    durationMs = r.optLong("duration", 0L).coerceAtLeast(0L),
-                    lastPlayedAtMs = atMs
-                )
-                val old = byId[item.seriesId]
-                if (old == null || item.lastPlayedAtMs > old.lastPlayedAtMs) byId[item.seriesId] = item
-            }
-            val out = byId.values.sortedByDescending { it.lastPlayedAtMs }
-            android.util.Log.d("HongguoSync", "cloud history rows=${rows.length()} merged=${out.size}")
-            return out.take(maxItems)
+        val rows = payload.optJSONObject("data")?.optJSONArray("data_list") ?: JSONArray()
+        val byId = LinkedHashMap<String, CloudHistoryItem>()
+        for (i in 0 until rows.length()) {
+            val item = parseCloudRow(rows.optJSONObject(i) ?: continue) ?: continue
+            val old = byId[item.seriesId]
+            if (old == null || item.lastPlayedAtMs > old.lastPlayedAtMs) byId[item.seriesId] = item
         }
+        val out = byId.values.sortedByDescending { it.lastPlayedAtMs }
+        android.util.Log.d("HongguoSync", "cloud history rows=${rows.length()} merged=${out.size}")
+        return out.take(maxItems)
     }
 
+    /**
+     * 云端单剧进度（read_progress/get/v，官方进播放页必拉——2026-11-13 抓包 13 次）：
+     * 无记录/未登录返回 null。行字段与 read_history/list 同源。
+     */
+    fun cloudProgress(seriesId: String): CloudHistoryItem? {
+        if (!session.loggedIn) return null
+        val sid = seriesId.toLongOrNull() ?: return null
+        val body = JSONObject().put(
+            "book_ids", JSONObject()
+                .put("1", JSONArray())
+                .put("0", JSONArray().put(sid))
+        )
+        val payload = accountPost("/reading/bookapi/read_progress/get/v", body)
+        val rows = payload.optJSONArray("video_data")?.takeIf { it.length() > 0 }
+            ?: payload.optJSONArray("data")?.takeIf { it.length() > 0 }
+            ?: return null
+        var best: CloudHistoryItem? = null
+        for (i in 0 until rows.length()) {
+            val item = parseCloudRow(rows.optJSONObject(i) ?: continue) ?: continue
+            if (best == null || item.lastPlayedAtMs > best.lastPlayedAtMs) best = item
+        }
+        android.util.Log.d("HongguoSync", "cloud progress rows=${rows.length()} hit=${best != null}")
+        return best
+    }
+
+    /** 云端进度行解析（read_history/read_progress 共用字段；缺集数或时间戳的行丢弃）。 */
+    private fun parseCloudRow(r: JSONObject): CloudHistoryItem? {
+        if (r.optBoolean("is_delete", false)) return null
+        val sid = r.optString("book_id_str").ifEmpty { r.optLong("book_id", 0L).takeIf { it > 0 }?.toString().orEmpty() }
+        if (sid.isEmpty()) return null
+        val idx1 = r.optInt("vid_index", 0)
+        val atMs = r.optLong("read_timestamp_ms", 0L)
+        if (idx1 < 1 || atMs <= 0) return null
+        return CloudHistoryItem(
+            seriesId = sid,
+            title = r.optString("book_name"),
+            cover = r.optString("thumb_url").takeIf { it.startsWith("http") } ?: "",
+            episodeIndex1 = idx1,
+            episodeCount = r.optInt("episode_cnt", 0),
+            positionMs = r.optLong("current_play_position", 0L).coerceAtLeast(0L),
+            durationMs = r.optLong("duration", 0L).coerceAtLeast(0L),
+            lastPlayedAtMs = atMs
+        )
+    }
 
     // ---- 4. 预约列表（b.java 1551：subscribe/list GET；tab_type=13） ----
 
     fun subscribeList(onlyOnline: Boolean): List<SubscribeItem> {
-        val id = identity()
-        val q = LinkedHashMap<String, String>()
-        q["iid"] = id.installId
-        q["device_id"] = id.deviceId
-        q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = "72232"; q["version_name"] = "7.2.2.32"
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoEnv.deviceType; q["device_brand"] = HongguoEnv.deviceBrand
-        q["language"] = "zh"; q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
-        q["manifest_version_code"] = "72232"; q["resolution"] = HongguoEnv.resolution
-        q["dpi"] = HongguoEnv.dpi; q["update_version_code"] = "72232"
-        q["host_abi"] = HongguoEnv.HOST_ABI; q["cdid"] = id.cdid
-        q["offset"] = "0"; q["limit"] = "20"
-        q["is_online"] = if (onlyOnline) "true" else "false"
-        q["session_id"] = ""; q["tab_type"] = "13"
-        q["subscribe_order_type"] = "0"; q["swipe_type"] = "0"
-        q["need_calendar_schema"] = "false"; q["subscribe_offset"] = "0"
-        val bodyBytes = ByteArray(0)
-        val signed = HongguoCrypto.signRequest(
-            q, null, System.currentTimeMillis(), id.deviceId,
-            targetBranch = 0, version = "7.2.2.32"
+        val payload = accountGet(
+            "/reading/user/subscribe/list/v1/",
+            linkedMapOf(
+                "offset" to "0", "limit" to "20",
+                "is_online" to if (onlyOnline) "true" else "false",
+                "session_id" to "", "tab_type" to "13",
+                "subscribe_order_type" to "0", "swipe_type" to "0",
+                "need_calendar_schema" to "false", "subscribe_offset" to "0"
+            )
         )
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
-        val argus = HongguoArgus.generate(
-            signed.query, null, nowSec, "7.2.2.32", id.deviceId,
-            deviceProfile = HongguoEnv.argusProfile
-        )
-        val cookieHeader = HongguoCookieStoreParser.COOKIE_ORDER.mapNotNull { name ->
-            session.accountCookies[name]?.takeIf { it.isNotEmpty() }?.let { "$name=$it" }
-        }.joinToString("; ")
-        val req = Request.Builder()
-            .url("https://api5-normal-sinfonlinea.fqnovel.com/reading/user/subscribe/list/v1/?${signed.query}")
-            .get()
-            .apply {
-                for ((k, v) in listOf(
-                    "User-Agent" to HongguoEnv.ua("72232"),
-                    "Accept-Language" to "zh-CN,zh;q=0.9",
-                    "X-SS-DP" to "8662", "X-Tt-Store-Region" to "cn",
-                    "X-Tt-Store-Region-Src" to "did", "X-XS-From-Web" to "0", "Sdk-Version" to "2",
-                    "Accept" to "application/json; charset=utf-8,application/x-protobuf",
-                    "x-ss-req-ticket" to (signed.headers["X-SS-Req-Ticket"] ?: ""),
-                    "sdk-version" to "2", "passport-sdk-version" to "5051452",
-                    "x-khronos" to (signed.headers["X-Khronos"] ?: ""),
-                    "x-ladon" to argus.ladon, "x-argus" to argus.argus,
-                    "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
-                    "x-helios" to HongguoArgus.helios(nowSec),
-                    "lc" to "101", "x-ss-dp" to "8662"
-                )) addHeader(k, v)
-                if (cookieHeader.isNotEmpty()) addHeader("Cookie", cookieHeader)
-                if (session.accountToken.isNotEmpty()) addHeader("x-tt-token", session.accountToken)
-            }
-            .build()
-        http.newCall(req).execute().use { resp ->
-            rollToken(resp.headers)
-            val text = resp.body?.string().orEmpty()
-            if (text.isEmpty()) throw SyncException("预约列表空响应")
-            val payload = JSONObject(text)
-            if (payload.optInt("code", -1) != 0) throw SyncException(payload.optString("message"))
-            val out = ArrayList<SubscribeItem>()
-            val items = payload.optJSONObject("data")
-                ?.optJSONObject("subscribe_data")?.optJSONArray("subscribe_items")
-                ?: payload.optJSONObject("data")?.optJSONArray("subscribe_items")
-                ?: JSONArray()
-            for (i in 0 until items.length()) {
-                val cell = items.optJSONObject(i) ?: continue
-                // 条目形态：video_data(剧卡) + sub_info(预约信息+schedule_publish_time)
-                val video = cell.optJSONObject("video_data") ?: cell
-                val subInfo = cell.optJSONObject("sub_info")
-                val sid = video.optString("series_id_str").ifEmpty { video.optString("series_id") }
-                if (sid.isEmpty()) continue
-                out.add(
-                    SubscribeItem(
-                        seriesId = sid,
-                        title = video.optString("title").ifEmpty { video.optString("series_title") },
-                        cover = video.optString("cover").ifEmpty { video.optString("cover_url") }
-                            .takeIf { it.startsWith("http") } ?: "",
-                        onlineTimeSec = (subInfo?.optLong("schedule_publish_time", 0L)
-                            ?: video.optLong("schedule_publish_time", 0L)),
-                        isOnline = subInfo?.optInt("is_online", 0) == 1
-                    )
+        val out = ArrayList<SubscribeItem>()
+        val items = payload.optJSONObject("data")
+            ?.optJSONObject("subscribe_data")?.optJSONArray("subscribe_items")
+            ?: payload.optJSONObject("data")?.optJSONArray("subscribe_items")
+            ?: JSONArray()
+        for (i in 0 until items.length()) {
+            val cell = items.optJSONObject(i) ?: continue
+            // 条目形态（HGTV b.java 1553 三级回落）：subscribe_data ?? video_data ?? 条目本身；
+            // schedule_publish_time/is_online 在条目层，sub_info 有则优先；id 数字/字符串两态
+            val video = cell.optJSONObject("subscribe_data")
+                ?: cell.optJSONObject("video_data")
+                ?: cell
+            val subInfo = cell.optJSONObject("sub_info")
+            val sid = idOf(video, cell)
+            if (sid.isEmpty()) continue
+            out.add(
+                SubscribeItem(
+                    seriesId = sid,
+                    title = titleOf(video, cell),
+                    cover = video.optString("cover").ifEmpty { video.optString("cover_url") }
+                        .takeIf { it.startsWith("http") } ?: "",
+                    onlineTimeSec = subInfo?.optLong("schedule_publish_time", 0L)
+                        ?.takeIf { it > 0 }
+                        ?: cell.optLong("schedule_publish_time", 0L),
+                    isOnline = subInfo?.optInt("is_online", -1)?.let { it == 1 }
+                        ?: cell.optBoolean("is_online", false)
                 )
-            }
-            return out
+            )
         }
+        android.util.Log.d(
+            "HongguoSync", "subscribe rows=${items.length()} parsed=${out.size} " +
+                "online=$onlyOnline"
+        )
+        if (out.isEmpty() && items.length() > 0) {
+            android.util.Log.w(
+                "HongguoSync",
+                "subscribe parse miss: ${payload.optJSONObject("data").toString().take(600)}"
+            )
+        }
+        return out
+    }
+
+    /** 条目 id（两层×多字段兜底：*_str/item_id 字符串态 / series_id·book_id 数字态）。 */
+    private fun idOf(vararg objs: JSONObject): String {
+        for (o in objs) {
+            o.optString("series_id_str").takeIf { it.isNotEmpty() }?.let { return it }
+            o.optString("series_id").takeIf { it.isNotEmpty() }?.let { return it }
+            o.optString("book_id_str").takeIf { it.isNotEmpty() }?.let { return it }
+            // 预约条目（即将上线的未开播剧）是扁平 item_id/name/cover 形态（2026-11-14
+            // MuMu 实机日志实证，无 video_data 剧卡）
+            o.optString("item_id").takeIf { it.isNotEmpty() }?.let { return it }
+            o.optLong("series_id", 0L).takeIf { it > 0 }?.let { return it.toString() }
+            o.optLong("book_id", 0L).takeIf { it > 0 }?.let { return it.toString() }
+        }
+        return ""
+    }
+
+    /** 条目标题（title/series_title/name 三态，name=扁平预约/收藏条目）。 */
+    private fun titleOf(vararg objs: JSONObject): String {
+        for (o in objs) {
+            o.optString("title").takeIf { it.isNotEmpty() }?.let { return it }
+            o.optString("series_title").takeIf { it.isNotEmpty() }?.let { return it }
+            o.optString("name").takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return ""
+    }
+
+    // ---- 4.5 云端收藏书架（bookshelf/video/list GET，2026-11-14 补：此前只有 update 上传） ----
+
+    /** 云端收藏条目（video_shelf_info[]：video_data 剧卡 + 条目层 collect_time，秒）。 */
+    data class CloudFavoriteItem(
+        val seriesId: String, val title: String, val cover: String,
+        val episodeCount: Int, val collectedAtMs: Long
+    )
+
+    fun cloudFavorites(): List<CloudFavoriteItem> {
+        // HGTV F0/K 同款 info/v。条目形态（2026-11-14 MuMu 实机日志实证）：剧卡字段在
+        // **条目层**（series_title/series_cover_url/series_intro/category_schema），video_data
+        // 里只是单 vid 信息（episode_cnt 有用）；collect_time 原生毫秒
+        val payload = accountGet("/reading/bookapi/bookshelf/video/info/v", linkedMapOf())
+        val rows = payload.optJSONObject("data")?.optJSONArray("video_shelf_info")
+            ?: JSONArray()
+        val out = ArrayList<CloudFavoriteItem>(rows.length())
+        for (i in 0 until rows.length()) {
+            val cell = rows.optJSONObject(i) ?: continue
+            val sid = idOf(cell, cell.optJSONObject("video_data"))
+            if (sid.isEmpty()) continue
+            val eps = cell.optJSONObject("video_data")?.optInt("episode_cnt", 0) ?: 0
+            val collectRaw = cell.optLong("collect_time", 0L)
+            out.add(
+                CloudFavoriteItem(
+                    seriesId = sid,
+                    title = titleOf(cell),
+                    cover = cell.optString("series_cover_url")
+                        .ifEmpty { cell.optString("cover").ifEmpty { cell.optString("cover_url") } }
+                        .takeIf { it.startsWith("http") } ?: "",
+                    episodeCount = eps,
+                    // 防御两态：>1e12 已是毫秒，否则当秒转
+                    collectedAtMs = if (collectRaw > 1_000_000_000_000L) collectRaw else collectRaw * 1000L
+                )
+            )
+        }
+        android.util.Log.d("HongguoSync", "cloud favorites rows=${rows.length()} parsed=${out.size}")
+        if (out.size != rows.length() || out.any { it.title.isEmpty() || it.cover.isEmpty() }) {
+            android.util.Log.w(
+                "HongguoSync",
+                "favorites parse miss: ${payload.optJSONObject("data").toString().take(1200)}"
+            )
+        }
+        return out
     }
 
     // ---- 5. 取消预约（b.java 6399：subscribe/delete，tab_type=13 批量形态） ----
@@ -459,7 +397,7 @@ class HongguoSync(
             }
             .build()
         http.newCall(req).execute().use { resp ->
-            rollToken(resp.headers)
+            session.rollTokenFrom(resp.headers)
             val text = resp.body?.string().orEmpty()
             android.util.Log.d("HongguoSync", "beat scene=$scene http=${resp.code} len=${text.length}")
             if (resp.code in 200..299) {
@@ -489,7 +427,7 @@ class HongguoSync(
             }
             .build()
         http.newCall(req).execute().use { resp ->
-            rollToken(resp.headers)
+            session.rollTokenFrom(resp.headers)
             val text = resp.body?.string().orEmpty()
             android.util.Log.d("HongguoSync", "boot verify http=${resp.code} len=${text.length}")
             if (text.contains("session_expired")) throw SyncException("登录态已过期", "SESSION_EXPIRED")
