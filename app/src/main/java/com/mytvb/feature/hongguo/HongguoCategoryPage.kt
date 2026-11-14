@@ -84,6 +84,16 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
     /** 一级 tab DOWN / 卡片 UP 的二级 tab 落点：分类子档 tab。 */
     override fun focusSecondaryTab(): Boolean = focusGenreTab()
 
+    /** BACK 三层回退：子档卡片 → 筛选行（子档页自分层）→ 子档 tab；已在子档 tab 返回 false 交宿主。 */
+    override fun backToParentLayer(): Boolean {
+        val b = _binding ?: return false
+        if (b.tabGenre.hasFocus()) return false
+        val page = childFragmentManager.findFragmentByTag("f${b.viewPager.currentItem}")
+            as? HongguoPageFocus
+        if (page?.backToParentLayer() == true) return true
+        return focusGenreTab()
+    }
+
     /** 侧栏 RIGHT / 红果 tab DOWN 的落点：当前子档第一张卡片。 */
     override fun focusFirstCard(): Boolean {
         if (!isAdded || view == null) return false

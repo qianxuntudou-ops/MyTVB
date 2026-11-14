@@ -151,6 +151,13 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         return binding.tabRankBoards.focusSelectedTab()
     }
 
+    /** BACK 分层回退：卡片 → 档位 tab；已在档位 tab 上返回 false 交宿主回一级 tab。 */
+    override fun backToParentLayer(): Boolean {
+        if (_binding == null) return false
+        if (binding.tabRankBoards.hasFocus()) return false
+        return focusSecondaryTab()
+    }
+
     private fun focusTopTab(): Boolean {
         val host = parentFragment as? HongguoFragment ?: return false
         return host.focusTopTab()

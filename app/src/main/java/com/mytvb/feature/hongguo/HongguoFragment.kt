@@ -102,8 +102,10 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         })
         binding.viewPager.post { syncPageFocusability(binding.viewPager.currentItem) }
 
-        // tab 焦点导航：UP/左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）；
+        // tab 焦点导航：UP 吞键不动（页签行已是页面最顶行，按 UP 焦点留在当前页签，
+        // 对齐 B 站各主页同款行为；回侧栏走左边缘/BACK）；
         // DOWN 落当前页第一张卡片（不接则框架几何搜索把焦点送进侧栏/筛选行死循环）；
+        // 左边缘逃侧栏（落点必须是侧栏当前主 tab 按钮，勿用几何最近）；
         // 右边缘进同排搜索胶囊（行内移动，非页面边缘环绕）。
         // 必须用 enableTouchNavigation（同 B 站各主页签）：其 OK 键/点击走
         // setCurrentItemFromTab 瞬切+滑入动画；enableDirectTabNavigation 不接管 OK 键，
@@ -111,10 +113,11 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         // 远端页签（榜单→我的）会逐页滑过 ~800ms
         binding.tabLayout.enableTouchNavigation(
             viewPager = binding.viewPager,
-            onNavigateUp = {
-                (activity as? MainActivity)?.focusSidebarCurrentTab() == true
+            onNavigateUp = { true },
+            onNavigateDown = {
+                // 有二级层（榜单档位/分类子档/筛选行）先落二级 tab，无二级层才落第一张卡
+                currentPage()?.focusSecondaryTab() == true || focusCurrentPageContent()
             },
-            onNavigateDown = { focusCurrentPageContent() },
             onNavigateLeft = {
                 (activity as? MainActivity)?.focusSidebarCurrentTab() == true
             },
@@ -129,10 +132,15 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         binding.viewPager.isUserInputEnabled = false
     }
 
-    /** 侧栏 RIGHT / tab DOWN 的统一入口：聚焦当前 ViewPager2 子页的第一张卡片。 */
-    private fun focusCurrentPageContent(): Boolean {
+    /** 当前 ViewPager2 子页（HongguoPageFocus 强转，找不到时 null）。 */
+    private fun currentPage(): HongguoPageFocus? {
         val page = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
-        return (page as? HongguoPageFocus)?.focusFirstCard() == true
+        return page as? HongguoPageFocus
+    }
+
+    /** 侧栏 RIGHT / 无二级层时 tab DOWN 的入口：聚焦当前 ViewPager2 子页的第一张卡片。 */
+    private fun focusCurrentPageContent(): Boolean {
+        return currentPage()?.focusFirstCard() == true
     }
 
     /**
@@ -159,8 +167,9 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
     }
 
     /**
-     * BACK 三层回退（对齐 Home/Live 等主 tab 页）：
-     * 内容区（子页卡片/搜索胶囊）→ 聚焦本页选中的页签；页签栏 → 回左侧主边栏
+     * BACK 逐层回退（对齐 Home/Live 等主 tab 页）：
+     * 子页卡片/筛选行 → 本页二级 tab（backToParentLayer 分层，已在二级 tab 时跳过）；
+     * 二级 tab / 页外控件（搜索胶囊）→ 聚焦本页选中的页签；页签栏 → 回左侧主边栏
      * 当前主 tab 按钮（红果按钮）；焦点已在本页外（如侧栏）→ false 交给退出链。
      * 不实现本接口时 BACK 会一路落到 MainActivity.returnToHomeBeforeExit 的
      * focusHomeTab，焦点直接跳主页按钮（跳过本页 tab 栏与侧栏红果入口）。
@@ -172,6 +181,10 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         }
         if (currentBinding.tabLayout.hasFocus()) {
             return (activity as? MainActivity)?.focusSidebarCurrentTab() == true
+        }
+        // viewPager 守卫：焦点须在子页内才分层回退，胶囊等页外控件 BACK 仍直接回页签
+        if (currentBinding.viewPager.hasFocus() && currentPage()?.backToParentLayer() == true) {
+            return true
         }
         return currentBinding.tabLayout.focusSelectedTab()
     }

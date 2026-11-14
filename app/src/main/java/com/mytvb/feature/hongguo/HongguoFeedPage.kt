@@ -175,6 +175,13 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
         return holder?.itemView?.requestFocus() == true
     }
 
+    /** BACK 分层回退：卡片 → 筛选行；已在筛选行/筛选行不可见返回 false 交上层。 */
+    override fun backToParentLayer(): Boolean {
+        if (_binding == null) return false
+        if (binding.recyclerFilters.hasFocus()) return false
+        return focusSecondaryTab()
+    }
+
     /** 侧栏 RIGHT / tab DOWN 的入口：聚焦第一张卡片（TvListFocusController 统一走）。 */
     override fun focusFirstCard(): Boolean {
         if (!isAdded || view == null) return false

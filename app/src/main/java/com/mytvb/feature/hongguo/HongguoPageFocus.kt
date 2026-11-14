@@ -14,6 +14,13 @@ interface HongguoPageFocus {
     fun focusSecondaryTab(): Boolean = false
 
     /**
+     * BACK 分层回退一层的落点（卡片 → 二级 tab）。
+     * 焦点已在二级 tab 上时须返回 false 交宿主回一级 tab（跳级=一次 BACK 直达顶部）；
+     * 无二级层的页（我的）用默认 false 直接回一级 tab。
+     */
+    fun backToParentLayer(): Boolean = false
+
+    /**
      * tab **首次**选中回顶：离屏页全 retain + 进程重启会恢复旧滚动位置（表现为
      * 「打开停在半路」），首次选中强制回第一行；之后切换保持用户滚动位置
      * （用户口径：首次打开在顶部，来回切 tab 不丢位置）。
