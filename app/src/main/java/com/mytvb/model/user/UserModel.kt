@@ -2,59 +2,6 @@ package com.mytvb.model.user
 
 import com.google.gson.annotations.SerializedName
 
-data class UserInfoModel(
-    @SerializedName("mid")
-    val mid: Long = 0,
-    
-    @SerializedName("uname")
-    val uname: String = "",
-    
-    @SerializedName("userid")
-    val userId: String = "",
-    
-    @SerializedName("sign")
-    val sign: String = "",
-    
-    @SerializedName("birthday")
-    val birthday: String = "",
-    
-    @SerializedName("sex")
-    val sex: String = "",
-    
-    @SerializedName("nick_free")
-    val nickFree: Boolean = false,
-    
-    @SerializedName("nick_rename_time")
-    val nickRenameTime: Long = 0,
-    
-    @SerializedName("rank")
-    val rank: String = "",
-    
-    @SerializedName("mobile_verified")
-    val mobileVerified: Int = 0,
-    
-    @SerializedName("email_verified")
-    val emailVerified: Int = 0,
-    
-    @SerializedName("is_tourist")
-    val isTourist: Int = 0,
-    
-    @SerializedName("vip")
-    val vip: Vip? = null,
-    
-    @SerializedName("official")
-    val official: Official? = null,
-    
-    @SerializedName("level_info")
-    val levelInfo: LevelInfo? = null,
-    
-    @SerializedName("coins")
-    val coins: Double = 0.0,
-    
-    @SerializedName("face")
-    val face: String = ""
-)
-
 data class UserDetailInfoModel(
     @SerializedName("isLogin")
     val isLogin: Boolean = false,

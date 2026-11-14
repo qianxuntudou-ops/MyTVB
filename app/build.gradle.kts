@@ -300,15 +300,12 @@ dependencies {
     implementation("androidx.recyclerview:recyclerview:1.4.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("androidx.preference:preference-ktx:1.2.1")
-    // 在 Application 阶段后台异步 inflate activity_main，避免主线程 setContentView 走慢 inflate 路径。
-    implementation("androidx.asynclayoutinflater:asynclayoutinflater:1.0.0")
     implementation("androidx.datastore:datastore-preferences:1.1.4")
     // B站 app 端 gRPC（热门官方接口 grpc.biliapi.net），lite 版控制体积
     implementation("io.grpc:grpc-okhttp:1.72.0")
     implementation("io.grpc:grpc-protobuf-lite:1.72.0")
     implementation("io.grpc:grpc-stub:1.72.0")
-    implementation("com.google.protobuf:protobuf-javalite:3.25.5")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.5") // 同时服务 gRPC 与弹幕 proto 解析
     implementation("javax.annotation:javax.annotation-api:1.3.2")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -343,13 +340,6 @@ dependencies {
 
     // 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-
-    // Android TV
-    implementation("androidx.leanback:leanback:1.0.0")
-    implementation("androidx.leanback:leanback-preference:1.0.0")
-
-    // Protobuf (弹幕解析)
-    implementation("com.google.protobuf:protobuf-javalite:3.24.0")
 
     // 二维码解析
     implementation("com.google.zxing:core:3.5.2")
