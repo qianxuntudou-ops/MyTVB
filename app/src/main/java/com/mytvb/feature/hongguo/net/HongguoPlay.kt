@@ -1,6 +1,7 @@
 package com.mytvb.feature.hongguo.net
 
 import android.util.Base64
+import com.mytvb.core.common.log.AppLog
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -86,13 +87,13 @@ class HongguoPlay(
         preferredPixels: Int = 0,
     ): PlayUrl {
         require(vid.matches(Regex("\\d{1,30}"))) { "分集编号无效" }
-        // 通道 C：HGTV 完整复刻（player/v1 + gzip + 73932）；body 带其扩展字段
+        // 通道 C：HGTV 完整复刻（player/v1 + gzip）；body 带其扩展字段
         // video_platform=3（HGTV T1 默认）：1024 会请求到 ByteVC2 自研编码，
         // 3 请求通用 h264/hevc（2026-11-10 实测 7703473857562151961 修复）
         val hgtvBody = playbackBody("player", listOf(vid))
-        // 端点策略（2026-11-10 实测定案）：主=player/v1（73932 档案，大部分剧）；
-        // player/v1 对部分内容报 code=100001 参数错误 → fetchModelEntry 内置
-        // L1-M1 兜底（sinfonlineb multi/v1 + 71332 档案，编码直接下发 hevc/h264）。
+        // 端点策略（2026-11-14 版本档案全量升 74532）：主=player/v1（74532 档案）；
+        // 2026-11-13 夜服务端弃用 73932/71332 档案（player/v1 全量 code=100001，
+        // 端到端冒烟单变量实验 74532 通过实锤），M1 兜底同步升级。
         val entry = fetchModelEntry(
             vid,
             listOf(
@@ -108,7 +109,7 @@ class HongguoPlay(
             // 2026-11-10：服务端对新转码剧集仅下发 ByteVC2（内容维度必现，换号无效）。
             // M1 同端点换 video_platform=3（player/v1 hgtvBody 同参数，实测能拿到通用
             // h264/hevc）重发一次；首发仍 1024，重试失败不影响原报错。
-            android.util.Log.w(TAG, "bytevc2-only; M1 retry with video_platform=3 vid=$vid")
+            AppLog.w(TAG, "bytevc2-only; M1 retry with video_platform=3 vid=$vid")
             val retry = runCatching {
                 fetchM1Entry(vid, m1ModelBody(vid, 3), identity, allowRotate = false)
             }.getOrElse { throw e }
@@ -220,7 +221,7 @@ class HongguoPlay(
             // 全部纯 Kotlin 签名+JVM okhttp 传输（2026-11-10 与字节码通道实测等价后 L1 已拆除）。
             val host = PLAY_HOSTS[round % PLAY_HOSTS.size]
             try {
-                android.util.Log.d(
+                AppLog.d(
                     TAG, "play round=$round host=$host device=${current.deviceId} " +
                         "path=${hgtvEndpoint.first} vid=$vid via=okhttp"
                 )
@@ -238,18 +239,20 @@ class HongguoPlay(
                 lastError = e
             }
         }
-        // 兜底①：M1 端点（sinfonlineb multi/v1 + 71332 档案 + 明文 body）——
+        // 兜底①：M1 端点（sinfonlineb multi/v1 + 74532 档案 + 明文 body）——
         // player/v1 收紧后的实际可用端点（HGTV 本尊 fallback_api 二跳同路径）。
         // 沿用当前号；空响应再自愈一次重发（两发保 K-M1 在两种环境下都首发可过）。
         val m1Body = endpoints.last { it.first.contains("multi_video_model/v1/") }.second
         runCatching { return fetchM1Entry(vid, m1Body, current, allowRotate = true) }
-            .onFailure { android.util.Log.w(TAG, "M1 fallback fail: ${it.message}") }
+            .onFailure { AppLog.w(TAG, "M1 fallback fail: ${it.message}") }
         throw lastError ?: PlayException("播放接口无响应", "EMPTY_RESPONSE")
     }
 
     /**
-     * M1 兜底请求：sinfonlineb multi/v1 + 71332 档案 + 明文 body，空响应换号重发一次。
+     * M1 兜底请求：sinfonlineb multi/v1 + 74532 档案 + 明文 body，空响应换号重发一次。
      * bytevc2-only 重试传 allowRotate=false（编码与号无关，换号不改变下发编码集）。
+     * （2026-11-14：71332 与 73932 同批被服务端弃用——player/v1 全量 code=100001，
+     *  单变量实验 74532 通过；版本档案全链对齐官方 App 7.4.5.32。）
      */
     private fun fetchM1Entry(
         vid: String,
@@ -267,19 +270,19 @@ class HongguoPlay(
             if (current.deviceToken.isNotEmpty()) m1q["device_token"] = current.deviceToken
             m1q["ac"] = "wifi"; m1q["channel"] = "update_64"; m1q["aid"] = "8662"
             m1q["app_name"] = "novelread"
-            m1q["version_code"] = "71332"; m1q["version_name"] = "7.1.3.32"
+            m1q["version_code"] = "74532"; m1q["version_name"] = "7.4.5.32"
             m1q["device_platform"] = "android"; m1q["os"] = "android"; m1q["ssmix"] = "a"
             m1q["device_type"] = "25053RT47C"; m1q["device_brand"] = "Redmi"; m1q["language"] = "zh"
             m1q["os_api"] = "36"; m1q["os_version"] = "16"
-            m1q["manifest_version_code"] = "71332"
+            m1q["manifest_version_code"] = "74532"
             m1q["resolution"] = "1280*2772"; m1q["dpi"] = "520"
-            m1q["update_version_code"] = "71332"; m1q["host_abi"] = "arm64-v8a"
-            m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "71332"
+            m1q["update_version_code"] = "74532"; m1q["host_abi"] = "arm64-v8a"
+            m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "74532"
             m1q["compliance_status"] = "0"; m1q["need_personal_recommend"] = "1"
             m1q["player_so_load"] = "1"; m1q["is_android_pad_screen"] = "0"
-            android.util.Log.d(TAG, "play fallback K-M1 vid=$vid attempt=$m1Attempt device=${current.deviceId}")
-            val text = kotlinSignedPost(m1Url, m1q, body, "7.1.3.32", current.deviceId,
-                Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua("71332"), gzipHeader = false)
+            AppLog.d(TAG, "play fallback K-M1 vid=$vid attempt=$m1Attempt device=${current.deviceId}")
+            val text = kotlinSignedPost(m1Url, m1q, body, "7.4.5.32", current.deviceId,
+                Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua("74532"), gzipHeader = false)
             if (text.isNotEmpty()) return extractEntry(vid, JSONObject(text))
         }
         throw EmptyBodyException()
@@ -289,7 +292,7 @@ class HongguoPlay(
         val code = payload.optInt("Code", payload.optInt("code", 0))
         if (code != 0) {
             val msg = payload.optString("message", payload.optString("Message", ""))
-            android.util.Log.w(TAG, "play biz code=$code msg=$msg")
+            AppLog.w(TAG, "play biz code=$code msg=$msg")
             throw PlayException("播放接口 code=$code${if (msg.isNotEmpty()) "：$msg" else ""}", "BUSINESS_REJECTED")
         }
         val data = payload.optJSONObject("data") ?: JSONObject()
@@ -313,7 +316,7 @@ class HongguoPlay(
 
     }
 
-    /** player/v1 通道（HGTV 实测形态）：gzip body + 73932 query + 注册身份。 */
+    /** player/v1 通道（HGTV 实测形态）：gzip body + 74532 query + 注册身份。 */
     private fun postVideoModel(
         path: String, raw: ByteArray, identity: HongguoDeviceRegister.Identity,
         hostOverride: String? = null
@@ -322,7 +325,7 @@ class HongguoPlay(
         val q = LinkedHashMap<String, String>()
         run {
             // 2026-11-10 frida 实抓 HGTV E0 实测 query（保插入序，klink_egdi 最前）：
-            // 真注册号 + 如实设备环境（HongguoEnv）+ 73932 档案 + cdid。
+            // 真注册号 + 如实设备环境（HongguoEnv）+ 74532 档案 + cdid。
             // 旧「内置老号/伪装 Redmi」两形态均已证伪（环境矛盾触发风控）。
             if (identity.klinkEgdi.isNotEmpty()) q["klink_egdi"] = identity.klinkEgdi
             // device_token：HGTV O0/E.java:4397 每个 API 请求随带（注册响应字段，
@@ -332,7 +335,7 @@ class HongguoPlay(
             q["device_id"] = identity.deviceId
             q["ac"] = "wifi"; q["channel"] = HongguoEnv.CHANNEL; q["aid"] = "8662"
             q["app_name"] = "novelread"
-            q["version_code"] = "73932"; q["version_name"] = "7.3.9.32"
+            q["version_code"] = "74532"; q["version_name"] = "7.4.5.32"
             q["device_platform"] = "android"
             q["os"] = "android"; q["ssmix"] = "a"
             q["device_type"] = HongguoEnv.deviceType
@@ -340,11 +343,11 @@ class HongguoPlay(
             q["language"] = "zh"
             q["os_api"] = HongguoEnv.osApi
             q["os_version"] = HongguoEnv.osVersion
-            q["manifest_version_code"] = "73932"
+            q["manifest_version_code"] = "74532"
             q["resolution"] = HongguoEnv.resolution
             q["dpi"] = HongguoEnv.dpi
-            q["update_version_code"] = "73932"; q["host_abi"] = HongguoEnv.HOST_ABI
-            q["dragon_device_type"] = "phone"; q["pv_player"] = "73932"
+            q["update_version_code"] = "74532"; q["host_abi"] = HongguoEnv.HOST_ABI
+            q["dragon_device_type"] = "phone"; q["pv_player"] = "74532"
             q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
             q["player_so_load"] = "1"; q["is_android_pad_screen"] = "1"
             q["rom_version"] = HongguoEnv.romVersion
@@ -354,7 +357,7 @@ class HongguoPlay(
         // 通道（2026-11-10 定案）：纯 Kotlin 签名（与 HGTV F0.x1 逐字段对拍+实测等价）
         // + JVM okhttp（HongguoTls）传输。L1 字节码通道已拆除（embed dex +1.9MB 不值得）。
 
-        val versionName = "7.3.9.32"
+        val versionName = "7.4.5.32"
         val deviceId = identity.deviceId
         val signed = HongguoCrypto.signRequest(q, body, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName)
         val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
@@ -418,7 +421,7 @@ class HongguoPlay(
             .build()
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
-            android.util.Log.d(
+            AppLog.d(
                 TAG, "play resp http=${resp.code} len=${bytes.size} " +
                     "tls=${resp.handshake?.tlsVersion} cipher=${resp.handshake?.cipherSuite}"
             )
@@ -488,7 +491,7 @@ class HongguoPlay(
             .build()
         http.newCall(req).execute().use { resp ->
             val text = resp.body?.string() ?: ""
-            android.util.Log.d(
+            AppLog.d(
                 TAG, "Kotlin-signed resp http=${resp.code} len=${text.length} " +
                     "tls=${resp.handshake?.tlsVersion}"
             )
@@ -597,7 +600,7 @@ class HongguoPlay(
             // video_list 为 JSONArray 时 optJSONObject 恒 null，附 codecs 汇总与二跳线索）
             runCatching {
                 val codecs = candidates.joinToString(",") { it.codec }
-                android.util.Log.w(TAG, "no codec candidates; info.keys=" + info.keys().asSequence().toList() +
+                AppLog.w(TAG, "no codec candidates; info.keys=" + info.keys().asSequence().toList() +
                     " codecs=[" + codecs + "]" +
                     " video_list=" + (info.optJSONArray("video_list")?.toString()
                         ?.take(600) ?: "null") +
@@ -672,7 +675,7 @@ class HongguoPlay(
                     cleanUrl(candidate)
                 }
                 val checked = checkedUrl(media)
-                android.util.Log.d(
+                AppLog.d(
                     TAG, "play picked codec=${best.codec} quality=${best.quality} " +
                         "${best.width}x${best.height} encrypted=${contentKey != null} host=${java.net.URI(checked).host}" +
                         " preferred=$preferredPixels available=$availableQualities"

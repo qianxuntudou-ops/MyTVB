@@ -57,6 +57,6 @@ internal object HongguoEnv {
             "Build/${Build.ID ?: "V417IR"}; " +
             "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
 
-    /** 播放 UA（HGTV 实测形态）：版本 71332。 */
-    fun playbackUa(): String = ua("71332")
+    /** 播放 UA：版本 74532（2026-11-14 随 player/v1 档案弃用 73932/71332 一同对齐官方 App）。 */
+    fun playbackUa(): String = ua("74532")
 }

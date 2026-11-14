@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TimeBar
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
 import com.mytvb.feature.player.settings.PlayerSettingsStore
@@ -347,7 +348,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.w("Hongguo", "switch quality failed", e)
+                AppLog.w("Hongguo", "switch quality failed", e)
                 AppToast.show(this@HongguoPlayerActivity, e.message ?: "切换画质失败")
             } finally {
                 switchingSource = false
@@ -392,9 +393,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
         switchingSource = true
         lifecycleScope.launch {
             try {
-                android.util.Log.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
+                AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
-                android.util.Log.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
+                AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
                 binding.progressBuffering.visibility = View.VISIBLE
                 val playable = resolvePlayable(play)
                 binding.progressBuffering.visibility = View.GONE
@@ -405,7 +406,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.w("Hongguo", "player load failed", e)
+                AppLog.w("Hongguo", "player load failed", e)
                 AppToast.show(this@HongguoPlayerActivity, e.message ?: "播放失败")
                 finish()
             } finally {
@@ -428,7 +429,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         p.playbackParameters = PlaybackParameters(speed)
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                android.util.Log.d("Hongguo", "player state=$state")
+                AppLog.d("Hongguo", "player state=$state")
                 binding.progressBuffering.visibility =
                     if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
                 updatePauseBigIcon()
@@ -455,7 +456,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
+                AppLog.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
                 AppToast.show(this@HongguoPlayerActivity, "播放出错：${error.errorCodeName}")
             }
         })
@@ -881,7 +882,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
         if (seriesId.isEmpty()) return
         repository.saveProgress(
             HongguoRepository.WatchRecord(
-                seriesId, title, cover, episodeIndex, episodeCount,
+                // WatchRecord.episodeIndex 全链 0-based（云上传 +1 / 弹窗续播 +1 对齐），
+                // 本 Activity 的 episodeIndex 是 1-based（intent 传入、顶栏显示），落库前 -1
+                seriesId, title, cover, episodeIndex - 1, episodeCount,
                 positionMs, durationMs(), System.currentTimeMillis()
             ),
             vid = currentVid.ifEmpty { seriesId }

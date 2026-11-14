@@ -360,8 +360,9 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             cover = HongguoCoverUrl.rewrite(cover),
             subtitle = when {
                 episodeCount <= 0 -> ""
-                episodeIndex >= episodeCount -> "已看完"
-                else -> "看到${episodeIndex}/${episodeCount}集"
+                // WatchRecord.episodeIndex 0-based（与 Mine/Shelf 的 seen=e+1 同口径）
+                episodeIndex + 1 >= episodeCount -> "已看完"
+                else -> "看到${episodeIndex + 1}/${episodeCount}集"
             },
             progressPercent = percent.coerceIn(0, 100)
         )

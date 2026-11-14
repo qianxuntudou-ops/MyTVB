@@ -43,6 +43,8 @@ class HongguoDetailDialog(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var detail: HongguoWeb.SeriesDetail? = null
     private var lastEpisodeIndex = 1
+    /** 有本地观看记录：按钮文案「继续播放」/「开始观看」分流（没看过不该说"继续"）。 */
+    private var hasWatched = false
     private var pageStart = 0   // 当前页首集序（0-based）
     private val episodeAdapter = EpisodeAdapter()
     private val pageChipAdapter = PageChipAdapter()
@@ -80,6 +82,11 @@ class HongguoDetailDialog(
         binding.buttonPlay.setOnClickListener { playEpisode(lastEpisodeIndex) }
         binding.buttonFavorite.setOnClickListener { toggleFavorite() }
         binding.buttonWatchLater.setOnClickListener { toggleWatchLater() }
+        // 播放期间弹窗保持打开（对齐红果官方详情页语义：退出播放回详情），
+        // 播放器 finish 后本窗口重获焦点时刷新观看进度（正在看/按钮文案/角标/选集页）
+        binding.root.viewTreeObserver.addOnWindowFocusChangeListener { hasFocus ->
+            if (hasFocus) refreshProgress()
+        }
         // 内容就绪前先把焦点钉在「继续播放」（不等网络，load 回调里还会再钉一次）
         requestInitialFocus()
         load()
@@ -116,9 +123,7 @@ class HongguoDetailDialog(
             try {
                 val d = repository.detail(seriesId)
                 detail = d
-                repository.progressOf(seriesId)?.let {
-                    lastEpisodeIndex = (it.episodeIndex + 1).coerceAtMost(d.episodes.size.coerceAtLeast(1))
-                }
+                refreshProgress()
                 binding.textTitle.text = d.drama.title
                 // 评分单独强调（强调色）；无评分数据时整格隐藏，标签行不再带评分前缀
                 val score = d.drama.score.ifBlank { scoreHint }.trim()
@@ -157,6 +162,33 @@ class HongguoDetailDialog(
     }
 
     /**
+     * 观看进度刷新（load 首算 + 播放返回窗口重获焦点共用）：
+     * 重算 hasWatched/lastEpisodeIndex → 按钮文案/「正在看」/角标/选集页联动。
+     * 同页只重绑网格（itemAnimator=null 下 notifyDataSetChanged 复用 holder 不丢焦点），
+     * 跨页（连播推进跨过分页边界）才整体换页。
+     */
+    private fun refreshProgress() {
+        val d = detail ?: return
+        val rec = repository.progressOf(seriesId)
+        hasWatched = rec != null
+        // WatchRecord.episodeIndex 是 0-based「最后在看的集」：+1 = 1-based 当前集。
+        // 看完推进只由播放器 ENDED→playNext 换集驱动（没看完退出 = 继续当前集+断点续播）
+        lastEpisodeIndex = rec
+            ?.let { (it.episodeIndex + 1).coerceAtMost(d.episodes.size.coerceAtLeast(1)) }
+            ?: 1
+        refreshButtons()
+        refreshWatchingText()
+        if (episodeAdapter.itemCount > 0) {
+            val target = pageForEpisode(lastEpisodeIndex)
+            if (target == pageStart) {
+                episodeAdapter.notifyDataSetChanged()
+            } else {
+                showPage(target)
+            }
+        }
+    }
+
+    /**
      * 初始焦点给「继续播放」。详情数据回来得早时（缓存命中）弹窗窗口可能还没 attach，
      * 一次性 requestFocus 会静默失败、焦点掉到选集格/chip 上——按帧重试到成功为止
      * （touch 打开时 requestFocus 在 touch mode 下本就无效，重试自然放弃，无副作用）。
@@ -186,7 +218,8 @@ class HongguoDetailDialog(
 
     private fun refreshButtons() {
         val d = detail ?: return
-        binding.textButtonPlay.text = "继续播放 第${lastEpisodeIndex}集"
+        binding.textButtonPlay.text =
+            if (hasWatched) "继续播放 第${lastEpisodeIndex}集" else "开始观看 第1集"
         val favorite = repository.isFavorite(seriesId)
         val watchLater = repository.isWatchLater(seriesId)
         binding.buttonFavorite.text =
@@ -219,14 +252,14 @@ class HongguoDetailDialog(
         val d = detail ?: return
         val episode = d.episodes.getOrNull(index - 1) ?: return
         val resumeMs = repository.progressOf(d.drama.seriesId)
-            ?.takeIf { it.episodeIndex == index }?.positionMs ?: 0L
+            // 0-based 存档 +1 对齐 1-based 入参：正在看的集且未播完才续位
+            ?.takeIf { it.episodeIndex + 1 == index }?.positionMs ?: 0L
         HongguoPlayerActivity.start(
             context, d.drama.seriesId, d.drama.title,
             episode.videoId, index, d.episodes.size, resumeMs,
             cover = d.drama.cover
         )
-        // 跳播放即关弹窗：退出播放直接回列表（对齐 B 站播放返回行为，不再多按一次 BACK）
-        dismiss()
+        // 弹窗保持打开：退出播放回详情（窗口重获焦点时 refreshProgress 刷新进度）
     }
 
     // ---- 选集分页 ----
@@ -306,7 +339,9 @@ class HongguoDetailDialog(
 
     private fun refreshWatchingText() {
         val d = detail ?: return
-        binding.textWatching.text = "正在看第 $lastEpisodeIndex 集 · 共 ${d.episodes.size} 集"
+        // 没看过不显示「正在看」（lastEpisodeIndex 兜底 1 不是真实进度）
+        binding.textWatching.text =
+            if (hasWatched) "正在看第 $lastEpisodeIndex 集 · 共 ${d.episodes.size} 集" else ""
     }
 
     private fun Int.asText(): String = context.getString(this)
@@ -329,7 +364,7 @@ class HongguoDetailDialog(
         override fun onBindViewHolder(holder: EpisodeHolder, position: Int) {
             val d = detail ?: return
             val episode = d.episodes.getOrNull(pageStart + position) ?: return
-            val watching = episode.index == lastEpisodeIndex
+            val watching = hasWatched && episode.index == lastEpisodeIndex
             holder.cell.text = "${episode.index}"
             // 8 列格宽（152dp）容不下「上次观看」角标 + 居中数字（CCTV 是 6 列 208dp），
             // 有角标时把数字下沉到角标下沿，避免被粉色标压住

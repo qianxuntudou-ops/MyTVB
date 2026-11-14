@@ -1,6 +1,7 @@
 package com.mytvb.feature.hongguo
 
 import android.content.Context
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.hongguo.net.HongguoAccount
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoDeviceRegister
@@ -84,7 +85,8 @@ class HongguoRepository private constructor(context: Context) {
         return try {
             block(identity()); true
         } catch (e: Exception) {
-            android.util.Log.w("Hongguo", "withIdentity failed: ${e.javaClass.simpleName}: ${e.message}")
+            // 走 AppLog：release 包 LAN 日志可见（android.util.Log 的 W 级在 release 不落任何盘）
+            AppLog.w("Hongguo", "withIdentity failed: ${e.javaClass.simpleName}: ${e.message}", e)
             cachedIdentity = null
             session.clearAll()
             false
@@ -192,7 +194,7 @@ class HongguoRepository private constructor(context: Context) {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.d("Hongguo", "discovery fail: ${e.javaClass.simpleName}: ${e.message}")
+                AppLog.d("Hongguo", "discovery fail: ${e.javaClass.simpleName}: ${e.message}")
                 null
             }
         }
@@ -436,7 +438,7 @@ class HongguoRepository private constructor(context: Context) {
         withContext(Dispatchers.IO) {
             val key = "$vid@$preferredPixels"
             takeCachedPlayUrl(key)?.let {
-                android.util.Log.d("Hongguo", "playUrl cache hit vid=$vid q=$preferredPixels")
+                AppLog.d("Hongguo", "playUrl cache hit vid=$vid q=$preferredPixels")
                 return@withContext it
             }
             var result: HongguoPlay.PlayUrl? = null
@@ -444,7 +446,11 @@ class HongguoRepository private constructor(context: Context) {
                 if (withIdentity { id -> result = play.playUrl(vid, id, preferredPixels) }) break
             }
             result?.also { cachePlayUrl(key, it) }
-                ?: throw IllegalStateException("红果播放地址解析失败")
+                ?: run {
+                    // 两次 attempt 全败的真实原因在 withIdentity 逐条 AppLog（LAN 日志可见）
+                    AppLog.w("Hongguo", "playUrl resolve failed vid=$vid q=$preferredPixels after 2 attempts")
+                    throw IllegalStateException("红果播放地址解析失败")
+                }
         }
 
     /**
@@ -459,15 +465,15 @@ class HongguoRepository private constructor(context: Context) {
         val pixels = defaultQualityPixels()
         val pending = vids.filter { it.isNotEmpty() && takeCachedPlayUrl("$it@$pixels") == null }
         if (pending.isNotEmpty()) {
-            android.util.Log.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
+            AppLog.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
             cloudScope.launch {
                 withIdentity { id ->
                     runCatching { play.preloadEntries(pending, id, pixels) }
                         .onSuccess { entries ->
                             entries.forEach { (vid, url) -> cachePlayUrl("$vid@$pixels", url) }
-                            android.util.Log.d("Hongguo", "preload episodes ok ${entries.keys}")
+                            AppLog.d("Hongguo", "preload episodes ok ${entries.keys}")
                         }
-                        .onFailure { android.util.Log.w("Hongguo", "preload episodes fail: ${it.message}") }
+                        .onFailure { AppLog.w("Hongguo", "preload episodes fail: ${it.message}") }
                 }
             }
         }
@@ -478,11 +484,11 @@ class HongguoRepository private constructor(context: Context) {
                 val play = playUrl(next, pixels)
                 if (play.contentKeyHex != null) {
                     resolvePlayableFile(play)
-                    android.util.Log.d("Hongguo", "prefetch download ok vid=$next q=${play.pixels}")
+                    AppLog.d("Hongguo", "prefetch download ok vid=$next q=${play.pixels}")
                 } else {
-                    android.util.Log.d("Hongguo", "prefetch next plain vid=$next (直链不落地)")
+                    AppLog.d("Hongguo", "prefetch next plain vid=$next (直链不落地)")
                 }
-            }.onFailure { android.util.Log.d("Hongguo", "prefetch next fail vid=$next: ${it.message}") }
+            }.onFailure { AppLog.d("Hongguo", "prefetch next fail vid=$next: ${it.message}") }
         }
     }
 
@@ -537,14 +543,14 @@ class HongguoRepository private constructor(context: Context) {
             } catch (e: Exception) {
                 if (retried) throw e
                 retried = true
-                android.util.Log.w("Hongguo", "cenc await fail (${e.message}), retry self vid=${play.vid}")
+                AppLog.w("Hongguo", "cenc await fail (${e.message}), retry self vid=${play.vid}")
             }
         }
     }
 
     /** 下载整集 + 解密 + 原子落地（tmp 改名防半截文件被缓存命中）+ 落地后 LRU 修剪。 */
     private fun downloadDecryptLand(play: HongguoPlay.PlayUrl, key: ByteArray, outFile: java.io.File): String {
-        android.util.Log.d("Hongguo", "cenc download start ${play.vid} q=${play.pixels}")
+        AppLog.d("Hongguo", "cenc download start ${play.vid} q=${play.pixels}")
         val bytes = cencHttpClient.newCall(
             okhttp3.Request.Builder().url(play.url)
                 .header("User-Agent", "com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR)")
@@ -554,7 +560,7 @@ class HongguoRepository private constructor(context: Context) {
             if (!resp.isSuccessful) throw IllegalStateException("片源下载 HTTP ${resp.code}")
             resp.body?.bytes() ?: throw IllegalStateException("片源下载为空")
         }
-        android.util.Log.d("Hongguo", "cenc downloaded ${bytes.size}B, decrypting")
+        AppLog.d("Hongguo", "cenc downloaded ${bytes.size}B, decrypting")
         val plain = com.mytvb.feature.hongguo.net.HongguoMp4Decrypt.decryptMp4Buffer(bytes, key)
         java.io.File(outFile.parentFile, "${play.vid}.tmp").let { tmp ->
             tmp.writeBytes(plain)
@@ -563,7 +569,7 @@ class HongguoRepository private constructor(context: Context) {
                 tmp.delete()
             }
         }
-        android.util.Log.d("Hongguo", "cenc decrypted ${plain.size}B -> ${outFile.name}")
+        AppLog.d("Hongguo", "cenc decrypted ${plain.size}B -> ${outFile.name}")
         // 落地后按「缓存限制」设置修剪旧集（LRU），预下载与观看缓存同池同口径
         HongguoMediaCache.enforceLimit(appContext)
         return android.net.Uri.fromFile(outFile).toString()
@@ -623,9 +629,9 @@ class HongguoRepository private constructor(context: Context) {
             runCatching { sync.block() }
                 .onFailure {
                     if (it is HongguoSync.SyncException && it.code == "SESSION_EXPIRED") {
-                        android.util.Log.w("HongguoSync", "登录态过期，云同步停用（下次登录恢复）")
+                        AppLog.w("HongguoSync", "登录态过期，云同步停用（下次登录恢复）")
                     } else {
-                        android.util.Log.d("HongguoSync", "cloud sync fail: ${it.message}")
+                        AppLog.d("HongguoSync", "cloud sync fail: ${it.message}")
                     }
                 }
         }
@@ -674,7 +680,7 @@ class HongguoRepository private constructor(context: Context) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            android.util.Log.w("Hongguo", "cloud history merge fail: ${e.message}")
+            AppLog.w("Hongguo", "cloud history merge fail: ${e.message}")
             local
         }
     }
@@ -696,7 +702,7 @@ class HongguoRepository private constructor(context: Context) {
         if (!session.loggedIn) return
         cloudScope.launch {
             runCatching { sync.beatIfNeeded(scene = "play") }
-                .onFailure { android.util.Log.d("HongguoSync", "beat fail: ${it.message}") }
+                .onFailure { AppLog.d("HongguoSync", "beat fail: ${it.message}") }
         }
     }
 
@@ -790,6 +796,30 @@ class HongguoRepository private constructor(context: Context) {
         localPrefs.edit().putString(key, arr.toString()).apply()
     }
 
+    init {
+        migrateEpisodeIndexOnce()
+    }
+
+    /**
+     * 一次性迁移（2026-11-14）：修复前播放器把 1-based episodeIndex 直接落库，
+     * 存量「看过」记录全部偏 +1（表现为详情弹窗「继续播放 第N+1集」、断点不续）。
+     * 统一回 0-based：仅 e>0 减 1；e=0 是「从未播放」的收藏占位，保持不变。
+     */
+    private fun migrateEpisodeIndexOnce() {
+        if (localPrefs.getBoolean(PREF_KEY_EP_INDEX_MIGRATED, false)) return
+        for (key in listOf("history", "favorites", "watch_later")) {
+            val list = readRecords(key)
+            if (list.any { it.episodeIndex > 0 }) {
+                writeRecords(
+                    key,
+                    list.map { if (it.episodeIndex > 0) it.copy(episodeIndex = it.episodeIndex - 1) else it }
+                )
+                AppLog.d("Hongguo", "migrate episodeIndex key=$key count=${list.size}")
+            }
+        }
+        localPrefs.edit().putBoolean(PREF_KEY_EP_INDEX_MIGRATED, true).apply()
+    }
+
     fun clearLocal() {
         localPrefs.edit().clear().apply()
     }
@@ -797,6 +827,9 @@ class HongguoRepository private constructor(context: Context) {
     companion object {
         /** 预取地址有效期约 6h（x-expires），缓存 5h 留余量防过期 URL 起播 403。 */
         private const val PLAY_URL_TTL_MS = 5L * 60 * 60 * 1000
+
+        /** episodeIndex 0-based 迁移标记（见 migrateEpisodeIndexOnce）。 */
+        private const val PREF_KEY_EP_INDEX_MIGRATED = "migrated_episode_index_v1"
 
         @Volatile
         private var instance: HongguoRepository? = null
