@@ -1,6 +1,7 @@
 package com.mytvb.feature.player
 
 import androidx.core.net.toUri
+import com.mytvb.core.common.log.AppLog
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -86,6 +87,11 @@ internal object CdnLatencyProfile {
             if (list.size > THROUGHPUT_MAX_SAMPLES_PER_HOST) list.removeAt(0)
             throughputRecords[host] = list
         }
+        AppLog.i(
+            "PlaybackCdn",
+            "cdn_throughput host=$host rate=${"%.2f".format(bytesPerSecond / 1_000_000.0)}MB/s " +
+                "avg=${"%.2f".format(averageThroughputBytesPerSecond(url) / 1_000_000.0)}MB/s"
+        )
     }
 
     /** 该 host 的近期平均吞吐（B/s）；无近期记录返回 -1（不参与沉底判定，避免冤枉新节点）。 */
@@ -109,7 +115,7 @@ internal object CdnLatencyProfile {
         if (urls.size <= 1) return urls
         // 健康分开关关闭（或无记录）时全部候选同分 1000，自然退化为纯 TTFB 口径。
         val useHealthScore = CdnHealthProfile.isEnabled()
-        return urls.sortedWith(
+        val sorted = urls.sortedWith(
             compareBy(
                 { cdnPreference(it) },
                 // 实测慢吞吐沉底先于健康分：烂吞吐节点可以零报错（健康分 970）但照样卡
@@ -120,6 +126,18 @@ internal object CdnLatencyProfile {
                 { averageTtfbMs(it) }
             )
         )
+        // 有吞吐画像参与时留排序锚点：验证沉底口径实际生效与否（issue#114 诊断）
+        if (useHealthScore && urls.any { averageThroughputBytesPerSecond(it) >= 0L }) {
+            AppLog.i(
+                "PlaybackCdn",
+                "cdn_sort hosts=" + sorted.joinToString(" -> ") { url ->
+                    val host = extractHost(url) ?: "?"
+                    val avg = averageThroughputBytesPerSecond(url)
+                    if (avg >= 0L) "$host(${"%.1f".format(avg / 1_000_000.0)}MB/s)" else host
+                }
+            )
+        }
+        return sorted
     }
 
     private fun cdnPreference(url: String): Int {

@@ -25,13 +25,16 @@ class VideoPlayerProgressCoordinator(
         // 症状形态："卡 2 秒 → 播几秒 → 再卡 2~5 秒"的高频短 rebuffer 循环——单次卡顿
         // 永远达不到既有 stall 阈值，且每次都自行恢复到不了错误链，两条旧救援都够不着。
         // 病理 = 吞吐长期低于码率：每次"恢复"只是攒下 2~3 秒缓冲又立刻耗光，等是等不好的。
-        private const val NETWORK_STALL_WINDOW_MS = 60_000L
-        // 判据一(频次)：窗口内 rebuffer ≥3 次——高频循环的特征指纹
-        private const val NETWORK_STALL_EVENT_COUNT = 3
+        // v2.1.26 实测标定：水位 10s 生效后形态变为"2~4 分钟卡一次 3~5.6s"，首版阈值
+        // （3次/60s、12s单次）全部够不着零触发——放宽为 2次/90s + 单次7s。
+        private const val NETWORK_STALL_WINDOW_MS = 90_000L
+        // 判据一(频次)：窗口内 rebuffer ≥2 次（实测 21s 间隔双卡形态命中）
+        private const val NETWORK_STALL_EVENT_COUNT = 2
         // 判据二(累计)：窗口内 rebuffer 累计 ≥10s——低频长卡的特征指纹
         private const val NETWORK_STALL_TOTAL_MS = 10_000L
-        // 判据三(单次)：单次网络性 BUFFERING ≥12s 无恢复（水位 10s 攒满一轮的时间都过了）
-        private const val NETWORK_STALL_SINGLE_MS = 12_000L
+        // 判据三(单次)：单次网络性 BUFFERING ≥7s 无恢复——卡 7 秒还在等就是干耗，
+        // 换线重建代价仅 ~1.5s，越早换越划算（实测最长单次 5.6s 恰在旧阈值 12s 之下漏网）
+        private const val NETWORK_STALL_SINGLE_MS = 7_000L
         // 救援冷却：换线重建后给新节点攒水位的时间，窗口期内不重复触发
         private const val NETWORK_STALL_RESCUE_COOLDOWN_MS = 20_000L
     }
