@@ -36,7 +36,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:id="@+id/button_follow"
-        android:background="@drawable/bg_owner_dialog_outline_button"
+        android:background="@drawable/bg_hongguo_btn_detail"
         android:paddingLeft="@dimen/px30"
         android:paddingTop="@dimen/px15"
         android:paddingRight="@dimen/px30"
@@ -94,7 +94,7 @@
         app:tabSelectedTextAppearance="@style/OwnerDetailTabText"/>
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/buttonOrder"
-        android:background="@drawable/bg_owner_dialog_outline_button"
+        android:background="@drawable/bg_hongguo_btn_detail"
         android:paddingLeft="@dimen/px14"
         android:paddingRight="@dimen/px14"
         android:focusable="true"

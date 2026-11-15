@@ -15,11 +15,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <!-- 退出钮：bg_hongguo_btn_detail（常态淡灰底无描边/聚焦提亮/按下变色），
+             与详情弹窗动作钮同款；原白描边 outline 在此同样扎眼 -->
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/button_hongguo_search_exit"
             android:src="@drawable/ic_hongguo_back"
             app:tint="@color/textColor"
-            android:background="@drawable/bg_hongguo_btn_outline"
+            android:background="@drawable/bg_hongguo_btn_detail"
             android:padding="@dimen/px10"
             android:contentDescription="@string/back"
             android:layout_marginEnd="@dimen/px20"

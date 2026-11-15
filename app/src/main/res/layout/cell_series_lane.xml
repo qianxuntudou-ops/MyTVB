@@ -25,7 +25,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/px30"
-        android:background="@drawable/button_accent_outline"
+        android:background="@drawable/bg_hongguo_btn_detail"
         android:clickable="true"
         android:focusable="true"
         android:gravity="center_vertical"

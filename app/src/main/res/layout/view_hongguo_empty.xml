@@ -30,7 +30,7 @@
         android:text="@string/retry"
         android:textSize="@dimen/px24"
         android:textColor="@color/hongguo_btn_text"
-        android:background="@drawable/bg_hongguo_btn_outline"
+        android:background="@drawable/bg_hongguo_btn_detail"
         android:paddingStart="@dimen/px40"
         android:paddingEnd="@dimen/px40"
         android:layout_marginTop="@dimen/px20"

@@ -77,7 +77,7 @@
             android:id="@+id/button_follow"
             android:layout_width="wrap_content"
             android:layout_height="@dimen/px56"
-            android:background="@drawable/bg_follow_space_btn"
+            android:background="@drawable/bg_hongguo_btn_detail"
             android:drawablePadding="@dimen/px8"
             android:minWidth="@dimen/px40"
             android:paddingStart="@dimen/px20"

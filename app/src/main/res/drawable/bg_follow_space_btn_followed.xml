@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 全屏页关注按钮（已关注态）：焦点态与列表 tab 同款紫色圆角块（colorControlHighlight），非焦点为弱化描边 -->
+<!-- 全屏页关注按钮（已关注态，2026-11-15 去描边统一）：常态比未关注(#14FFFFFF)更弱的
+     #0AFFFFFF 底（保留 B 站"已关注弱化防误触"语义，配合文字 dimmed），无描边；
+     按下=colorPrimary / 聚焦=colorControlHighlight，状态序与 bg_hongguo_btn_detail 完全一致。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android"
     android:exitFadeDuration="@android:integer/config_shortAnimTime">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary" />
+            <corners android:radius="@dimen/px15" />
+        </shape>
+    </item>
     <item android:state_focused="true">
         <shape>
             <solid android:color="?attr/colorControlHighlight" />
@@ -10,11 +18,8 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#14FFFFFF" />
-            <corners android:radius="@dimen/px8" />
-            <stroke
-                android:width="@dimen/px2"
-                android:color="#59FFFFFF" />
+            <solid android:color="#0AFFFFFF" />
+            <corners android:radius="@dimen/px15" />
         </shape>
     </item>
 </selector>

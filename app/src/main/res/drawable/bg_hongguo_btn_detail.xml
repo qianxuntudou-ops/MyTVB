@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果详情弹窗动作钮（继续播放/收藏共用，2026-11-15 二次迭代）：
+     状态集与 bg_hongguo_episode（选集格）完全同序同色——点击=colorPrimary、
+     聚焦=colorControlHighlight、选中=tabBarHighlight（收藏钮用=已收藏）、
+     常态=#14FFFFFF 淡灰底。首版"主钮中性灰底/次钮白描边"在深色弹窗上
+     灰底与背景融为一体的只有白线扎眼，用户拍板与选集格完全统一。圆角 px15。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_focused="true">
+        <shape>
+            <solid android:color="?attr/colorControlHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="?attr/tabBarHighlight"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="#14FFFFFF"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>

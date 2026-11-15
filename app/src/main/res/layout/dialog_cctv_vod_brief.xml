@@ -61,7 +61,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="end"
         android:layout_marginTop="@dimen/px20"
-        android:background="@drawable/bg_owner_dialog_outline_button"
+        android:background="@drawable/bg_hongguo_btn_detail"
         android:clickable="true"
         android:focusable="true"
         android:paddingStart="@dimen/px35"

@@ -711,7 +711,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
             backgroundRes = if (following) {
                 R.drawable.bg_follow_space_btn_followed
             } else {
-                R.drawable.bg_follow_space_btn
+                R.drawable.bg_hongguo_btn_detail
             },
             iconRes = if (following) R.drawable.ic_check else R.drawable.ic_plus,
             dimmed = following

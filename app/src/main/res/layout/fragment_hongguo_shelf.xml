@@ -21,7 +21,7 @@
             android:src="@drawable/ic_hongguo_back"
             app:tint="@color/textColor"
             xmlns:app="http://schemas.android.com/apk/res-auto"
-            android:background="@drawable/bg_hongguo_btn_outline"
+            android:background="@drawable/bg_hongguo_btn_detail"
             android:padding="@dimen/px10"
             android:contentDescription="@string/back"
             android:layout_width="@dimen/px56"

@@ -311,7 +311,7 @@ class HongguoDetailDialog(
         val favorite = repository.isFavorite(seriesId)
         binding.buttonFavorite.text =
             if (favorite) R.string.hongguo_unfavorite.asText() else R.string.hongguo_favorite.asText()
-        // 按钮选中态 = 已收藏（tab_round_background 的 tabBarHighlight 底），
+        // 按钮选中态 = 已收藏（bg_hongguo_btn_detail 的 tabBarHighlight 底，同选集格），
         // 文案之外再给一层可扫视的状态反馈
         binding.buttonFavorite.isSelected = favorite
     }

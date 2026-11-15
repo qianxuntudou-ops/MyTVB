@@ -41,7 +41,7 @@ class UserSpaceHeaderAdapter(
         val videoCount: Int = 0,
         val showFollow: Boolean = false,
         @StringRes val followLabelRes: Int = R.string.follow,
-        @DrawableRes val followBackgroundRes: Int = R.drawable.bg_follow_space_btn,
+        @DrawableRes val followBackgroundRes: Int = R.drawable.bg_hongguo_btn_detail,
         @DrawableRes val followIconRes: Int = R.drawable.ic_plus,
         val followDimmed: Boolean = false,
         // 投稿排序按钮（头部关注按钮左边），列表首屏加载后显示

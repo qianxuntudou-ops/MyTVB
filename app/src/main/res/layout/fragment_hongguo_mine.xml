@@ -93,7 +93,7 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- 危险项（登出/清数据）描边小钮，与身份信息右端对齐 -->
+            <!-- 危险项（登出/清数据）淡灰底小钮（bg_hongguo_btn_detail），与身份信息右端对齐 -->
             <LinearLayout
                 android:id="@+id/group_account_actions"
                 android:orientation="horizontal"
@@ -107,7 +107,7 @@
                     android:text="@string/sign_out"
                     android:textSize="@dimen/px20"
                     android:textColor="@color/hongguo_btn_text"
-                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:background="@drawable/bg_hongguo_btn_detail"
                     android:paddingStart="@dimen/px20"
                     android:paddingEnd="@dimen/px20"
                     android:layout_width="wrap_content"
@@ -118,7 +118,7 @@
                     android:text="@string/hongguo_clear_local"
                     android:textSize="@dimen/px20"
                     android:textColor="@color/hongguo_btn_text"
-                    android:background="@drawable/bg_hongguo_btn_outline"
+                    android:background="@drawable/bg_hongguo_btn_detail"
                     android:layout_marginStart="@dimen/px12"
                     android:paddingStart="@dimen/px20"
                     android:paddingEnd="@dimen/px20"
