@@ -28,7 +28,6 @@
         app:tabIndicatorColor="?attr/colorAccent"
         app:tabIndicatorFullWidth="false"
         app:tabIndicatorHeight="@dimen/px10"
-        app:tabMaxWidth="@dimen/px200"
         app:tabMode="scrollable"
         app:tabRippleColor="@android:color/transparent"
         app:tabSelectedTextColor="?android:attr/textColorPrimary"
