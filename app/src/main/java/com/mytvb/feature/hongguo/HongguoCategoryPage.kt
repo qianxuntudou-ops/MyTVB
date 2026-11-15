@@ -9,6 +9,7 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import com.mytvb.R
 import com.mytvb.core.ui.tab.enableTouchNavigation
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.databinding.FragmentHongguoCategoryBinding
@@ -29,18 +30,23 @@ class HongguoCategoryPage : Fragment(), HongguoPageFocus {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val genres = listOf("全部" to "", "漫剧" to "comic", "AI剧" to "ai")
+        // 子档 tab：first=genre 参数（传 FeedPage），second=本地化显示名资源
+        val genres = listOf(
+            "" to R.string.hongguo_filter_all,
+            "comic" to R.string.hongguo_form_comic,
+            "ai" to R.string.hongguo_form_ai
+        )
         binding.viewPager.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount(): Int = genres.size
             override fun createFragment(position: Int): Fragment =
-                HongguoFeedPage.newInstance(HongguoFeedPage.MODE_FEED, genres[position].second).apply {
+                HongguoFeedPage.newInstance(HongguoFeedPage.MODE_FEED, genres[position].first).apply {
                     // 子档页卡片/筛选行 UP 的顶部落点=本页子档 tab（非宿主一级 tab）
                     topEdgeExit = { focusGenreTab() }
                 }
         }
         binding.viewPager.isUserInputEnabled = false
         TabLayoutMediator(binding.tabGenre, binding.viewPager) { tab, position ->
-            tab.text = genres[position].first
+            tab.setText(genres[position].second)
         }.attach()
         // 子档离屏页焦点域管理（与一级六页同款，见 HongguoPagerFocus）：
         // 不关的话离屏子档的筛选 chip/卡片/页根都参与几何搜索，当前子档芯片

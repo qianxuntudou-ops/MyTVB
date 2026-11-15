@@ -104,7 +104,7 @@
 
                 <androidx.appcompat.widget.AppCompatButton
                     android:id="@+id/button_logout"
-                    android:text="@string/hongguo_logout"
+                    android:text="@string/sign_out"
                     android:textSize="@dimen/px20"
                     android:textColor="@color/hongguo_btn_text"
                     android:background="@drawable/bg_hongguo_btn_outline"

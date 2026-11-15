@@ -299,10 +299,10 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
 
         private val PAGE_TITLES = intArrayOf(
             R.string.hongguo_tab_rank,
-            R.string.hongguo_tab_history,
+            R.string.history,
             R.string.hongguo_tab_favorite,
             R.string.hongguo_tab_category,
-            R.string.hongguo_tab_mine
+            R.string.me
         )
 
         fun newInstance(): HongguoFragment = HongguoFragment()

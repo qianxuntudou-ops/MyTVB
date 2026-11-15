@@ -163,7 +163,7 @@
         android:layout_height="wrap_content">
 
         <androidx.appcompat.widget.AppCompatTextView
-            android:text="@string/hongguo_pick_episode"
+            android:text="@string/choose_episode"
             android:textSize="@dimen/px30"
             android:textStyle="bold"
             android:textColor="?android:attr/textColorPrimary"

@@ -57,7 +57,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
     enum class Source(val titleRes: Int) {
         SUBSCRIBE(R.string.hongguo_my_subscribe),
         FAVORITE(R.string.hongguo_tab_favorite),
-        HISTORY(R.string.hongguo_tab_history)
+        HISTORY(R.string.history)
     }
 
     override fun onCreateView(
@@ -112,7 +112,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(requireContext(), e.message ?: "列表拉取失败")
+                AppToast.show(requireContext(), e.message ?: getString(R.string.hongguo_shelf_load_failed))
                 emptyList()
             }
             if (_binding == null) return@launch
@@ -155,7 +155,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
             // 封面右下「共 N 集」与信息流卡对齐（此前历史卡只有进度条，封面信息行全空）
             episodeCount = episodeCount,
             // 右上形态标签（AI剧/漫剧/真人剧，官方口径；历史无状态标此位空闲）
-            statusTag = formLabelOf(contentType),
+            statusTag = formLabelOf(requireContext(), contentType),
             progressPercent = pct
         )
     }
@@ -168,7 +168,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
         cover = cover,
         subtitle = if (episodeCount > 0) getString(R.string.hongguo_episode_count, episodeCount) else "",
         episodeCount = episodeCount,
-        statusTag = formLabelOf(contentType)
+        statusTag = formLabelOf(requireContext(), contentType)
     )
 
     private fun HongguoSync.SubscribeItem.toDramaUi(): DramaUi = DramaUi(
@@ -185,7 +185,7 @@ class HongguoShelfPage : Fragment(), HongguoPageFocus {
         // 封面右下「共 N 集」（已上线剧才有；预约未开播多数无值）
         episodeCount = episodeCount,
         // 右上官方状态标（tag_info「预告」金底）优先；预约响应无 content_type 不标形态
-        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(contentType) else "" }
+        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(requireContext(), contentType) else "" }
     )
 
     private fun formatOnlineTime(sec: Long): String {

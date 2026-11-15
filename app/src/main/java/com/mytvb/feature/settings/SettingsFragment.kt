@@ -442,7 +442,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_HONGGUO_ENTRY, R.string.hongguo_entry, "关"),
                 stored(KEY_HONGGUO_RECOMMEND_GENDER, R.string.hongguo_recommend_gender, "不限"),
                 stored(KEY_HONGGUO_SEARCH_SOURCE, R.string.hongguo_search_source, "App"),
-                stored(KEY_HONGGUO_QUALITY, R.string.hongguo_quality, "默认")
+                stored(KEY_HONGGUO_QUALITY, R.string.default_video_quality, "默认")
             ))
         )
 

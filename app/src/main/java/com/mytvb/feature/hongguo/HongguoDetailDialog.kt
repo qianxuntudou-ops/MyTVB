@@ -105,12 +105,12 @@ class HongguoDetailDialog(
         binding.textTitle.text = h.title
         val score = h.score.ifBlank { scoreHint }.trim()
         val scoreValid = score.isNotBlank() && (score.toFloatOrNull() ?: 0f) > 0f
-        binding.textScore.text = "$score 分"
+        binding.textScore.text = context.getString(R.string.hongguo_score_format, score)
         binding.textScore.visibility = if (scoreValid) View.VISIBLE else View.GONE
         if (h.episodeCount > 0) {
             binding.textMeta.text = listOf(
                 h.seasonText.takeIf { it.isNotBlank() },
-                "共${h.episodeCount}集"
+                context.getString(R.string.hongguo_episode_count, h.episodeCount)
             ).filterNotNull().joinToString(" · ")
             // 集数已知时高度先收缩到位，避免详情到达后弹窗跳变
             val pages = (h.episodeCount + PAGE_SIZE - 1) / PAGE_SIZE
@@ -168,13 +168,13 @@ class HongguoDetailDialog(
                 // 评分单独强调（强调色）；无评分数据时整格隐藏，标签行不再带评分前缀
                 val score = d.drama.score.ifBlank { scoreHint }.trim()
                 val scoreValid = score.isNotBlank() && (score.toFloatOrNull() ?: 0f) > 0f
-                binding.textScore.text = "$score 分"
+                binding.textScore.text = context.getString(R.string.hongguo_score_format, score)
                 binding.textScore.visibility = if (scoreValid) View.VISIBLE else View.GONE
                 binding.textTags.text = d.drama.tags.take(4).joinToString(" · ")
                 binding.textIntro.text = d.drama.intro
                 binding.textMeta.text = listOf(
-                    d.drama.seasonIndex.takeIf { it > 0 }?.let { "第${it}季" },
-                    "共${d.episodes.size}集"
+                    d.drama.seasonIndex.takeIf { it > 0 }?.let { context.getString(R.string.hongguo_season_format, it) },
+                    context.getString(R.string.hongguo_episode_count, d.episodes.size)
                 ).filterNotNull().joinToString(" · ")
                 ImageLoader.load(
                     imageView = binding.imageCover,
@@ -204,11 +204,11 @@ class HongguoDetailDialog(
                     // 预约未开播剧：video_detail 无选集、SSR 回退 404（2026-11-14 MuMu 实证）。
                     // 保留乐观渲染的剧名/封面，按钮置灰提示即将上线（不关弹窗）
                     binding.buttonPlay.isEnabled = false
-                    binding.textButtonPlay.text = hint.subtitle.ifBlank { "即将上线，敬请期待" }
+                    binding.textButtonPlay.text = hint.subtitle.ifBlank { context.getString(R.string.hongguo_coming_soon_btn) }
                     binding.buttonFavorite.isEnabled = false
-                    AppToast.show(context, "该剧暂未开播")
+                    AppToast.show(context, context.getString(R.string.hongguo_not_aired))
                 } else {
-                    AppToast.show(context, e.message ?: "详情加载失败")
+                    AppToast.show(context, e.message ?: context.getString(R.string.hongguo_detail_load_failed))
                     dismiss()
                 }
             }
@@ -220,13 +220,13 @@ class HongguoDetailDialog(
         binding.textTitle.text = d.drama.title.ifBlank { hint?.title.orEmpty() }
         val score = d.drama.score.ifBlank { scoreHint }.trim()
         val scoreValid = score.isNotBlank() && (score.toFloatOrNull() ?: 0f) > 0f
-        binding.textScore.text = "$score 分"
+        binding.textScore.text = context.getString(R.string.hongguo_score_format, score)
         binding.textScore.visibility = if (scoreValid) View.VISIBLE else View.GONE
         binding.textTags.text = d.drama.tags.take(4).joinToString(" · ")
         binding.textIntro.text = d.drama.intro
         binding.textMeta.text = listOf(
-            d.drama.seasonIndex.takeIf { it > 0 }?.let { "第${it}季" },
-            "即将上线"
+            d.drama.seasonIndex.takeIf { it > 0 }?.let { context.getString(R.string.hongguo_season_format, it) },
+            context.getString(R.string.hongguo_coming_soon_tag)
         ).filterNotNull().joinToString(" · ")
         ImageLoader.load(
             imageView = binding.imageCover,
@@ -301,7 +301,8 @@ class HongguoDetailDialog(
     private fun refreshButtons() {
         val d = detail ?: return
         binding.textButtonPlay.text =
-            if (hasWatched) "继续播放 第${lastEpisodeIndex}集" else "开始观看 第1集"
+            if (hasWatched) context.getString(R.string.hongguo_continue_episode, lastEpisodeIndex)
+            else context.getString(R.string.hongguo_start_watching)
         refreshFavoriteState()
     }
 
@@ -391,7 +392,7 @@ class HongguoDetailDialog(
         }
         val d = detail ?: return
         val end = minOf(pageStart + PAGE_SIZE, d.episodes.size)
-        binding.textPageRange.text = "第 ${pageStart + 1}-${end} 集 · 共 ${d.episodes.size} 集"
+        binding.textPageRange.text = context.getString(R.string.hongguo_episode_page_range, pageStart + 1, end, d.episodes.size)
         episodeAdapter.notifyDataSetChanged()
         binding.recyclerEpisodes.scrollToPosition(0)
     }
@@ -417,7 +418,7 @@ class HongguoDetailDialog(
         val d = detail ?: return
         // 没看过不显示「正在看」（lastEpisodeIndex 兜底 1 不是真实进度）
         binding.textWatching.text =
-            if (hasWatched) "正在看第 $lastEpisodeIndex 集 · 共 ${d.episodes.size} 集" else ""
+            if (hasWatched) context.getString(R.string.hongguo_watching_progress, lastEpisodeIndex, d.episodes.size) else ""
     }
 
     private fun Int.asText(): String = context.getString(this)

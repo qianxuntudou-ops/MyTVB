@@ -52,7 +52,7 @@
             android:paddingTop="@dimen/px8"
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px8"
-            android:text="@string/cctv_vod_search_confirm"
+            android:text="@string/search"
             android:textColor="@color/colorAccent"
             android:textSize="@dimen/px26" />
 
@@ -68,7 +68,7 @@
             android:paddingTop="@dimen/px8"
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px8"
-            android:text="@string/cctv_vod_search_clear"
+            android:text="@string/clear"
             android:textColor="@color/textColor"
             android:textSize="@dimen/px26" />
 

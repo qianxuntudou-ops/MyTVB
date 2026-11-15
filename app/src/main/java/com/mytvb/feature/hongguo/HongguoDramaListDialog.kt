@@ -64,7 +64,7 @@ class HongguoDramaListDialog(
             binding.textState.visibility = View.VISIBLE
             binding.recyclerDramas.visibility = View.GONE
         } else {
-            adapter.setDataDeduplicated(items.map { it.toDramaUi() })
+            adapter.setDataDeduplicated(items.map { it.toDramaUi(context) })
         }
         setOnShowListener {
             // 首帧布局完成后再聚焦第 0 项（Dialog 首次布局未完成时 requestFocus 无效）

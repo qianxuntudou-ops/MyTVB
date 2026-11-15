@@ -53,7 +53,7 @@
             app:tint="?android:attr/textColorSecondary"/>
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_hongguo_search_hint"
-            android:text="@string/hongguo_search_hint"
+            android:text="@string/search"
             android:textSize="@dimen/px24"
             android:textColor="?android:attr/textColorSecondary"
             android:layout_marginStart="@dimen/px8"

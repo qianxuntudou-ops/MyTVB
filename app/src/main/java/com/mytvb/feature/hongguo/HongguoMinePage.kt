@@ -63,12 +63,12 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         binding.buttonLogout.setOnClickListener {
             repository.account.logout()
             refreshLoginState()
-            AppToast.show(requireContext(), "已退出红果账号")
+            AppToast.show(requireContext(), getString(R.string.hongguo_logged_out))
         }
         binding.buttonClear.setOnClickListener {
             repository.clearLocal()
             refreshLoginState()
-            AppToast.show(requireContext(), "已清除本机红果数据")
+            AppToast.show(requireContext(), getString(R.string.hongguo_local_cleared))
         }
         // 账号区按钮 LEFT 逃逸：居中/右上布局的左侧同一水平 beam 内无可聚焦 view，
         // FocusFinder 几何搜索找不到目标会原地不动（用户实测 LEFT 失灵、UP/DOWN 反而能走），
@@ -148,7 +148,7 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         lanes += Lane(binding.laneHistory, newAdapter(), HongguoShelfPage.Source.HISTORY, false)
         lanes[0].cell.textLaneTitle.setText(R.string.hongguo_my_subscribe)
         lanes[1].cell.textLaneTitle.setText(R.string.hongguo_tab_favorite)
-        lanes[2].cell.textLaneTitle.setText(R.string.hongguo_tab_history)
+        lanes[2].cell.textLaneTitle.setText(R.string.history)
         val laneSpacing = resources.getDimensionPixelSize(R.dimen.px16)
         lanes.forEach { lane ->
             lane.cell.rvLane.layoutManager =
@@ -185,8 +185,8 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         binding.rowAccount.isVisible = loggedIn
         binding.emptyGuest.isVisible = !loggedIn
         if (profile != null) {
-            binding.textNickname.text = profile.name.ifEmpty { "红果用户" }
-            binding.textUid.text = "红果号：${profile.uid}"
+            binding.textNickname.text = profile.name.ifEmpty { getString(R.string.hongguo_default_nickname) }
+            binding.textUid.text = getString(R.string.hongguo_uid_label, profile.uid)
             binding.textStats.text = getString(R.string.hongguo_cloud_sync_on) + " · " + stats
             binding.dotSync.isVisible = true
             binding.groupAccountActions.isVisible = true
@@ -287,7 +287,7 @@ class HongguoMinePage : Fragment(), HongguoPageFocus {
         },
         // 封面右下「共 N 集」（与 HongguoShelfPage 同口径）
         episodeCount = episodeCount,
-        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(contentType) else "" }
+        statusTag = statusTag.ifEmpty { if (contentType.isNotEmpty()) formLabelOf(requireContext(), contentType) else "" }
     )
 
     private fun formatOnlineTime(sec: Long): String {

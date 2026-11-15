@@ -166,7 +166,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             alwaysOnClock = it.showAlwaysOnClock
             speed = it.defaultPlaybackSpeed
         }
-        binding.textTitle.text = "$title · 第${episodeIndex}集"
+        binding.textTitle.text = getString(R.string.hongguo_player_title_episode, title, episodeIndex)
         // 缓冲圈：B 站同款 load_data.gif 帧动画（GifDrawable 自驱动；裸 ProgressBar 的
         // indeterminate 走 ObjectAnimator，电视 ROM 动画缩放=0 时圈静止不转）
         ImageLoader.loadDrawableRes(binding.progressBuffering, R.drawable.load_data)
@@ -267,7 +267,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         val play = currentPlay ?: return
         val options = play.availableQualities
         if (options.isEmpty() || options.size <= 1) {
-            AppToast.show(this, getString(R.string.hongguo_quality_single, play.quality.ifEmpty { "唯一" }))
+            AppToast.show(this, getString(R.string.hongguo_quality_single, play.quality.ifEmpty { getString(R.string.hongguo_quality_only_one) }))
             return
         }
         val labels = options.map { "${it}P" }
@@ -285,13 +285,13 @@ class HongguoPlayerActivity : AppCompatActivity() {
     /** 选集面板（右侧竖版纯数字网格）：当前集高亮，点击切集（选当前集仅关面板）。 */
     private fun showEpisodePanel() {
         if (episodeCount <= 0) {
-            AppToast.show(this, "暂无选集信息")
+            AppToast.show(this, getString(R.string.hongguo_no_episodes))
             return
         }
         val labels = (1..episodeCount).map { it.toString() }
         // 标题带总数：面板一屏约 9 行，标出"共N集"防止误读为只有可见数量
         val panel = HongguoRightPanelDialog.show(
-            this, "选集 · 共${episodeCount}集", labels, episodeIndex - 1, spanCount = 6
+            this, getString(R.string.hongguo_pick_episode_title, episodeCount), labels, episodeIndex - 1, spanCount = 6
         ) { index ->
             rightPanel?.dismiss()
             val target = index + 1
@@ -353,7 +353,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 throw e
             } catch (e: Exception) {
                 AppLog.w("Hongguo", "switch quality failed", e)
-                AppToast.show(this@HongguoPlayerActivity, e.message ?: "切换画质失败")
+                AppToast.show(this@HongguoPlayerActivity, e.message ?: getString(R.string.hongguo_quality_switch_failed))
             } finally {
                 switchingSource = false
                 binding.progressBuffering.visibility = View.GONE
@@ -412,7 +412,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 throw e
             } catch (e: Exception) {
                 AppLog.w("Hongguo", "player load failed", e)
-                AppToast.show(this@HongguoPlayerActivity, e.message ?: "播放失败")
+                AppToast.show(this@HongguoPlayerActivity, e.message ?: getString(R.string.hongguo_play_failed))
                 finish()
             } finally {
                 switchingSource = false
@@ -463,7 +463,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLog.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
-                AppToast.show(this@HongguoPlayerActivity, "播放出错：${error.errorCodeName}")
+                AppToast.show(this@HongguoPlayerActivity, getString(R.string.hongguo_play_error, error.errorCodeName))
             }
         })
         startPositionWatcher()
@@ -813,7 +813,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
         val seconds = kotlin.math.abs(deltaMs / 1000L).toInt().coerceAtLeast(1)
         if (seconds == lastHintSeconds) return
         lastHintSeconds = seconds
-        binding.textSeekHint.text = if (deltaMs >= 0) "快进 ${seconds}s" else "快退 ${seconds}s"
+        binding.textSeekHint.text = if (deltaMs >= 0)
+            getString(R.string.hongguo_seek_forward, seconds)
+        else getString(R.string.hongguo_seek_backward, seconds)
         binding.textSeekHint.visibility = View.VISIBLE
     }
 
@@ -917,7 +919,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 episodeIndex = index
                 resumeMs = 0L
                 currentVid = episode.videoId
-                binding.textTitle.text = "$title · 第${episodeIndex}集"
+                binding.textTitle.text = getString(R.string.hongguo_player_title_episode, title, episodeIndex)
                 val play = resolvePlayUrl(episode.videoId).also { currentPlay = it }
                 val playable = resolvePlayable(play)
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
@@ -928,7 +930,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(this@HongguoPlayerActivity, e.message ?: "切换失败")
+                AppToast.show(this@HongguoPlayerActivity, e.message ?: getString(R.string.hongguo_switch_failed))
             } finally {
                 switchingSource = false
                 binding.progressBuffering.visibility = View.GONE
@@ -1051,7 +1053,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
                     val armed = kotlin.math.abs(dy) >= episodeSwipeThresholdPx
                     if (armed != swipeEpisodeArmed) {
                         swipeEpisodeArmed = armed
-                        if (armed) showEpisodeSwipeHint(if (dy < 0) "松开播放下一集" else "松开播放上一集")
+                        if (armed) showEpisodeSwipeHint(
+                            if (dy < 0) getString(R.string.hongguo_release_next)
+                            else getString(R.string.hongguo_release_prev)
+                        )
                         else hideSeekHint()
                     }
                     return true

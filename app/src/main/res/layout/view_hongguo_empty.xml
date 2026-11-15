@@ -27,7 +27,7 @@
 
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/button_empty_retry"
-        android:text="@string/hongguo_retry"
+        android:text="@string/retry"
         android:textSize="@dimen/px24"
         android:textColor="@color/hongguo_btn_text"
         android:background="@drawable/bg_hongguo_btn_outline"

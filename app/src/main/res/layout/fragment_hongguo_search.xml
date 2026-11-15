@@ -21,7 +21,7 @@
             app:tint="@color/textColor"
             android:background="@drawable/bg_hongguo_btn_outline"
             android:padding="@dimen/px10"
-            android:contentDescription="@string/hongguo_back"
+            android:contentDescription="@string/back"
             android:layout_marginEnd="@dimen/px20"
             android:layout_width="@dimen/px76"
             android:layout_height="@dimen/px76"/>
@@ -53,7 +53,7 @@
                 android:singleLine="true"
                 android:imeOptions="actionSearch"
                 android:inputType="text"
-                android:hint="@string/hongguo_search_hint"
+                android:hint="@string/search"
                 android:textSize="@dimen/px30"
                 android:textColorHint="?android:attr/textColorSecondary"
                 android:textColor="?android:attr/textColorPrimary"
@@ -65,7 +65,7 @@
 
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/button_hongguo_search_go"
-            android:text="@string/hongguo_search_hint"
+            android:text="@string/search"
             android:textSize="@dimen/px28"
             android:textColor="@color/white"
             android:background="@drawable/bg_hongguo_btn_primary"
@@ -125,7 +125,7 @@
 
                         <androidx.appcompat.widget.AppCompatTextView
                             android:id="@+id/button_hongguo_history_clear"
-                            android:text="@string/hongguo_search_clear_history"
+                            android:text="@string/clear"
                             android:textSize="@dimen/px24"
                             android:textColor="@color/grey"
                             android:background="@drawable/button_common"

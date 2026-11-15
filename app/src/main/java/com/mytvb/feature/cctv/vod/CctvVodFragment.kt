@@ -168,7 +168,7 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
 
     private fun updateSearchButton() {
         binding.buttonSearch.text = if (searchQuery.isBlank()) {
-            getString(R.string.cctv_vod_search)
+            getString(R.string.search)
         } else {
             getString(R.string.cctv_vod_search_keyword_format, searchQuery)
         }
@@ -306,9 +306,9 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
         val specs = listOf(
             FilterSpec(R.string.cctv_vod_filter_genre, CctvVodFilters.GENRES,
                 { filterGenre }, { filterGenre = it }),
-            FilterSpec(R.string.cctv_vod_filter_area, CctvVodFilters.AREAS,
+            FilterSpec(R.string.filter_area, CctvVodFilters.AREAS,
                 { filterArea }, { filterArea = it }),
-            FilterSpec(R.string.cctv_vod_filter_year, CctvVodFilters.years(today),
+            FilterSpec(R.string.filter_year, CctvVodFilters.years(today),
                 { filterYear }, { filterYear = it }),
             FilterSpec(R.string.cctv_vod_filter_letter, CctvVodFilters.LETTERS,
                 { filterLetter }, { filterLetter = it })
@@ -392,8 +392,8 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
     private fun updateFilterLabels() {
         val labels = listOf(
             getString(R.string.cctv_vod_filter_genre) to filterGenre,
-            getString(R.string.cctv_vod_filter_area) to filterArea,
-            getString(R.string.cctv_vod_filter_year) to filterYear,
+            getString(R.string.filter_area) to filterArea,
+            getString(R.string.filter_year) to filterYear,
             getString(R.string.cctv_vod_filter_letter) to filterLetter
         )
         labels.forEachIndexed { index, (label, value) ->

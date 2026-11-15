@@ -203,7 +203,7 @@
                 android:layout_marginStart="@dimen/px20"
                 android:background="@drawable/cell_background"
                 android:clickable="true"
-                android:contentDescription="@string/cctv_quality"
+                android:contentDescription="@string/video_quality"
                 android:focusable="true"
                 android:padding="@dimen/px23"
                 android:src="@drawable/ic_player_setting" />

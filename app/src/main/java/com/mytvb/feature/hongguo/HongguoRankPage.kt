@@ -233,7 +233,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(requireContext(), e.message ?: "榜单加载失败")
+                AppToast.show(requireContext(), e.message ?: getString(R.string.hongguo_rank_load_failed))
             } finally {
                 // 代际校验：被 refresh 取消的旧轮 finally 仍会异步跑（loading 复位/收尾），
                 // 只有仍是最新一轮时才收尾，避免污染新轮的 loading 标志
@@ -272,9 +272,9 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             .filterNotNull().joinToString(" · "),
         rank = rank,
         statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
-        heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
+        heatText = heatText.ifEmpty { if (playCount > 0) getString(R.string.hongguo_heat_wan, playCount / 10000) else "" },
         episodeCount = episodeCount,
-        seasonText = seasonText.ifEmpty { if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else "" },
+        seasonText = seasonText.ifEmpty { if (multiSeason && seasonIndex > 0) getString(R.string.hongguo_season_format, seasonIndex) else "" },
         score = score
     )
 

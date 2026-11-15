@@ -380,7 +380,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(requireContext(), e.message ?: "加载失败")
+                AppToast.show(requireContext(), e.message ?: getString(R.string.hongguo_load_failed))
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
             } finally {
                 // 代际校验：被 reload 取消的旧轮 finally 仍会异步跑（loading 复位/收尾），
@@ -494,7 +494,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
     // 分类页卡片副标题=评分 + 类型行（8.6 · 玄幻 · 科幻…，官方副标题同构）；tags 缺失时
     // 退回 toDramaUi 的评分/集数行兜底
     private fun HongguoClient.Drama.toUi(): DramaUi =
-        toDramaUi().let {
+        toDramaUi(requireContext()).let {
             if (tags.isNotEmpty()) {
                 val line = (listOf(score.takeIf { s -> s.isNotBlank() }) + tags)
                     .filterNotNull().joinToString(" · ")
@@ -514,13 +514,13 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             subtitle = when {
                 episodeCount <= 0 -> ""
                 // WatchRecord.episodeIndex 0-based（与 Mine/Shelf 的 seen=e+1 同口径）
-                episodeIndex + 1 >= episodeCount -> "已看完"
-                else -> "${episodeIndex + 1}集/${episodeCount}集"
+                episodeIndex + 1 >= episodeCount -> getString(R.string.hongguo_seen_done)
+                else -> getString(R.string.hongguo_seen_episode, episodeIndex + 1, episodeCount)
             },
             // 封面右下共 N 集 + 右上形态标签（AI剧/漫剧/真人剧，与货架页同口径；
             // contentType 来自云端历史行 content_type，本地记录由 fillFrom 云端互补）
             episodeCount = episodeCount,
-            statusTag = if (contentType.isNotEmpty()) formLabelOf(contentType) else "",
+            statusTag = if (contentType.isNotEmpty()) formLabelOf(requireContext(), contentType) else "",
             progressPercent = percent.coerceIn(0, 100)
         )
     }

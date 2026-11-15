@@ -116,7 +116,7 @@ class HongguoLoginDialog(
             } catch (e: Exception) {
                 binding.progressLogin.visibility = View.GONE
                 android.util.Log.w("Hongguo", "qr start failed: ${e.javaClass.simpleName}: ${e.message}")
-                binding.textQrStatus.text = e.message ?: "二维码获取失败"
+                binding.textQrStatus.text = e.message ?: context.getString(R.string.hongguo_qr_failed)
             }
         }
     }
@@ -137,17 +137,17 @@ class HongguoLoginDialog(
                         binding.progressLogin.visibility = View.VISIBLE
                         try {
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.account.finishQrLogin(ticket) }
-                            AppToast.show(context, "登录成功")
+                            AppToast.show(context, context.getString(R.string.hongguo_login_success))
                             onLoggedIn()
                             dismiss()
                             return@launch
                         } catch (e: Exception) {
                             binding.progressLogin.visibility = View.GONE
-                            binding.textQrStatus.text = e.message ?: "登录失败"
+                            binding.textQrStatus.text = e.message ?: context.getString(R.string.hongguo_login_failed)
                             return@launch
                         }
                     }
-                    4 -> { binding.textQrStatus.text = "已取消"; return@launch }
+                    4 -> { binding.textQrStatus.setText(R.string.hongguo_login_canceled); return@launch }
                     5 -> { binding.textQrStatus.setText(R.string.hongguo_qr_expired); return@launch }
                 }
                 delay(1800)
@@ -189,7 +189,7 @@ class HongguoLoginDialog(
                     startResendCountdown()
                     binding.editSmsCode.requestFocus()
                 } catch (e: Exception) {
-                    AppToast.show(context, e.message ?: "发送失败")
+                    AppToast.show(context, e.message ?: context.getString(R.string.hongguo_send_failed))
                 } finally {
                     binding.progressLogin.visibility = View.GONE
                 }
@@ -226,20 +226,20 @@ class HongguoLoginDialog(
         val phone = binding.editPhone.text?.toString().orEmpty()
         val code = binding.editSmsCode.text?.toString().orEmpty()
         if (phone.isBlank() || code.isBlank()) {
-            AppToast.show(context, "请输入手机号与验证码")
+            AppToast.show(context, context.getString(R.string.hongguo_input_phone_code))
             return
         }
         binding.progressLogin.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.account.smsLogin(phone, code) }
-                AppToast.show(context, "登录成功")
+                AppToast.show(context, context.getString(R.string.hongguo_login_success))
                 onLoggedIn()
                 dismiss()
             } catch (e: com.mytvb.feature.hongguo.net.HongguoAccount.MfaRequiredException) {
                 showMfa(e.challenge)
             } catch (e: Exception) {
-                AppToast.show(context, e.message ?: "登录失败")
+                AppToast.show(context, e.message ?: context.getString(R.string.hongguo_login_failed))
             } finally {
                 binding.progressLogin.visibility = View.GONE
             }
@@ -253,7 +253,7 @@ class HongguoLoginDialog(
             context.getString(R.string.hongguo_mfa_tip, challenge.smsContent, challenge.channelMobile)
         binding.cardMfa.visibility = View.VISIBLE
         binding.buttonMfaSent.requestFocus()
-        AppToast.show(context, "需要短信上行二次验证")
+        AppToast.show(context, context.getString(R.string.hongguo_mfa_required))
     }
 
     private fun doMfaConfirm() {
@@ -266,14 +266,14 @@ class HongguoLoginDialog(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     repository.account.smsLoginMfa(phone, code, challenge)
                 }
-                AppToast.show(context, "登录成功")
+                AppToast.show(context, context.getString(R.string.hongguo_login_success))
                 onLoggedIn()
                 dismiss()
             } catch (e: com.mytvb.feature.hongguo.net.HongguoAccount.MfaRequiredException) {
                 // 服务端更新了短信内容（新挑战），刷新指引继续引导
                 showMfa(e.challenge)
             } catch (e: Exception) {
-                AppToast.show(context, e.message ?: "验证失败")
+                AppToast.show(context, e.message ?: context.getString(R.string.hongguo_verify_failed))
             } finally {
                 binding.progressLogin.visibility = View.GONE
             }
@@ -298,11 +298,11 @@ class HongguoLoginDialog(
             lifecycleScope.launch {
                 try {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.account.importSession(raw) }
-                    AppToast.show(context, "导入成功")
+                    AppToast.show(context, context.getString(R.string.hongguo_import_success))
                     onLoggedIn()
                     dismiss()
                 } catch (e: Exception) {
-                    AppToast.show(context, e.message ?: "导入失败")
+                    AppToast.show(context, e.message ?: context.getString(R.string.hongguo_import_failed))
                 } finally {
                     binding.progressLogin.visibility = View.GONE
                 }

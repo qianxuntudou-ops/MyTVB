@@ -405,7 +405,7 @@ class HongguoSearchPage : Fragment() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                AppToast.show(requireContext(), e.message ?: "搜索失败")
+                AppToast.show(requireContext(), e.message ?: getString(R.string.hongguo_search_failed))
             } finally {
                 binding.progressHongguoSearch.visibility = View.GONE
             }
@@ -439,11 +439,11 @@ class HongguoSearchPage : Fragment() {
         // 热度/集数画在封面底部行（全卡统一），副标题行只留作者/集数
         subtitle = listOf(
             author.takeIf { it.isNotBlank() },
-            if (episodeCount > 0) "共${episodeCount}集" else null
+            if (episodeCount > 0) getString(R.string.hongguo_episode_count, episodeCount) else null
         ).filterNotNull().joinToString(" · "),
         heatText = heatText.ifEmpty {
             when {
-                playCount >= 10_000 -> "${playCount / 10000}万"
+                playCount >= 10_000 -> getString(R.string.hongguo_heat_wan, playCount / 10000)
                 playCount > 0 -> "${playCount}"
                 else -> ""
             }

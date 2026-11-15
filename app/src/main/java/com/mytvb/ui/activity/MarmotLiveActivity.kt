@@ -1237,7 +1237,7 @@ $scriptTags
         }
         ChoiceDialog.show(
             context = this,
-            title = getString(R.string.cctv_quality),
+            title = getString(R.string.video_quality),
             options = items.map { it.name.orEmpty().ifBlank { "-" } },
             selectedIndex = provider.currentQualityIndex(items)
         ) { index ->

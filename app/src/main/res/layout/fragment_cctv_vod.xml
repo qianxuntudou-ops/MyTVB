@@ -40,7 +40,7 @@
             android:paddingTop="@dimen/px8"
             android:paddingEnd="@dimen/px25"
             android:paddingBottom="@dimen/px8"
-            android:text="@string/cctv_vod_search"
+            android:text="@string/search"
             android:textColor="@color/textColor"
             android:textSize="@dimen/px26" />
     </LinearLayout>

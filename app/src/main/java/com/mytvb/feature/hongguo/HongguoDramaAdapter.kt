@@ -1,5 +1,6 @@
 package com.mytvb.feature.hongguo
 
+import android.content.Context
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
@@ -40,29 +41,29 @@ data class DramaUi(
 
 /** 内容形态标签（官方右上角标口径）：1004=漫剧；AI 剧 content_type 值待日志实证后补；
  *  其余（1/7/空）=真人短剧。历史/收藏/预约无状态标时占右上。 */
-fun formLabelOf(contentType: String): String = when (contentType) {
-    "1004" -> "漫剧"
-    else -> "真人剧"
+fun formLabelOf(context: Context, contentType: String): String = when (contentType) {
+    "1004" -> context.getString(R.string.hongguo_form_comic)
+    else -> context.getString(R.string.hongguo_form_real)
 }
 
 /** [HongguoClient.Drama] → 卡片 UI 模型（各列表页与长按菜单弹窗共用）。
  *  副标题=评分/集数（热度与集数画在封面底部行，2026-11-14 官方对齐）；分类行由分类页覆写。 */
-fun HongguoClient.Drama.toDramaUi(): DramaUi = DramaUi(
+fun HongguoClient.Drama.toDramaUi(context: Context): DramaUi = DramaUi(
     seriesId = seriesId,
     title = title,
     cover = cover,
     subtitle = listOf(
         score.takeIf { it.isNotBlank() },
-        if (episodeCount > 0) "共${episodeCount}集" else null
+        if (episodeCount > 0) context.getString(R.string.hongguo_episode_count, episodeCount) else null
     ).filterNotNull().joinToString(" · "),
     // 底部行热度：官方 sub_title_list 现成值（normalizeDrama 解析）缺省退 play_cnt 换算
-    heatText = heatText.ifEmpty { if (playCount > 0) "${playCount / 10000}万" else "" },
+    heatText = heatText.ifEmpty { if (playCount > 0) context.getString(R.string.hongguo_heat_wan, playCount / 10000) else "" },
     episodeCount = episodeCount,
     statusTag = statusTag.ifEmpty { statusTags.firstOrNull().orEmpty() },
     // 季数标题前缀：官方 sub_title_list「第N季」优先，缺省 seasonIndex 生成
     // （官方对第 1 季也下发，不做 N≥2 过滤）
     seasonText = seasonText.ifEmpty {
-        if (multiSeason && seasonIndex > 0) "第${seasonIndex}季" else ""
+        if (multiSeason && seasonIndex > 0) context.getString(R.string.hongguo_season_format, seasonIndex) else ""
     }
 )
 
@@ -249,7 +250,7 @@ class HongguoDramaAdapter(
                     showDanmakuCount = false,
                     showInteractionBadge = false,
                     showChargeBadge = false,
-                    durationText = if (item.episodeCount > 0) "${item.episodeCount}集" else "",
+                    durationText = if (item.episodeCount > 0) ctx.getString(R.string.hongguo_episodes_short, item.episodeCount) else "",
                     rankBadgeText = leftText,
                     rankBadgeColor = leftColor,
                     rankBadgeTextColor = leftTextColor,
@@ -264,7 +265,10 @@ class HongguoDramaAdapter(
                         // 官方白底红字（tag_info bg_color=null 自带 icon 体系）
                         "红果首发" -> 0xFFFFFFFF.toInt()
                         // 形态标签（AI剧/漫剧/真人剧）：半透明黑底白字，不与状态标抢视觉
-                        "漫剧", "真人剧", "AI剧" -> 0x99000000.toInt()
+                        // （formLabelOf 已本地化，匹配跟随 getString；服务端 tag 仍按中文字面匹配）
+                        ctx.getString(R.string.hongguo_form_comic),
+                        ctx.getString(R.string.hongguo_form_real),
+                        ctx.getString(R.string.hongguo_form_ai) -> 0x99000000.toInt()
                         // 预约「预告」标：官方 tag_info bg_color 实值金
                         "预告" -> 0xFFD7A461.toInt()
                         else -> 0xFF6A5AE0.toInt()

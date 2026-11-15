@@ -349,7 +349,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         })
         // 自动隐藏不因焦点停留而取消：按键会重置 5 秒计时，停手后控制条隐藏、
         // 焦点由 hideController() 收回播放区（与普通播放器一致）。
-        updateQualityButton(getString(R.string.cctv_quality))
+        updateQualityButton(getString(R.string.video_quality))
     }
 
     /** 控制条上的播放/暂停图标随实际状态切换（暂停时显示播放三角）。 */
@@ -941,7 +941,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         val options = QUALITY_LABELS
         ChoiceDialog.show(
             context = this,
-            title = getString(R.string.cctv_quality),
+            title = getString(R.string.video_quality),
             options = options,
             selectedIndex = currentQualityIndex,
             onDismiss = { scheduleControllerHide() }
@@ -967,7 +967,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         options.add(getString(R.string.cctv_quality_auto))
         // 720P 有 1200k/2000k 两档：高码率档缀「高码率」区分
         val labels = qualities.map { quality ->
-            val p = if (quality.height > 0) "${quality.height}P" else getString(R.string.cctv_quality)
+            val p = if (quality.height > 0) "${quality.height}P" else getString(R.string.video_quality)
             if (quality.height >= 720 && quality.bandwidth >= 2_000_000) "$p（高码率）" else p
         }
         options.addAll(labels)
@@ -976,7 +976,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             else 1 + qualities.indexOfFirst { it.url == selectedQualityUrl }
         ChoiceDialog.show(
             context = this,
-            title = getString(R.string.cctv_quality),
+            title = getString(R.string.video_quality),
             options = options,
             selectedIndex = selected,
             onDismiss = { scheduleControllerHide() }
@@ -1146,7 +1146,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         selectedQualityUrl = null
         currentPlayInfo = null
         nativeRetryCount = 0
-        updateQualityButton(getString(R.string.cctv_quality))
+        updateQualityButton(getString(R.string.video_quality))
         showLoading(true)
         playbackSession++
         pendingResumeMs = CctvVodProgressStore.load(this, albumId, currentEpisodeIndex)
