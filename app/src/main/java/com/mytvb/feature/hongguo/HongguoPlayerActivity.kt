@@ -451,6 +451,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 updatePauseBigIcon()
             }
 
+            // 画质对账：解码器实测分辨率，与 play picked 的接口标签/元数据对照，
+            // 验证服务端 quality 标签（如 1080P）是否虚标（2026-11-15 画质核查）
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                AppLog.d(
+                    "Hongguo",
+                    "decoded size ${videoSize.width}x${videoSize.height} par=${videoSize.pixelWidthHeightRatio}"
+                )
+            }
+
             // 播放/暂停按钮图标跟随真实状态（对齐 B 站 updatePlayPauseButton）
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 binding.buttonPlay.setImageResource(
