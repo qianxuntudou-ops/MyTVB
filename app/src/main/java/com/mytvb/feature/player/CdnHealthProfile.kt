@@ -2,6 +2,7 @@ package com.mytvb.feature.player
 
 import androidx.core.net.toUri
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.settings.AppSettingsDataStore
@@ -41,13 +42,15 @@ internal object CdnHealthProfile {
     }
 
     internal data class CdnHealthRecord(
-        val host: String,
-        val readyCount: Int = 0,
-        val bufferingCount: Int = 0,
-        val playbackErrorCount: Int = 0,
-        val firstFrameTimeoutCount: Int = 0,
-        val lastUpdatedAtMs: Long = 0L,
-        val healthWindowStartedAtMs: Long = 0L
+        // @SerializedName 与属性名一致看似冗余，实为钉死 JSON 字段名：
+        // R8 混淆会把字段名改成 a/b/c 且跨版本漂移，导致落盘 JSON 读不回（v2.1.27 起播即崩的根因）。
+        @SerializedName("host") val host: String,
+        @SerializedName("readyCount") val readyCount: Int = 0,
+        @SerializedName("bufferingCount") val bufferingCount: Int = 0,
+        @SerializedName("playbackErrorCount") val playbackErrorCount: Int = 0,
+        @SerializedName("firstFrameTimeoutCount") val firstFrameTimeoutCount: Int = 0,
+        @SerializedName("lastUpdatedAtMs") val lastUpdatedAtMs: Long = 0L,
+        @SerializedName("healthWindowStartedAtMs") val healthWindowStartedAtMs: Long = 0L
     )
 
     private val gson = Gson()
@@ -170,10 +173,14 @@ internal object CdnHealthProfile {
         runCatching {
             val parsed: MutableMap<String, CdnHealthRecord> = gson.fromJson(stored, recordType)
             parsed.forEach { (host, record) ->
-                if (host.isNotBlank()) {
-                    // 读盘时先衰减再入内存，与 BiliPai 口径一致。
-                    records[host] = decay(record, host, nowMs) ?: record
+                if (host.isBlank() || record == null || record.host != host) {
+                    // 旧混淆包落盘字段名是 b~g 缩写，全 miss 时 Gson 用 Unsafe 绕过非空检查
+                    // 注入 host=null 的残废记录，留到 copy() 上必崩（v2.1.27 起播即崩）。
+                    // 判据：正常运行记录的 host 恒等于 map key；不符即脏数据，丢弃（旧格式计数全 0，无损）。
+                    return@forEach
                 }
+                // 读盘时先衰减再入内存，与 BiliPai 口径一致。
+                records[host] = decay(record, host, nowMs) ?: record
             }
             AppLog.i(TAG, "cdn_health loaded hosts=${records.size}")
         }.onFailure { error ->
