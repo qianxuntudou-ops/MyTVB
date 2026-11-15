@@ -135,7 +135,16 @@ class HongguoRepository private constructor(context: Context) {
     ): HongguoClient.CategoryPage {
         // 仅首屏（offset=0 且带筛选面板）走缓存；翻页/换筛选会话照常请求
         val cacheKey = if (offset == 0 && withPanel) "feed|$path|${filters.toSortedMap()}" else null
-        cacheKey?.let { contentCacheGet<HongguoClient.CategoryPage>(it)?.let { page -> return page } }
+        AppLog.d("Hongguo", "feed req offset=$offset panel=$withPanel " +
+            "filters=${filters.keys} cacheProbe=${cacheKey != null}")
+        cacheKey?.let {
+            val cached = contentCacheGet<HongguoClient.CategoryPage>(it)
+            if (cached != null) {
+                AppLog.d("Hongguo", "feed cache hit key=$cacheKey items=${cached.items.size} " +
+                    "rows=${cached.selectorRows.size}")
+                return cached
+            }
+        }
         val page = withContext(Dispatchers.IO) { client.category(path, offset, sessionId, filters, withPanel) }
         cacheKey?.let { contentCachePut(it, page) }
         return page

@@ -20,6 +20,7 @@ import com.mytvb.databinding.FragmentHongguoFeedBinding
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoCoverUrl
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
@@ -362,8 +363,15 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             binding.progressLoading.visibility = View.VISIBLE
         }
         loadJob?.cancel()
-        val job = viewLifecycleOwner.lifecycleScope.launch {
+        // LAZY 启动：Main.immediate 下普通 launch 的协程体会在 launch 调用点同步执行到
+        // 第一个挂起点；缓存命中时 repository.feed 全程无挂起点，协程体（含 finally 的
+        // 代际校验）一口气跑完才轮到下面的 loadJob = job——gen 判 false 收尾全跳过，
+        // progressLoading 永远 VISIBLE（语言切换重建后 feed 转圈不复位的实锤根因）。
+        // LAZY 保证先登记 loadJob 再 start，finally 的代际校验必然命中。
+        val job = viewLifecycleOwner.lifecycleScope.launch(start = CoroutineStart.LAZY) {
             try {
+                AppLog.d("Hongguo", "feed job start offset=$offset panel=$withPanel " +
+                    "filters=${selectedFilters.keys}")
                 val page = repository.feed(path, offset, sessionId, selectedFilters, withPanel)
                 sessionId = page.sessionId
                 // 空页=数据枯竭兜底：服务端 has_more 偶发不归零，防落地续拉原地空转
@@ -380,9 +388,12 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                AppLog.d("Hongguo", "feed fail ${e.javaClass.simpleName}: ${e.message}")
                 AppToast.show(requireContext(), e.message ?: getString(R.string.hongguo_load_failed))
                 binding.textEmpty.visibility = if (adapter.contentCount() == 0) View.VISIBLE else View.GONE
             } finally {
+                AppLog.d("Hongguo", "feed finally gen=${loadJob === coroutineContext[Job]} " +
+                    "bindingNull=${_binding == null}")
                 // 代际校验：被 reload 取消的旧轮 finally 仍会异步跑（loading 复位/收尾），
                 // 只有仍是最新一轮时才收尾，避免污染新轮的 loading 标志
                 if (loadJob === coroutineContext[Job]) {
@@ -401,6 +412,7 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
             }
         }
         loadJob = job
+        job.start()
     }
 
     /** 点选某维度选项：更新选中 → 重开会话（offset=0 + panel）。 */
@@ -418,20 +430,33 @@ class HongguoFeedPage : Fragment(), HongguoPageFocus {
      */
     private fun maybeInjectGenderFilter(mode: String, genre: String) {
         if (genderInjected || mode != MODE_FEED || selectedFilters.containsKey("gender")) {
+            AppLog.d("Hongguo", "gender inject skip injected=$genderInjected mode=$mode")
             genderInjected = true
             return
         }
         val stored = repository.recommendGenderStored()
         genderInjected = true
-        if (stored == "不限") return
-        val genderRow = selectorRows.firstOrNull { it.type == "gender" } ?: return
+        if (stored == "不限") {
+            AppLog.d("Hongguo", "gender inject skip stored=不限")
+            return
+        }
+        val genderRow = selectorRows.firstOrNull { it.type == "gender" }
+        if (genderRow == null) {
+            AppLog.d("Hongguo", "gender inject skip noRow stored=$stored")
+            return
+        }
         // 面板选项名以接口下发为准：先精确匹配设置文案，退化按「男/女」字面（兼容「男生/女生」等变体）
         val want = if (stored == "男频") "男" else "女"
         val matched = genderRow.items.firstOrNull { it.name == stored }
-            ?: genderRow.items.firstOrNull { it.name.contains(want) } ?: return
+            ?: genderRow.items.firstOrNull { it.name.contains(want) }
+        if (matched == null) {
+            AppLog.d("Hongguo", "gender inject skip noMatch stored=$stored items=${genderRow.items.map { it.name }}")
+            return
+        }
         selectedFilters["gender"] = matched.id
         filterAdapter.notifyDataSetChanged()
         // 面板已就位，reload 走 withPanel=false 只重拉内容
+        AppLog.d("Hongguo", "gender inject apply stored=$stored matched=${matched.name} → reload")
         reload(mode, genre)
     }
 
