@@ -32,6 +32,7 @@ import com.mytvb.feature.cctv.vod.CctvVodApi
 import com.mytvb.feature.cctv.vod.CctvVodProgressStore
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.core.common.settings.AppSettingsDataStore
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -1790,7 +1791,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             hideController()
             return
         }
-        if (now - exitTime <= EXIT_INTERVAL_MS) {
+        // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出
+        if (!ExitDoubleConfirm.enabled(appSettings) || now - exitTime <= EXIT_INTERVAL_MS) {
             finish()
         } else {
             exitTime = now

@@ -24,6 +24,7 @@ import com.mytvb.feature.marmot.quality.CctvQualityProvider
 import com.mytvb.feature.marmot.quality.LiveQualityProvider
 import com.mytvb.feature.marmot.quality.MarmotQualityProvider
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.core.common.ext.toast
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.BaseActivity
@@ -1479,7 +1480,9 @@ $scriptTags
             isChannelMenuShowing -> hideChannelMenu()
             isControllerShowing -> hideController()
             else -> {
-                if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出
+                if (!ExitDoubleConfirm.enabled(appSettings) ||
+                    System.currentTimeMillis() - exitTime <= exitInterval) {
                     finish()
                 } else {
                     exitTime = System.currentTimeMillis()

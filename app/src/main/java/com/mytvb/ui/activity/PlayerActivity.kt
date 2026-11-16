@@ -44,6 +44,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.common.content.ContentFilter
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.feature.player.viewpoint.ChapterSegmentBarView
 import com.mytvb.feature.player.viewpoint.ViewPointSegments
 import com.mytvb.core.ui.base.BaseActivity
@@ -1405,7 +1406,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     hideController = { playerView.hideController() },
                     hidePanel = { hideContentPanel() },
                     exitPlayer = {
-                        if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                        // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出
+                        if (!ExitDoubleConfirm.enabled(appSettings) ||
+                            System.currentTimeMillis() - exitTime <= exitInterval
+                        ) {
                             finish()
                         } else {
                             exitTime = System.currentTimeMillis()

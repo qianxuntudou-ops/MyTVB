@@ -12,6 +12,7 @@ import com.mytvb.R
 import com.mytvb.databinding.ActivityPlayerBinding
 import com.mytvb.core.ui.base.BaseActivity
 import com.mytvb.core.common.ext.toast
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.feature.player.LivePlayerFragment
 import com.mytvb.core.ui.base.AppToast
 
@@ -50,7 +51,9 @@ class LivePlayerActivity : BaseActivity<ActivityPlayerBinding>() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出
+                if (!ExitDoubleConfirm.enabled(appSettings) ||
+                    System.currentTimeMillis() - exitTime <= exitInterval) {
                     finish()
                 } else {
                     exitTime = System.currentTimeMillis()

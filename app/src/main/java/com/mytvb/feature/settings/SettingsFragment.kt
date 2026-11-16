@@ -51,6 +51,7 @@ import com.mytvb.core.ui.focus.EdgeTabSwitch
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.cache.FileCacheManager
 import com.mytvb.core.common.settings.AppSettingsDataStore
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.navigation.navigateBackFromUi
 import com.mytvb.core.ui.system.ScreenUtils
@@ -109,6 +110,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_HOME_PERSONAL_TABS = HomeFragmentStateAdapter.PERSONAL_TABS_KEY
         // 与 EdgeTabSwitch 同键（存储值"开/关"），默认开：卡片左右移到列表边缘切换顶部 tab
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
+        // 与 ExitDoubleConfirm.KEY 同键（存储值"开/关"），默认开：双击 BACK 才退出播放/应用。
+        private const val KEY_EXIT_DOUBLE_CONFIRM = ExitDoubleConfirm.KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
@@ -321,6 +324,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             )),
             SettingGroup(R.string.setting_group_interact, listOf(
                 stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "关"),
+                // 退出二次确认（issue#118）：开=双击 BACK 才退出播放页/应用（默认）；关=单次直接退
+                stored(KEY_EXIT_DOUBLE_CONFIRM, R.string.exit_double_confirm, "开"),
                 stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2")
             )),
             SettingGroup(R.string.setting_group_network, listOf(
@@ -776,6 +781,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 (activity as? MainActivity)?.applyMeEntryVisibility()
             }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
+            KEY_EXIT_DOUBLE_CONFIRM -> toggle(key)
             // —— 电视直播 ——
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
@@ -1401,6 +1407,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_LIVE_ENTRY)
         applyStored(KEY_HOME_PERSONAL_TABS)
         applyStored(KEY_EDGE_TAB_SWITCH)
+        applyStored(KEY_EXIT_DOUBLE_CONFIRM)
         applyStored(KEY_CCTV_LIVE_ENTRY)
         applyStored(KEY_CCTV_NATIVE_LIVE)
         applyStored(KEY_CCTV_VOD_ENTRY)

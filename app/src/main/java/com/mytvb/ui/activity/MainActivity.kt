@@ -55,6 +55,7 @@ import com.mytvb.ui.dialog.UserInfoDialog
 import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerFragment
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.core.common.update.ApkUpdater
 import com.mytvb.ui.dialog.UpdateFlowDialog
 import com.mytvb.core.common.net.NetworkRecoveryMonitor
@@ -927,7 +928,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
 
-        if (System.currentTimeMillis() - exitTime <= exitInterval) {
+        // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出应用
+        if (!ExitDoubleConfirm.enabled(appSettings) ||
+            System.currentTimeMillis() - exitTime <= exitInterval
+        ) {
             finish()
             return
         }
