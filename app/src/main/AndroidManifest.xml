@@ -121,6 +121,10 @@
                 android:resource="@xml/file_paths_update" />
         </provider>
 
+
+        <receiver
+            android:name=".feature.player.shortcut.DebugShortcutBinder"
+            android:exported="false" />
     </application>
 
 </manifest>

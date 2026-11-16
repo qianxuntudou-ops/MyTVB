@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dialog_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="false">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/top_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px35"
+        android:layout_marginEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px20"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/title_divider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/top_title" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/capture_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px60"
+        android:layout_marginEnd="@dimen/px40"
+        android:gravity="center"
+        android:lineSpacingExtra="@dimen/px10"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px32"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/title_divider" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/captured_key"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px40"
+        android:gravity="center"
+        android:textColor="@color/white"
+        android:textSize="@dimen/px48"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/capture_hint" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

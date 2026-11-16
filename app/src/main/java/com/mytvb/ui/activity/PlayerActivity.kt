@@ -89,6 +89,14 @@ import com.mytvb.model.video.quality.AudioQuality
 import com.mytvb.model.video.quality.VideoCodecEnum
 import com.mytvb.model.video.quality.VideoQuality
 import com.mytvb.ui.adapter.VideoAdapter
+import com.mytvb.feature.player.settings.SubtitleDefaultMode
+import com.mytvb.feature.player.shortcut.PlayerShortcutAction
+import com.mytvb.feature.player.shortcut.PlayerShortcutKeyDispatcher
+import com.mytvb.feature.player.shortcut.ShortcutSettingKeys
+import com.mytvb.feature.player.shortcut.hasTextInputFocus
+import com.mytvb.feature.player.shortcut.showShortcutChoiceDialog
+import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
+import com.mytvb.core.common.ext.localizedSettingLabel
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -1439,7 +1447,184 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             }
             return true
         }
+        // 自定义快捷键（issue#116）：绑定键在 Activity 层最先消费（DOWN/UP 判定短按/长按槽位）。
+        // 数字键等绑定候选键对本播放器本无用途，且设置面板/seek 会话内数字键亦无功能，前置消费无副作用。
+        if (shortcutKeyDispatcher.dispatch(event)) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    private val shortcutKeyDispatcher = PlayerShortcutKeyDispatcher(
+        isTextInputActive = { hasTextInputFocus() },
+    ) { performShortcutAction(it) }
+
+    // ================= 自定义快捷键（issue#116）：动作执行 =================
+
+    private fun performShortcutAction(action: PlayerShortcutAction) {
+        when (action) {
+            PlayerShortcutAction.LIKE -> shortcutLikeToggle()
+            PlayerShortcutAction.COIN -> shortcutGiveCoin()
+            PlayerShortcutAction.TRIPLE -> shortcutTriple()
+            PlayerShortcutAction.DEFAULT_SPEED -> showShortcutSpeedDialog()
+            PlayerShortcutAction.SUBTITLE_MODE -> showShortcutSubtitleModeDialog()
+            PlayerShortcutAction.SPONSOR_TOGGLE -> toggleShortcutSwitch(
+                ShortcutSettingKeys.SPONSOR_BLOCK_ENABLED,
+                getString(R.string.sponsor_block),
+                current = playerSettings.sponsorBlockEnabled,
+            ) { enabled ->
+                viewModel.updateSponsorBlockEnabled(enabled)
+            }
+            PlayerShortcutAction.BOTTOM_PROGRESS -> toggleShortcutSwitch(
+                ShortcutSettingKeys.SHOW_BOTTOM_PROGRESS_BAR,
+                getString(R.string.show_bottom_progress_bar),
+                current = playerSettings.showBottomProgressBar,
+            ) { enabled ->
+                playerSettings = playerSettings.copy(showBottomProgressBar = enabled)
+                playerView.setPersistentBottomProgressEnabled(enabled)
+                renderBottomProgressBar()
+            }
+            PlayerShortcutAction.CHAPTER_BAR -> toggleShortcutSwitch(
+                ShortcutSettingKeys.SHOW_CHAPTER_BAR,
+                getString(R.string.show_chapter_bar),
+                current = playerSettings.showChapterBar,
+            ) { enabled ->
+                playerSettings = playerSettings.copy(showChapterBar = enabled)
+                // applyViewPoints 内部实时读落盘值重算段落并联动常驻条互斥
+                applyViewPoints(viewModel.viewPoints.value)
+            }
+            PlayerShortcutAction.ONLINE_WATCHING -> toggleShortcutSwitch(
+                ShortcutSettingKeys.SHOW_ONLINE_WATCHING,
+                getString(R.string.show_online_watching),
+                current = playerSettings.showOnlineWatching,
+            ) { enabled ->
+                playerSettings = playerSettings.copy(showOnlineWatching = enabled)
+                renderOnlineWatching()
+            }
+            PlayerShortcutAction.SUPER_CHAT -> {
+                // SC 醒目留言是直播页能力，点播宿主给出指引
+                AppToast.show(this, R.string.shortcut_super_chat_live_only)
+            }
+            PlayerShortcutAction.ALWAYS_CLOCK -> toggleShortcutSwitch(
+                ShortcutSettingKeys.SHOW_ALWAYS_ON_CLOCK,
+                getString(R.string.show_always_on_clock),
+                current = playerSettings.showAlwaysOnClock,
+            ) { enabled ->
+                playerSettings = playerSettings.copy(showAlwaysOnClock = enabled)
+                playerView.showAlwaysOnClock(enabled)
+            }
+            PlayerShortcutAction.DANMAKU -> {
+                val enabled = !playerView.isDanmakuEnabled()
+                playerView.setDanmakuEnabled(enabled)
+                AppToast.show(this, "${getString(R.string.dm_switch)}：${getString(if (enabled) R.string.on else R.string.off)}")
+            }
+            PlayerShortcutAction.SMART_SHIELD -> playerView.toggleDmSmartShield()
+            PlayerShortcutAction.MERGE_DUPLICATE -> playerView.toggleDmMergeDuplicate()
+            PlayerShortcutAction.DOUBLE_BACK_EXIT -> toggleShortcutSwitch(
+                ExitDoubleConfirm.KEY,
+                getString(R.string.exit_double_confirm),
+                current = ExitDoubleConfirm.enabled(appSettings),
+            ) { }
+        }
+    }
+
+    /** 开关型动作通用：落盘（中文"开/关"口径）+ 即时生效回调 + Toast 反馈。 */
+    private fun toggleShortcutSwitch(key: String, title: String, current: Boolean, apply: (Boolean) -> Unit) {
+        val newValue = !current
+        appSettings.putStringAsync(key, if (newValue) "开" else "关")
+        apply(newValue)
+        AppToast.show(this, "$title：${getString(if (newValue) R.string.on else R.string.off)}")
+    }
+
+    /** 当前视频的 aid/bvid；视频信息未就绪时 Toast 提示并返回 null。 */
+    private fun shortcutVideoIds(): Pair<Long, String>? {
+        val view = latestVideoInfo?.view
+        val aid = view?.aid ?: 0L
+        val bvid = view?.bvid.orEmpty()
+        if (aid <= 0L && bvid.isBlank()) {
+            AppToast.show(this, R.string.player_video_info_not_loaded)
+            return null
+        }
+        return aid to bvid
+    }
+
+    private fun shortcutLikeToggle() {
+        val (aid, bvid) = shortcutVideoIds() ?: return
+        val safeBvid = bvid.takeIf { it.isNotBlank() }
+        lifecycleScope.launch {
+            runCatching { videoRepository.getArchiveRelation(aid, safeBvid) }
+                .onFailure {
+                    AppToast.show(this@PlayerActivity, it.message ?: getString(R.string.dialog_action_failed))
+                }
+                .onSuccess { relation ->
+                    val liked = relation.data?.like == true
+                    runCatching { videoRepository.like(aid, safeBvid, if (liked) 2 else 1) }
+                        .onSuccess {
+                            AppToast.show(
+                                this@PlayerActivity,
+                                getString(if (liked) R.string.like else R.string.liked_),
+                            )
+                        }
+                        .onFailure {
+                            AppToast.show(this@PlayerActivity, it.message ?: getString(R.string.dialog_action_failed))
+                        }
+                }
+        }
+    }
+
+    private fun shortcutGiveCoin() {
+        val (aid, bvid) = shortcutVideoIds() ?: return
+        val safeBvid = bvid.takeIf { it.isNotBlank() }
+        val multiply = appSettings.getCachedString("give_coin_number")?.toIntOrNull()?.coerceIn(1, 2) ?: 2
+        lifecycleScope.launch {
+            runCatching { videoRepository.giveCoin(aid, safeBvid, multiply = multiply, selectLike = 0) }
+                .onSuccess { AppToast.show(this@PlayerActivity, R.string.give_coin_) }
+                .onFailure { AppToast.show(this@PlayerActivity, it.message ?: getString(R.string.dialog_action_failed)) }
+        }
+    }
+
+    private fun shortcutTriple() {
+        val (aid, bvid) = shortcutVideoIds() ?: return
+        val safeBvid = bvid.takeIf { it.isNotBlank() } ?: bvid
+        lifecycleScope.launch {
+            runCatching { videoRepository.tripleAction(aid, safeBvid) }
+                .onSuccess { AppToast.show(this@PlayerActivity, R.string.triple_action_success) }
+                .onFailure { AppToast.show(this@PlayerActivity, it.message ?: getString(R.string.dialog_action_failed)) }
+        }
+    }
+
+    /** 默认播放倍速：设置页同款档位弹窗，选中后写全局设置并即时作用于当前播放（红果起播也读同一全局键）。 */
+    private fun showShortcutSpeedDialog() {
+        val options = PlaybackSpeedPolicy.storedSpeedOptions()
+        val currentIndex = options.indexOf(playerSettings.defaultPlaybackSpeed.toString()).coerceAtLeast(0)
+        showShortcutChoiceDialog(this, getString(R.string.default_play_speed), options, currentIndex) { index ->
+            val speed = options.getOrNull(index)?.toFloatOrNull() ?: return@showShortcutChoiceDialog
+            appSettings.putStringAsync(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, speed.toString())
+            playerSettings = playerSettings.copy(defaultPlaybackSpeed = speed)
+            // 音乐区 1 倍速开关不拦快捷键即时应用：用户显式调整优先
+            playerView.setPlaySpeed(speed)
+            AppToast.show(this, "${getString(R.string.default_play_speed)}：${speed}x")
+        }
+    }
+
+    /** 字幕三态：设置页同款弹窗（关闭/开启/自动），选中后写全局设置并即时作用于当前视频。 */
+    private fun showShortcutSubtitleModeDialog() {
+        val storedOptions = arrayOf("关闭字幕", "开启字幕", "自动字幕")
+        val currentStored = when (playerSettings.subtitleDefaultMode) {
+            SubtitleDefaultMode.OFF -> storedOptions[0]
+            SubtitleDefaultMode.ON -> storedOptions[1]
+            SubtitleDefaultMode.AUTO -> storedOptions[2]
+        }
+        val displayOptions = storedOptions.map { localizedSettingLabel(it) }.toTypedArray()
+        showShortcutChoiceDialog(this, getString(R.string.show_subtitle_default), displayOptions, storedOptions.indexOf(currentStored)) { index ->
+            val stored = storedOptions.getOrElse(index) { storedOptions[2] }
+            appSettings.putStringAsync(ShortcutSettingKeys.SUBTITLE_DEFAULT_MODE, stored)
+            val mode = when (stored) {
+                storedOptions[0] -> SubtitleDefaultMode.OFF
+                storedOptions[1] -> SubtitleDefaultMode.ON
+                else -> SubtitleDefaultMode.AUTO
+            }
+            viewModel.applySubtitleModeNow(mode)
+            AppToast.show(this, "${getString(R.string.show_subtitle_default)}：${localizedSettingLabel(stored)}")
+        }
     }
 
     private var preloadHeaderRefreshPosted = false

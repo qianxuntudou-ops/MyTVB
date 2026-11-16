@@ -512,6 +512,15 @@ class MyPlayerSettingView @JvmOverloads constructor(
         refreshCurrentMenu()
     }
 
+    /** 自定义快捷键入口：复用面板 toggle 全链路（写盘 + 回调 + Toast + 面板刷新）。 */
+    fun dmMergeDuplicateClick() {
+        handleDmToggleClick(ITEM_DM_MERGE_DUPLICATE)
+    }
+
+    fun dmSmartShieldClick() {
+        handleDmToggleClick(ITEM_DM_SMART_SHIELD)
+    }
+
     fun getDmEnable(): Boolean = panelState.dmEnabled
     fun getDmAlpha(): Float = panelState.dmAlpha
     fun getDmTextScaleParam(): Int = panelState.dmTextSize

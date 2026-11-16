@@ -3588,6 +3588,18 @@ class MyPlayerView @JvmOverloads constructor(
         updateVideoFrameRateStrategy(enabled)
     }
 
+    fun isDanmakuEnabled(): Boolean = settingView?.getDmEnable() ?: true
+
+    /** 快捷键：合并重复弹幕开关，走面板同款链路（写盘+syncDanmakuSettings）。 */
+    fun toggleDmMergeDuplicate() {
+        settingView?.dmMergeDuplicateClick()
+    }
+
+    /** 快捷键：智能屏蔽开关，走面板同款链路（写盘+防挡控制器，镜像开启时自动拒绝）。 */
+    fun toggleDmSmartShield() {
+        settingView?.dmSmartShieldClick()
+    }
+
     fun pauseDanmaku() {
         activeDanmakuController()?.pause()
     }

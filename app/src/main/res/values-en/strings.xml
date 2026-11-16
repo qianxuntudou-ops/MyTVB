@@ -631,4 +631,27 @@
     <string name="konami_hint">Enter the Konami code with the remote D-pad to turn it off!</string>
     <string name="sponsor_testing">Testing…</string>
     <string name="confirm_save">Save</string>
+    <!-- Custom player shortcuts (issue#116) -->
+    <string name="shortcut_setting">Custom player shortcuts</string>
+    <string name="shortcut_count_format">%d set</string>
+    <string name="shortcut_none">None</string>
+    <string name="shortcut_add">Add shortcut</string>
+    <string name="shortcut_clear_all">Clear all</string>
+    <string name="shortcut_cleared">Cleared</string>
+    <string name="shortcut_rebind">Rebind key</string>
+    <string name="shortcut_remove">Remove</string>
+    <string name="shortcut_pick_action">Choose action</string>
+    <string name="shortcut_capture_title">Key capture</string>
+    <string name="shortcut_capture_hint">Press the key to bind
+(Back to cancel)</string>
+    <string name="shortcut_key_forbidden">This key cannot be bound (system key)</string>
+    <string name="shortcut_not_supported_here">Not available on this page</string>
+    <string name="shortcut_super_chat_live_only">Use this in live pages</string>
+
+    <string name="shortcut_pick_trigger">Choose trigger</string>
+    <string name="shortcut_trigger_long">Long press</string>
+            <string name="shortcut_clear_confirm">Clear all shortcuts?</string>
+<string name="shortcut_empty_hint">No shortcuts yet. Press Add shortcut to create one</string>
+<string name="shortcut_trigger_short">Short press</string>
+    <string name="triple_action_success">Triple done!</string>
 </resources>

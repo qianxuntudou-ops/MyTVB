@@ -774,4 +774,27 @@
     <string name="konami_hint">使用遥控器方向键输入魂斗罗秘籍才能关闭！</string>
     <string name="sponsor_testing">正在测试…</string>
     <string name="confirm_save">保存</string>
+    <!-- 自定义播放快捷键（issue#116） -->
+    <string name="shortcut_setting">自定义播放快捷键</string>
+    <string name="shortcut_count_format">%d 个</string>
+    <string name="shortcut_none">未设置</string>
+    <string name="shortcut_add">添加快捷键</string>
+    <string name="shortcut_clear_all">清空全部</string>
+    <string name="shortcut_cleared">已清空</string>
+    <string name="shortcut_rebind">改绑按键</string>
+    <string name="shortcut_remove">删除</string>
+    <string name="shortcut_pick_action">选择动作</string>
+    <string name="shortcut_capture_title">按键学习</string>
+    <string name="shortcut_capture_hint">请按下要绑定的按键
+（按返回键取消）</string>
+    <string name="shortcut_key_forbidden">该按键不可绑定（返回/确认/菜单/音量键为系统键）</string>
+    <string name="shortcut_not_supported_here">当前页面不支持该动作</string>
+    <string name="shortcut_super_chat_live_only">该功能请在直播页使用</string>
+
+    <string name="shortcut_pick_trigger">选择触发方式</string>
+    <string name="shortcut_trigger_long">长按</string>
+            <string name="shortcut_clear_confirm">确认清空全部快捷键？</string>
+<string name="shortcut_empty_hint">暂无快捷键，按「添加快捷键」新建</string>
+<string name="shortcut_trigger_short">短按</string>
+    <string name="triple_action_success">三连成功</string>
 </resources>

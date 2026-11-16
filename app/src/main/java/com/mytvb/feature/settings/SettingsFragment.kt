@@ -61,6 +61,8 @@ import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
 import com.mytvb.feature.player.settings.AudioBalanceSettings
+import com.mytvb.feature.player.shortcut.PlayerShortcutStore
+import com.mytvb.feature.player.shortcut.ShortcutManageDialog
 import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
 import com.mytvb.feature.player.sponsor.SponsorBlockRepository
 import com.mytvb.feature.player.sponsor.SponsorCategoryPrefs
@@ -114,6 +116,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         // 与 ExitDoubleConfirm.KEY 同键（存储值"开/关"），默认开：双击 BACK 才退出播放/应用。
         private const val KEY_EXIT_DOUBLE_CONFIRM = ExitDoubleConfirm.KEY
+        // 自定义播放快捷键（issue#116）：动作型条目（非 DataStore 开关），显示值=已绑定数
+        private const val KEY_PLAYER_SHORTCUTS = "action_player_shortcuts"
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
@@ -327,6 +331,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 // 退出二次确认（issue#118）：开=双击 BACK 才退出播放页/应用（默认）；关=单次直接退
                 stored(KEY_EXIT_DOUBLE_CONFIRM, R.string.exit_double_confirm, "开"),
                 stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2"),
+                // 自定义播放快捷键（issue#116）：数字键等绑定点赞/三连/各类开关，点击管理绑定
+                plain(KEY_PLAYER_SHORTCUTS, R.string.shortcut_setting, shortcutCountLabel())
             )),
             SettingGroup(R.string.setting_group_network, listOf(
                 stored(KEY_IPV4_ONLY, R.string.ipv4_only, "开"),
@@ -796,6 +802,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
             KEY_EXIT_DOUBLE_CONFIRM -> toggle(key)
+            KEY_PLAYER_SHORTCUTS -> ShortcutManageDialog(requireContext()) {
+                updateInfo(KEY_PLAYER_SHORTCUTS, shortcutCountLabel())
+            }.show()
             // —— 电视直播 ——
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
@@ -1799,6 +1808,18 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             onSelected(storedOptions.getOrElse(index) { storedOptions.first() })
         }
     }
+
+    // ================= 自定义播放快捷键（issue#116）：入口与计数 =================
+
+    private fun shortcutCountLabel(): String {
+        val count = PlayerShortcutStore.load().size
+        return if (count == 0) {
+            getString(R.string.shortcut_none)
+        } else {
+            getString(R.string.shortcut_count_format, count)
+        }
+    }
+
 
     private fun showChoiceDialog(
         title: String,

@@ -54,6 +54,7 @@ import com.mytvb.repository.UserRepository
 import com.mytvb.feature.player.settings.AfterPlayMode
 import com.mytvb.feature.player.settings.PlayerSettings
 import com.mytvb.feature.player.settings.PlayerSettingsStore
+import com.mytvb.feature.player.settings.SubtitleDefaultMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -689,6 +690,17 @@ class VideoPlayerViewModel(
     /** 当前播放的 cid，供 Activity 做按集去重的试看提示。 */
     val previewContextCid: Long get() = currentCid
     private var currentSettings: PlayerSettings = PlayerSettingsStore.load(appContext)
+
+    /** 自定义快捷键切换空降助手：即时更新内存设置让当前视频立即生效，落盘由调用方完成。 */
+    fun updateSponsorBlockEnabled(enabled: Boolean) {
+        currentSettings = currentSettings.copy(sponsorBlockEnabled = enabled)
+    }
+
+    /** 自定义快捷键切换字幕三态：更新内存设置并即时应用到当前视频，落盘由调用方完成。 */
+    fun applySubtitleModeNow(mode: SubtitleDefaultMode) {
+        currentSettings = currentSettings.copy(subtitleDefaultMode = mode)
+        subtitleController.applyModeNow(mode)
+    }
     private val heartbeatReporter = PlaybackHeartbeatReporter(
         apiService = apiService,
         sessionGateway = sessionGateway,

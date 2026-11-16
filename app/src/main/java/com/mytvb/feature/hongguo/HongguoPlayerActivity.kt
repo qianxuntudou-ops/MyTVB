@@ -23,11 +23,17 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TimeBar
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
 import com.mytvb.feature.player.settings.PlayerSettingsStore
+import com.mytvb.feature.player.shortcut.PlayerShortcutAction
+import com.mytvb.feature.player.shortcut.PlayerShortcutKeyDispatcher
+import com.mytvb.feature.player.shortcut.ShortcutSettingKeys
+import com.mytvb.feature.player.shortcut.hasTextInputFocus
+import com.mytvb.feature.player.shortcut.showShortcutChoiceDialog
 import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -494,6 +500,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             return super.dispatchKeyEvent(event) // BACK 走 OnBackPressedCallback（Android13+ 双通道安全）
         }
+        // 自定义快捷键（issue#116）：数字键等绑定候选键对本播放器无其他用途，最先消费
+        // （DOWN/UP 判定短按/长按槽位）
+        if (shortcutKeyDispatcher.dispatch(event)) return true
         // seek 会话激活：非 seek 键先取消会话（清 UI 不 seek），按键继续正常分发（B 站同款）
         if (seekUiActive && event.action == KeyEvent.ACTION_DOWN && !isSeekKeyCode(keyCode)) {
             cancelSeekSession()
@@ -524,6 +533,53 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    // ==================== 自定义快捷键（issue#116）：红果支持子集 ====================
+
+    private val shortcutKeyDispatcher = PlayerShortcutKeyDispatcher(
+        isTextInputActive = { hasTextInputFocus() },
+    ) { performShortcutAction(it) }
+
+    private fun performShortcutAction(action: PlayerShortcutAction) {
+        when (action) {
+            PlayerShortcutAction.DEFAULT_SPEED -> showShortcutSpeedDialog()
+            PlayerShortcutAction.ALWAYS_CLOCK -> {
+                val enabled = !PlayerSettingsStore.load(this).showAlwaysOnClock
+                appSettingsDataStore().putStringAsync(
+                    ShortcutSettingKeys.SHOW_ALWAYS_ON_CLOCK,
+                    if (enabled) "开" else "关",
+                )
+                alwaysOnClock = enabled
+                updateAlwaysClock()
+                AppToast.show(this, "${getString(R.string.show_always_on_clock)}：${getString(if (enabled) R.string.on else R.string.off)}")
+            }
+            PlayerShortcutAction.DOUBLE_BACK_EXIT -> {
+                val enabled = !ExitDoubleConfirm.enabled()
+                appSettingsDataStore().putStringAsync(
+                    ExitDoubleConfirm.KEY,
+                    if (enabled) "开" else "关",
+                )
+                AppToast.show(this, "${getString(R.string.exit_double_confirm)}：${getString(if (enabled) R.string.on else R.string.off)}")
+            }
+            else -> AppToast.show(this, R.string.shortcut_not_supported_here)
+        }
+    }
+
+    /** 默认播放倍速：写全局设置（红果起播与 B 站共用同一键）并即时作用于当前会话。 */
+    private fun showShortcutSpeedDialog() {
+        val options = PlaybackSpeedPolicy.storedSpeedOptions()
+        val currentIndex = options.indexOf(speed.toString()).coerceAtLeast(0)
+        showShortcutChoiceDialog(this, getString(R.string.default_play_speed), options, currentIndex) { index ->
+            val picked = options.getOrNull(index)?.toFloatOrNull() ?: return@showShortcutChoiceDialog
+            appSettingsDataStore().putStringAsync(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, picked.toString())
+            speed = picked
+            player?.playbackParameters = PlaybackParameters(speed)
+            AppToast.show(this, "${getString(R.string.default_play_speed)}：${speed}x")
+        }
+    }
+
+    private fun appSettingsDataStore(): AppSettingsDataStore =
+        org.koin.mp.KoinPlatform.getKoin().get()
 
     /**
      * UP/DOWN 路由。控制栏可见：UP 显式聚焦进度条（B 站对齐，不走 FocusFinder），

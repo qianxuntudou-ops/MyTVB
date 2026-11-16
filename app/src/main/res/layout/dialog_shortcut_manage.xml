@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dialog_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="false">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/top_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px35"
+        android:layout_marginEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px20"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/title_divider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/top_title" />
+
+    <!-- 操作区：添加（主）居左，清空（次级）居右；与下方数据列表用间距+分隔线分层 -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/btn_add"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginTop="@dimen/px20"
+        android:background="@drawable/bg_hongguo_btn_detail"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="@dimen/px40"
+        android:paddingTop="@dimen/px15"
+        android:paddingEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px15"
+        android:text="@string/shortcut_add"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px28"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/title_divider" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/btn_clear"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="@drawable/bg_hongguo_btn_detail"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="@dimen/px40"
+        android:paddingTop="@dimen/px15"
+        android:paddingEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px15"
+        android:text="@string/shortcut_clear_all"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px28"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/btn_add" />
+
+    <View
+        android:id="@+id/list_divider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginTop="@dimen/px20"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_add" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:paddingStart="@dimen/px18"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px18"
+        android:paddingBottom="@dimen/px18"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/list_divider" />
+
+    <!-- 空态：不放空白，引导到上方添加按钮 -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/empty_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px80"
+        android:layout_marginEnd="@dimen/px40"
+        android:gravity="center"
+        android:text="@string/shortcut_empty_hint"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px30"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/list_divider" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

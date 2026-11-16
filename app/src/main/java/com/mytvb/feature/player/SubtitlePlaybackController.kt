@@ -266,6 +266,18 @@ internal class SubtitlePlaybackController(
             }
         }
 
+    /** 快捷键/设置切换字幕三态后即时应用：OFF 直接关；ON/AUTO 恢复自动资格并立即按策略重判。 */
+    fun applyModeNow(mode: SubtitleDefaultMode) {
+        subtitleDefaultMode = mode
+        if (mode == SubtitleDefaultMode.OFF) {
+            selectSubtitle(-1)
+        } else {
+            shouldAutoSelectSubtitle = true
+            autoSelectedByPolicy = false
+            maybeAutoSelectSubtitle()
+        }
+    }
+
     fun maybeAutoSelectSubtitle() {
         val subtitles = _subtitles.value
         // 纠偏：此前按策略自动加载过，而最新轨道（playerInfo 的 ai_status 更全）判定视频已有
