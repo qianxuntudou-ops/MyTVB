@@ -37,7 +37,8 @@
     <string name="about_setting">About</string>
     <string name="tv_live_setting">Live TV</string>
     <!-- 设置分组标题 -->
-    <string name="setting_group_browse">Browsing &amp; Entries</string>
+    <string name="setting_group_browse">Browsing &amp; Cast</string>
+    <string name="setting_group_pages">Page Display</string>
     <string name="setting_group_interact">Interaction</string>
     <string name="setting_group_network">Network &amp; Account</string>
     <string name="setting_group_storage">Storage</string>

@@ -63,7 +63,8 @@
     <string name="about_setting">关于</string>
     <string name="tv_live_setting">电视直播</string>
     <!-- 设置分组标题 -->
-    <string name="setting_group_browse">浏览与入口</string>
+    <string name="setting_group_browse">浏览与投屏</string>
+    <string name="setting_group_pages">页面显示</string>
     <string name="setting_group_interact">交互</string>
     <string name="setting_group_network">网络与账号</string>
     <string name="setting_group_storage">存储</string>

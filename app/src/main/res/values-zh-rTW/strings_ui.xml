@@ -142,4 +142,13 @@
     <string name="cell_fans_placeholder">0粉絲</string>
     <string name="cell_user_stat_placeholder">0粉絲 · 0個影片</string>
     <string name="setting_tv_live">電視直播</string>
+
+    <!-- ===== 分類頁分區顯示（issue#117） ===== -->
+    <string name="category_tabs_display">分類頁顯示的分區</string>
+    <string name="category_tabs_dialog_title">選擇要顯示的分區</string>
+    <string name="category_tabs_all">全部</string>
+    <string name="category_tabs_count_format">%1$d/%2$d</string>
+    <string name="category_tabs_select_all">全選</string>
+    <string name="category_tabs_select_none">全不選</string>
+    <string name="category_tabs_keep_one">至少保留一個分區</string>
 </resources>

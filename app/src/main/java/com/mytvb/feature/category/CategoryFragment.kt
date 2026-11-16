@@ -11,7 +11,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
-import com.mytvb.R
 import com.mytvb.databinding.FragmentCategoryBinding
 import com.mytvb.model.CategoryModel
 import com.mytvb.core.ui.base.BaseFragment
@@ -95,31 +94,36 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
 
     private fun initCategories() {
         categories.clear()
-        val resources = requireContext().resources
-
-        categories.add(CategoryModel(0, resources.getString(R.string.allWeb)))
-        categories.add(CategoryModel(1, resources.getString(R.string.cartoon)))
-        categories.add(CategoryModel(3, resources.getString(R.string.music)))
-        categories.add(CategoryModel(129, resources.getString(R.string.dance)))
-        categories.add(CategoryModel(4, resources.getString(R.string.game)))
-        categories.add(CategoryModel(36, resources.getString(R.string.knowledge)))
-        categories.add(CategoryModel(188, resources.getString(R.string.science)))
-        categories.add(CategoryModel(234, resources.getString(R.string.sport)))
-        categories.add(CategoryModel(223, resources.getString(R.string.auto)))
-        categories.add(CategoryModel(160, resources.getString(R.string.lifestyle)))
-        categories.add(CategoryModel(211, resources.getString(R.string.food)))
-        categories.add(CategoryModel(217, resources.getString(R.string.pet)))
-        categories.add(CategoryModel(119, resources.getString(R.string.kichiku)))
-        categories.add(CategoryModel(155, resources.getString(R.string.fashion)))
-        categories.add(CategoryModel(5, resources.getString(R.string.entainment)))
-        categories.add(CategoryModel(181, resources.getString(R.string.film_and_television)))
-        categories.add(CategoryModel(177, resources.getString(R.string.documentary)))
-        categories.add(CategoryModel(23, resources.getString(R.string.movie)))
-        categories.add(CategoryModel(11, resources.getString(R.string.series)))
-
-        adapter.setCategories(categories)
-        
+        categories.addAll(CategoryTabPrefs.allCategories(requireContext()))
+        adapter.setCategories(CategoryTabPrefs.visibleCategories(categories))
         viewPager.currentItem = 0
+    }
+
+    /**
+     * 按「分类页显示的分区」设置重应用 tab 集合（issue#117）：设置页改动后返回本页时刷新。
+     * 幂等——集合没变直接返回；变化时尽量保留仍在显示范围内的当前分区选中位。
+     */
+    private fun refreshVisibleCategories() {
+        if (!this::adapter.isInitialized) return
+        val visible = CategoryTabPrefs.visibleCategories(categories)
+        if (visible.map { it.id } == adapter.currentCategories().map { it.id }) return
+        val currentId = adapter.currentCategories().getOrNull(viewPager.currentItem)?.id
+        adapter.setCategories(visible)
+        val restoreIndex = visible.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: 0
+        viewPager.currentItem = restoreIndex
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 设置页是 overlay fragment，关闭返回时本页走 onResume；hidden 切换走 onHiddenChanged
+        refreshVisibleCategories()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) {
+            refreshVisibleCategories()
+        }
     }
 
     override fun initData() {

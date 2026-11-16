@@ -13,6 +13,9 @@ class CategoryFragmentAdapter(
 
     private val categories = mutableListOf<CategoryModel>()
 
+    /** 当前 tab 集合（过滤后），供与设置变更后的期望集合比对。 */
+    fun currentCategories(): List<CategoryModel> = categories.toList()
+
     fun setCategories(list: List<CategoryModel>) {
         categories.clear()
         categories.addAll(list)

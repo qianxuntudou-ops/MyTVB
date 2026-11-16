@@ -37,7 +37,8 @@
     <string name="about_setting">關於</string>
     <string name="tv_live_setting">電視直播</string>
     <!-- 设置分组标题 -->
-    <string name="setting_group_browse">瀏覽與入口</string>
+    <string name="setting_group_browse">瀏覽與投屏</string>
+    <string name="setting_group_pages">頁面顯示</string>
     <string name="setting_group_interact">互動</string>
     <string name="setting_group_network">網路與帳號</string>
     <string name="setting_group_storage">儲存空間</string>

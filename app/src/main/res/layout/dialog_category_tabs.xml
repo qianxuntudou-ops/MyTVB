@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 分类页分区多选弹窗（issue#117）：dialog_setting_choice 同款壳 + 底部按钮区。
+     列表行复用 cell_setting_choice（多选态：iconCheck 勾选、tvCurrent 徽章恒隐藏）。 -->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dialog_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="false">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/top_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px35"
+        android:layout_marginEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px20"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/title_divider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/top_title" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:paddingStart="@dimen/px18"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px18"
+        android:paddingBottom="@dimen/px12"
+        app:layout_constraintBottom_toTopOf="@id/button_bar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/title_divider" />
+
+    <LinearLayout
+        android:id="@+id/button_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px30"
+        android:paddingTop="@dimen/px15"
+        android:paddingEnd="@dimen/px30"
+        android:paddingBottom="@dimen/px25"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/button_select_none"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="@dimen/px25"
+            android:background="@drawable/bg_hongguo_btn_detail"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="@dimen/px35"
+            android:paddingTop="@dimen/px12"
+            android:paddingEnd="@dimen/px35"
+            android:paddingBottom="@dimen/px12"
+            android:text="@string/category_tabs_select_none"
+            android:textColor="@color/textColor"
+            android:textSize="@dimen/px28"
+            android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/button_select_all"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="@dimen/px25"
+            android:background="@drawable/bg_hongguo_btn_detail"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="@dimen/px35"
+            android:paddingTop="@dimen/px12"
+            android:paddingEnd="@dimen/px35"
+            android:paddingBottom="@dimen/px12"
+            android:text="@string/category_tabs_select_all"
+            android:textColor="@color/textColor"
+            android:textSize="@dimen/px28"
+            android:textStyle="bold" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/button_confirm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_hongguo_btn_detail"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="@dimen/px35"
+            android:paddingTop="@dimen/px12"
+            android:paddingEnd="@dimen/px35"
+            android:paddingBottom="@dimen/px12"
+            android:text="@string/confirm"
+            android:textColor="@color/textColor"
+            android:textSize="@dimen/px28"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -148,4 +148,13 @@
     <string name="core_count_b_format">%1$sB</string>
     <!-- 数字分级开关：false=万/亿（中文习惯），true=K/M/B（千分位语言，由 values-en 覆盖） -->
     <bool name="count_scale_thousand">false</bool>
+
+    <!-- ===== 分类页分区显示（issue#117） ===== -->
+    <string name="category_tabs_display">分类页显示的分区</string>
+    <string name="category_tabs_dialog_title">选择要显示的分区</string>
+    <string name="category_tabs_all">全部</string>
+    <string name="category_tabs_count_format">%1$d/%2$d</string>
+    <string name="category_tabs_select_all">全选</string>
+    <string name="category_tabs_select_none">全不选</string>
+    <string name="category_tabs_keep_one">至少保留一个分区</string>
 </resources>

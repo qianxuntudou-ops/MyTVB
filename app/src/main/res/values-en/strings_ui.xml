@@ -140,4 +140,13 @@
     <string name="cell_fans_placeholder">0 followers</string>
     <string name="cell_user_stat_placeholder">0 followers · 0 videos</string>
     <string name="setting_tv_live">Live TV</string>
+
+    <!-- ===== Category tabs to show (issue#117) ===== -->
+    <string name="category_tabs_display">Category tabs to show</string>
+    <string name="category_tabs_dialog_title">Choose tabs to show</string>
+    <string name="category_tabs_all">All</string>
+    <string name="category_tabs_count_format">%1$d/%2$d</string>
+    <string name="category_tabs_select_all">Select all</string>
+    <string name="category_tabs_select_none">Deselect all</string>
+    <string name="category_tabs_keep_one">Keep at least one category</string>
 </resources>

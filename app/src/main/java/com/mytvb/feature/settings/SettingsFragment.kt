@@ -32,6 +32,8 @@ import com.mytvb.core.common.update.ApkUpdater
 import com.mytvb.databinding.FragmentSettingsBinding
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.cast.NvaDevice
+import com.mytvb.feature.category.CategoryTabPrefs
+import com.mytvb.feature.category.CategoryTabsDialog
 import com.mytvb.feature.home.FeedSourceSetting
 import com.mytvb.feature.home.HomeFragmentStateAdapter
 import com.mytvb.model.SettingModel
@@ -192,6 +194,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
 
         // —— 动作/信息型伪 key（无落盘值，仅作点击分发与条目刷新寻址）——
         private const val KEY_CLEAR_CACHE = "action_clear_cache"
+        // 分类页分区显示多选弹窗（issue#117）：勾选落 StringSet（CategoryTabPrefs.KEY），
+        // 空=默认全部分区显示；条目 info 动态生成「全部/N/总数」
+        private const val KEY_CATEGORY_TABS = "action_category_tabs"
         private const val KEY_UI_LANGUAGE = "ui_language"
         private const val KEY_RISK_CONTROL = "action_risk_control"
         private const val KEY_APP_VERSION = "info_app_version"
@@ -306,16 +311,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         requireContext().localizedSettingLabel(stored)
 
     private fun initSettings() {
-        // 通用：浏览与入口 / 交互 / 网络与账号 / 存储
+        // 通用：浏览与投屏 / 交互 / 网络与账号 / 存储
         commonGroups = listOf(
             SettingGroup(R.string.setting_group_browse, listOf(
-                stored(KEY_DEFAULT_START_PAGE, R.string.default_start_page, "热门"),
                 stored(KEY_HOME_FEED_SOURCE, R.string.home_feed_source, FeedSourceSetting.DEFAULT),
                 stored(KEY_HOT_FEED_SOURCE, R.string.hot_feed_source, FeedSourceSetting.DEFAULT),
-                stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
-                stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
-                // 打开方式：点卡片直接播放 / 先进详情页（与默认首页等同属浏览行为）
-                stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
                 // CCTV 相关条目已归入「电视直播」分类（tvGroups）
                 // 投屏开关默认值直接读 cast 自有存储（不进 appSettings，冷启动即可读），
                 // 因此无需在 applyStored 段恢复
@@ -326,7 +326,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_EDGE_TAB_SWITCH, R.string.edge_tab_switch, "关"),
                 // 退出二次确认（issue#118）：开=双击 BACK 才退出播放页/应用（默认）；关=单次直接退
                 stored(KEY_EXIT_DOUBLE_CONFIRM, R.string.exit_double_confirm, "开"),
-                stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2")
+                stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2"),
             )),
             SettingGroup(R.string.setting_group_network, listOf(
                 stored(KEY_IPV4_ONLY, R.string.ipv4_only, "开"),
@@ -340,11 +340,25 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             ))
         )
 
-        // 显示：外观 / 缩放与图片
+        // 显示：外观 / 页面显示 / 缩放与图片
         displayGroups = listOf(
             SettingGroup(R.string.setting_group_appearance, listOf(
                 stored(KEY_THEME, R.string.theme, "黑色"),
                 plain(KEY_UI_LANGUAGE, R.string.ui_language, currentLanguageDisplay())
+            )),
+            // 页面级显示开关（原通用·浏览与入口组迁入：除来源/投屏外均属「显示什么」）
+            SettingGroup(R.string.setting_group_pages, listOf(
+                stored(KEY_DEFAULT_START_PAGE, R.string.default_start_page, "热门"),
+                stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
+                stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
+                // 打开方式：点卡片直接播放 / 先进详情页
+                stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
+                // 分类页顶部分区 tab 按需显示（issue#117），默认全部
+                plain(
+                    KEY_CATEGORY_TABS,
+                    R.string.category_tabs_display,
+                    CategoryTabPrefs.summaryText(requireContext(), CategoryTabPrefs.allCategories(requireContext()))
+                )
             )),
             SettingGroup(R.string.setting_group_scale, listOf(
                 stored(UiScale.KEY_UI_SCALE, R.string.ui_scale, "100"),
@@ -769,7 +783,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     /** 按 key 统一分发点击（key 全局唯一，与分组/顺序解耦）。 */
     private fun dispatchSettingClick(key: String) {
         when (key) {
-            // —— 通用·浏览与互动 ——
+            // —— 通用·浏览与投屏（页面显示类条目已迁「显示」tab）——
             KEY_DEFAULT_START_PAGE -> showCommonChoiceDialog(key, HOME_START_PAGE_OPTIONS)
             KEY_HOME_FEED_SOURCE, KEY_HOT_FEED_SOURCE -> showCommonChoiceDialog(key, FeedSourceSetting.OPTIONS)
             KEY_LIVE_ENTRY -> toggle(key) {
@@ -808,6 +822,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
             KEY_CAST_DEVICE_NAME -> showCastDeviceNameDialog()
             KEY_SHOW_VIDEO_DETAIL -> toggle(key)
+            KEY_CATEGORY_TABS -> showCategoryTabsDialog()
             KEY_DOUYIN_MODE -> toggle(key)
             KEY_GIVE_COIN_NUMBER -> showCommonChoiceDialog(key, arrayOf("1", "2"))
             // —— 通用·网络与账号 ——
@@ -2110,6 +2125,16 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         )
         dialog.show()
         actionContainer.getChildAt(0)?.requestFocus()
+    }
+
+    /** 分类页分区多选弹窗（issue#117）：确认后落盘并刷新条目 info，返回分类页时 tab 自动重应用。 */
+    private fun showCategoryTabsDialog() {
+        CategoryTabsDialog.show(requireContext()) {
+            updateInfo(
+                KEY_CATEGORY_TABS,
+                CategoryTabPrefs.summaryText(requireContext(), CategoryTabPrefs.allCategories(requireContext()))
+            )
+        }
     }
 
     /** 投屏设备名输入弹窗：保存后立即重播 SSDP 通知，手机投屏列表无需重启即更新。 */
