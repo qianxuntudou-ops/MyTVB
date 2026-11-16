@@ -44,6 +44,8 @@
     <!-- 播放器：空降助手（跳过片段） -->
     <string name="player_skip_segment_toast_format">已跳过：%1$s</string>
     <string name="player_mute_segment_toast_format">已静音：%1$s</string>
+    <!-- 网络性卡顿提示（issue#114 判据命中）：只提示不换线，降画质交用户决定 -->
+    <string name="player_network_stall_hint">网络卡顿，建议降低画质</string>
     <string name="player_sponsor_category_sponsor">赞助/恰饭</string>
     <string name="player_sponsor_category_intro">过场/开场动画</string>
     <!-- 官方片头片尾（pgc playurl clip_info_list），区别于空降助手社区数据 -->

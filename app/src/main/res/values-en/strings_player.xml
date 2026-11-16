@@ -44,6 +44,8 @@
     <!-- Player: SponsorBlock segments -->
     <string name="player_skip_segment_toast_format">Skipped: %1$s</string>
     <string name="player_mute_segment_toast_format">Muted: %1$s</string>
+    <!-- Network stall hint (issue#114): hint only, no CDN rotation -->
+    <string name="player_network_stall_hint">Slow network, consider lowering quality</string>
     <string name="player_sponsor_category_sponsor">Sponsor</string>
     <string name="player_sponsor_category_intro">Intro</string>
     <!-- Official intro/outro (pgc playurl clip_info_list) -->

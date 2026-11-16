@@ -497,6 +497,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         onPlaybackStalled = { positionMs, stalledMs ->
             recoverFromPlaybackStall(positionMs, stalledMs)
         },
+        onNetworkStalled = { positionMs, stalledMs ->
+            onNetworkStallDetected(positionMs, stalledMs)
+        },
         onHeartbeatTick = {
             viewModel.reportPlaybackHeartbeat()
         }
@@ -2407,6 +2410,20 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             val upperBound = if (durationMs > 0L) SeekSession.seekUpperBoundMs(durationMs) else Long.MAX_VALUE
             currentPlayer.seekTo((positionMs + stalledMs).coerceIn(0L, upperBound))
         }
+    }
+
+    /**
+     * 网络性卡顿（issue#114 判据命中：高频短 rebuffer 循环 / 长 BUFFERING 无恢复）。
+     * TV 宿主只提示不换线：吞吐普遍低于码率（全线路皆慢）时换线无收益，重建反而
+     * 白闪一次加载圈；对症解法是降画质，是否降交用户决定。Fragment 宿主仍是换线版
+     * （[VideoPlayerFragment.recoverFromNetworkStall]），两条路各自独立不共享。
+     */
+    private fun onNetworkStallDetected(positionMs: Long, stalledMs: Long) {
+        AppLog.w(
+            TAG,
+            "network stall detected: position=$positionMs, stalledMs=$stalledMs, action=hint_only"
+        )
+        toast(getString(R.string.player_network_stall_hint))
     }
 
     /**

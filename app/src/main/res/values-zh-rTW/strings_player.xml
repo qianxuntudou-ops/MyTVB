@@ -44,6 +44,8 @@
     <!-- 播放器：空降助手（跳過片段） -->
     <string name="player_skip_segment_toast_format">已跳過：%1$s</string>
     <string name="player_mute_segment_toast_format">已靜音：%1$s</string>
+    <!-- 網路性卡頓提示（issue#114 判據命中）：只提示不換線，降畫質交用戶決定 -->
+    <string name="player_network_stall_hint">網路卡頓，建議降低畫質</string>
     <string name="player_sponsor_category_sponsor">贊助/業配</string>
     <string name="player_sponsor_category_intro">過場/開場動畫</string>
     <!-- 官方片頭片尾（pgc playurl clip_info_list） -->
