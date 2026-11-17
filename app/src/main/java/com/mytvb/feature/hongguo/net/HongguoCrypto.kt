@@ -40,7 +40,7 @@ internal object HongguoCrypto {
     fun md5(data: ByteArray): ByteArray = MessageDigest.getInstance("MD5").digest(data)
     fun sha512(data: ByteArray): ByteArray = MessageDigest.getInstance("SHA-512").digest(data)
 
-    private fun leU32(n: Int): ByteArray = byteArrayOf(
+    internal fun leU32(n: Int): ByteArray = byteArrayOf(
         n.toByte(), (n ushr 8).toByte(), (n ushr 16).toByte(), (n ushr 24).toByte()
     )
 
@@ -71,7 +71,7 @@ internal object HongguoCrypto {
         (b[off].toInt() and 0xFF) or ((b[off + 1].toInt() and 0xFF) shl 8) or
             ((b[off + 2].toInt() and 0xFF) shl 16) or ((b[off + 3].toInt() and 0xFF) shl 24)
 
-    private fun beU32At(b: ByteArray, off: Int): Int =
+    internal fun beU32At(b: ByteArray, off: Int): Int =
         ((b[off].toInt() and 0xFF) shl 24) or ((b[off + 1].toInt() and 0xFF) shl 16) or
             ((b[off + 2].toInt() and 0xFF) shl 8) or (b[off + 3].toInt() and 0xFF)
 
@@ -136,7 +136,7 @@ internal object HongguoCrypto {
     }
 
     // ---- 签名分支 IV，对照 passportIV / passportBranch ----
-    private fun ivTransform(data: ByteArray, iv: Int): Int {
+    internal fun ivTransform(data: ByteArray, iv: Int): Int {
         var acc = iv
         for (i in data.indices) {
             val x = data[i].toInt() and 0xFF
@@ -197,7 +197,9 @@ internal object HongguoCrypto {
     }
 
     // ---- X-Helios，对照 passportHelios ----
-    fun helios(ts: Int, nonce: Int): String {
+    // license 参数化：普通接口=channelID(1588093228)，播放 V5 协议=646637794
+    // （openhongguo PR#13 playbackV5Helios，2026-11-17 对照确认与本品同构）。
+    fun helios(ts: Int, nonce: Int, license: String = "1588093228"): String {
         val key = md5(leU32(nonce) + "8662".toByteArray(Charsets.UTF_8))
         val raw = toHex(key).toByteArray(Charsets.UTF_8)
         fun u64(b: ByteArray, o: Int): Long {
@@ -216,7 +218,7 @@ internal object HongguoCrypto {
             k = x xor java.lang.Long.rotateLeft(k, 3)
             rounds.add(k)
         }
-        var plain = "$ts-1588093228-8662".toByteArray(Charsets.UTF_8)
+        var plain = "$ts-$license-8662".toByteArray(Charsets.UTF_8)
         val pad = 16 - plain.size % 16
         plain += ByteArray(pad) { pad.toByte() }
         val out = ArrayList<Byte>(4 + plain.size)
@@ -309,7 +311,7 @@ internal object HongguoCrypto {
     }
 
     // ---- F13 branch 0（tt02 变体：112 轮消息扩展 + 8 变量轮函数），对照 Node hashF13 ----
-    private val TT02 = intArrayOf(
+    internal val TT02 = intArrayOf(
         0xebb64faf.toInt(), 0x07aadcC2, 0xcf3187bf.toInt(), 0xe01138ff.toInt(), 0x6d0bfcff.toInt(), 0x5a30a3be.toInt(), 0xb41ad638.toInt(), 0x34180eb8.toInt(),
         0xf233eb6f.toInt(), 0xb1a584cc.toInt(), 0xccc30dc7.toInt(), 0x47d1db51.toInt(), 0xd55653de.toInt(), 0x70a84fa1.toInt(), 0x57473c12.toInt(), 0xf76f0288.toInt(),
         0x2c077f0a.toInt(), 0xda0dcad0.toInt(), 0xfbb86f6c.toInt(), 0xfdc4cf00.toInt(), 0x688a020d.toInt(), 0xe676c6a6.toInt(), 0x8cd6338b.toInt(), 0x1a3c8d0e.toInt(),
@@ -317,9 +319,10 @@ internal object HongguoCrypto {
         0x617ce2a6.toInt(), 0xe423417e.toInt(), 0x0a40e143, 0x544e4032, 0x88dffb2a.toInt(), 0x716c1ae0.toInt(), 0x4c467a88.toInt(), 0x05b23bb3,
         0xe1d0b866.toInt(), 0xbaa3dcb8.toInt(), 0xae3374d3.toInt(), 0xc3381a50.toInt(), 0x1702f75b.toInt(), 0xfe6da368.toInt(), 0xf0b4cf48.toInt(), 0x4e0ffbb8.toInt(),
         0x72aad10d.toInt(), 0x26c53a3d.toInt(), 0xf2bce0f6.toInt(), 0xb4557581.toInt(), 0x4a257fdd.toInt(), 0x8c3182a2.toInt(), 0xab0b3b86.toInt(), 0x3d5dfb14.toInt(),
-        0x4f103634.toInt(), 0xd37b52d7.toInt(), 0x444eff16.toInt(), 0xeb0a33d1.toInt(), 0x6ca86f6e.toInt(), 0x0284ba07, 0x08387cfa, 0x5fb37586.toInt()
+        // 第 61 项 0x00284ba7：2026-11-17 V5 对拍实锤旧值 0x0284ba07 是抄录错位（数字移位）
+        0x4f103634.toInt(), 0xd37b52d7.toInt(), 0x444eff16.toInt(), 0xeb0a33d1.toInt(), 0x6ca86f6e.toInt(), 0x00284ba7, 0x08387cfa, 0x5fb37586.toInt()
     )
-    private val BRANCH0_INIT = intArrayOf(
+    internal val BRANCH0_INIT = intArrayOf(
         0x7aba4fc8.toInt(), 0x67166507, 0x6403fa00.toInt(), 0x340f512f, 984304912, 3005047866.toInt(),
         2874125293.toInt(), 2152413264.toInt()
     )
@@ -336,7 +339,7 @@ internal object HongguoCrypto {
         0xc9aa3ba7.toInt(), 0xf5a7adf2.toInt(), 0x963c2ed1.toInt()
     )
 
-    private fun ror32(v: Int, n: Int): Int {
+    internal fun ror32(v: Int, n: Int): Int {
         val k = n and 31
         return if (k == 0) v else Integer.rotateLeft(v, 32 - k)
     }
@@ -407,7 +410,7 @@ internal object HongguoCrypto {
         return ret.copyOfRange(0, 16) + leU32(sumMd5Check(ret.copyOfRange(0, 16)))
     }
 
-    private fun sumMd5Check(out16: ByteArray): Int {
+    internal fun sumMd5Check(out16: ByteArray): Int {
         var check = 0x20220420
         for (i in 0 until 12) {
             val x = out16[i].toInt() and 0xFF

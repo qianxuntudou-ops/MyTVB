@@ -274,11 +274,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * 播放地址 → 可播 URI：加密流（CENC）整集下载+解密落地，未加密直链原样返回。
-     * 实现平移至 Repository（起播/切集/后台预下载共用，含同集在途下载去重）。
+     * 播放地址 → 播放源三级决策（Repository.resolvePlayableSource）：
+     * 明文直链 / 预取落地的解密文件 / ClearKey DRM 直链流式（加密流不再整集等待）。
      */
-    private suspend fun resolvePlayable(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl): String =
-        repository.resolvePlayableFile(play)
+    private suspend fun resolvePlayable(play: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl): HongguoRepository.PlayableSource =
+        repository.resolvePlayableSource(play)
 
     /** 本集画质面板（右侧竖版）：列实际下发档位（降序），当前档高亮；无档位/仅一档时提示后不弹。 */
     private fun showQualityDialog() {
@@ -421,10 +421,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
                 AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
-                val playable = resolvePlayable(play)
+                val source = resolvePlayable(play)
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)
-                startPlayer(playable)
+                startPlayer(source)
                 preloadFollowingEpisodes()
             } catch (e: CancellationException) {
                 throw e
@@ -439,13 +439,147 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** [revealControls]=false（默认）：进入播放/切集/切画质均保持控制栏隐藏，只有用户主动呼出才显示。 */
-    private fun startPlayer(url: String, revealControls: Boolean = false) {
+    /** 当前播放源（ClearKey 失败判定用）。 */
+    private var activeSource: HongguoRepository.PlayableSource? = null
+
+    /**
+     * ClearKey 流式解密源（HGTV 同款路线，2026-11-17 接入）：
+     * spade_a 派生的内容密钥包成 W3C ClearKey license JSON，
+     * [androidx.media3.exoplayer.drm.LocalMediaDrmCallback] 本地同步返回（不发网络）；
+     * Media3 Mp4Extractor 读 mp4 pssh/tenc 建 DrmSession，解密在 MediaDrm 硬件层随
+     * 解码流水线流式进行——起播只等 moov+首 GOP，不再整集下载 15-20 秒。
+     */
+    /** DRM 会话管理器缓存（同 key/kid 复用）：竞态重试时复用已 open 的会话，
+     *  codec 初始化即刻拿到 MediaCrypto，不再重演 mCrypto 竞态。 */
+    private var cachedDrmManager: androidx.media3.exoplayer.drm.DefaultDrmSessionManager? = null
+    private var cachedDrmFingerprint: String? = null
+
+    private fun buildClearKeyMediaSource(source: HongguoRepository.PlayableSource): androidx.media3.exoplayer.source.MediaSource {
+        val fingerprint = "${source.keyHex}|${source.kidHex}"
+        var drmSessionManager = cachedDrmManager?.takeIf { cachedDrmFingerprint == fingerprint }
+        if (drmSessionManager == null) {
+            AppLog.d("Hongguo", "clearkey src url=${source.uri.take(180)} kid=${source.kidHex}")
+            val keyB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.keyHex!!))
+            val kidB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.kidHex!!))
+            val license = """{"keys":[{"kty":"oct","k":"$keyB64","kid":"$kidB64"}],"type":"temporary"}"""
+            val drmCallback = androidx.media3.exoplayer.drm.LocalMediaDrmCallback(license.toByteArray(Charsets.UTF_8))
+            drmSessionManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
+                .setUuidAndExoMediaDrmProvider(
+                    androidx.media3.common.C.CLEARKEY_UUID,
+                    androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER
+                )
+                .build(drmCallback)
+            cachedDrmManager = drmSessionManager
+            cachedDrmFingerprint = fingerprint
+        }
+        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent(CENC_DOWNLOAD_UA)
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(20_000)
+            .setAllowCrossProtocolRedirects(true)
+        // pssh 注入层：红果 CENC 流无 pssh（KID 只在 tenc），media3 拿不到
+        // DrmInitData 不会激活解密管线；流头部注入 PSSH v1（stco 同步 +52 修正）
+        val dataSourceFactory = androidx.media3.datasource.DataSource.Factory {
+            com.mytvb.feature.hongguo.net.CencPsshDataSource(
+                httpFactory.createDataSource(), source.kidHex!!
+            )
+        }
+        // MediaItem 带 DrmConfiguration（licenseUri 占位不实际使用）+ DefaultMediaSourceFactory
+        // 官方完整 DRM 链（与 DASH 同路径）：renderer 在密钥就绪前等待，防 codec 先起
+        // "queuing secure buffer without mCrypto" 崩溃；实际签名回调仍是 LocalMediaDrmCallback
+        val mediaItem = MediaItem.Builder()
+            .setUri(source.uri)
+            .setDrmConfiguration(
+                MediaItem.DrmConfiguration.Builder(androidx.media3.common.C.CLEARKEY_UUID)
+                    .setLicenseUri("https://127.0.0.1/clearkey-placeholder")
+                    .setForceSessionsForAudioAndVideoTracks(true)
+                    .build()
+            )
+            .build()
+        return androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+            dataSourceFactory,
+            // CENC progressive fork（MyTVB）：media3 官方 Mp4Extractor 不支持样本表加密
+            // （moov 样本的 cryptoData 恒 null + NAL 转换破坏密文），fork 版补齐
+            androidx.media3.extractor.ExtractorsFactory {
+                arrayOf(com.mytvb.feature.hongguo.mp4fork.Mp4Extractor())
+            }
+        )
+            .setDrmSessionManagerProvider { drmSessionManager }
+            .createMediaSource(mediaItem)
+    }
+
+    private fun base64UrlNoPad(bytes: ByteArray): String =
+        android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+
+    /** ClearKey 播放失败回落：整集下载解密再播一次（每源仅一次）。 */
+    private var clearKeyFallbackTried = false
+    /** ClearKey 首次失败的轻量重试（codec init 与密钥就绪的一次性竞态，重试即成）。 */
+    private var clearKeyRetryTried = false
+    private fun maybeFallbackFromClearKey(error: Exception): Boolean {
+        val source = activeSource ?: return false
+        if (source.keyHex == null || source.kidHex == null) return false
+        if (clearKeyFallbackTried) return false
+        val play = currentPlay ?: return false
+        // 竞态类错误（"queuing secure buffer without mCrypto"）：session 此刻已就绪，
+        // 同源重建 player 即可，不必走整集下载
+        if (!clearKeyRetryTried) {
+            clearKeyRetryTried = true
+            AppLog.w("Hongguo", "clearkey race (${error.message}), retry same source vid=${play.vid}")
+            binding.root.postDelayed({ startPlayer(source, resetFallback = false) }, 300)
+            return true
+        }
+        clearKeyFallbackTried = true
+        AppLog.w("Hongguo", "clearkey play fail (${error.message}), fallback to full download vid=${play.vid}")
+        lifecycleScope.launch {
+            try {
+                binding.progressBuffering.visibility = View.VISIBLE
+                val uri = repository.fallbackDownload(play)
+                startPlayer(HongguoRepository.PlayableSource(uri, null, null))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppToast.show(this@HongguoPlayerActivity, e.message ?: getString(R.string.hongguo_play_failed))
+                finish()
+            } finally {
+                binding.progressBuffering.visibility = View.GONE
+            }
+        }
+        return true
+    }
+
+    /** [revealControls]=false（默认）：进入播放/切集/切画质均保持控制栏隐藏，只有用户主动呼出才显示。
+     *  ClearKey 源（keyHex/kidHex 非空）走 MediaDrm 流式解密（HGTV 同款秒开路线），
+     *  失败在 [maybeFallbackFromClearKey] 回落整集下载解密重试。 */
+    private fun startPlayer(source: HongguoRepository.PlayableSource, revealControls: Boolean = false, resetFallback: Boolean = true) {
+        if (resetFallback) {
+            clearKeyFallbackTried = false
+            clearKeyRetryTried = false
+        }
         player?.release()
         val p = ExoPlayer.Builder(this).build()
         player = p
+        activeSource = source
         binding.playerView.player = p
-        p.setMediaItem(MediaItem.fromUri(url))
+        if (source.keyHex != null && source.kidHex != null) {
+            p.setMediaSource(buildClearKeyMediaSource(source))
+        } else {
+            p.setMediaItem(MediaItem.fromUri(source.uri))
+        }
+        // DRM 链路诊断（ClearKey 流式）：会话获取/密钥加载/错误一次看清
+        p.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onDrmSessionAcquired(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
+                AppLog.d("Hongguo", "drm session acquired state=$state")
+            }
+            override fun onDrmKeysLoaded(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime) {
+                AppLog.d("Hongguo", "drm keys loaded")
+            }
+            override fun onDrmSessionManagerError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, error: Exception) {
+                AppLog.w("Hongguo", "drm session manager error", error)
+            }
+            override fun onDrmKeysRestored(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime) {
+                AppLog.d("Hongguo", "drm keys restored")
+            }
+        })
         p.prepare()
         if (resumeMs > 0) p.seekTo(resumeMs)
         p.playWhenReady = true
@@ -469,6 +603,12 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 updatePauseBigIcon()
             }
 
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                tracks.groups.forEach { g ->
+                    AppLog.d("Hongguo", "track fmt=${g.getTrackFormat(0)}")
+                }
+            }
+
             // 画质对账：解码器实测分辨率，与 play picked 的接口标签/元数据对照，
             // 验证服务端 quality 标签（如 1080P）是否虚标（2026-11-15 画质核查）
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -490,6 +630,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLog.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
+                // ClearKey 源失败先回落整集下载解密（每源一次），仍失败才报错退出
+                if (maybeFallbackFromClearKey(error)) return
                 AppToast.show(this@HongguoPlayerActivity, getString(R.string.hongguo_play_error, error.errorCodeName))
             }
         })
@@ -1256,6 +1398,9 @@ class HongguoPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        /** CDN 直链下载 UA（与整集下载同款，Repository.downloadDecryptLand 实测可用）。 */
+        private const val CENC_DOWNLOAD_UA =
+            "com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR)"
         private const val EXTRA_SERIES_ID = "hg_series_id"
         private const val EXTRA_TITLE = "hg_title"
         private const val EXTRA_COVER = "hg_cover"

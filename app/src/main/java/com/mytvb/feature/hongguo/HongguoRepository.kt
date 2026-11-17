@@ -562,6 +562,45 @@ class HongguoRepository private constructor(context: Context) {
         }
     }
 
+    // ---- ClearKey 流式解密（2026-11-17 起）：加密流不再整集下载，直链边下边解边播 ----
+
+    /** 播放源决策结果：[keyHex]/[kidHex] 非空 = ClearKey DRM 直链流式播（MediaDrm
+     *  硬件层解密，起播只等 moov+首 GOP）；否则 uri 已是可播地址（明文直链/本地解密文件）。 */
+    class PlayableSource(val uri: String, val keyHex: String?, val kidHex: String?)
+
+    /**
+     * 播放地址 → 播放源三级决策：
+     * 1. 明文流：直链原样返回；
+     * 2. 加密流预取/缓存命中（解密落地文件）：本地 URI（秒开）；
+     * 3. 加密流未落地且 ClearKey 可用（API≥27 + kid 下发）：**直链 + 密钥** 流式播，
+     *    替代旧「整集下载+解密」的 15-20 秒起播等待（CDN ~330KB/s 全下 5-9MB）；
+     * 4. 兜底：ClearKey 不可用（老设备无 kid）走 [resolvePlayableFile] 整集下载解密。
+     * 预取链路（[preloadNextEpisodes]）仍走整集落地，与流式播并存：命中秒开、未命中流式。
+     */
+    suspend fun resolvePlayableSource(play: HongguoPlay.PlayUrl): PlayableSource {
+        val keyHex = play.contentKeyHex ?: return PlayableSource(play.url, null, null)
+        val outFile = java.io.File(HongguoMediaCache.dir(appContext), cachedName(play))
+        if (outFile.isFile && outFile.length() > 0) {
+            return PlayableSource(android.net.Uri.fromFile(outFile).toString(), null, null)
+        }
+        val kidHex = play.kidHex
+        if (android.os.Build.VERSION.SDK_INT >= 27 && !kidHex.isNullOrEmpty()) {
+            AppLog.d("Hongguo", "play clearkey stream vid=${play.vid} q=${play.pixels}")
+            return PlayableSource(play.url, keyHex, kidHex)
+        }
+        return try {
+            resolvePlayableFile(play).let { PlayableSource(it, null, null) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLog.w("Hongguo", "fallback download fail: ${e.message}")
+            PlayableSource(play.url, null, null)
+        }
+    }
+
+    /** 兜底整集下载解密（ClearKey 播放失败时的重试路径，Activity 调用）。 */
+    suspend fun fallbackDownload(play: HongguoPlay.PlayUrl): String = resolvePlayableFile(play)
+
     /** 下载整集 + 解密 + 原子落地（tmp 改名防半截文件被缓存命中）+ 落地后 LRU 修剪。 */
     private fun downloadDecryptLand(play: HongguoPlay.PlayUrl, key: ByteArray, outFile: java.io.File): String {
         AppLog.d("Hongguo", "cenc download start ${play.vid} q=${play.pixels}")

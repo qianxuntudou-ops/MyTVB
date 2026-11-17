@@ -164,8 +164,8 @@ object HongguoDeviceRegister {
         val header = JSONObject()
         header.put("aid", 8662)
         header.put("access", "wifi")
-        header.put("app_version", "7.3.9.32")
-        header.put("app_version_minor", "7.3.9.32")
+        header.put("app_version", "7.4.3.32")
+        header.put("app_version_minor", "7.4.3.32")
         header.put("channel", HongguoEnv.CHANNEL)
         header.put("device_brand", HongguoEnv.deviceBrand)
         header.put("device_manufacturer", HongguoEnv.deviceBrand)
@@ -184,9 +184,9 @@ object HongguoDeviceRegister {
         header.put("tz_offset", 28800)
         header.put("region", "CN")
         header.put("package", "com.phoenix.read")
-        header.put("version_code", 73932)
-        header.put("manifest_version_code", 73932)
-        header.put("update_version_code", 73932)
+        header.put("version_code", 74332)
+        header.put("manifest_version_code", 74332)
+        header.put("update_version_code", 74332)
         header.put("apk_first_install_time", session.deviceCreated)
         header.put("cdid", session.cdid)
         header.put("clientudid", session.clientUdid)
@@ -249,11 +249,11 @@ object HongguoDeviceRegister {
         q["channel"] = HongguoEnv.CHANNEL; q["device_brand"] = HongguoEnv.deviceBrand
         q["device_platform"] = "android"; q["device_type"] = HongguoEnv.deviceType
         q["dpi"] = HongguoEnv.dpi; q["language"] = "zh"
-        q["manifest_version_code"] = "73932"; q["os"] = "android"
+        q["manifest_version_code"] = "74332"; q["os"] = "android"
         q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
         q["resolution"] = HongguoEnv.resolution; q["ssmix"] = "a"
-        q["update_version_code"] = "73932"; q["version_code"] = "73932"
-        q["version_name"] = "7.3.9.32"
+        q["update_version_code"] = "74332"; q["version_code"] = "74332"
+        q["version_name"] = "7.4.3.32"
         q["cdid"] = session.cdid
         q["openudid"] = session.openUdid
         q["tt_data"] = "a"
