@@ -68,11 +68,11 @@ class PlaybackEndPanelController(
         // 空列表时 getItemViewType(0) 取不到 viewType，共享池设置须等数据就位后执行（幂等）
         VideoRecyclerViewTuning.apply(recyclerView, adapter)
         // 焦点固定给重播按钮：与官方播完页一致，取消连播后最可能的动作是重播或挑一个推荐。
-        // 设备处于触摸模式（tap 过页面）时同步 requestFocus 会静默失败，post 一帧重试兜底
+        // 同步 requestFocus + 无条件 post 重试：触摸模式下同步请求会静默失败；若此前有
+        // 面板 dismiss 调度的延迟焦点恢复 post（issue#119 追加反馈）排在本帧之后执行，
+        // 会把焦点抢回控制栏，这一帧保证焦点最终落回重播按钮
         val focusTaken = replayButton.requestFocus()
-        if (!focusTaken) {
-            replayButton.post { replayButton.requestFocus() }
-        }
+        replayButton.post { replayButton.requestFocus() }
         AppLog.i(TAG, "end panel show: items=${items.size} focusTaken=$focusTaken")
     }
 
@@ -80,6 +80,19 @@ class PlaybackEndPanelController(
         if (!panel.isVisible) return
         AppLog.i(TAG, "end panel hide")
         panel.visibility = View.GONE
+    }
+
+    /**
+     * 重新把焦点交给重播按钮：面板 show 时若焦点正被顶层窗口（评论/选集等 Dialog）
+     * 持有，requestFocus 会静默失败；等该窗口关闭、宿主要恢复焦点前调用本方法接管
+     * （issue#119 追加反馈：评论区开着播完，返回后焦点落在播放器而非重播按钮）。
+     */
+    fun refocusReplay() {
+        val focusTaken = replayButton.requestFocus()
+        // 无条件补一帧重试：可能存在面板 dismiss 调度的延迟焦点恢复 post 排在后面，
+        // 其执行会把焦点抢走，这里保证最终落回重播按钮（requestFocus 幂等）
+        replayButton.post { replayButton.requestFocus() }
+        AppLog.i(TAG, "end panel refocusReplay focusTaken=$focusTaken")
     }
 
     private companion object {

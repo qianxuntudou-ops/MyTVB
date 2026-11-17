@@ -1122,7 +1122,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             },
             onOpenFragmentFromHost = { _, _ -> },
             onHideNextPreview = { autoPlayController.hideNextPreview() },
-            isViewActive = { true }
+            isViewActive = { true },
+            onPanelDismissedFocusIntercept = {
+                // 播完推荐页已在面板后面等着（如评论区开着时视频播完）：
+                // 关掉面板后焦点交给重播按钮，而不是恢复到面板打开前的控制栏焦点
+                if (playbackEndPanelController.isShowing()) {
+                    playbackEndPanelController.refocusReplay()
+                    true
+                } else {
+                    false
+                }
+            }
         )
         resumeHintController = VideoPlayerResumeHintController(
             activity = this,

@@ -50,7 +50,14 @@ class VideoPlayerOverlayController(
     private val onPlayRelatedVideo: (VideoModel, List<VideoModel>) -> Unit,
     private val onOpenFragmentFromHost: (Fragment, String) -> Unit,
     private val onHideNextPreview: () -> Unit,
-    private val isViewActive: () -> Boolean
+    private val isViewActive: () -> Boolean,
+    /**
+     * 面板（Dialog）关闭恢复焦点前的拦截钩子：返回 true 表示焦点已被别的覆盖层
+     * 接管（播放结束推荐页），跳过默认的「恢复到面板打开前控制栏焦点」——否则
+     * 评论区开着时视频播完，返回后焦点会落在播放器而不是结束页的重播按钮
+     * （issue#119 追加反馈）。
+     */
+    private val onPanelDismissedFocusIntercept: (() -> Boolean)? = null
 ) {
 
     /** 当前面板打开时控制栏处于隐藏态且未强制拉起（隐藏态 UP 直达），关闭后应保持隐藏。 */
@@ -588,6 +595,11 @@ class VideoPlayerOverlayController(
         controllerWasHiddenForOverlay = false
         if (!keepHidden && !playerView.isControllerFullyVisible()) {
             playerView.showController()
+        }
+        if (onPanelDismissedFocusIntercept?.invoke() == true) {
+            // 播放结束推荐页正显示：焦点已由其重播按钮接管，不再恢复面板打开前的控制栏焦点
+            playerView.setControllerHideCallbacksSuspended(false)
+            return
         }
         // 延迟请求焦点，等控制器完全显示后再恢复，避免控制器还在隐藏/动画状态导致焦点请求失败
         playerView.post {
