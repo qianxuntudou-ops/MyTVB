@@ -122,8 +122,11 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
     private var pendingFocusAid: Long = 0
 
-    private enum class PlaybackSource { NONE, PLAY_BUTTON, UGC_CARD }
+    private enum class PlaybackSource { NONE, PLAY_BUTTON, UGC_CARD, RELATED_CARD }
     private var lastPlaybackSource = PlaybackSource.NONE
+
+    /** 点推荐视频进播放页/新详情页前记录的 aid，返回时焦点回该推荐卡片（issue#119）。 */
+    private var lastRelatedFocusAid = 0L
 
     private var actionDialog: PlayerActionDialog? = null
     private var ownerDetailDialog: OwnerDetailDialog? = null
@@ -191,6 +194,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                     val currentAid = videoView?.aid ?: videoModel?.aid ?: return@postDelayed
                     focusUgcCardByAid(currentAid)
                 }
+                PlaybackSource.RELATED_CARD -> focusRelatedCardByAid(lastRelatedFocusAid)
                 else -> {}
             }
         }, 150)
@@ -221,6 +225,44 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 return
             }
         }
+    }
+
+    /** 返回详情页后焦点回推荐视频区：按记录的 aid 在 Related lane 内聚焦对应卡片。 */
+    private fun focusRelatedCardByAid(targetAid: Long, retry: Int = 2) {
+        val binding = _binding ?: return
+        if (targetAid <= 0L) return
+        val recyclerView = binding.recyclerView
+        val relatedRow = contentAdapter.currentList.indexOfFirst {
+            it is VideoDetailContentAdapter.Row.Related
+        }
+        AppLog.d(TAG, "focusRelatedCardByAid: targetAid=$targetAid relatedRow=$relatedRow retry=$retry")
+        if (relatedRow < 0) return
+        val laneHolder = recyclerView.findViewHolderForAdapterPosition(relatedRow)
+            as? VideoDetailContentAdapter.RelatedLaneViewHolder
+        if (laneHolder == null) {
+            // Related 行在屏外未布局：滚到行位置后异步重试（限次，防布局未稳定时死循环）
+            if (retry <= 0) {
+                AppLog.d(TAG, "focusRelatedCardByAid: give up, lane holder not laid out")
+                return
+            }
+            recyclerView.scrollToPosition(relatedRow)
+            recyclerView.postDelayed({
+                if (canTouchView()) focusRelatedCardByAid(targetAid, retry - 1)
+            }, 120)
+            return
+        }
+        val innerRv = laneHolder.innerRecyclerView
+        val adapter = innerRv.adapter as? VideoAdapter ?: return
+        for (i in 0 until innerRv.childCount) {
+            val child = innerRv.getChildAt(i)
+            val vh = innerRv.getChildViewHolder(child)
+            if (adapter.getItem(vh.bindingAdapterPosition)?.aid == targetAid) {
+                child.requestFocus()
+                AppLog.d(TAG, "focusRelatedCardByAid: focused pos=$i")
+                return
+            }
+        }
+        AppLog.d(TAG, "focusRelatedCardByAid: aid not found in lane children=${innerRv.childCount}")
     }
 
     private fun setupViews() {
@@ -742,6 +784,8 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
     private fun onRelatedVideoClicked(model: VideoModel) {
         if (model.aid != 0L || model.bvid.isNotBlank()) {
+            lastPlaybackSource = PlaybackSource.RELATED_CARD
+            lastRelatedFocusAid = model.aid
             val relatedRow = contentAdapter.currentList
                 .find { it is VideoDetailContentAdapter.Row.Related } as? VideoDetailContentAdapter.Row.Related
             VideoRouteNavigator.openVideo(

@@ -54,8 +54,14 @@ object VideoRouteNavigator {
                 // 接口加载，番剧单集返回的数据没有 ugcSeason，选集/预告/花絮整个
                 // 不显示（v2.1.14 反馈：历史页点进看过的番剧下方空白）。历史条目的
                 // seasonId 由 uri(/bangumi/play/ssXXXX) 解析、epId=history.epid。
-                if (video.isPgc && video.playbackSeasonId > 0L) {
-                    AppLog.d(TAG, "openVideo: pgc route seasonId=${video.playbackSeasonId} epId=${video.playbackEpId}")
+                // 但 isPgc 不可单独作判据：view 接口的 related/推荐卡片对普通 UGC
+                // 视频也下发 season_type=1 + sid，playbackSeasonId 会非零（issue#119
+                // 「点推荐视频啥都木有」），误走番剧路由后 getSeriesDetail 返回 -404。
+                // 只认显式集 id、番剧 uri、goto=pgc 三种番剧特征。
+                if (video.isPgc && video.playbackSeasonId > 0L && hasExplicitPgcEntry(video)) {
+                    AppLog.d(TAG, "openVideo: pgc route seasonId=${video.playbackSeasonId} epId=${video.playbackEpId}" +
+                        " goto=${video.goto} sid=${video.sid} epid=${video.epid} seasonType=${video.seasonType}" +
+                        " isOgv=${video.isOgv} redirect=${video.redirectUrl.take(60)}")
                     hostActivity.openInHostContainer(
                         SeriesDetailFragment.newInstance(
                             seasonId = video.playbackSeasonId,
@@ -129,6 +135,13 @@ object VideoRouteNavigator {
             return false
         }
         return video.aid > 0L || video.bvid.isNotBlank()
+    }
+
+    /** 显式番剧特征：episode id、番剧 uri 或 goto=pgc。 */
+    private fun hasExplicitPgcEntry(video: VideoModel): Boolean {
+        return video.playbackEpId > 0L ||
+            video.redirectUrl.contains("/bangumi/play/") ||
+            video.goto.equals("pgc", ignoreCase = true)
     }
 
     private fun resolveLiveRoomId(historyVideo: HistoryVideoModel): Long? {

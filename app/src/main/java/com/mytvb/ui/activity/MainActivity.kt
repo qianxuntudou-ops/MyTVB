@@ -193,6 +193,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     /** 进入 CCTV 直播等独立 Activity 前置位；窗口焦点回来后检查焦点是否丢失并兜底恢复。 */
     private var pendingFocusRestoreAfterExternalReturn = false
+
+    /** 窗口被外部 Activity 覆盖前的焦点锚点：返回后整树无焦点时按此恢复（issue#119）。 */
+    private var lastExternalFocusAnchor: WeakReference<View>? = null
+
+    /** 是否真丢过窗口焦点：首启从未失焦，不参与外部返回兜底。 */
+    private var hasEverLostWindowFocus = false
     private val focusRestoreAnchors = ArrayDeque<FocusRestoreAnchor>()
     private var lastBackStackEntryCount = 0
     private var pendingFocusRestoreDelayMs = 0L
@@ -1278,6 +1284,13 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         super.onWindowFocusChanged(hasFocus)
         AppLog.i(TEEN_REST_DIAG_TAG, "onWindowFocusChanged hasFocus=$hasFocus")
         dumpTeenRestOverlayState("onWindowFocusChanged($hasFocus)")
+        if (!hasFocus) {
+            // 被外部 Activity（播放器/直播）覆盖前记录焦点锚点：覆盖期间原焦点视图
+            // 若被列表重绑或清焦，返回后整树无焦点，按此锚点恢复（issue#119）
+            lastExternalFocusAnchor = currentFocus?.let { WeakReference(it) }
+            hasEverLostWindowFocus = true
+            return
+        }
         // 从 MarmotLiveActivity 返回后系统自动焦点回落并不可靠（独立 Activity，无任何
         // 恢复回调可挂），窗口焦点回来后若整棵视图树无焦点视图则兜底拉回侧栏当前 tab 按钮；
         // 焦点仍有时不动，避免改变播放器等其它返回路径的正常回落行为。
@@ -1301,6 +1314,25 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 if (focused == null || !focused.isShown) {
                     focusSidebarCurrentTab()
                 }
+            }
+            return
+        }
+        // 播放页等外部 Activity 返回的通用兜底（issue#119）：视频播完自动退出不经过
+        // 任何返回回调，覆盖期间原焦点视图丢失时整树无焦点，方向键全部无响应。
+        // 仅在确实丢过窗口焦点且回来后仍无焦点视图时介入，首启/正常回落不受影响。
+        if (hasEverLostWindowFocus) {
+            binding.root.post {
+                val focused = currentFocus
+                if (focused != null && focused.isShown) return@post
+                AppLog.d("FocusTrace", "restoreAfterExternalReturn no-focus tree, anchor=${lastExternalFocusAnchor?.get()?.javaClass?.simpleName}")
+                val anchor = lastExternalFocusAnchor?.get()
+                if (anchor != null && anchor.isAttachedToWindow && anchor.isShown &&
+                    anchor.isFocusable && anchor.requestFocus()
+                ) {
+                    return@post
+                }
+                if (focusCurrentMainContent(anchor)) return@post
+                focusSidebarCurrentTab()
             }
         }
     }

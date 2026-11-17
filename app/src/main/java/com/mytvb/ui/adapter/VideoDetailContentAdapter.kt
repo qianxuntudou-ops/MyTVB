@@ -732,6 +732,8 @@ internal class VideoDetailContentAdapter(
         private val upperRowIsLane: (RecyclerView.ViewHolder) -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        val innerRecyclerView: RecyclerView get() = binding.recyclerView
+
         private var tvFocusController: TvListFocusController? = null
         private val videoAdapter = VideoAdapter(
             itemWidthPx = ScreenUtils.getScreenWidth(binding.root.context) / 5,
