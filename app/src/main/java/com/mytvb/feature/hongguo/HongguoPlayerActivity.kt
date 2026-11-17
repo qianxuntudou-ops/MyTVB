@@ -26,6 +26,7 @@ import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.core.common.settings.ExitDoubleConfirm
 import com.mytvb.core.ui.base.AppToast
+import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
 import com.mytvb.feature.player.settings.PlayerSettingsStore
@@ -60,6 +61,13 @@ import kotlinx.coroutines.withContext
  *   打开即聚焦当前项、关面板焦点回来源按钮、面板期间控制栏不隐藏；倍速会话级（切集保持）
  */
 class HongguoPlayerActivity : AppCompatActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        // 不继承 BaseActivity 的独立宿主须自行钉密度：px 尺寸池按 UiScale 设计倍率渲染，
+        // 缺此调用时布局按设备真实 density（如 MuMu 2.0 vs 设计 1.333）放大 1.5 倍，控制栏巨大
+        UiScale.apply(newBase.resources, "hongguo_player")
+        super.attachBaseContext(newBase)
+    }
 
     private lateinit var binding: ActivityHongguoPlayerBinding
     private val repository by lazy { HongguoRepository.get(this) }
