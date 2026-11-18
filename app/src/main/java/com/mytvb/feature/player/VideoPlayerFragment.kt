@@ -642,7 +642,11 @@ class VideoPlayerFragment : Fragment() {
             textNext = textNext,
             countdownView = countdownView,
             canExecutePendingAction = { _binding != null && player?.playbackState == Player.STATE_ENDED },
-            onExecutePendingSession = { sessionId -> viewModel.playContinuation(sessionId) },
+            // 连播真正切换时才登记 currentVideo（倒计时取消则不登记），
+            // 否则 detail 回调以旧视频为 base 合并，评论区仍指向上一个视频
+            onExecutePendingSession = { sessionId ->
+                viewModel.playContinuation(sessionId)?.let(sessionCoordinator::updateCurrentVideo)
+            },
             onPendingActionCleared = { viewModel.clearPendingContinuation() }
         )
         playbackEndPanelController = PlaybackEndPanelController(

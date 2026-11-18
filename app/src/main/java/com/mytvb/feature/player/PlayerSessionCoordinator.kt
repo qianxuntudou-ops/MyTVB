@@ -186,7 +186,17 @@ class PlayerSessionCoordinator {
                                 seasonId = nextEpisode.seasonId.takeIf { it > 0L },
                                 source = PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN
                             ),
-                            episodeIndex = selectedEpisodeIndex + 1
+                            episodeIndex = selectedEpisodeIndex + 1,
+                            // 连播执行时由宿主登记 currentVideo（合集分集可能跨稿件，
+                            // aid 与上一集不同，缺了会让评论区等仍指向上一个视频）
+                            video = VideoModel(
+                                aid = nextEpisode.aid,
+                                bvid = nextEpisode.bvid,
+                                cid = nextEpisode.cid,
+                                title = nextEpisode.title,
+                                pic = nextEpisode.cover,
+                                duration = nextEpisode.duration
+                            )
                         )
                     )
                 } else {

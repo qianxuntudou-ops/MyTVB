@@ -1074,7 +1074,11 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             canExecutePendingAction = { player?.playbackState == Player.STATE_ENDED },
             onExecutePendingSession = { sessionId ->
                 // 公益广告锁死模式：禁止连播下一个，由 STATE_ENDED 直接 finish
-                if (!psasLocked) viewModel.playContinuation(sessionId)
+                // 连播真正切换时登记 currentVideo（倒计时取消则不登记），
+                // 否则 detail 回调以旧视频为 base 合并，评论区仍指向上一个视频
+                if (!psasLocked) {
+                    viewModel.playContinuation(sessionId)?.let(sessionCoordinator::updateCurrentVideo)
+                }
             },
             onPendingActionCleared = { viewModel.clearPendingContinuation() }
         )

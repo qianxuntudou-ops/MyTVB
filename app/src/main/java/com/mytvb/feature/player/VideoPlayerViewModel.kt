@@ -1633,16 +1633,21 @@ class VideoPlayerViewModel(
         AppLog.i(TAG, "continuation_cleared")
     }
 
-    fun playContinuation(sessionId: String) {
+    /**
+     * 执行连播切换。返回值=实际切到的目标视频（intent.video），供宿主登记
+     * sessionCoordinator.updateCurrentVideo——连播链路不经过手动切换的登记点，
+     * 缺了这步 detail 回调会以旧视频为 base 合并，评论区等仍指向上一个视频。
+     */
+    fun playContinuation(sessionId: String): VideoModel? {
         val intent = continuationSessions.remove(sessionId) ?: run {
             AppLog.w(TAG, "continuation_play_missing id=$sessionId")
-            return
+            return null
         }
         continuationSessions.clear()
         val identity = intent.target.toPlayRequestIdentity() ?: run {
             _error.value = appContext.getString(R.string.player_error_continuation_missing_id)
             AppLog.w(TAG, "continuation_play_failed id=$sessionId reason=invalid_identity")
-            return
+            return null
         }
         activePlaybackIntentId = intent.id
         pendingContinuationIntentId = intent.id
@@ -1660,6 +1665,7 @@ class VideoPlayerViewModel(
             message = "id=${intent.id} cid=${identity.cid} readyPreload=$hasReadyPreload runningPreload=$hasRunningPreload"
         )
         playContinuationIntent(intent, identity)
+        return intent.video
     }
 
     private fun playContinuationIntent(
