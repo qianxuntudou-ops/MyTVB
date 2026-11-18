@@ -167,7 +167,7 @@ internal class PlaybackFallbackController(
         if (errorType != PlaybackErrorType.DECODER) {
             context.cdnStates.filter { it.hasOpened() }.forEach { state ->
                 state.currentHostUrl()?.let { url ->
-                    CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.PLAYBACK_ERROR)
+                    CdnProfile.recordEvent(url, CdnProfile.CdnProfileEvent.PLAYBACK_ERROR)
                 }
             }
         }
@@ -208,9 +208,9 @@ internal class PlaybackFallbackController(
     /** 卡顿回调入口，返回是否已派发新 fallback。 */
     fun handlePlaybackStall(positionMs: Long, stalledMs: Long): Boolean {
         lastPlaybackPositionMs = positionMs.coerceAtLeast(0L)
-        // 卡顿降权：把当前正在用的 CDN host 记一条惩罚性 TTFB，让后续视频的 sortUrlsByLatency
-        // 把它排到 candidates 末尾，避免重复踩坑。借助 CdnLatencyProfile 的 5 条淘汰机制自动稀释，
-        // 一次卡顿不会判死刑。放在 fallback 重建之前，确保本次重建的 state 也是基于降权后的排序。
+        // 卡顿降权：对当前正在用的 CDN host 开惩罚窗口，让后续排序把它压到 candidates 末尾，
+        // 避免重复踩坑。惩罚窗口自动过期，一次卡顿不会判死刑。放在 fallback 重建之前，
+        // 确保本次重建的 state 也是基于降权后的排序。
         // 只罚 hasOpened 的 state：未用过的流（无缝目录其余档位）的 candidates[0] 是无辜 host。
         context.cdnStates.filter { it.hasOpened() }.forEach { it.penalizeCurrentHost() }
         val handled =
@@ -240,7 +240,7 @@ internal class PlaybackFallbackController(
         // 是主惩戒——它才是"喂不饱"的直接证据，坏事件计数口径压不住零报错的烂吞吐节点。
         context.cdnStates.filter { it.hasOpened() }.forEach { state ->
             state.currentHostUrl()?.let {
-                CdnHealthProfile.recordEvent(it, CdnHealthProfile.CdnHealthEvent.BUFFERING)
+                CdnProfile.recordEvent(it, CdnProfile.CdnProfileEvent.BUFFERING)
             }
             state.penalizeCurrentHost()
         }
@@ -317,7 +317,7 @@ internal class PlaybackFallbackController(
         // （cn-sccd 系好节点被记 fft 的来源）。首帧还没出时当前流必然 open 过（数据请求已发出）。
         context.cdnStates.filter { it.hasOpened() }.forEach { state ->
             state.currentHostUrl()?.let { url ->
-                CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.FIRST_FRAME_TIMEOUT)
+                CdnProfile.recordEvent(url, CdnProfile.CdnProfileEvent.FIRST_FRAME_TIMEOUT)
             }
         }
         return tryNextCdnInCurrentCodec(lastPlaybackPositionMs, reason = "first_frame_timeout") ||

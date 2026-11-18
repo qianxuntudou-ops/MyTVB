@@ -3367,26 +3367,37 @@ class VideoPlayerViewModel(
         fallbackController.handleNetworkStall(positionMs, stalledMs)
 
     /**
+     * 视频主承载流的 CDN state（供 CdnAdaptiveScheduler 的宿主快照采集）：
+     * 首个已 open 的视频流 state；无缝目录挂载时 cdnStates 含全部档位，未 open 的不算。
+     */
+    internal fun primaryVideoCdnState(): VideoPlayerCdnFailoverState? {
+        return currentCdnStates.firstOrNull { it.isVideoStream && it.hasOpened() }
+            ?: currentCdnStates.firstOrNull { it.isVideoStream }
+    }
+
+    /**
      * 双宿主 onPlaybackStateChanged 的 CDN 健康分回流：
      * READY 首次记成功(+25)；BUFFERING 只记播放中途的 rebuffer(-55)——
      * 起播阶段（未 READY 过）由首帧看门狗负责，seek 引起的缓冲不是线路的锅。
-     * 只归因到 video 主承载流的 state（states 首位），不给其余清晰度/音轨候选洗白。
-     * 同 host 的节流在 CdnHealthProfile 内部（30s 一条）。
+     * 只归因到 video 主承载流的 state，不给其余清晰度/音轨候选洗白。
+     * 同 host 的节流在 CdnProfile 内部（30s 一条）。
      */
     fun reportCdnPlaybackState(playbackState: Int, isSeeking: Boolean) {
+        val primaryVideoState = currentCdnStates.firstOrNull { it.isVideoStream }
+            ?: currentCdnStates.firstOrNull()
         when (playbackState) {
             Player.STATE_READY -> {
                 disarmFirstFrameWatchdog()
                 if (cdnSessionReadyRecorded) return
                 cdnSessionReadyRecorded = true
-                currentCdnStates.firstOrNull()?.currentHostUrl()?.let { url ->
-                    CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.READY)
+                primaryVideoState?.currentHostUrl()?.let { url ->
+                    CdnProfile.recordEvent(url, CdnProfile.CdnProfileEvent.READY)
                 }
             }
             Player.STATE_BUFFERING -> {
                 if (isSeeking || !cdnSessionReadyRecorded) return
-                currentCdnStates.firstOrNull()?.currentHostUrl()?.let { url ->
-                    CdnHealthProfile.recordEvent(url, CdnHealthProfile.CdnHealthEvent.BUFFERING)
+                primaryVideoState?.currentHostUrl()?.let { url ->
+                    CdnProfile.recordEvent(url, CdnProfile.CdnProfileEvent.BUFFERING)
                 }
             }
         }

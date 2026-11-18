@@ -41,17 +41,22 @@ internal class SeamlessDashMediaSourceFactory(
         val routeFactories = LinkedHashMap<String, DataSource.Factory>()
         val cdnStates = ArrayList<VideoPlayerCdnFailoverState>()
 
-        fun routeFactoryFor(urls: List<String>): DataSource.Factory {
-            // 同 VideoPlayerDashMediaSourceFactory 口径：候选按构建时刻最新健康分+TTFB 排序，
+        fun routeFactoryFor(urls: List<String>, bitrateBps: Long, isVideoStream: Boolean): DataSource.Factory {
+            // 同 VideoPlayerDashMediaSourceFactory 口径：候选按构建时刻最新画像+流码率排序，
             // open 失败的轮换顺序吃到最新降权。路由 key 仍用 representation.baseUrl 原值，不受影响。
-            val candidates = CdnLatencyProfile.sortUrlsByLatency(
+            val candidates = CdnProfile.rankCandidates(
                 urls
                     .map(urlNormalizer)
                     .filter { it.isNotBlank() }
-                    .distinct()
+                    .distinct(),
+                bitrateBps
             )
             if (candidates.size <= 1) return baseDataSourceFactory
-            val state = VideoPlayerCdnFailoverState(candidates = candidates.map(Uri::parse))
+            val state = VideoPlayerCdnFailoverState(
+                candidates = candidates.map(Uri::parse),
+                streamBitrateBps = bitrateBps,
+                isVideoStream = isVideoStream
+            )
             cdnStates.add(state)
             return VideoPlayerCdnFailoverDataSourceFactory(
                 upstreamFactory = baseDataSourceFactory,
@@ -61,11 +66,13 @@ internal class SeamlessDashMediaSourceFactory(
 
         catalog.options.forEach { option ->
             val urls = listOf(option.representation.baseUrl) + option.representation.backupUrls
-            routeFactories[canonicalUriKey(option.representation.baseUrl)] = routeFactoryFor(urls)
+            routeFactories[canonicalUriKey(option.representation.baseUrl)] =
+                routeFactoryFor(urls, option.representation.bandwidth, isVideoStream = true)
         }
         catalog.audioRepresentation?.let { audio ->
             val urls = listOf(audio.baseUrl) + audio.backupUrls
-            routeFactories[canonicalUriKey(audio.baseUrl)] = routeFactoryFor(urls)
+            routeFactories[canonicalUriKey(audio.baseUrl)] =
+                routeFactoryFor(urls, audio.bandwidth, isVideoStream = false)
         }
 
         val routedFactory = SeamlessDataSourceFactory(

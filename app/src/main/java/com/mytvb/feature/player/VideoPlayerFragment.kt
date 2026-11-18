@@ -64,6 +64,9 @@ import com.mytvb.core.common.time.TimeUtils
 import com.mytvb.core.ui.base.ScaledTextView
 import com.mytvb.core.ui.navigation.navigateBackFromUi
 import com.mytvb.core.ui.system.ViewUtils
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
@@ -711,6 +714,18 @@ class VideoPlayerFragment : Fragment() {
         )
     }
 
+    // ===== CDN 预测性调度（双宿主共用 Host，见 CdnAdaptiveSchedulerHost）=====
+
+    private var cdnAdaptiveSchedulerHost: CdnAdaptiveSchedulerHost? = null
+
+    private fun startCdnAdaptiveScheduler() {
+        cdnAdaptiveSchedulerHost = CdnAdaptiveSchedulerHost(
+            lifecycleOwner = viewLifecycleOwner,
+            playerProvider = { player },
+            viewModelProvider = { viewModel }
+        ).also { it.start() }
+    }
+
     private fun setupPlayer() {
         val startMs = SystemClock.elapsedRealtime()
         AppLog.i("VideoPlayerViewModel", "PLAYER_PERF setupPlayer() called")
@@ -723,6 +738,7 @@ class VideoPlayerFragment : Fragment() {
             it.addAnalyticsListener(playerPerfListener)
         }
         playerView.setPlayer(player)
+        startCdnAdaptiveScheduler()
         playerView.setRenderEventListener(object : MyPlayerView.RenderEventListener {
             override fun onRenderedFirstFrame() {
                 val trace = playerPerfTrace
@@ -1890,6 +1906,8 @@ class VideoPlayerFragment : Fragment() {
         // playerPerfListener 此前未移除：player 是 PlayerInstancePool 的共享单例，
         // 不移除会跨 Fragment 重建累积泄漏，每次重建都叠加一份 AnalyticsListener。
         player?.removeAnalyticsListener(playerPerfListener)
+        cdnAdaptiveSchedulerHost?.stop()
+        cdnAdaptiveSchedulerHost = null
         playerView.destroy()
         playerView.stopDanmaku()
         // player 归还共享池前恢复空降静音的原音量，避免静音态串到下一个会话

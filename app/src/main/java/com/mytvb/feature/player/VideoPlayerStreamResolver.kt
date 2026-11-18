@@ -99,7 +99,7 @@ internal class VideoPlayerStreamResolver(
             "mimeType=${selectedAudio?.realMimeType} codecs=${selectedAudio?.codecs} bandwidth=${selectedAudio?.bandwidth} " +
             "requestedId=$selectedAudioId fallback=${selectedAudio?.id != selectedAudioId}")
         val audioUrls = selectedAudio
-            ?.let { CdnLatencyProfile.sortUrlsByLatency(buildDistinctUrls(it.realBaseUrl, it.realBackupUrl)) }
+            ?.let { CdnProfile.rankCandidates(buildDistinctUrls(it.realBaseUrl, it.realBackupUrl), it.bandwidth) }
             .orEmpty()
         val audioRepresentation = selectedAudio?.let { audio ->
             DashRepresentation(
@@ -132,8 +132,9 @@ internal class VideoPlayerStreamResolver(
                 .orEmpty()
                 .maxByOrNull { it.bandwidth }
                 ?: return@mapNotNull null
-            val videoUrls = CdnLatencyProfile.sortUrlsByLatency(
-                buildDistinctUrls(selectedVideo.realBaseUrl, selectedVideo.realBackupUrl)
+            val videoUrls = CdnProfile.rankCandidates(
+                buildDistinctUrls(selectedVideo.realBaseUrl, selectedVideo.realBackupUrl),
+                selectedVideo.bandwidth
             )
             if (videoUrls.isEmpty()) return@mapNotNull null
             DashRoute(
@@ -205,8 +206,9 @@ internal class VideoPlayerStreamResolver(
             .groupBy { it.id to it.codecId }
             .mapNotNull { (_, streams) ->
                 val video = streams.maxByOrNull { it.bandwidth } ?: return@mapNotNull null
-                val urls = CdnLatencyProfile.sortUrlsByLatency(
-                    buildDistinctUrls(video.realBaseUrl, video.realBackupUrl)
+                val urls = CdnProfile.rankCandidates(
+                    buildDistinctUrls(video.realBaseUrl, video.realBackupUrl),
+                    video.bandwidth
                 )
                 if (urls.isEmpty()) return@mapNotNull null
                 SeamlessVideoOption(
@@ -237,8 +239,9 @@ internal class VideoPlayerStreamResolver(
 
         // 音轨选择与 resolveDashRoutePlan 保持一致：请求 id 优先，缺省取最高带宽。
         val selectedAudio = selectAudioTrack(playInfo, selectedAudioId) ?: return null
-        val audioUrls = CdnLatencyProfile.sortUrlsByLatency(
-            buildDistinctUrls(selectedAudio.realBaseUrl, selectedAudio.realBackupUrl)
+        val audioUrls = CdnProfile.rankCandidates(
+            buildDistinctUrls(selectedAudio.realBaseUrl, selectedAudio.realBackupUrl),
+            selectedAudio.bandwidth
         )
         if (audioUrls.isEmpty()) return null
         val audioRepresentation = DashRepresentation(
@@ -452,25 +455,29 @@ internal class VideoPlayerStreamResolver(
             val selectedAudio = selectAudioTrack(playInfo, selectedAudioId)
             AppLog.i(TAG, "buildMediaSource audio: id=${selectedAudio?.id} mimeType=${selectedAudio?.realMimeType} " +
                 "codecs=${selectedAudio?.codecs} bandwidth=${selectedAudio?.bandwidth}")
-            val videoUrls = CdnLatencyProfile.sortUrlsByLatency(
+            val videoUrls = CdnProfile.rankCandidates(
                 buildDistinctUrls(
                     primaryUrl = selectedVideo.realBaseUrl,
                     backupUrls = selectedVideo.realBackupUrl
-                )
+                ),
+                selectedVideo.bandwidth
             )
             val audioUrls = selectedAudio?.let {
-                CdnLatencyProfile.sortUrlsByLatency(
+                CdnProfile.rankCandidates(
                     buildDistinctUrls(
                         primaryUrl = it.realBaseUrl,
                         backupUrls = it.realBackupUrl
-                    )
+                    ),
+                    it.bandwidth
                 )
             }.orEmpty()
             val sourceWithState = createMediaSource(
                 videoUrls = videoUrls,
                 audioUrls = audioUrls,
                 videoMimeType = selectedVideo.realMimeType,
-                audioMimeType = selectedAudio?.realMimeType.orEmpty()
+                audioMimeType = selectedAudio?.realMimeType.orEmpty(),
+                videoBitrateBps = selectedVideo.bandwidth,
+                audioBitrateBps = selectedAudio?.bandwidth ?: 0L
             )
             return MediaSourceSelection(
                 mediaSource = sourceWithState.mediaSource,
@@ -498,7 +505,10 @@ internal class VideoPlayerStreamResolver(
         val segmentSources = durlSegments.map { segment ->
             createProgressiveSource(
                 urls = buildDistinctUrls(primaryUrl = segment.url, backupUrls = segment.backupUrl),
-                mimeType = durlMimeType
+                mimeType = durlMimeType,
+                // durl 无独立码率字段，按段大小/时长折算：size(bytes)×8000/length(ms) = bps
+                bitrateBps = if (segment.length > 0L) segment.size * 8000L / segment.length else 0L,
+                isVideoStream = true
             )
         }
         val durlMediaSource = if (segmentSources.size == 1) {
@@ -524,10 +534,12 @@ internal class VideoPlayerStreamResolver(
         selectedCodec: VideoCodecEnum?
     ): MediaSourceSelection {
         val sourceWithState = createMediaSource(
-            videoUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.videoUrls, videoUrl)),
-            audioUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.audioUrls, audioUrl)),
+            videoUrls = CdnProfile.rankCandidates(prioritizeUrl(route.videoUrls, videoUrl), route.videoDescriptor.bandwidth),
+            audioUrls = CdnProfile.rankCandidates(prioritizeUrl(route.audioUrls, audioUrl), route.audioDescriptor?.bandwidth ?: 0L),
             videoMimeType = route.videoDescriptor.mimeType,
-            audioMimeType = route.audioDescriptor?.mimeType.orEmpty()
+            audioMimeType = route.audioDescriptor?.mimeType.orEmpty(),
+            videoBitrateBps = route.videoDescriptor.bandwidth,
+            audioBitrateBps = route.audioDescriptor?.bandwidth ?: 0L
         )
         return MediaSourceSelection(
             mediaSource = sourceWithState.mediaSource,
@@ -762,7 +774,9 @@ internal class VideoPlayerStreamResolver(
         videoUrls: List<String>,
         audioUrls: List<String>,
         videoMimeType: String,
-        audioMimeType: String
+        audioMimeType: String,
+        videoBitrateBps: Long = 0L,
+        audioBitrateBps: Long = 0L
     ): MediaSourceWithCdnState {
         val normalizedVideoUrls = videoUrls
             .map(urlNormalizer)
@@ -776,7 +790,9 @@ internal class VideoPlayerStreamResolver(
             videoUrls = normalizedVideoUrls,
             audioUrls = normalizedAudioUrls,
             videoMimeType = videoMimeType.ifBlank { "video/mp4" },
-            audioMimeType = audioMimeType.ifBlank { "audio/mp4" }
+            audioMimeType = audioMimeType.ifBlank { "audio/mp4" },
+            videoBitrateBps = videoBitrateBps,
+            audioBitrateBps = audioBitrateBps
         )
     }
 
@@ -784,12 +800,14 @@ internal class VideoPlayerStreamResolver(
         videoUrls: List<String>,
         audioUrls: List<String>,
         videoMimeType: String,
-        audioMimeType: String
+        audioMimeType: String,
+        videoBitrateBps: Long = 0L,
+        audioBitrateBps: Long = 0L
     ): MediaSourceWithCdnState {
-        val videoSource = createProgressiveSource(videoUrls, videoMimeType)
+        val videoSource = createProgressiveSource(videoUrls, videoMimeType, videoBitrateBps, isVideoStream = true)
         val audioSource = audioUrls
             .takeIf { it.isNotEmpty() }
-            ?.let { createProgressiveSource(it, audioMimeType) }
+            ?.let { createProgressiveSource(it, audioMimeType, audioBitrateBps, isVideoStream = false) }
         val mediaSource = if (audioSource != null) {
             MergingMediaSource(true, videoSource.mediaSource, audioSource.mediaSource)
         } else {
@@ -804,10 +822,15 @@ internal class VideoPlayerStreamResolver(
         )
     }
 
-    private fun createProgressiveSource(urls: List<String>, mimeType: String): MediaSourceWithCdnState {
+    private fun createProgressiveSource(
+        urls: List<String>,
+        mimeType: String,
+        bitrateBps: Long = 0L,
+        isVideoStream: Boolean = false
+    ): MediaSourceWithCdnState {
         val primaryUrl = urls.firstOrNull()
             ?: error("No media url candidates available")
-        val (sourceFactory, state) = createCandidateAwareFactory(urls)
+        val (sourceFactory, state) = createCandidateAwareFactory(urls, bitrateBps, isVideoStream)
         val mediaItem = MediaItem.Builder()
             .setUri(primaryUrl)
             .setMimeType(mimeType.takeIf { it.isNotBlank() })
@@ -821,19 +844,28 @@ internal class VideoPlayerStreamResolver(
         )
     }
 
-    private fun createCandidateAwareFactory(urls: List<String>): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
-        // 构建时刻按最新健康分+TTFB 重排（fallback 重建复用固化 route 时，让新记的降权生效；
+    private fun createCandidateAwareFactory(
+        urls: List<String>,
+        bitrateBps: Long,
+        isVideoStream: Boolean
+    ): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
+        // 构建时刻按最新画像+流码率重排（fallback 重建复用固化 route 时，让新记的降权生效；
         // 与 VideoPlayerDashMediaSourceFactory 同款口径，初次构建幂等）。
-        val candidates = CdnLatencyProfile.sortUrlsByLatency(
+        val candidates = CdnProfile.rankCandidates(
             urls
                 .map(urlNormalizer)
                 .filter { it.isNotBlank() }
-                .distinct()
+                .distinct(),
+            bitrateBps
         )
         if (candidates.size <= 1) {
             return dataSourceFactory to null
         }
-        val state = VideoPlayerCdnFailoverState(candidates = candidates.map(Uri::parse))
+        val state = VideoPlayerCdnFailoverState(
+            candidates = candidates.map(Uri::parse),
+            streamBitrateBps = bitrateBps,
+            isVideoStream = isVideoStream
+        )
         return VideoPlayerCdnFailoverDataSourceFactory(
             upstreamFactory = dataSourceFactory,
             state = state

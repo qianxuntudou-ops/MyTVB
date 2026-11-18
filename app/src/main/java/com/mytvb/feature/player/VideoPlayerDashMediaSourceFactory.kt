@@ -46,14 +46,18 @@ internal class VideoPlayerDashMediaSourceFactory(
     fun createMediaSourceWithCdnState(route: DashRoute): MediaSourceWithCdnState {
         val videoSource = createProgressiveSource(
             urls = route.videoUrls,
-            mimeType = route.videoRepresentation.mimeType
+            mimeType = route.videoRepresentation.mimeType,
+            bitrateBps = route.videoRepresentation.bandwidth,
+            isVideoStream = true
         )
 
         val audioSource = route.audioRepresentation?.let {
             if (route.audioUrls.isNotEmpty()) {
                 createProgressiveSource(
                     urls = route.audioUrls,
-                    mimeType = it.mimeType
+                    mimeType = it.mimeType,
+                    bitrateBps = it.bandwidth,
+                    isVideoStream = false
                 )
             } else null
         }
@@ -72,10 +76,15 @@ internal class VideoPlayerDashMediaSourceFactory(
         )
     }
 
-    private fun createProgressiveSource(urls: List<String>, mimeType: String): MediaSourceWithCdnState {
+    private fun createProgressiveSource(
+        urls: List<String>,
+        mimeType: String,
+        bitrateBps: Long,
+        isVideoStream: Boolean
+    ): MediaSourceWithCdnState {
         val primaryUrl = urls.firstOrNull()
             ?: error("No media url candidates available")
-        val (sourceFactory, state) = createCandidateAwareFactory(urls)
+        val (sourceFactory, state) = createCandidateAwareFactory(urls, bitrateBps, isVideoStream)
         val mediaItem = MediaItem.Builder()
             .setUri(primaryUrl)
             .setMimeType(mimeType.takeIf { it.isNotBlank() })
@@ -89,22 +98,31 @@ internal class VideoPlayerDashMediaSourceFactory(
         )
     }
 
-    private fun createCandidateAwareFactory(urls: List<String>): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
-        // 构建时刻按最新健康分+TTFB（含惩罚性记录）排序：route.videoUrls 在 resolveDashRoutePlan
+    private fun createCandidateAwareFactory(
+        urls: List<String>,
+        bitrateBps: Long,
+        isVideoStream: Boolean
+    ): Pair<DataSource.Factory, VideoPlayerCdnFailoverState?> {
+        // 构建时刻按最新画像+流码率排序：route.videoUrls 在 resolveDashRoutePlan
         // 时已排过一次，但 fallback 换线重建复用同一 route 对象，构建时重排才能吃到两次构建之间
         // 新记的卡顿/超时惩罚——否则重建后 candidates[0] 还是那个刚被降权的烂 host，换线换了个
         // 寂寞（S65 现场：hwo1 被记 30+ 次首帧超时后，fallback:dash 重建 attempt=1 仍是它）。
         // 初次构建时排序幂等（同一时刻分数不变）。
-        val candidates = CdnLatencyProfile.sortUrlsByLatency(
+        val candidates = CdnProfile.rankCandidates(
             urls
                 .map(urlNormalizer)
                 .filter { it.isNotBlank() }
-                .distinct()
+                .distinct(),
+            bitrateBps
         )
         if (candidates.size <= 1) {
             return dataSourceFactory to null
         }
-        val state = VideoPlayerCdnFailoverState(candidates = candidates.map(Uri::parse))
+        val state = VideoPlayerCdnFailoverState(
+            candidates = candidates.map(Uri::parse),
+            streamBitrateBps = bitrateBps,
+            isVideoStream = isVideoStream
+        )
         return VideoPlayerCdnFailoverDataSourceFactory(
             upstreamFactory = dataSourceFactory,
             state = state

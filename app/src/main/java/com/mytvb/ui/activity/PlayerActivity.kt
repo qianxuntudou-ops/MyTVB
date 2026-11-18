@@ -31,6 +31,7 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.view.isVisible
 
 import androidx.lifecycle.lifecycleScope
+import com.mytvb.feature.player.CdnAdaptiveSchedulerHost
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -272,6 +273,18 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private val viewModel: VideoPlayerViewModel by viewModel()
 
     private var player: ExoPlayer? = null
+
+    // CDN 预测性调度（双宿主共用 Host，见 CdnAdaptiveSchedulerHost）
+    private var cdnAdaptiveSchedulerHost: CdnAdaptiveSchedulerHost? = null
+
+    private fun startCdnAdaptiveScheduler() {
+        cdnAdaptiveSchedulerHost = CdnAdaptiveSchedulerHost(
+            lifecycleOwner = this,
+            playerProvider = { player },
+            viewModelProvider = { viewModel }
+        ).also { it.start() }
+    }
+
     private val uiCoordinator = PlaybackUiCoordinator()
 
     /**
@@ -1174,6 +1187,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         // 首帧看门狗到点时读实时位置：lambda 每次读当前字段，release 置 null 后安全返回 0（回退快照）
         viewModel.livePlaybackPositionProvider = { player?.currentPosition ?: 0L }
         playerView.setPlayer(player)
+        // CDN 预测性调度：TV 宿主同样接决策器（MuMu/电视端点播走本宿主，
+        // 只接 VideoPlayerFragment 会导致决策静默不跑）
+        startCdnAdaptiveScheduler()
         // 公益广告锁死模式：关闭控制器（不显示暂停/进度条/设置面板），隐藏各种按钮，强制不循环
         if (psasLocked) {
             playerView.setUseController(false)
@@ -2116,6 +2132,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         stopTeenModeTicker()
         resumeHintController.release()
         player?.removeListener(playerListener)
+        cdnAdaptiveSchedulerHost?.stop()
+        cdnAdaptiveSchedulerHost = null
         playerView.destroy()
         playerView.stopDanmaku()
         // player 归还共享池前恢复空降静音的原音量，避免静音态串到下一个会话
