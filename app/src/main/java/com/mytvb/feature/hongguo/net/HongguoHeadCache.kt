@@ -11,7 +11,7 @@ import java.security.MessageDigest
 /**
  * CENC 流头部磁盘缓存（2026-11-18 P2，对齐 HGTV 1.3.7.9 反编译的头部落盘机制——
  * C0174j3.c() 的魔数+总长+头部格式同款思路）：
- * 存「ftyp+moov 原始字节 + 流总长」，命中时 CencPsshDataSource 免去起播关键路径上的
+ * 存「ftyp+moov 原始字节 + 流总长」，命中时 CencDecryptDataSource 免去起播关键路径上的
  * 头部网络下载（红果 moov 实测 122KB 量级，慢网 ~370ms），切集/重进同集即点即开。
  *
  * - 文件名 = sha256(url) 前 16 hex（url 换签后天然不命中，旧条目由 LRU 修剪回收）；

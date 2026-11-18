@@ -601,32 +601,37 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     /**
-     * 详情页将播集地址预热（2026-11-18 P0，对齐 HGTV 秒开差距分析）：详情加载成功即
+     * 详情页将播集预热（2026-11-18 P0，对齐 HGTV 秒开差距分析）：详情加载成功即
      * 后台解析将播集（续看集/第 1 集）播放地址进缓存——用户看简介/选集的窗口期足够
      * 完成 V5 签名+RTT，点播放时 [playUrl] 缓存命中，起播关键路径砍掉最大单项。
+     * 二轮追加：地址就绪后**连头部一起预取**（地址+moov+首GOP 全在用户点击前落盘，
+     * 点播放时 CencDecryptDataSource 全命中，起播只剩解码）。
      * 失败静默（点播放实时解析兜底）。
      */
     fun warmupPlayUrl(vid: String) {
         if (vid.isEmpty()) return
         cloudScope.launch {
             runCatching { playUrl(vid, defaultQualityPixels()) }
-                .onSuccess { AppLog.d("Hongguo", "detail warmup ok vid=$vid") }
+                .onSuccess {
+                    prefetchHead(it)
+                    AppLog.d("Hongguo", "detail warmup ok vid=$vid")
+                }
                 .onFailure { AppLog.d("Hongguo", "detail warmup fail vid=$vid: ${it.message}") }
         }
     }
 
     /**
-     * CENC 流头部预取（对齐 HGTV C0174j3 的头部预取/落盘）：Range 拉 512KB，本地
-     * 扫 box 链截到 moov 结束（红果实测 ~122KB）写入 [HongguoHeadCache]；总长取自
-     * Content-Range（仅 206 分段响应有效，200 全量直接放弃防整集误下）。
-     * CencPsshDataSource 起播时本地命中，免去 moov 网络下载段。
+     * CENC 流头部预取（对齐 HGTV C0174j3 的头部预取/落盘）：Range 拉 512KB **整段**
+     * 落盘（二轮优化：不只 moov——首 GOP 一起进缓存，起播首帧不等网络；moov 校验
+     * 仅用于确认 box 链形态正常）；总长取自 Content-Range（仅 206 分段响应有效，
+     * 200 全量直接放弃防整集误下）。CencDecryptDataSource 起播时本地命中。
      */
     private suspend fun prefetchHead(play: HongguoPlay.PlayUrl) {
         if (play.contentKeyHex == null) return
         withContext(Dispatchers.IO) {
             runCatching {
                 HongguoHeadCache.ensureDir(appContext)
-                if (HongguoHeadCache.load(play.url) != null) {
+                if (HongguoHeadCache.load("${play.vid}@${play.pixels}") != null) {
                     AppLog.d("Hongguo", "head prefetch skip (cached) vid=${play.vid}")
                     return@runCatching
                 }
@@ -644,10 +649,10 @@ class HongguoRepository private constructor(context: Context) {
                     val total = resp.header("Content-Range")
                         ?.substringAfterLast('/')?.toLongOrNull() ?: return@use
                     val body = resp.body?.bytes() ?: return@use
-                    val headEnd = HongguoHeadCache.headEndOf(body)
-                    if (headEnd > 0) {
-                        HongguoHeadCache.save(play.url, total, body.copyOf(headEnd))
-                        AppLog.d("Hongguo", "head prefetch ok vid=${play.vid} ${headEnd}B")
+                    if (HongguoHeadCache.headEndOf(body) > 0) {
+                        // key=vid@pixels：同集换 CDN host（负载均衡）也能命中
+                        HongguoHeadCache.save("${play.vid}@${play.pixels}", total, body)
+                        AppLog.d("Hongguo", "head prefetch ok vid=${play.vid} ${body.size}B")
                     } else {
                         AppLog.d("Hongguo", "head prefetch no moov vid=${play.vid}")
                     }
@@ -712,20 +717,20 @@ class HongguoRepository private constructor(context: Context) {
         }
     }
 
-    // ---- ClearKey 流式解密（2026-11-17 起）：加密流不再整集下载，直链边下边解边播 ----
+    // ---- 软解密流式（2026-11-18 P3）：加密流不再整集下载，直链边下边解边播 ----
 
-    /** 播放源决策结果：[keyHex]/[kidHex] 非空 = ClearKey DRM 直链流式播（MediaDrm
-     *  硬件层解密，起播只等 moov+首 GOP）；否则 uri 已是可播地址（明文直链/本地解密文件）。 */
-    class PlayableSource(val uri: String, val keyHex: String?, val kidHex: String?)
+    /** 播放源决策结果：[keyHex] 非空 = 软解密流式播（DataSource 层 AES-CTR 还原，
+     *  零设备 DRM 依赖）；[cacheKey]=vid@pixels（头部缓存跨 CDN host 命中）。 */
+    class PlayableSource(val uri: String, val keyHex: String?, val kidHex: String?, val cacheKey: String = "")
 
     /**
-     * 播放地址 → 播放源三级决策：
+     * 播放地址 → 播放源决策：
      * 1. 明文流：直链原样返回；
      * 2. 加密流预取/缓存命中（解密落地文件）：本地 URI（秒开）；
-     * 3. 加密流未落地且 ClearKey 可用（API≥27 + kid 下发）：**直链 + 密钥** 流式播，
-     *    替代旧「整集下载+解密」的 15-20 秒起播等待（CDN ~330KB/s 全下 5-9MB）；
-     * 4. 兜底：ClearKey 不可用（老设备无 kid）走 [resolvePlayableFile] 整集下载解密。
-     * 预取链路（[preloadNextEpisodes]）仍走整集落地，与流式播并存：命中秒开、未命中流式。
+     * 3. 加密流未落地：**直链 + 密钥** 软解密流式播（DataSource 层 AES-CTR 还原，
+     *    2026-11-18 P3 全面替代 ClearKey/MediaDrm——设备 DRM 栈兼容性无底洞）；
+     *    兜底：软解流式播放失败走 [fallbackDownload] 整集下载解密。
+     * 预取链路（[preloadNextEpisodes]）走头部落盘，与流式播并存。
      */
     suspend fun resolvePlayableSource(play: HongguoPlay.PlayUrl): PlayableSource {
         val keyHex = play.contentKeyHex ?: return PlayableSource(play.url, null, null)
@@ -733,19 +738,8 @@ class HongguoRepository private constructor(context: Context) {
         if (outFile.isFile && outFile.length() > 0) {
             return PlayableSource(android.net.Uri.fromFile(outFile).toString(), null, null)
         }
-        val kidHex = play.kidHex
-        if (android.os.Build.VERSION.SDK_INT >= 27 && !kidHex.isNullOrEmpty()) {
-            AppLog.d("Hongguo", "play clearkey stream vid=${play.vid} q=${play.pixels}")
-            return PlayableSource(play.url, keyHex, kidHex)
-        }
-        return try {
-            resolvePlayableFile(play).let { PlayableSource(it, null, null) }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            AppLog.w("Hongguo", "fallback download fail: ${e.message}")
-            PlayableSource(play.url, null, null)
-        }
+        AppLog.d("Hongguo", "play soft-decrypt stream vid=${play.vid} q=${play.pixels}")
+        return PlayableSource(play.url, keyHex, play.kidHex, "${play.vid}@${play.pixels}")
     }
 
     /** 兜底整集下载解密（ClearKey 播放失败时的重试路径，Activity 调用）。 */

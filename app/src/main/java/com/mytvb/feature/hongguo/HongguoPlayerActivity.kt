@@ -419,14 +419,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 // 进播放即出圈（B 站同款观感）：地址解析黑屏段也有加载反馈，收圈统一在 finally
                 binding.progressBuffering.visibility = View.VISIBLE
                 AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
-                // ClearKey HAL 懒启动预热（MuMu 实测冷启动 5s+ 才注册服务）：与地址解析
-                // 并行触发 MediaDrm 实例化，防首播「Unexpected runtime error」竞态落整集兜底
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching {
-                        androidx.media3.exoplayer.drm.FrameworkMediaDrm
-                            .newInstance(androidx.media3.common.C.CLEARKEY_UUID).release()
-                    }
-                }
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
                 AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
                 val source = resolvePlayable(play)
@@ -447,94 +439,28 @@ class HongguoPlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** 当前播放源（ClearKey 失败判定用）。 */
+    /** 当前播放源（软解密失败回落判定用）。 */
     private var activeSource: HongguoRepository.PlayableSource? = null
 
     /**
-     * ClearKey 流式解密源（HGTV 同款路线，2026-11-17 接入）：
-     * spade_a 派生的内容密钥包成 W3C ClearKey license JSON，
-     * [androidx.media3.exoplayer.drm.LocalMediaDrmCallback] 本地同步返回（不发网络）；
-     * Media3 Mp4Extractor 读 mp4 pssh/tenc 建 DrmSession，解密在 MediaDrm 硬件层随
-     * 解码流水线流式进行——起播只等 moov+首 GOP，不再整集下载 15-20 秒。
-     *
-     * DrmSessionManager 每次新建（2026-11-18 教训，勿再缓存复用）：DefaultDrmSessionManager
-     * 绑定 playback looper，player release 是异步的——旧 player 未解绑时新 player setPlayer
-     * 100% 撞 initPlaybackLooper 的 Preconditions.checkState（MuMu 实测 retry 必炸，
-     * 连锁落整集兜底=「打开等半天」）。本地 ClearKey license 新建零成本。
+     * 软解密流式源（2026-11-18 P3，HGTV 同款架构，全面替代 ClearKey/MediaDrm 路线）：
+     * [CencDecryptDataSource] 在 read 透传路上按 moov 加密样本区间做 AES-128-CTR 还原，
+     * codec 只见明文——零设备 DRM 栈依赖。背景：荣耀/华为系 ClearKey HAL 判定商业
+     * 用户后不建会话（日志实证无 getKeyRequest），MediaCodec 无 mCrypto 收加密样本
+     * 必崩；MuMu 上也是靠竞态重试侥幸通过。头部缓存同层复用（moov 零网络重读）。
      */
-    private fun buildClearKeyMediaSource(source: HongguoRepository.PlayableSource): androidx.media3.exoplayer.source.MediaSource {
-        AppLog.d("Hongguo", "clearkey src url=${source.uri.take(180)} kid=${source.kidHex}")
-        val keyB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.keyHex!!))
-        val kidB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.kidHex!!))
-        val license = """{"keys":[{"kty":"oct","k":"$keyB64","kid":"$kidB64"}],"type":"temporary"}"""
-        val drmCallback = androidx.media3.exoplayer.drm.LocalMediaDrmCallback(license.toByteArray(Charsets.UTF_8))
-        val drmSessionManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
-            .setUuidAndExoMediaDrmProvider(
-                androidx.media3.common.C.CLEARKEY_UUID,
-                androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER
-            )
-            .build(drmCallback)
-        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setUserAgent(com.mytvb.feature.hongguo.net.HongguoHeadCache.CDN_UA)
-            .setConnectTimeoutMs(10_000)
-            .setReadTimeoutMs(20_000)
-            .setAllowCrossProtocolRedirects(true)
-        // pssh 注入层：红果 CENC 流无 pssh（KID 只在 tenc），media3 拿不到
-        // DrmInitData 不会激活解密管线；流头部注入 PSSH v1（stco 同步 +52 修正）。
-        // 头部磁盘缓存目录随工厂初始化（P2：open 时本地命中免去 moov 网络下载）
-        com.mytvb.feature.hongguo.net.HongguoHeadCache.ensureDir(this)
-        val dataSourceFactory = androidx.media3.datasource.DataSource.Factory {
-            com.mytvb.feature.hongguo.net.CencPsshDataSource(
-                httpFactory.createDataSource(), source.kidHex!!
-            )
-        }
-        // MediaItem 带 DrmConfiguration（licenseUri 占位不实际使用）+ DefaultMediaSourceFactory
-        // 官方完整 DRM 链（与 DASH 同路径）：renderer 在密钥就绪前等待，防 codec 先起
-        // "queuing secure buffer without mCrypto" 崩溃；实际签名回调仍是 LocalMediaDrmCallback
-        val mediaItem = MediaItem.Builder()
-            .setUri(source.uri)
-            .setDrmConfiguration(
-                MediaItem.DrmConfiguration.Builder(androidx.media3.common.C.CLEARKEY_UUID)
-                    .setLicenseUri("https://127.0.0.1/clearkey-placeholder")
-                    .setForceSessionsForAudioAndVideoTracks(true)
-                    .build()
-            )
-            .build()
-        return androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
-            dataSourceFactory,
-            // CENC progressive fork（MyTVB）：media3 官方 Mp4Extractor 不支持样本表加密
-            // （moov 样本的 cryptoData 恒 null + NAL 转换破坏密文），fork 版补齐
-            androidx.media3.extractor.ExtractorsFactory {
-                arrayOf(com.mytvb.feature.hongguo.mp4fork.Mp4Extractor())
-            }
-        )
-            .setDrmSessionManagerProvider { drmSessionManager }
-            .createMediaSource(mediaItem)
-    }
+    private fun buildSoftDecryptMediaSource(source: HongguoRepository.PlayableSource): androidx.media3.exoplayer.source.MediaSource =
+        HongguoSoftDecryptSources.build(this, source)
 
-    private fun base64UrlNoPad(bytes: ByteArray): String =
-        android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
-
-    /** ClearKey 播放失败回落：整集下载解密再播一次（每源仅一次）。 */
+    /** 软解密流式播放失败回落：整集下载解密再播一次（每源仅一次）。 */
     private var clearKeyFallbackTried = false
-    /** ClearKey 首次失败的轻量重试（codec init 与密钥就绪的一次性竞态，重试即成）。 */
-    private var clearKeyRetryTried = false
     private fun maybeFallbackFromClearKey(error: Exception): Boolean {
         val source = activeSource ?: return false
-        if (source.keyHex == null || source.kidHex == null) return false
+        if (source.keyHex == null) return false
         if (clearKeyFallbackTried) return false
         val play = currentPlay ?: return false
-        // 竞态类错误（"queuing secure buffer without mCrypto"）：session 此刻已就绪，
-        // 同源重建 player 即可，不必走整集下载。间隔 800ms——player release 异步 +
-        // MuMu 类虚拟机 ClearKey HAL 冷启动慢（实测 5s+），300ms 内重建会再撞
-        if (!clearKeyRetryTried) {
-            clearKeyRetryTried = true
-            AppLog.w("Hongguo", "clearkey race (${error.message}), retry same source vid=${play.vid}")
-            binding.root.postDelayed({ startPlayer(source, resetFallback = false) }, 800)
-            return true
-        }
         clearKeyFallbackTried = true
-        AppLog.w("Hongguo", "clearkey play fail (${error.message}), fallback to full download vid=${play.vid}")
+        AppLog.w("Hongguo", "soft-decrypt play fail (${error.message}), fallback to full download vid=${play.vid}")
         lifecycleScope.launch {
             try {
                 binding.progressBuffering.visibility = View.VISIBLE
@@ -552,44 +478,51 @@ class HongguoPlayerActivity : AppCompatActivity() {
         return true
     }
 
+    /** player 懒加载单例（二轮，2026-11-18）：Activity 生命周期内复用——切集/切画质
+     *  只 setMediaSource 换源不重建（对齐 HGTV 播放器常驻架构）。listener 只注册一次。
+     *  音频焦点托管 media3：B 站等其它播放器起播抢焦点时红果自动让位暂停。 */
+    private fun obtainPlayer(): ExoPlayer {
+        player?.let { return it }
+        val p = ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                androidx.media3.common.AudioAttributes.Builder()
+                    .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                    .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus= */ true
+            )
+            .build()
+        player = p
+        binding.playerView.player = p
+        attachPlaybackListener(p)
+        return p
+    }
+
     /** [revealControls]=false（默认）：进入播放/切集/切画质均保持控制栏隐藏，只有用户主动呼出才显示。
-     *  ClearKey 源（keyHex/kidHex 非空）走 MediaDrm 流式解密（HGTV 同款秒开路线），
+     *  加密流（keyHex/kidHex 非空）走软解密流式（DataSource 层 CTR 还原，零 DRM 依赖），
      *  失败在 [maybeFallbackFromClearKey] 回落整集下载解密重试。 */
     private fun startPlayer(source: HongguoRepository.PlayableSource, revealControls: Boolean = false, resetFallback: Boolean = true) {
         if (resetFallback) {
             clearKeyFallbackTried = false
-            clearKeyRetryTried = false
         }
-        player?.release()
-        val p = ExoPlayer.Builder(this).build()
-        player = p
+        val p = obtainPlayer()
         activeSource = source
-        binding.playerView.player = p
-        if (source.keyHex != null && source.kidHex != null) {
-            p.setMediaSource(buildClearKeyMediaSource(source))
+        if (source.keyHex != null) {
+            p.setMediaSource(buildSoftDecryptMediaSource(source))
         } else {
             p.setMediaItem(MediaItem.fromUri(source.uri))
         }
-        // DRM 链路诊断（ClearKey 流式）：会话获取/密钥加载/错误一次看清
-        p.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
-            override fun onDrmSessionAcquired(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, state: Int) {
-                AppLog.d("Hongguo", "drm session acquired state=$state")
-            }
-            override fun onDrmKeysLoaded(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime) {
-                AppLog.d("Hongguo", "drm keys loaded")
-            }
-            override fun onDrmSessionManagerError(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, error: Exception) {
-                AppLog.w("Hongguo", "drm session manager error", error)
-            }
-            override fun onDrmKeysRestored(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime) {
-                AppLog.d("Hongguo", "drm keys restored")
-            }
-        })
         p.prepare()
         if (resumeMs > 0) p.seekTo(resumeMs)
         p.playWhenReady = true
-        // 切集/切画质重建 player 后保持会话倍速（B 站换视频速度不重置）
+        // 切集/切画质换源后保持会话倍速（B 站换视频速度不重置）
         p.playbackParameters = PlaybackParameters(speed)
+        startPositionWatcher()
+        if (revealControls) bumpControls()
+    }
+
+    /** 播放事件监听（player 常驻后只注册一次）：状态/错误/轨道/画面尺寸联动 UI。 */
+    private fun attachPlaybackListener(p: ExoPlayer) {
         p.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 AppLog.d("Hongguo", "player state=$state")
@@ -645,8 +578,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 AppToast.show(this@HongguoPlayerActivity, getString(R.string.hongguo_play_error, error.errorCodeName))
             }
         })
-        startPositionWatcher()
-        if (revealControls) bumpControls()
     }
 
     // ==================== 按键路由（对齐 MyPlayerView.dispatchKeyEvent 模型） ====================
@@ -1389,8 +1320,41 @@ class HongguoPlayerActivity : AppCompatActivity() {
         player?.playWhenReady = false
     }
 
+    // ---- 后台资源让位（2026-11-18）：退后台（切 B 站/切 App）即停播放；后台超 10 分钟
+    //  自动 finish 整页释放解码器/连接——「看一小时 B 站回来」红果不该还占着资源。 ----
+
+    private var backgroundTimeout: Runnable? = null
+    private var resumePlayOnStart = false
+
+    override fun onStart() {
+        super.onStart()
+        backgroundTimeout?.let { android.os.Handler(mainLooper).removeCallbacks(it) }
+        backgroundTimeout = null
+        if (resumePlayOnStart) {
+            resumePlayOnStart = false
+            player?.playWhenReady = true
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val p = player ?: return
+        resumePlayOnStart = p.playWhenReady && p.playbackState != Player.STATE_ENDED
+        if (p.playWhenReady) p.playWhenReady = false
+        val timeout = Runnable {
+            backgroundTimeout = null
+            if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                AppLog.d("Hongguo", "background timeout, finish player")
+                finish()
+            }
+        }.also { backgroundTimeout = it }
+        android.os.Handler(mainLooper).postDelayed(timeout, 10 * 60 * 1000L)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        backgroundTimeout?.let { android.os.Handler(mainLooper).removeCallbacks(it) }
+        backgroundTimeout = null
         progressJob?.cancel()
         cancelPendingHoldStart()
         cancelHoldTick()

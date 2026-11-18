@@ -237,6 +237,9 @@ public final class Mp4Extractor implements Extractor {
   private final @Flags int flags;
   private final boolean omitTrackSampleTable;
 
+  /** 预解密模式：见 {@link #Mp4Extractor(SubtitleParser.Factory, int, boolean)}。 */
+  private final boolean predecrypted;
+
   // Temporary arrays.
   private final ParsableByteArray nalStartCode;
   private final ParsableByteArray nalPrefix;
@@ -311,8 +314,19 @@ public final class Mp4Extractor implements Extractor {
    * @param flags Flags that control the extractor's behavior.
    */
   public Mp4Extractor(SubtitleParser.Factory subtitleParserFactory, @Flags int flags) {
+    this(subtitleParserFactory, flags, /* predecrypted= */ false);
+  }
+
+  /**
+   * 预解密模式（MyTVB fork，2026-11-18）：数据源层已完成 CENC CTR 解密（明文流但 moov
+   * 仍带 encv/senc 加密语义）。此模式下加密语义全部旁路——format 不挂 cryptoType、样本
+   * 不输出加密前缀/加密标志、NAL 转换走官方明文路径，renderer 按 普通 MP4 处理（零 DRM
+   * 依赖——部分设备 ClearKey HAL 有商用管控不给建会话，mCrypto 竞态族问题根治）。
+   */
+  public Mp4Extractor(SubtitleParser.Factory subtitleParserFactory, @Flags int flags, boolean predecrypted) {
     this.subtitleParserFactory = subtitleParserFactory;
     this.flags = flags;
+    this.predecrypted = predecrypted;
     omitTrackSampleTable = (flags & FLAG_OMIT_TRACK_SAMPLE_TABLE) != 0;
     lastSniffFailures = ImmutableList.of();
     parserState =
@@ -668,7 +682,9 @@ public final class Mp4Extractor implements Extractor {
         continue;
       }
       Track track = trackSampleTable.track;
-      TrackEncryptionBox encBox = track.getSampleDescriptionEncryptionBox(0);
+      // 预解密模式：密文已在 DataSource 层还原，加密语义整体旁路（见构造器注释）
+      TrackEncryptionBox encBox =
+          predecrypted ? null : track.getSampleDescriptionEncryptionBox(0);
       android.util.Log.d(
           "Mp4Fork",
           "track id=" + track.id + " type=" + track.type + " encBox=" + (encBox != null)

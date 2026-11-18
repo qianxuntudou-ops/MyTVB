@@ -15,6 +15,39 @@ import javax.crypto.spec.SecretKeySpec
  */
 internal object HongguoMp4Decrypt {
 
+    /** 流式软解密用：单个加密样本区间 [start,end) + 8B nonce（CTR IV=nonce+8 零计数器）。 */
+    class EncryptedRange(val start: Long, val end: Long, val iv: ByteArray)
+
+    /**
+     * 从头部字节解析全局加密样本区间表（跨轨合并、按偏移排序）。
+     * 流式解密 DataSource 用：read 透传的字节落在区间内即按样本 IV 做 CTR 还原。
+     * [head] 可以是 ftyp+moov 也可以是含 mdat 前段碎片的更长预取段（截到 moov 结束
+     * 解析——2026-11-18 真机教训：512KB 整段预取里的截断 mdat 会让全量 box 链解析
+     * 抛「尺寸无效」）。无加密轨返回空表；头部形态异常抛 [DecryptException]。
+     */
+    fun parseEncryptedRanges(head: ByteArray): List<EncryptedRange> {
+        // 扫顶层 box 链到 moov 结束（其后 mdat 碎片不参与）
+        var off = 0
+        var moovEnd = -1
+        while (off + 8 <= head.size) {
+            val size = u32(head, off).toLong() and 0xFFFFFFFFL
+            if (size < 8 || off + size > head.size) throw DecryptException("MP4 box 尺寸无效")
+            if (type(head, off + 4) == "moov") { moovEnd = (off + size).toInt(); break }
+            off += size.toInt()
+        }
+        if (moovEnd < 0) throw DecryptException("moov not found in head")
+        val top = parseBoxes(head, 0, moovEnd)
+        val out = mutableListOf<EncryptedRange>()
+        for (t in trackInfo(head, top)) {
+            if (!t.encrypted) continue
+            for (i in t.sizes.indices) {
+                if (t.ivs.isEmpty()) continue
+                out.add(EncryptedRange(t.offs[i].toLong(), t.offs[i].toLong() + t.sizes[i], t.ivs[i]))
+            }
+        }
+        return out.sortedBy { it.start }
+    }
+
     class DecryptException(message: String) : IllegalStateException(message)
 
     private val CONTAINERS = setOf("moov", "trak", "mdia", "minf", "stbl", "edts", "dinf", "udta")

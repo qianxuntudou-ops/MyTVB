@@ -22,6 +22,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import com.mytvb.core.common.log.AppLog
 import kotlinx.coroutines.launch
 
 /**
@@ -85,6 +87,10 @@ class HongguoDetailDialog(
         binding.recyclerPageChips.itemAnimator = null
         binding.buttonPlay.setOnClickListener { playEpisode(lastEpisodeIndex) }
         binding.buttonFavorite.setOnClickListener { toggleFavorite() }
+        // 弹窗关闭：取消协程（原实现 scope 不 cancel 会泄漏）
+        setOnDismissListener {
+            scope.cancel()
+        }
         // 播放期间弹窗保持打开（对齐红果官方详情页语义：退出播放回详情），
         // 播放器 finish 后本窗口重获焦点时刷新观看进度（正在看/按钮文案/角标/选集页）
         binding.root.viewTreeObserver.addOnWindowFocusChangeListener { hasFocus ->
