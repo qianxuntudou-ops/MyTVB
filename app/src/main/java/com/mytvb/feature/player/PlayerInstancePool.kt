@@ -1,6 +1,7 @@
 package com.mytvb.feature.player
 
 import android.content.Context
+import android.media.MediaCrypto
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
@@ -26,8 +27,12 @@ import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
+import androidx.media3.exoplayer.video.VideoRendererEventListener
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.feature.player.settings.AudioBalanceSettings
@@ -466,6 +471,39 @@ object PlayerInstancePool {
                     .build()
                 return SkipSampleTolerantAudioSink(delegate)
             }
+
+            override fun buildVideoRenderers(
+                context: Context,
+                extensionRendererMode: Int,
+                mediaCodecSelector: MediaCodecSelector,
+                enableDecoderFallback: Boolean,
+                eventHandler: Handler,
+                eventListener: VideoRendererEventListener,
+                allowedVideoJoiningTimeMs: Long,
+                out: ArrayList<Renderer>
+            ) {
+                super.buildVideoRenderers(
+                    context, extensionRendererMode, mediaCodecSelector,
+                    enableDecoderFallback, eventHandler, eventListener,
+                    allowedVideoJoiningTimeMs, out
+                )
+                // super 构建的首个视频 renderer（MediaCodecVideoRenderer）换成带
+                // frame-rate 声明防御的子类；Builder 只设 super 实际生效的项，
+                // codecAdapterFactory 与 experimental 开关均未改过、保持库默认等价。
+                val idx = out.indexOfFirst { it is MediaCodecVideoRenderer }
+                if (idx >= 0) {
+                    out[idx] = FrameRateCapAwareVideoRenderer(
+                        MediaCodecVideoRenderer.Builder(context)
+                            .setMediaCodecSelector(mediaCodecSelector)
+                            .setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
+                            .setEnableDecoderFallback(enableDecoderFallback)
+                            .setEventHandler(eventHandler)
+                            .setEventListener(eventListener)
+                            .setMaxDroppedFramesToNotify(50)
+                    )
+                    AppLog.i(TAG, "video renderer swapped: FrameRateCapAware installed at $idx")
+                }
+            }
         }
     }
 
@@ -503,6 +541,54 @@ object PlayerInstancePool {
                 delegate.flush()
                 delegate.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
             }
+        }
+    }
+
+    /**
+     * 片源帧率超出 codec 能力声明时，剥掉 configure 下发的 frame-rate 提示（issue#113 对拍 BT）。
+     *
+     * 因果链：电视芯片 codec 的能力声明（MediaCodecInfo.VideoCapabilities.maxFrameRate）普遍
+     * 保守，MTK 老平台尤甚——雷鸟鹤6 同档机常只声明 30fps 而实际硬解 60fps 片源无压力。
+     * media3 会把片源 Format.frameRate 原样塞进 configure 的 MediaFormat["frame-rate"]，
+     * 这类 codec 要么因能力匹配判死 init 失败，要么按声明值限速解码导致持续掉帧（体感
+     * "播放卡顿"）。剥法＝把传给 super 的 format 换成 frameRate=NO_VALUE 的副本（media3
+     * 见 NO_VALUE 即不塞该键，与 BT 反编译 a/RK.java 的"置 -1 不下发"同款）；该键仅为
+     * 解码调度提示、非码流参数，剥掉不影响解码正确性。仅当片源帧率 > 声明上限才介入，
+     * 声明能力足够的 codec 行为不变。
+     */
+    private class FrameRateCapAwareVideoRenderer(
+        builder: MediaCodecVideoRenderer.Builder
+    ) : MediaCodecVideoRenderer(builder) {
+
+        override fun getMediaCodecConfiguration(
+            codecInfo: MediaCodecInfo,
+            format: Format,
+            crypto: MediaCrypto?,
+            operatingRate: Float
+        ): MediaCodecAdapter.Configuration {
+            val frameRate = format.frameRate
+            if (frameRate != Format.NO_VALUE.toFloat() && frameRate > 0f) {
+                // 声明上限取 supportedFrameRates().upper（全局保守值：最小分辨率下限）；
+                // 声明保守的芯片误剥也仅少一个调度提示，代价可忽略。
+                val declaredMax = runCatching {
+                    codecInfo.capabilities?.videoCapabilities
+                        ?.supportedFrameRates?.upper?.toFloat() ?: -1f
+                }.getOrDefault(-1f)
+                if (declaredMax > 0f && frameRate > declaredMax) {
+                    AppLog.i(
+                        TAG,
+                        "strip frame-rate hint: source ${frameRate}fps over codec " +
+                            "${codecInfo.name} declared max ${declaredMax}fps"
+                    )
+                    val stripped = format.buildUpon()
+                        .setFrameRate(Format.NO_VALUE.toFloat())
+                        .build()
+                    return super.getMediaCodecConfiguration(
+                        codecInfo, stripped, crypto, operatingRate
+                    )
+                }
+            }
+            return super.getMediaCodecConfiguration(codecInfo, format, crypto, operatingRate)
         }
     }
 

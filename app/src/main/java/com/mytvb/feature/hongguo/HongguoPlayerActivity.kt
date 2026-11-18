@@ -29,6 +29,7 @@ import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.UiScale
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.databinding.ActivityHongguoPlayerBinding
+import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.player.shortcut.PlayerShortcutAction
 import com.mytvb.feature.player.shortcut.PlayerShortcutKeyDispatcher
@@ -484,6 +485,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private fun obtainPlayer(): ExoPlayer {
         player?.let { return it }
         val p = ExoPlayer.Builder(this)
+            // 统一渲染器工厂（对齐 B 站三处播放器）：decoderFallback 兜底、软解开关、
+            // FFmpeg 音频兜底、frameRate 超 codec 声明剥除防御（BT 对拍，issue#113）。
+            // 之前裸 Builder 走 media3 默认 DefaultRenderersFactory，这些全没有。
+            .setRenderersFactory(PlayerInstancePool.createRenderersFactory(this))
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder()
                     .setUsage(androidx.media3.common.C.USAGE_MEDIA)
