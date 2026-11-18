@@ -459,8 +459,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                             if (event.index == 2) {
                                 currentOpenStartMs = PagePerfLogger.now()
                                 PagePerfLogger.markNow("Dynamic", "tab_reselected")
-                                currentUpId = 0L
-                                loadData()
+                                // 侧栏重选 = 刷新当前 UP 列表，与 MENU 键同款强制路径；
+                                // 不能走 loadData()（不带 forceRefresh 会被防重拦截静默不联网）
+                                swipeRefreshLayout?.isRefreshing = true
+                                refreshCurrentVideoList()
                             }
 
                         MainNavigationViewModel.Event.MenuPressed -> {

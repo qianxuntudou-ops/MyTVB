@@ -189,7 +189,7 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
         reload()
     }
 
-    /** 重选本 tab / 菜单键：回顶并聚焦第一张卡片（与分区页一致的刷新语义）。 */
+    /** 侧栏重选本 tab = 重拉当前数据源；菜单键 = 回顶并聚焦第一张卡片。 */
     override fun initObserver() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -197,7 +197,8 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
                     if (isHidden) return@collectLatest
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabReselected ->
-                            if (event.index == TAB_INDEX) scrollToTopAndFocus()
+                            // 侧栏重选 = 重拉当前数据源（reload 自带回顶不聚焦，不抢侧栏焦点）
+                            if (event.index == TAB_INDEX) reload()
                         MainNavigationViewModel.Event.MenuPressed -> scrollToTopAndFocus()
                         else -> Unit
                     }

@@ -51,7 +51,7 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
         super.onViewCreated(view, savedInstanceState)
         setupTabsAndViewPager()
         setupSearchEntry()
-        observeMenuKeyRefresh()
+        observeRefreshEvents()
         // 搜索层/货架层显示时 BACK 先收层，不退出红果页
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
@@ -144,20 +144,26 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
     }
 
     /**
-     * 菜单键刷新（对齐 B 站首页推荐：MainActivity 在焦点位于 RecyclerView/TabLayout
-     * 内时派发 MenuPressed，宿主统一订阅转发当前页，子页不各自订阅）。
+     * 菜单键 / 侧栏重选红果按钮刷新（对齐 B 站首页推荐：MainActivity 在焦点位于
+     * RecyclerView/TabLayout 内时派发 MenuPressed，侧栏已激活按钮再按一次派发
+     * MainTabReselected，宿主统一订阅转发当前页，子页不各自订阅）。
      * isShown 守卫防主 tab 切走后后台刷新（红果页被 hide 时 view 不可见）；
      * 搜索/货架覆盖层打开时刷新归覆盖层自身数据，不动被盖住的底层页。
      */
-    private fun observeMenuKeyRefresh() {
+    private fun observeRefreshEvents() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 mainNavigationViewModel.events.collectLatest { event ->
-                    if (event !is MainNavigationViewModel.Event.MenuPressed) return@collectLatest
+                    val fromSidebarReselect = when (event) {
+                        is MainNavigationViewModel.Event.MenuPressed -> false
+                        is MainNavigationViewModel.Event.MainTabReselected -> event.index == MAIN_TAB_INDEX
+                        else -> return@collectLatest
+                    }
                     if (!isResumed || view?.isShown != true) return@collectLatest
                     if (searchShown || shelfShown) return@collectLatest
                     com.mytvb.core.common.log.AppLog.d(
-                        "Hongguo", "menu key refresh -> page ${binding.viewPager.currentItem}"
+                        "Hongguo",
+                        "${if (fromSidebarReselect) "sidebar reselect" else "menu key"} refresh -> page ${binding.viewPager.currentItem}"
                     )
                     (childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
                         as? HongguoPageFocus)?.refresh()
@@ -296,6 +302,9 @@ class HongguoFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler {
 
     companion object {
         // 侧栏固定序：0推荐/1分类/2动态/3直播/4CCTV直播/5CCTV影视/6红果/7我的/8搜索
+
+        /** 本宿主在 MainActivity 侧栏的固定序（MainTabReselected 过滤用）。 */
+        private const val MAIN_TAB_INDEX = 6
 
         private val PAGE_TITLES = intArrayOf(
             R.string.hongguo_tab_rank,

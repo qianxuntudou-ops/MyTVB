@@ -636,7 +636,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             MarmotLiveActivity.start(this)
             return
         }
-        // 其他侧边栏按钮再次点击，不触发刷新，避免抢走焦点
+        // 其他侧边栏按钮再次点击 = 刷新当前内容页的激活 tab（各宿主订阅 MainTabReselected
+        // 分支自带 isShown/isResumed 守卫与"焦点已在列表内才回焦"守卫，不会抢走侧栏焦点）
+        mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MainTabReselected(index))
     }
 
     override fun onTabNavigateRight(index: Int): Boolean {
