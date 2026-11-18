@@ -5,6 +5,7 @@ import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.hongguo.net.HongguoAccount
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoDeviceRegister
+import com.mytvb.feature.hongguo.net.HongguoHeadCache
 import com.mytvb.feature.hongguo.net.HongguoPlay
 import com.mytvb.feature.hongguo.net.HongguoSearch
 import com.mytvb.feature.hongguo.net.HongguoSession
@@ -427,6 +428,8 @@ class HongguoRepository private constructor(context: Context) {
      * 播放地址预取缓存（官方 preload/v1 批量预取的落点）：条目 = PlayUrl 纯字符串
      * 轻量对象（每条 <1KB），内存驻留可忽略。URL 有效期约 6h → TTL 5h 留余量，
      * 过期/未命中走实时解析（player/v1 主链路）。
+     * 2026-11-18 P1 加磁盘层（对齐 HGTV P3 双层缓存）：冷启动/杀进程后重进同集
+     * 免 V5 签名请求（起播关键路径最大单项）；文件 mtime 即时间戳，TTL 同内存层。
      */
     private val playUrlCacheLock = Any()
     private val playUrlCache = HashMap<String, HongguoPlay.PlayUrl>()
@@ -444,6 +447,87 @@ class HongguoRepository private constructor(context: Context) {
     private fun cachePlayUrl(key: String, value: HongguoPlay.PlayUrl) = synchronized(playUrlCacheLock) {
         playUrlCache[key] = value
         playUrlCacheAt[key] = System.currentTimeMillis()
+        writeDiskPlayUrl(key, value)
+    }
+
+    /** 地址磁盘缓存目录（cacheDir/hongguo_playurl，全局总账管辖）。 */
+    private fun playUrlDiskDir(): java.io.File =
+        java.io.File(appContext.cacheDir, "hongguo_playurl").apply {
+            mkdirs()
+            com.mytvb.core.common.cache.GlobalCacheBudget.register(this)
+        }
+
+    /** DataOutputStream 二进制序列化（writeUTF 对任意字符串安全，零第三方依赖）。 */
+    private fun writeDiskPlayUrl(key: String, value: HongguoPlay.PlayUrl) {
+        runCatching {
+            val f = java.io.File(playUrlDiskDir(), "$key.purl")
+            val tmp = java.io.File(f.path + ".tmp")
+            java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(tmp), 4096)).use {
+                it.writeUTF(value.url)
+                it.writeUTF(value.contentKeyHex ?: "")
+                it.writeUTF(value.kidHex ?: "")
+                it.writeUTF(value.codec)
+                it.writeUTF(value.quality)
+                it.writeInt(value.width)
+                it.writeInt(value.height)
+                it.writeLong(value.durationSec)
+                it.writeUTF(value.vid)
+                it.writeInt(value.pixels)
+                it.writeInt(value.availableQualities.size)
+                value.availableQualities.forEach { v -> it.writeInt(v) }
+                val t = value.bigThumbs
+                if (t == null) it.writeBoolean(false) else {
+                    it.writeBoolean(true)
+                    it.writeUTF(t.imageUrl)
+                    it.writeInt(t.cellWidth); it.writeInt(t.cellHeight)
+                    it.writeInt(t.xLen); it.writeInt(t.intervalSec); it.writeInt(t.frameCount)
+                }
+            }
+            f.delete()
+            if (!tmp.renameTo(f)) tmp.delete()
+        }.onFailure { AppLog.d("Hongguo", "playurl disk write fail: ${it.message}") }
+    }
+
+    private fun takeDiskPlayUrl(key: String): HongguoPlay.PlayUrl? = runCatching {
+        val f = java.io.File(playUrlDiskDir(), "$key.purl")
+        if (!f.isFile) return null
+        // mtime 即写入时间（tmp+rename 保证原子，mtime 跟随 rename 不变）
+        if (System.currentTimeMillis() - f.lastModified() > PLAY_URL_TTL_MS) {
+            f.delete()
+            return null
+        }
+        java.io.DataInputStream(f.inputStream().buffered()).use {
+            val url = it.readUTF()
+            val keyHex = it.readUTF().ifEmpty { null }
+            val kidHex = it.readUTF().ifEmpty { null }
+            val codec = it.readUTF()
+            val quality = it.readUTF()
+            val width = it.readInt(); val height = it.readInt()
+            val durationSec = it.readLong()
+            val vid = it.readUTF()
+            val pixels = it.readInt()
+            val nQuals = it.readInt()
+            val quals = ArrayList<Int>(nQuals)
+            repeat(nQuals) { _ -> quals.add(it.readInt()) }
+            val thumbs = if (it.readBoolean()) {
+                val imageUrl = it.readUTF()
+                HongguoPlay.BigThumbs(
+                    imageUrl, it.readInt(), it.readInt(), it.readInt(), it.readInt(), it.readInt()
+                )
+            } else null
+            HongguoPlay.PlayUrl(
+                url, keyHex, codec, quality, width, height, durationSec, vid, pixels, quals, thumbs, kidHex
+            )
+        }
+    }.getOrNull()
+
+    /** 地址失效清理（播放器 403/404 时调用）：删内存+磁盘条目，重试/重进即重新解析。 */
+    fun dropPlayUrlCache(vid: String, pixels: Int) {
+        val key = "$vid@$pixels"
+        synchronized(playUrlCacheLock) {
+            playUrlCache.remove(key); playUrlCacheAt.remove(key)
+        }
+        runCatching { java.io.File(playUrlDiskDir(), "$key.purl").delete() }
     }
 
     /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。
@@ -453,6 +537,15 @@ class HongguoRepository private constructor(context: Context) {
             val key = "$vid@$preferredPixels"
             takeCachedPlayUrl(key)?.let {
                 AppLog.d("Hongguo", "playUrl cache hit vid=$vid q=$preferredPixels")
+                return@withContext it
+            }
+            // P1 磁盘层：内存 miss 先查磁盘（冷启动重进同集），命中只回填内存（不重写磁盘）
+            takeDiskPlayUrl(key)?.let {
+                AppLog.d("Hongguo", "playUrl disk hit vid=$vid q=$preferredPixels")
+                synchronized(playUrlCacheLock) {
+                    playUrlCache[key] = it
+                    playUrlCacheAt[key] = System.currentTimeMillis()
+                }
                 return@withContext it
             }
             var result: HongguoPlay.PlayUrl? = null
@@ -471,8 +564,10 @@ class HongguoRepository private constructor(context: Context) {
      * 起播/切集成功后后台预热后续集（当前集+1 起 2 集；[vids] 首位=下一集）：
      * 1) 官方 preload/v1 批量预取地址（服务端 200 空体时全挂，走 2 兜底）；
      * 2) 下一集地址缓存 miss 时实时解析（player/v1 → K-M1 fallback，历史实证可用）；
-     * 3) 下一集为加密流时整集预下载落地（切集秒开，[resolvePlayableFile] 在途去重
-     *    防与切集并发双下）。释放同池：落地即受「缓存限制」LRU 修剪，无独立释放点。
+     * 3) 下一集为加密流时**头部预取落盘**（2026-11-18 P2 对齐 HGTV：Range 拉头部段
+     *    截到 moov 结束 ~122KB，替代旧整集预下载——30MB 慢网 90s 难落地还与在播流
+     *    抢带宽；头部秒级完成，切集时 ClearKey 路径的 moov 网络段归零）。
+     *    整集落地链路保留作 ClearKey 不可用/播放失败兜底（[fallbackDownload]）。
      * 全部失败静默，切集实时解析兜底。
      */
     fun preloadNextEpisodes(vids: List<String>) {
@@ -497,12 +592,67 @@ class HongguoRepository private constructor(context: Context) {
                 // playUrl 内部先查地址缓存（preload/v1 命中免请求），miss 走 player/v1→K-M1
                 val play = playUrl(next, pixels)
                 if (play.contentKeyHex != null) {
-                    resolvePlayableFile(play)
-                    AppLog.d("Hongguo", "prefetch download ok vid=$next q=${play.pixels}")
+                    prefetchHead(play)
                 } else {
-                    AppLog.d("Hongguo", "prefetch next plain vid=$next (直链不落地)")
+                    AppLog.d("Hongguo", "prefetch next plain vid=$next (直链不走 PSSH 手术)")
                 }
             }.onFailure { AppLog.d("Hongguo", "prefetch next fail vid=$next: ${it.message}") }
+        }
+    }
+
+    /**
+     * 详情页将播集地址预热（2026-11-18 P0，对齐 HGTV 秒开差距分析）：详情加载成功即
+     * 后台解析将播集（续看集/第 1 集）播放地址进缓存——用户看简介/选集的窗口期足够
+     * 完成 V5 签名+RTT，点播放时 [playUrl] 缓存命中，起播关键路径砍掉最大单项。
+     * 失败静默（点播放实时解析兜底）。
+     */
+    fun warmupPlayUrl(vid: String) {
+        if (vid.isEmpty()) return
+        cloudScope.launch {
+            runCatching { playUrl(vid, defaultQualityPixels()) }
+                .onSuccess { AppLog.d("Hongguo", "detail warmup ok vid=$vid") }
+                .onFailure { AppLog.d("Hongguo", "detail warmup fail vid=$vid: ${it.message}") }
+        }
+    }
+
+    /**
+     * CENC 流头部预取（对齐 HGTV C0174j3 的头部预取/落盘）：Range 拉 512KB，本地
+     * 扫 box 链截到 moov 结束（红果实测 ~122KB）写入 [HongguoHeadCache]；总长取自
+     * Content-Range（仅 206 分段响应有效，200 全量直接放弃防整集误下）。
+     * CencPsshDataSource 起播时本地命中，免去 moov 网络下载段。
+     */
+    private suspend fun prefetchHead(play: HongguoPlay.PlayUrl) {
+        if (play.contentKeyHex == null) return
+        withContext(Dispatchers.IO) {
+            runCatching {
+                HongguoHeadCache.ensureDir(appContext)
+                if (HongguoHeadCache.load(play.url) != null) {
+                    AppLog.d("Hongguo", "head prefetch skip (cached) vid=${play.vid}")
+                    return@runCatching
+                }
+                val req = okhttp3.Request.Builder()
+                    .url(play.url)
+                    .header("User-Agent", com.mytvb.feature.hongguo.net.HongguoHeadCache.CDN_UA)
+                    .header("Range", "bytes=0-${HongguoHeadCache.PREFETCH_LIMIT - 1}")
+                    .header("Accept-Encoding", "identity")
+                    .build()
+                cencHttpClient.newCall(req).execute().use { resp ->
+                    if (resp.code != 206) {
+                        AppLog.d("Hongguo", "head prefetch not 206 (${resp.code}) vid=${play.vid}")
+                        return@use
+                    }
+                    val total = resp.header("Content-Range")
+                        ?.substringAfterLast('/')?.toLongOrNull() ?: return@use
+                    val body = resp.body?.bytes() ?: return@use
+                    val headEnd = HongguoHeadCache.headEndOf(body)
+                    if (headEnd > 0) {
+                        HongguoHeadCache.save(play.url, total, body.copyOf(headEnd))
+                        AppLog.d("Hongguo", "head prefetch ok vid=${play.vid} ${headEnd}B")
+                    } else {
+                        AppLog.d("Hongguo", "head prefetch no moov vid=${play.vid}")
+                    }
+                }
+            }.onFailure { AppLog.d("Hongguo", "head prefetch fail vid=${play.vid}: ${it.message}") }
         }
     }
 

@@ -2,6 +2,7 @@ package com.mytvb.feature.hongguo.net
 
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import java.io.IOException
 
@@ -18,6 +19,12 @@ import java.io.IOException
  *    同步修正 stco/co64 全部条目 +52（它们指向 mdat 样本区；saio 指向 moov 内
  *    的 senc 数据区，moov 内已有 box 位置不动，无需修）；
  * 4. 手术后的头部缓存在内存，后续 read 先吐缓冲再透传 upstream。
+ *
+ * 2026-11-18 P2 头部磁盘缓存（对齐 HGTV C0174j3 头部落盘）：open(position==0)
+ * 优先读 [HongguoHeadCache]（下集预取/上次播放落盘的原始头部），命中则 upstream
+ * 直接从头部之后开 Range——起播关键路径免去 moov 网络下载；网络路径首次手术成功后
+ * 原始头部回写缓存（同集重进受益）。总长不符（流变）弃缓存降级网络；upstream 403/404
+ * （地址过期）顺手清头部缓存，对齐参考实现的 StreamExpired 清理策略。
  *
  * seek 触发的 reopen（position>0）不做注入直接透传（moov 已被 extractor 缓存）。
  * 手术失败（流形态意外）静默降级为透传——播放行为回到注入前，无额外风险。
@@ -41,24 +48,54 @@ class CencPsshDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
+        val url = dataSpec.uri.toString()
+        // 头部缓存优先（仅首开 position==0；seek reopen 走下方透传路径）
+        if (dataSpec.position == 0L) {
+            val cached = runCatching { HongguoHeadCache.load(url) }.getOrNull()
+            if (cached != null) {
+                val headLen = cached.bytes.size.toLong()
+                val restLen = if (dataSpec.length < 0L) -1L else dataSpec.length - headLen
+                val spec = dataSpec.buildUpon()
+                    .setPosition(headLen)
+                    .setLength(restLen)
+                    .build()
+                header = null
+                headerPos = 0
+                val len2 = openUpstream(url, spec)
+                // 总长校验（对齐 HGTV VideoChanged 防御）：流变了弃缓存走网络重读
+                if (len2 > 0 && headLen + len2 == cached.totalLen &&
+                    runCatching { injectFromRaw(cached.bytes) }.isSuccess
+                ) {
+                    com.mytvb.core.common.log.AppLog.d(
+                        "Hongguo", "pssh head cache hit ${cached.bytes.size}B uri=${url.take(80)}"
+                    )
+                    return headLen + len2 + injectedDelta
+                }
+                // 降级：关掉这次半开的连接，从头走网络路径
+                runCatching { upstream.close() }
+                if (len2 > 0 && headLen + len2 != cached.totalLen) {
+                    HongguoHeadCache.drop(url)
+                }
+            }
+        }
         // seek reopen（position>0）：mdat 区的逻辑坐标平移回物理坐标再透传
         val upstreamSpec =
             if (dataSpec.position == 0L || injectPoint < 0 || dataSpec.position < injectPoint) dataSpec
             else dataSpec.buildUpon().setPosition(dataSpec.position - injectedDelta).build()
-        val len = upstream.open(upstreamSpec)
+        val len = openUpstream(url, upstreamSpec)
         header = null
         headerPos = 0
         // injectedDelta/injectPoint/tailPadded 不在此重置：seek 触发的多次 open 属同一逻辑
         // 流，注入信息必须跨 open 保留（重置会让 seek 平移失效，读错数据黑屏）
         if (dataSpec.position == 0L && len > 0) {
-            runCatching { injectHeader() }
+            runCatching { injectHeader(len, url) }
                 .onFailure {
                     header = null; headerPos = 0
                     com.mytvb.core.common.log.AppLog.w("Hongguo", "pssh inject fail: ${it.message}")
                 }
                 .onSuccess {
                     com.mytvb.core.common.log.AppLog.d(
-                        "Hongguo", "pssh injected header=${header?.size}B uri=${dataSpec.uri.toString().take(80)}"
+                        "Hongguo", "pssh injected header=${header?.size}B uri=${url.take(80)}"
                     )
                 }
         }
@@ -68,33 +105,68 @@ class CencPsshDataSource(
         return len + injectedDelta
     }
 
-    /** 预读 ftyp+moov 并完成 pssh 手术（upstream 读位置停在 moov 结束处）。 */
-    private fun injectHeader() {
-        val pssh = buildPsshV1(kidHex)
+    /** upstream open 统一入口：403/404 = 签名地址过期，顺手清头部缓存再抛。 */
+    private fun openUpstream(url: String, spec: DataSpec): Long = try {
+        upstream.open(spec)
+    } catch (e: HttpDataSource.InvalidResponseCodeException) {
+        if (e.responseCode == 403 || e.responseCode == 404) HongguoHeadCache.drop(url)
+        throw e
+    }
+
+    /** 网络预读 ftyp+moov 并完成 pssh 手术（upstream 读位置停在 moov 结束处）；
+     *  成功后原始头部回写磁盘缓存（同集重进/seek 重开受益）。 */
+    private fun injectHeader(totalLen: Long, url: String) {
         // ftyp（含可能的其它前置小 box）：按 box 链读到 moov 为止
-        val prefixBoxes = ArrayList<ByteArray>(2)
-        var moov: ByteArray? = null
+        val boxes = ArrayList<ByteArray>(2)
         for (i in 0 until 8) {
             val box = readBox() ?: throw IOException("stream ended before moov")
             if (box.size >= 4 && String(box, 4, 4, Charsets.US_ASCII) == "moov") {
-                moov = box; break
+                boxes.add(box); break
             }
-            prefixBoxes.add(box)
+            boxes.add(box)
         }
-        moov ?: throw IOException("moov not found in stream head")
-        patchStco(moov, pssh.size)
-        // moov size 字段 +52（大端），pssh 追加到尾部
-        val patchedSize = (beU32(moov, 0) + pssh.size)
-        putBe32(moov, 0, patchedSize)
-        val out = ByteArray(prefixBoxes.sumOf { it.size } + moov.size + pssh.size)
+        val raw = ByteArray(boxes.sumOf { it.size })
         var off = 0
-        for (b in prefixBoxes) { System.arraycopy(b, 0, out, off, b.size); off += b.size }
-        System.arraycopy(moov, 0, out, off, moov.size)
-        System.arraycopy(pssh, 0, out, off + moov.size, pssh.size)
+        for (b in boxes) { System.arraycopy(b, 0, raw, off, b.size); off += b.size }
+        // 循环正常收尾 = 末个 box 是 moov（否则 8 个 box 都不是，头部形态意外）
+        if (String(boxes.last(), 4, 4, Charsets.US_ASCII) != "moov") {
+            throw IOException("moov not found in stream head")
+        }
+        injectFromRaw(raw)
+        // 原始（未手术）头部落盘：头部 box 链完整且总长已知才有资格进缓存
+        if (totalLen > raw.size) {
+            runCatching { HongguoHeadCache.save(url, totalLen, raw) }
+        }
+    }
+
+    /** 对原始头部字节（ftyp..moov 完整链）做 pssh 手术，产出去重后的 [header]。
+     *  手术在副本上进行——调用方持有的 raw（预取落盘/缓存命中复用）必须保持原始未手术态，
+     *  否则再次手术会 stco 双重 +52 错位（2026-11-18 MuMu 实测教训）。 */
+    private fun injectFromRaw(rawSrc: ByteArray) {
+        // 定位 moov 区间（只读扫描）
+        var off = 0
+        var moovStart = -1
+        var moovEnd = -1
+        while (off + 8 <= rawSrc.size) {
+            val size = beU32(rawSrc, off).toLong() and 0xFFFFFFFFL
+            if (size < 8 || off + size > rawSrc.size) throw IOException("bad head box chain")
+            val type = String(rawSrc, off + 4, 4, Charsets.US_ASCII)
+            if (type == "moov") { moovStart = off; moovEnd = off + size.toInt(); break }
+            off += size.toInt()
+        }
+        if (moovStart < 0) throw IOException("moov not found in head bytes")
+        val pssh = buildPsshV1(kidHex)
+        val work = rawSrc.copyOf()
+        patchContainer(work, moovStart, moovEnd, pssh.size)
+        val out = ByteArray(work.size + pssh.size)
+        System.arraycopy(work, 0, out, 0, work.size)
+        System.arraycopy(pssh, 0, out, work.size, pssh.size)
+        // moov size +52（大端；size 字段在 moovStart）
+        putBe32(out, moovStart, beU32(out, moovStart) + pssh.size)
         header = out
         injectedDelta = pssh.size
-        // 注入点 = 前缀 box 链原始字节 + 原 moov（未含 pssh 的物理终点）
-        injectPoint = (out.size - pssh.size).toLong()
+        // 注入点 = 原始头部物理终点（pssh 之前的布局不变）
+        injectPoint = rawSrc.size.toLong()
     }
 
     /** 从 upstream 完整读一个顶层 box（长度前缀读取；size=0/1 不支持——头部 box 不该出现）。 */
@@ -121,68 +193,34 @@ class CencPsshDataSource(
         return box
     }
 
-    /** 深度遍历 moov（缓冲内字节），stco/co64 全部条目 +delta。 */
-    private fun patchStco(moov: ByteArray, delta: Int) {
-        var off = 8
-        val end = moov.size
-        while (off + 8 <= end) {
-            val size = beU32(moov, off).toLong() and 0xFFFFFFFFL
-            if (size < 8 || off + size > end) break
-            val type = String(moov, off + 4, 4, Charsets.US_ASCII)
-            when (type) {
-                "stco" -> {
-                    val n = beU32(moov, off + 12)
-                    for (i in 0 until n) {
-                        val p = off + 16 + i * 4
-                        putBe32(moov, p, beU32(moov, p) + delta)
-                    }
-                }
-                "co64" -> {
-                    val n = beU32(moov, off + 12)
-                    for (i in 0 until n) {
-                        val p = off + 16 + i * 8
-                        val hi = beU32(moov, p)
-                        val lo = beU32(moov, p + 4)
-                        var v = ((hi.toLong() and 0xFFFFFFFFL) shl 32) or (lo.toLong() and 0xFFFFFFFFL)
-                        v += delta.toLong()
-                        putBe32(moov, p, (v ushr 32).toInt())
-                        putBe32(moov, p + 4, v.toInt())
-                    }
-                }
-                "moov", "trak", "mdia", "minf", "stbl" -> patchStcoIn(moov, off + 8, (off + size).toInt(), delta)
-            }
-            off += size.toInt()
-        }
-    }
-
-    /** 递归容器（不重入 stco 层）。 */
-    private fun patchStcoIn(moov: ByteArray, start: Int, end: Int, delta: Int) {
+    /** 递归容器遍历（moov/trak/mdia/minf/stbl 层级 + stco/co64 条目平移）。 */
+    private fun patchContainer(buf: ByteArray, start: Int, end: Int, delta: Int) {
         var off = start
         while (off + 8 <= end) {
-            val size = beU32(moov, off).toLong() and 0xFFFFFFFFL
+            val size = beU32(buf, off).toLong() and 0xFFFFFFFFL
             if (size < 8 || off + size > end) break
-            val type = String(moov, off + 4, 4, Charsets.US_ASCII)
+            val type = String(buf, off + 4, 4, Charsets.US_ASCII)
             when (type) {
                 "stco" -> {
-                    val n = beU32(moov, off + 12)
+                    val n = beU32(buf, off + 12)
                     for (i in 0 until n) {
                         val p = off + 16 + i * 4
-                        putBe32(moov, p, beU32(moov, p) + delta)
+                        putBe32(buf, p, beU32(buf, p) + delta)
                     }
                 }
                 "co64" -> {
-                    val n = beU32(moov, off + 12)
+                    val n = beU32(buf, off + 12)
                     for (i in 0 until n) {
                         val p = off + 16 + i * 8
-                        val hi = beU32(moov, p)
-                        val lo = beU32(moov, p + 4)
+                        val hi = beU32(buf, p)
+                        val lo = beU32(buf, p + 4)
                         var v = ((hi.toLong() and 0xFFFFFFFFL) shl 32) or (lo.toLong() and 0xFFFFFFFFL)
                         v += delta.toLong()
-                        putBe32(moov, p, (v ushr 32).toInt())
-                        putBe32(moov, p + 4, v.toInt())
+                        putBe32(buf, p, (v ushr 32).toInt())
+                        putBe32(buf, p + 4, v.toInt())
                     }
                 }
-                "trak", "mdia", "minf", "stbl" -> patchStcoIn(moov, off + 8, (off + size).toInt(), delta)
+                "moov", "trak", "mdia", "minf", "stbl" -> patchContainer(buf, off + 8, (off + size).toInt(), delta)
             }
             off += size.toInt()
         }

@@ -419,6 +419,14 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 // 进播放即出圈（B 站同款观感）：地址解析黑屏段也有加载反馈，收圈统一在 finally
                 binding.progressBuffering.visibility = View.VISIBLE
                 AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
+                // ClearKey HAL 懒启动预热（MuMu 实测冷启动 5s+ 才注册服务）：与地址解析
+                // 并行触发 MediaDrm 实例化，防首播「Unexpected runtime error」竞态落整集兜底
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        androidx.media3.exoplayer.drm.FrameworkMediaDrm
+                            .newInstance(androidx.media3.common.C.CLEARKEY_UUID).release()
+                    }
+                }
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
                 AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
                 val source = resolvePlayable(play)
@@ -448,37 +456,33 @@ class HongguoPlayerActivity : AppCompatActivity() {
      * [androidx.media3.exoplayer.drm.LocalMediaDrmCallback] 本地同步返回（不发网络）；
      * Media3 Mp4Extractor 读 mp4 pssh/tenc 建 DrmSession，解密在 MediaDrm 硬件层随
      * 解码流水线流式进行——起播只等 moov+首 GOP，不再整集下载 15-20 秒。
+     *
+     * DrmSessionManager 每次新建（2026-11-18 教训，勿再缓存复用）：DefaultDrmSessionManager
+     * 绑定 playback looper，player release 是异步的——旧 player 未解绑时新 player setPlayer
+     * 100% 撞 initPlaybackLooper 的 Preconditions.checkState（MuMu 实测 retry 必炸，
+     * 连锁落整集兜底=「打开等半天」）。本地 ClearKey license 新建零成本。
      */
-    /** DRM 会话管理器缓存（同 key/kid 复用）：竞态重试时复用已 open 的会话，
-     *  codec 初始化即刻拿到 MediaCrypto，不再重演 mCrypto 竞态。 */
-    private var cachedDrmManager: androidx.media3.exoplayer.drm.DefaultDrmSessionManager? = null
-    private var cachedDrmFingerprint: String? = null
-
     private fun buildClearKeyMediaSource(source: HongguoRepository.PlayableSource): androidx.media3.exoplayer.source.MediaSource {
-        val fingerprint = "${source.keyHex}|${source.kidHex}"
-        var drmSessionManager = cachedDrmManager?.takeIf { cachedDrmFingerprint == fingerprint }
-        if (drmSessionManager == null) {
-            AppLog.d("Hongguo", "clearkey src url=${source.uri.take(180)} kid=${source.kidHex}")
-            val keyB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.keyHex!!))
-            val kidB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.kidHex!!))
-            val license = """{"keys":[{"kty":"oct","k":"$keyB64","kid":"$kidB64"}],"type":"temporary"}"""
-            val drmCallback = androidx.media3.exoplayer.drm.LocalMediaDrmCallback(license.toByteArray(Charsets.UTF_8))
-            drmSessionManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
-                .setUuidAndExoMediaDrmProvider(
-                    androidx.media3.common.C.CLEARKEY_UUID,
-                    androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER
-                )
-                .build(drmCallback)
-            cachedDrmManager = drmSessionManager
-            cachedDrmFingerprint = fingerprint
-        }
+        AppLog.d("Hongguo", "clearkey src url=${source.uri.take(180)} kid=${source.kidHex}")
+        val keyB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.keyHex!!))
+        val kidB64 = base64UrlNoPad(com.mytvb.feature.hongguo.net.HongguoCrypto.hexToBytes(source.kidHex!!))
+        val license = """{"keys":[{"kty":"oct","k":"$keyB64","kid":"$kidB64"}],"type":"temporary"}"""
+        val drmCallback = androidx.media3.exoplayer.drm.LocalMediaDrmCallback(license.toByteArray(Charsets.UTF_8))
+        val drmSessionManager = androidx.media3.exoplayer.drm.DefaultDrmSessionManager.Builder()
+            .setUuidAndExoMediaDrmProvider(
+                androidx.media3.common.C.CLEARKEY_UUID,
+                androidx.media3.exoplayer.drm.FrameworkMediaDrm.DEFAULT_PROVIDER
+            )
+            .build(drmCallback)
         val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-            .setUserAgent(CENC_DOWNLOAD_UA)
+            .setUserAgent(com.mytvb.feature.hongguo.net.HongguoHeadCache.CDN_UA)
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(20_000)
             .setAllowCrossProtocolRedirects(true)
         // pssh 注入层：红果 CENC 流无 pssh（KID 只在 tenc），media3 拿不到
-        // DrmInitData 不会激活解密管线；流头部注入 PSSH v1（stco 同步 +52 修正）
+        // DrmInitData 不会激活解密管线；流头部注入 PSSH v1（stco 同步 +52 修正）。
+        // 头部磁盘缓存目录随工厂初始化（P2：open 时本地命中免去 moov 网络下载）
+        com.mytvb.feature.hongguo.net.HongguoHeadCache.ensureDir(this)
         val dataSourceFactory = androidx.media3.datasource.DataSource.Factory {
             com.mytvb.feature.hongguo.net.CencPsshDataSource(
                 httpFactory.createDataSource(), source.kidHex!!
@@ -521,11 +525,12 @@ class HongguoPlayerActivity : AppCompatActivity() {
         if (clearKeyFallbackTried) return false
         val play = currentPlay ?: return false
         // 竞态类错误（"queuing secure buffer without mCrypto"）：session 此刻已就绪，
-        // 同源重建 player 即可，不必走整集下载
+        // 同源重建 player 即可，不必走整集下载。间隔 800ms——player release 异步 +
+        // MuMu 类虚拟机 ClearKey HAL 冷启动慢（实测 5s+），300ms 内重建会再撞
         if (!clearKeyRetryTried) {
             clearKeyRetryTried = true
             AppLog.w("Hongguo", "clearkey race (${error.message}), retry same source vid=${play.vid}")
-            binding.root.postDelayed({ startPlayer(source, resetFallback = false) }, 300)
+            binding.root.postDelayed({ startPlayer(source, resetFallback = false) }, 800)
             return true
         }
         clearKeyFallbackTried = true
@@ -630,6 +635,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLog.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
+                // 签名地址过期（403/404）：清三层缓存（内存地址/磁盘地址/头部），重进重试即重新解析
+                val respCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
+                if (respCode == 403 || respCode == 404) {
+                    currentPlay?.let { repository.dropPlayUrlCache(it.vid, it.pixels) }
+                }
                 // ClearKey 源失败先回落整集下载解密（每源一次），仍失败才报错退出
                 if (maybeFallbackFromClearKey(error)) return
                 AppToast.show(this@HongguoPlayerActivity, getString(R.string.hongguo_play_error, error.errorCodeName))
@@ -1398,9 +1408,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
-        /** CDN 直链下载 UA（与整集下载同款，Repository.downloadDecryptLand 实测可用）。 */
-        private const val CENC_DOWNLOAD_UA =
-            "com.phoenix.read/71332 (Linux; U; Android 15; zh_CN; 2211133C; Build/V417IR)"
         private const val EXTRA_SERIES_ID = "hg_series_id"
         private const val EXTRA_TITLE = "hg_title"
         private const val EXTRA_COVER = "hg_cover"

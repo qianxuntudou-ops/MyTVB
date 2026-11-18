@@ -152,8 +152,16 @@ class HongguoDetailDialog(
         else -> false
     }
 
-    private fun load() {
-        scope.launch {
+    /** 将播集地址预热（P0）：续看集或第 1 集——与 [playEpisode] 的选集口径一致，
+     *  用户点播放按钮时命中同 key 缓存。未开播已在 load() 上游 return，无需判断。 */
+    private fun warmupPlayableEpisode() {
+        val d = detail ?: return
+        val index = if (hasWatched) lastEpisodeIndex else 1
+        val vid = d.episodes.getOrNull(index - 1)?.videoId ?: return
+        repository.warmupPlayUrl(vid)
+    }
+
+    private fun load() {        scope.launch {
             try {
                 val d = repository.detail(seriesId)
                 detail = d
@@ -164,6 +172,9 @@ class HongguoDetailDialog(
                     return@launch
                 }
                 refreshProgress()
+                // P0 将播集地址预热：用户停留在详情的窗口期把 V5 取址做完，点播放即缓存命中
+                // （对齐 HGTV 秒开差距分析；hasWatched/lastEpisodeIndex 由 refreshProgress 就绪）
+                warmupPlayableEpisode()
                 binding.textTitle.text = d.drama.title
                 // 评分单独强调（强调色）；无评分数据时整格隐藏，标签行不再带评分前缀
                 val score = d.drama.score.ifBlank { scoreHint }.trim()
