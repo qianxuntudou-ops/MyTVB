@@ -146,6 +146,9 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
                     setRefreshing(false)
                     val currentItemCount = (adapter as? VideoAdapter)?.items?.size ?: 0
                     if (currentItemCount == videos.size && currentItemCount > 0) {
+                        // 刷新后条数与现列表一致（分区排行榜固定条数，重选/MENU 刷新几乎必中）：
+                        // 不重设列表，但 loadData 已 showLoading(true)，必须关圈，否则永久转圈（issue#123）
+                        showLoading(false)
                         return@collectLatest
                     }
                     adapter?.setData(videos)
@@ -163,9 +166,17 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.loading.collectLatest { loading ->
-                    if (loading && adapter?.itemCount == 0) {
-                        showContent()
-                        showLoading(true)
+                    if (loading) {
+                        if (adapter?.itemCount == 0) {
+                            showContent()
+                            showLoading(true)
+                        }
+                    } else {
+                        // 大圈收尾统一由 loading=false 驱动：两次拉取内容完全一致时 StateFlow
+                        // 值去重不发射 videos，上面那条 collectLatest 不会跑，圈收不掉；
+                        // 同时清 isLoading 残留，避免 onTabSelected 被永远早退
+                        isLoading = false
+                        showLoading(false)
                     }
                 }
             }
@@ -177,6 +188,8 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
                     if (!error.isNullOrBlank()) {
                         isLoading = false
                         setRefreshing(false)
+                        // 大圈 addView 在根布局末尾（Z 序最顶层），不关会盖住 error 视图的重试按钮
+                        showLoading(false)
                         showError(error)
                         viewModel.clearError()
                     }
