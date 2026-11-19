@@ -1546,6 +1546,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 playerView.setDanmakuEnabled(enabled)
                 AppToast.show(this, "${getString(R.string.dm_switch)}：${getString(if (enabled) R.string.on else R.string.off)}")
             }
+            PlayerShortcutAction.COMMENT_PANEL -> showCommentPanel()
             PlayerShortcutAction.SMART_SHIELD -> playerView.toggleDmSmartShield()
             PlayerShortcutAction.MERGE_DUPLICATE -> playerView.toggleDmMergeDuplicate()
             PlayerShortcutAction.DOUBLE_BACK_EXIT -> toggleShortcutSwitch(

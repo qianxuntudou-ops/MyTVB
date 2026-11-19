@@ -29,6 +29,7 @@ enum class PlayerShortcutAction(val id: String) {
     SUPER_CHAT("super_chat"),
     ALWAYS_CLOCK("always_clock"),
     DANMAKU("danmaku"),
+    COMMENT_PANEL("comment_panel"),
     SMART_SHIELD("smart_shield"),
     MERGE_DUPLICATE("merge_duplicate"),
     DOUBLE_BACK_EXIT("double_back_exit"),

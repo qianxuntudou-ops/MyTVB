@@ -171,6 +171,7 @@ class ShortcutManageDialog(
             PlayerShortcutAction.SUPER_CHAT -> getString(R.string.show_live_super_chat)
             PlayerShortcutAction.ALWAYS_CLOCK -> getString(R.string.show_always_on_clock)
             PlayerShortcutAction.DANMAKU -> getString(R.string.dm_switch)
+            PlayerShortcutAction.COMMENT_PANEL -> getString(R.string.player_comment_title)
             PlayerShortcutAction.SMART_SHIELD -> getString(R.string.dm_smart_shield)
             PlayerShortcutAction.MERGE_DUPLICATE -> getString(R.string.dm_merge_duplicate)
             PlayerShortcutAction.DOUBLE_BACK_EXIT -> getString(R.string.exit_double_confirm)
