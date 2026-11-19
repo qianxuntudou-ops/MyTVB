@@ -276,25 +276,128 @@ internal object CdnProfile {
         return healthScoreOf(signal, clock())
     }
 
+    // ===== 候选池合成 =====
+
+    /**
+     * 大陆 upos 节点池：B 站签名在 path+query 上，兼容节点认同一份签名——拿 playurl
+     * 下发的普通地址当 donor，把 host 换成本池任一节点即得新候选（BTR 同款思路，
+     * 顺序沿用其社区实测偏好序；mirrorcoso1 近核心机房——BTR issue#44 验证可用）。
+     * playurl 常只下发 2~4 个地址，扩池让 rotate 的"更优候选"从碰运气变成大概率。
+     */
+    private val MAINLAND_CDN_HOSTS = listOf(
+        "upos-sz-mirrorali.bilivideo.com",
+        "upos-sz-mirrorhw.bilivideo.com",
+        "upos-sz-mirrorbos.bilivideo.com",
+        "upos-sz-mirror08c.bilivideo.com",
+        "upos-sz-mirrorbd.bilivideo.com",
+        "upos-sz-mirror14b.bilivideo.com",
+        "upos-sz-estgoss.bilivideo.com",
+        "upos-sz-mirrorcos.bilivideo.com",
+        "upos-sz-mirrorcoso1.bilivideo.com"
+    )
+
+    private data class MediaUrlParts(val host: String, val path: String, val query: String?)
+
+    /** 智能选线开着才扩池；关闭时与旧行为逐字节一致。 */
+    internal fun expandCandidates(urls: List<String>): List<String> =
+        expandCandidatesInternal(urls, isEnabled())
+
+    /**
+     * 候选池合成纯函数（单测直接喂开关状态）：原始地址在前，合成候选垫后——
+     * 排序时合成候选健康分中性、TTFB 无记录自然沉底，不干扰既有偏好；实测 403
+     * 会被 FailoverDataSource 的 attempt 循环跳过并记健康分沉底，无机制冲突。
+     * 幂等：已合成过的列表再次合成，distinct 兜底不膨胀（rotate 重排重入安全）。
+     */
+    internal fun expandCandidatesInternal(urls: List<String>, enabled: Boolean): List<String> {
+        if (!enabled || urls.isEmpty()) return urls
+        // donor 准入：普通（非中继）的 bilivideo 系或 akamai DASH 分片地址。直播流
+        //（.flv 路径）、progressive mp4、其他域都不合成——直播签名是另一套，upos 节点不认。
+        val donors = urls.mapNotNull { url ->
+            val parts = parseMediaUrlParts(url) ?: return@mapNotNull null
+            if ((isBilivideoMediaHost(parts.host) || isAkamaiHost(parts.host)) &&
+                !isRelayMediaUrl(parts.host, parts.path, parts.query) &&
+                parts.path.endsWith(".m4s", ignoreCase = true)
+            ) url to parts.host else null
+        }
+        val donor = donors.firstOrNull { !isAkamaiHost(it.second) } ?: donors.firstOrNull() ?: return urls
+        // akamai 签名兼容节点同样认可（BTR issue#9：海外账号只发 akamaized.net 时的唯一出路），
+        // 但仅在没有任何普通 donor 时才退而求其次。
+        val synthetic = MAINLAND_CDN_HOSTS.asSequence()
+            .filter { it != donor.second }
+            .mapNotNull { host -> swapUrlAuthority(donor.first, host) }
+            .toList()
+        if (synthetic.isEmpty()) return urls
+        val expanded = (urls + synthetic).distinct()
+        if (expanded.size > urls.size) {
+            AppLog.i(
+                TAG,
+                "cdn_expand from=${urls.size} to=${expanded.size} donor=${donor.second} " +
+                    "added=" + (expanded.size - urls.size)
+            )
+        }
+        return expanded
+    }
+
+    private fun parseMediaUrlParts(url: String): MediaUrlParts? = runCatching {
+        val uri = URI(url)
+        val host = uri.host?.lowercase(Locale.US) ?: return null
+        MediaUrlParts(host = host, path = uri.path ?: "", query = uri.rawQuery)
+    }.getOrNull()
+
+    private fun isBilivideoMediaHost(host: String): Boolean =
+        host.endsWith(".bilivideo.com") || host.endsWith(".bilivideo.cn") || host.endsWith(".bilivideo.net")
+
+    private fun isAkamaiHost(host: String): Boolean = host.endsWith(".akamaized.net")
+
+    /** P2P/PCDN 中继（mcdn 系）的签名只在relay上有效，搬到普通节点必 403（BTR 实锤）。 */
+    private fun isRelayMediaUrl(host: String, path: String, query: String?): Boolean {
+        if (host.startsWith("mcdn.") || host.contains(".mcdn.")) return true
+        if (path.startsWith("/v1/resource/", ignoreCase = true)) return true
+        if (query != null) {
+            for (pair in query.split('&')) {
+                if (pair.startsWith("os=", ignoreCase = true) &&
+                    pair.substringAfter('=').equals("mcdn", ignoreCase = true)
+                ) return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * authority 整段（host[:port]）字符串手术替换：java.net.URI 重建会二次编码已编码的
+     * path/query；顺带剥掉 peer CDN 携带的非标端口（如 :4483）。
+     */
+    private fun swapUrlAuthority(url: String, newHost: String): String? {
+        val schemeIndex = url.indexOf("://")
+        if (schemeIndex < 0) return null
+        val authorityStart = schemeIndex + 3
+        if (authorityStart >= url.length) return null
+        val authorityEnd = url.indexOfAny(charArrayOf('/', '?', '#'), authorityStart)
+        val tailStart = if (authorityEnd < 0) url.length else authorityEnd
+        return url.substring(0, authorityStart) + newHost + url.substring(tailStart)
+    }
+
     // ===== 排序 =====
 
     /**
-     * 候选排序（原 sortUrlsByLatency 的升级，只重排 playurl 已签名候选，不改 Host）：
-     * cdn 基础偏好 → 贴地档位沉底（相对当前流码率）→ 绝对慢吞吐沉底 → 健康分 → TTFB。
-     * [contextBitrateBps] 为当前流码率，0 时退化为绝对阈值口径。
+     * 候选池合成 + 排序（原 sortUrlsByLatency 的升级）：
+     * 先把 playurl 已签名地址经 [expandCandidatesInternal] 换 host 扩池（原始地址优先、
+     * 合成候选垫后），再按 cdn 基础偏好 → 贴地档位沉底（相对当前流码率）→ 绝对慢吞吐
+     * 沉底 → 健康分 → TTFB 重排。[contextBitrateBps] 为当前流码率，0 时退化为绝对阈值口径。
      */
     fun rankCandidates(urls: List<String>, contextBitrateBps: Long): List<String> {
-        if (urls.size <= 1) return urls
+        val expanded = expandCandidates(urls)
+        if (expanded.size <= 1) return expanded
         val nowMs = clock()
         val useSmartRanking = isEnabled()
         val ranked = rankCandidatesInternal(
-            urls = urls,
+            urls = expanded,
             contextBitrateBps = contextBitrateBps,
             signalsSnapshot = synchronized(signals) { signals.toMap() },
             useSmartRanking = useSmartRanking,
             nowMs = nowMs
         )
-        if (useSmartRanking && urls.any { throughputEwmaBps(it) >= 0L }) {
+        if (useSmartRanking && expanded.any { throughputEwmaBps(it) >= 0L }) {
             AppLog.i(
                 TAG,
                 "cdn_rank bitrate=${if (contextBitrateBps > 0L) "${contextBitrateBps / 1000}kbps" else "n/a"} " +

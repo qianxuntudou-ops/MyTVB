@@ -268,4 +268,92 @@ class CdnProfileTest {
         )
         assertEquals(listOf(direct, mcdn, other), ranked)
     }
+
+    // ===== 候选池合成（P1：签名地址换 host 扩池）=====
+
+    private val signedBase =
+        "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/98/98/xx/1234567890-1-30280.m4s" +
+            "?e=ut8egmr2&os=upos&tr=4sc&deadline=1732000000&gen=playsoftv2"
+    private val signedBackup =
+        "https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/98/98/xx/1234567890-1-30280.m4s" +
+            "?e=ut8egmr3&os=upos&tr=4sc&deadline=1732000001&gen=playsoftv2"
+    private val mainlandPool = setOf(
+        "upos-sz-mirrorali.bilivideo.com", "upos-sz-mirrorhw.bilivideo.com",
+        "upos-sz-mirrorbos.bilivideo.com", "upos-sz-mirror08c.bilivideo.com",
+        "upos-sz-mirrorbd.bilivideo.com", "upos-sz-mirror14b.bilivideo.com",
+        "upos-sz-estgoss.bilivideo.com", "upos-sz-mirrorcos.bilivideo.com",
+        "upos-sz-mirrorcoso1.bilivideo.com"
+    )
+
+    @Test
+    fun `expand synthesizes mainland hosts keeping originals first`() {
+        val expanded = CdnProfile.expandCandidatesInternal(listOf(signedBase, signedBackup), enabled = true)
+        // 2 原始 + 8 合成（池 9 个 host 减去 donor 自身 mirrorcos）
+        assertEquals(10, expanded.size)
+        assertEquals("原始地址保持在前，不被合成候选挤掉", listOf(signedBase, signedBackup), expanded.take(2))
+        assertEquals("合成列表无重复", expanded.size, expanded.distinct().size)
+        assertTrue(
+            "新增候选全部来自大陆池且 mirrorcoso1 已入池",
+            expanded.drop(2).all { CdnProfile.extractHost(it) in mainlandPool } &&
+                expanded.any { CdnProfile.extractHost(it) == "upos-sz-mirrorcoso1.bilivideo.com" }
+        )
+        // 合成 URL 保留 donor 的 path+query（签名原样，只换了 authority）
+        val synthesized = expanded.first { CdnProfile.extractHost(it) == "upos-sz-mirrorali.bilivideo.com" }
+        assertTrue(synthesized.endsWith("?e=ut8egmr2&os=upos&tr=4sc&deadline=1732000000&gen=playsoftv2"))
+    }
+
+    @Test
+    fun `expand is idempotent for already expanded list`() {
+        val once = CdnProfile.expandCandidatesInternal(listOf(signedBase, signedBackup), enabled = true)
+        val twice = CdnProfile.expandCandidatesInternal(once, enabled = true)
+        assertEquals("rotate 重排重入合成不膨胀", once, twice)
+    }
+
+    @Test
+    fun `relay mcdn address never becomes donor`() {
+        // 中继三判据全覆盖：mcdn host / /v1/resource/ 路径 / os=mcdn 参数
+        val mcdnHost = "https://mcdn.bilivideo.com/upgcxcode/xx.m4s?os=upos"
+        val resourcePath = "https://upos-sz-mirrorcos.bilivideo.com/v1/resource/xx.m4s?os=upos"
+        val osParam = "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/xx.m4s?os=mcdn&tr=4sc"
+        listOf(mcdnHost, resourcePath, osParam).forEach { url ->
+            assertEquals(
+                "中继签名搬到普通节点必 403，不参与合成",
+                listOf(url), CdnProfile.expandCandidatesInternal(listOf(url), enabled = true)
+            )
+        }
+    }
+
+    @Test
+    fun `akamai only address falls back to akamai donor`() {
+        val akamai = "https://upos-sz-akamai.akamaized.net/upgcxcode/98/98/xx/1234567890-1-30280.m4s?e=xxx&os=akam"
+        val expanded = CdnProfile.expandCandidatesInternal(listOf(akamai), enabled = true)
+        assertEquals("akamai 不在池内，9 个池 host 全部合成", 10, expanded.size)
+        assertEquals(akamai, expanded.first())
+        assertTrue(expanded.drop(1).all { CdnProfile.extractHost(it) in mainlandPool })
+    }
+
+    @Test
+    fun `live and non bilivideo urls are not expanded`() {
+        val liveFlv = "https://cn-gotcha203.bilivideo.com/live-bld/6789/live.flv?expires=1732000000&len=0"
+        val hdslb = "https://i0.hdslb.com/bfs/archive/cover.jpg"
+        val progressiveMp4 = "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/xx/30280.mp4?e=xxx"
+        listOf(liveFlv, hdslb, progressiveMp4).forEach { url ->
+            assertEquals(listOf(url), CdnProfile.expandCandidatesInternal(listOf(url), enabled = true))
+        }
+    }
+
+    @Test
+    fun `peer cdn port is stripped in synthetic urls`() {
+        val ported = "https://upos-sz-mirrorcos.bilivideo.com:4483/upgcxcode/xx/1234567890-1-30280.m4s?e=xxx&os=upos"
+        val expanded = CdnProfile.expandCandidatesInternal(listOf(ported), enabled = true)
+        assertTrue(
+            "authority 整段替换顺带剥掉非标端口",
+            expanded.drop(1).none { it.contains(":4483") } && expanded.size == 9
+        )
+    }
+
+    @Test
+    fun `disabled switch keeps urls untouched`() {
+        assertEquals(listOf(signedBase), CdnProfile.expandCandidatesInternal(listOf(signedBase), enabled = false))
+    }
 }
