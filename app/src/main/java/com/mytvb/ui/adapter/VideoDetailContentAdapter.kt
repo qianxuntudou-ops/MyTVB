@@ -398,10 +398,11 @@ internal class VideoDetailContentAdapter(
 
             binding.textTitle.text = view.title
 
-            // 数据行：官方手机端样式（播放数/评论数/发布时间/正在看，图标+数字）
+            // 数据行：官方手机端样式（播放数/弹幕数/发布时间/正在看），图标+数字组合；
+            // 第二位图标是弹幕（ic_video_danmaku），数字须取 stat.danmaku（旧代码误取 reply 评论数）
             val stat = view.stat
             binding.textStatView.text = stat?.let { formatCount(it.view) }.orEmpty()
-            binding.textStatReply.text = stat?.let { formatCount(it.reply) }.orEmpty()
+            binding.textStatReply.text = stat?.let { formatCount(it.danmaku) }.orEmpty()
             binding.textStatTime.text = if (view.pubDate > 0) {
                 TimeUtils.formatTime(view.pubDate)
             } else {

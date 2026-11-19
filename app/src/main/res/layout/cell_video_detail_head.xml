@@ -230,7 +230,7 @@
         app:layout_constraintStart_toEndOf="@+id/card_cover"
         app:layout_constraintTop_toBottomOf="@+id/button_uploader" />
 
-    <!-- 数据行：官方手机端样式（播放数/评论数/发布时间/正在看），图标+数字组合 -->
+    <!-- 数据行：官方手机端样式（播放数/弹幕数/发布时间/正在看），图标+数字组合 -->
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/layout_stat_row"
         android:layout_width="0dp"
