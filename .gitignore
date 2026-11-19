@@ -53,6 +53,9 @@ google-services.json
 # docs/ 下只纳入 HTML 报告（团队共享/存档），其余（md、临时文件、superpowers/ 等）忽略
 /docs/*
 !docs/*.html
+# 例外：CCTV 直播备用源存档（UTAO 停服时的 Plan B，未启用；见 README 内说明）
+!docs/backup-live-source-README.md
+!docs/backup-live-source-taotao.txt
 
 # ========== 调试文件 ==========
 debug.txt

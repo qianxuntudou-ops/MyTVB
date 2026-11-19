@@ -18,6 +18,11 @@ import java.io.File
  * - [liveNext] 四向环形切台（up/down/left/right）。
  * - [readFileWithFallback] 读取 tv-web 资源：优先 filesDir/tv-web（云端更新后），无则 assets/tv-web（内置种子）。
  *
+ * 【备用频道源（未启用）】：tv2.json 供给全灭（云端+assets 种子都失效）时的 Plan B 是
+ * 备用直播源（涛涛TV 订阅存档，直链 m3u8 形态）——快照与逐步切换手册见
+ * `docs/backup-live-source-README.md`；启用时在 [load] 的兜底链尾部接入解析合并
+ * （模式参照 [mergeExtraChannels]），并在 `MarmotLiveActivity.playCurrent()` 补直链播放分支。
+ *
  * 必须在 IO 线程调用 [load]。
  */
 object MarmotLiveData {

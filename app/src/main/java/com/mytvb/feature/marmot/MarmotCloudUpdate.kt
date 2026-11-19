@@ -24,6 +24,12 @@ import java.util.zip.ZipInputStream
  *
  * 用独立 OkHttpClient（不注入 B 站 cookie/buvid header，避免污染 vonchange 服务器请求）。
  * 必须在 IO 线程调用。
+ *
+ * 【备用频道源（未启用）】：本云端（utao 第三方 vonchange 服务器）长期不可达或停止更新、
+ * 且 assets 内置 tv-web 种子的官网页频道也失效时，切换到备用直播源——
+ * 备用源快照与完整切换步骤见 `docs/backup-live-source-README.md`
+ * （涛涛TV 订阅存档：直链 m3u8 形态，启用需在 [MarmotLiveData.load] 加载侧和
+ * `MarmotLiveActivity.playCurrent()` 播放分流侧各加一条直链分支，手册内有逐步说明）。
  */
 object MarmotCloudUpdate {
     private const val TAG = "MarmotCloudUpdate"
