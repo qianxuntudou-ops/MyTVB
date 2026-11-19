@@ -106,6 +106,18 @@ class LivePlayerActivity : BaseActivity<ActivityPlayerBinding>() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                // 浮层优先收（与 PlayerActivity 对齐）：设置面板 → 控制层，都关着才轮到退出判断
+                val playerView = findViewById<MyPlayerView>(R.id.playerView)
+                if (playerView != null) {
+                    if (playerView.isSettingViewShowing()) {
+                        playerView.showHideSettingView(false)
+                        return
+                    }
+                    if (playerView.isControllerFullyVisible()) {
+                        playerView.hideController()
+                        return
+                    }
+                }
                 // 退出二次确认（设置默认开）：关闭后单次 BACK 直接退出
                 if (!ExitDoubleConfirm.enabled(appSettings) ||
                     System.currentTimeMillis() - exitTime <= exitInterval
