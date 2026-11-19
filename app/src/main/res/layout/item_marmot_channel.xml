@@ -20,6 +20,16 @@
         android:textSize="@dimen/px32"
         android:visibility="gone" />
 
+    <!-- 频道台标（自建仓库 logos/ 台标，CctvChannelLogo 映射；未命中隐藏，文字顶格不占位） -->
+    <ImageView
+        android:id="@+id/channel_logo"
+        android:contentDescription="@null"
+        android:layout_width="@dimen/px90"
+        android:layout_height="@dimen/px45"
+        android:layout_marginEnd="@dimen/px14"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/channel_name"
         android:layout_width="0dp"

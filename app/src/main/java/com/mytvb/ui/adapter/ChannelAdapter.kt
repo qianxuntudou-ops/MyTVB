@@ -10,6 +10,8 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
+import com.mytvb.core.ui.image.ImageLoader
+import com.mytvb.feature.marmot.CctvChannelLogo
 import com.mytvb.feature.marmot.domain.MarmotModels.Vod
 
 /**
@@ -37,10 +39,13 @@ class ChannelAdapter(
     var groupRecyclerView: RecyclerView? = null
     var groupAdapter: GroupAdapter? = null
 
+    private val transparentPlaceholder = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+
     inner class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val name: TextView = itemView.findViewById(R.id.channel_name)
         val playingMark: TextView = itemView.findViewById(R.id.playing_mark)
         val favoriteIcon: ImageView = itemView.findViewById(R.id.favorite_icon)
+        val channelLogo: ImageView = itemView.findViewById(R.id.channel_logo)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -51,6 +56,16 @@ class ChannelAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) {
         val item = getItem(position)
         holder.name.text = item.name
+        // 台标：未命中隐藏（文字顶格）；命中加载（ImageLoader LruCache 兜住焦点滚动重复 bind）。
+        // 占位/失败图传透明 ColorDrawable——fanmingming 部分网络环境（DNS 解析境外节点）
+        // 会超时，默认灰块占位在列表里成排出现太丑，失败就当没有台标
+        val logoUrl = CctvChannelLogo.logoUrlFor(item.name)
+        if (logoUrl == null) {
+            holder.channelLogo.visibility = View.GONE
+        } else {
+            holder.channelLogo.visibility = View.VISIBLE
+            ImageLoader.load(holder.channelLogo, logoUrl, transparentPlaceholder, transparentPlaceholder)
+        }
         val isPlaying = item.url == currentPlayingUrl
         holder.playingMark.visibility = if (isPlaying) View.VISIBLE else View.GONE
         holder.favoriteIcon.visibility = if (item.favorite) View.VISIBLE else View.GONE
