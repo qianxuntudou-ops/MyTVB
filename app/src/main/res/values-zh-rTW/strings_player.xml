@@ -116,6 +116,7 @@
     <string name="player_comment_loading">載入中…</string>
     <string name="player_comment_empty">暫無評論</string>
     <string name="player_comment_load_failed">評論載入失敗</string>
+    <string name="player_comment_rate_limited">評論請求過快，稍後自動重試</string>
     <string name="player_comment_thread_empty">暫無回覆</string>
     <string name="player_comment_thread_title">評論詳情</string>
     <string name="player_comment_thread_section">相關回覆</string>

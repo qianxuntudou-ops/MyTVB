@@ -116,6 +116,7 @@
     <string name="player_comment_loading">Loading…</string>
     <string name="player_comment_empty">No comments yet</string>
     <string name="player_comment_load_failed">Failed to load comments</string>
+    <string name="player_comment_rate_limited">Too many requests, retrying shortly</string>
     <string name="player_comment_thread_empty">No replies yet</string>
     <string name="player_comment_thread_title">Comment Details</string>
     <string name="player_comment_thread_section">Related Replies</string>

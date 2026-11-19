@@ -3,6 +3,7 @@ package com.mytvb.feature.player.comment
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -57,6 +58,13 @@ internal class CommentPanelDialog(
     companion object {
         private const val TAG = "CommentPanelDialog"
         private const val LOAD_MORE_THRESHOLD = 4
+
+        /** 翻页失败（503/-509/412 频控等）后的冷却时长：冷却期内不重发，到点自动重试一次。
+         *  无冷却时用户再按下方向键会立即重发，频控越打越紧，表现为"永远加载不出来"。 */
+        private const val LOAD_FAIL_COOLDOWN_MS = 15_000L
+
+        /** B 站评论接口的频控/风控码：临时性限制，冷却重试可恢复。 */
+        private val RATE_LIMIT_CODES = setOf(503, -509, 412, -352)
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -73,6 +81,13 @@ internal class CommentPanelDialog(
     private var threadFetchJob: Job? = null
     private var threadFetchToken: Int = 0
     private val threadState = VideoCommentThreadPagingState()
+
+    /** 翻页失败冷却（SystemClock.elapsedRealtime 口径）：0=无冷却。到点自动重试一次。 */
+    private var rootLoadRetryNotBefore = 0L
+    private var threadLoadRetryNotBefore = 0L
+    private val retryHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var rootRetryRunnable: Runnable? = null
+    private var threadRetryRunnable: Runnable? = null
 
     /** 当前楼中楼是 initialThreadRpid 直达进入（未经过根列表）——BACK/X 直接关面板。 */
     private var threadEnteredDirectly = false
@@ -96,6 +111,8 @@ internal class CommentPanelDialog(
 
         setOnDismissListener {
             scope.cancel()
+            rootRetryRunnable?.let { retryHandler.removeCallbacks(it) }
+            threadRetryRunnable?.let { retryHandler.removeCallbacks(it) }
             if (imageViewer.isViewing) imageViewer.dismiss()
             onDismissed()
         }
@@ -473,6 +490,7 @@ internal class CommentPanelDialog(
                     val pageData = dataSource.loadRootPage(oid = aid, sort = commentSort, cursorOffset = null)
                     if (token != commentsFetchToken) return@launch
 
+                    rootLoadRetryNotBefore = 0L
                     commentsState.replace(pageData)
                     // 直达模式下根列表在后台加载，加载完不能覆盖楼中楼的「评论详情」标题
                     if (!isThreadVisible()) {
@@ -499,6 +517,8 @@ internal class CommentPanelDialog(
 
     private fun loadMoreComments() {
         if (commentsFetchJob?.isActive == true || commentsState.endReached) return
+        // 频控冷却期内不重发（失败后立刻按键重试会把 503 风控越打越紧）
+        if (SystemClock.elapsedRealtime() < rootLoadRetryNotBefore) return
         val cursorOffset = commentsState.nextCursorOffset ?: return
         val token = ++commentsFetchToken
 
@@ -513,6 +533,7 @@ internal class CommentPanelDialog(
                     )
                     if (token != commentsFetchToken) return@launch
 
+                    rootLoadRetryNotBefore = 0L
                     if (!commentsState.append(pageData)) {
                         return@launch
                     }
@@ -521,11 +542,24 @@ internal class CommentPanelDialog(
                 } catch (t: Throwable) {
                     if (t is CancellationException) return@launch
                     AppLog.w(TAG, "loadMoreComments failed aid=$aid sort=$commentSort cursor=$cursorOffset", t)
+                    scheduleRootRetry()
                     showCommentLoadError(t)
                 } finally {
                     if (token == commentsFetchToken) commentsFetchJob = null
                 }
             }
+    }
+
+    /** 根列表翻页失败：进冷却并到点自动重试一次（成功则解除冷却）。 */
+    private fun scheduleRootRetry() {
+        rootLoadRetryNotBefore = SystemClock.elapsedRealtime() + LOAD_FAIL_COOLDOWN_MS
+        rootRetryRunnable?.let { retryHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            rootRetryRunnable = null
+            if (rootLoadRetryNotBefore != 0L && !commentsState.endReached) loadMoreComments()
+        }
+        rootRetryRunnable = runnable
+        retryHandler.postDelayed(runnable, LOAD_FAIL_COOLDOWN_MS)
     }
 
     private fun maybeLoadMoreCommentsFromLayout() {
@@ -599,6 +633,7 @@ internal class CommentPanelDialog(
                     if (token != threadFetchToken) return@launch
                     if (threadState.rootRpid != root) return@launch
 
+                    threadLoadRetryNotBefore = 0L
                     threadState.replace(pageData)
                     threadAdapter.setItems(buildThreadDisplayItems())
 
@@ -623,6 +658,8 @@ internal class CommentPanelDialog(
         if (aid <= 0L) return
         val root = threadState.rootRpid.takeIf { it > 0L } ?: return
         if (threadFetchJob?.isActive == true || threadState.endReached) return
+        // 频控冷却期内不重发（同根列表）
+        if (SystemClock.elapsedRealtime() < threadLoadRetryNotBefore) return
 
         val nextPage = threadState.page + 1
         val token = ++threadFetchToken
@@ -639,6 +676,7 @@ internal class CommentPanelDialog(
                     if (token != threadFetchToken) return@launch
                     if (threadState.rootRpid != root) return@launch
 
+                    threadLoadRetryNotBefore = 0L
                     if (!threadState.append(nextPage = nextPage, replies = pageData.replies)) {
                         return@launch
                     }
@@ -647,11 +685,24 @@ internal class CommentPanelDialog(
                 } catch (t: Throwable) {
                     if (t is CancellationException) return@launch
                     AppLog.w(TAG, "loadMoreThread failed aid=$aid root=$root page=$nextPage", t)
+                    scheduleThreadRetry()
                     showCommentLoadError(t)
                 } finally {
                     if (token == threadFetchToken) threadFetchJob = null
                 }
             }
+    }
+
+    /** 楼中楼翻页失败：进冷却并到点自动重试一次（同 [scheduleRootRetry]）。 */
+    private fun scheduleThreadRetry() {
+        threadLoadRetryNotBefore = SystemClock.elapsedRealtime() + LOAD_FAIL_COOLDOWN_MS
+        threadRetryRunnable?.let { retryHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            threadRetryRunnable = null
+            if (threadLoadRetryNotBefore != 0L && !threadState.endReached) loadMoreThread()
+        }
+        threadRetryRunnable = runnable
+        retryHandler.postDelayed(runnable, LOAD_FAIL_COOLDOWN_MS)
     }
 
     private fun maybeLoadMoreThreadFromLayout() {
@@ -673,7 +724,14 @@ internal class CommentPanelDialog(
     // ---------- 错误 ----------
 
     private fun showCommentLoadError(t: Throwable) {
-        AppToast.show(activity, t.message ?: activity.getString(R.string.player_comment_load_failed))
+        // 503/-509/412 是 B 站评论接口频控码：请求过快被临时限制，冷却后重试可恢复
+        val rateLimited = (t as? com.mytvb.network.BiliClient.ApiException)?.code in RATE_LIMIT_CODES
+        val message = if (rateLimited) {
+            activity.getString(R.string.player_comment_rate_limited)
+        } else {
+            t.message ?: activity.getString(R.string.player_comment_load_failed)
+        }
+        AppToast.show(activity, message)
         val rootEmpty = commentsState.items.isEmpty() && !isThreadVisible()
         val threadEmpty = isThreadVisible() && threadState.items.isEmpty()
         if (rootEmpty || threadEmpty) {

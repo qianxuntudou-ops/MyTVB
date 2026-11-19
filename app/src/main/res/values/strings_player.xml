@@ -118,6 +118,7 @@
     <string name="player_comment_loading">加载中…</string>
     <string name="player_comment_empty">暂无评论</string>
     <string name="player_comment_load_failed">评论加载失败</string>
+    <string name="player_comment_rate_limited">评论请求过快，稍后自动重试</string>
     <string name="player_comment_thread_empty">暂无回复</string>
     <string name="player_comment_thread_title">评论详情</string>
     <string name="player_comment_thread_section">相关回复</string>
