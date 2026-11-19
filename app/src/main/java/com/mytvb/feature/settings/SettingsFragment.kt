@@ -888,7 +888,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             )
             KEY_DM_ALPHA -> showDmChoiceDialog(key, arrayOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"))
             KEY_DM_TRACK_SPACING -> showDmChoiceDialog(key, arrayOf("紧凑", "标准", "宽松", "特宽"))
-            KEY_DM_SPEED -> showDmChoiceDialog(key, arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9"))
+            KEY_DM_SPEED -> showDmChoiceDialog(key, MyPlayerSettingView.DM_SPEED_VALUES.map { MyPlayerSettingView.dmSpeedToLabel(it) }.toTypedArray())
             KEY_DM_ALLOW_VIP_COLORFUL_DM -> toggle(key)
             // —— 弹幕·显示区域 ——
             KEY_DM_SCREEN_AREA -> showDmChoiceDialog(key, arrayOf("1/8", "1/6", "1/4", "1/2", "3/4", "全屏"))

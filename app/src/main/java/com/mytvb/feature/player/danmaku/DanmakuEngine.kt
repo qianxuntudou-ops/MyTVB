@@ -225,7 +225,7 @@ internal class DanmakuEngine(
                 textSizePx = sp(18f),
                 fontBorder = DANMAKU_FONT_BORDER_DEFAULT
             ),
-            speedLevel = 4,
+            speedLevel = 4f,
             area = 1f,
             laneDensity = DanmakuLaneDensity.Standard,
         )
@@ -2214,7 +2214,7 @@ internal class DanmakuEngine(
         return x.coerceAtLeast(0f)
     }
 
-    private fun computeRollingDurationMs(speedLevel: Int): Int {
+    private fun computeRollingDurationMs(speedLevel: Float): Int {
         // Keep the speed scale aligned with the project's previous implementation.
         // (User feedback: new 10 ~= old 4 was too slow.)
         val speed = speedMultiplier(speedLevel)
@@ -2222,19 +2222,22 @@ internal class DanmakuEngine(
         return duration.coerceIn(MIN_ROLLING_DURATION_MS, MAX_ROLLING_DURATION_MS)
     }
 
-    private fun speedMultiplier(level: Int): Float =
+    private fun speedMultiplier(level: Float): Float =
         // 对齐 akdanmaku toDanmakuDurationMs 各档时长：multiplier = 6000 / akMs。
         // （akdanmaku 档位 1→12000ms ... 9→2160ms，缺 4 档补 6000ms 对齐 level 4/5。）
-        when (min(10, max(1, level))) {
-            1 -> 0.50f   // 6000/12000
-            2 -> 0.588f  // 6000/10200
-            3 -> 0.714f  // 6000/8400
-            4 -> 1.0f    // 6000/6000（akdanmaku 原 else 回退，此处显式对齐）
-            5 -> 1.0f    // 6000/6000
-            6 -> 1.25f   // 6000/4800
-            7 -> 1.5625f // 6000/3840
-            8 -> 2.0f    // 6000/3000
-            9 -> 2.778f  // 6000/2160
+        // 0.5/0.75 为超慢档（issue#124：车机嫌 1 档 12s/屏仍偏快），低于 0.5 钳到 0.5。
+        when (level.coerceIn(0.5f, 9f)) {
+            0.5f -> 0.25f   // 6000/24000
+            0.75f -> 0.375f // 6000/16000
+            1f -> 0.50f   // 6000/12000
+            2f -> 0.588f  // 6000/10200
+            3f -> 0.714f  // 6000/8400
+            4f -> 1.0f    // 6000/6000（akdanmaku 原 else 回退，此处显式对齐）
+            5f -> 1.0f    // 6000/6000
+            6f -> 1.25f   // 6000/4800
+            7f -> 1.5625f // 6000/3840
+            8f -> 2.0f    // 6000/3000
+            9f -> 2.778f  // 6000/2160
             else -> 2.778f
         }
 
@@ -2242,7 +2245,8 @@ internal class DanmakuEngine(
         private const val TAG = "BlblDmEngine"
         private const val DEFAULT_ROLLING_DURATION_MS = 6_000f
         private const val MIN_ROLLING_DURATION_MS = 2_000
-        private const val MAX_ROLLING_DURATION_MS = 20_000
+        // 0.5 档滚动时长 24s，上限随之抬到 24s（历史最高档 1 档为 12s，不受影响）
+        private const val MAX_ROLLING_DURATION_MS = 24_000
 
         private const val FIXED_DURATION_MS = 4_000
         private const val MAX_LONG_SCROLL_SPEED_RATIO = 1.5f

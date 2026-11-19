@@ -37,9 +37,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
         private const val SETTING_FOCUS_LOG_ENABLED = false
         internal val PLAYBACK_SPEEDS: FloatArray = PlaybackSpeedPolicy.DEFAULT_PLAYBACK_SPEED_OPTIONS
         internal val DM_ALPHA_VALUES = floatArrayOf(0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1.0f)
-        // 30-55 为历史档位；56-100 供超宽/低密度屏（如 5120×1600）放大使用
-        /** 弹幕字号档位：30~60 步进 2（16 档，视觉放大由引擎 toBlblTextScale 档位系数承担）。 */
-        internal val DM_TEXT_SIZE_VALUES = IntArray(16) { 30 + it * 2 }
+        // 30-55 为历史档位；56-100 供超宽/低密度屏（车机/5120×1600 等）放大使用（issue#124）
+        /** 弹幕字号档位：30~100 步进 2（36 档，视觉放大由引擎 toBlblTextScale 档位系数承担）。 */
+        internal val DM_TEXT_SIZE_VALUES = IntArray(36) { 30 + it * 2 }
 
         /** 字号存储值归一到最近档位（兼容旧版 30~100 逐档存储值，如 39/55/100）。 */
         internal fun coerceDmTextSize(value: Int): Int =
@@ -52,7 +52,15 @@ class MyPlayerSettingView @JvmOverloads constructor(
             DmScreenArea.ThreeQuarter,
             DmScreenArea.Full
         )
-        internal val DM_SPEED_VALUES = intArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        // 0.5/0.75 为比 1 档更慢的档位（issue#124：车机嫌 1 档 12s/屏仍偏快）；
+        // 1~9 为历史档位，整数档显示不带小数点。
+        internal val DM_SPEED_VALUES = floatArrayOf(0.5f, 0.75f, 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 9f)
+
+        /** 速度档位显示文案：整数档去掉 ".0"（1.0f → "1"），小数档原样（0.5f → "0.5"）。 */
+        internal fun dmSpeedToLabel(speed: Float): String {
+            val intSpeed = speed.toInt()
+            return if (speed == intSpeed.toFloat()) intSpeed.toString() else speed.toString()
+        }
 
         internal const val PREFS_NAME = "app_settings"
         internal const val KEY_DM_ENABLE = "dm_enable"
@@ -524,7 +532,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
     fun getDmEnable(): Boolean = panelState.dmEnabled
     fun getDmAlpha(): Float = panelState.dmAlpha
     fun getDmTextScaleParam(): Int = panelState.dmTextSize
-    fun getDmSpeedParam(): Int = panelState.dmSpeed
+    fun getDmSpeedParam(): Float = panelState.dmSpeed
     fun getScreenPartParam(): Int = panelState.dmArea
     fun getDmAllowTop(): Boolean = panelState.dmAllowTop
     fun getDmAllowBottom(): Boolean = panelState.dmAllowBottom

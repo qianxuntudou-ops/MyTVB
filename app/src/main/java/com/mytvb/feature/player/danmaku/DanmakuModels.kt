@@ -101,7 +101,8 @@ data class DanmakuConfig(
     val textSizeSp: Float,
     val fontWeight: DanmakuFontWeight,
     val strokeWidthPx: Int,
-    val speedLevel: Int,
+    /** 滚动速度档位：0.5/0.75 为超慢档（24s/16s 滚过全屏），1~9 为历史档位（issue#124）。 */
+    val speedLevel: Float,
     val area: Float,
     val laneDensity: DanmakuLaneDensity,
     val trackSpacing: DanmakuTrackSpacing = DanmakuTrackSpacing.DEFAULT,
@@ -117,7 +118,7 @@ data class DanmakuSessionSettings(
     val textSizeSp: Float,
     val fontWeight: DanmakuFontWeight,
     val strokeWidthPx: Int,
-    val speedLevel: Int,
+    val speedLevel: Float,
     val area: Float,
     val laneDensity: DanmakuLaneDensity,
     val followBiliShield: Boolean = true,

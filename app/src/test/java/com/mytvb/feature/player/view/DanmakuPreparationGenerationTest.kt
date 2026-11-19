@@ -138,9 +138,11 @@ class DanmakuPreparationGenerationTest {
 
   @Test
   fun tailPatchGuardMatchesTheActiveSpeedLifetime() {
-    assertEquals(12_000L, rollingDurationMsForTailPatch(1))
-    assertEquals(6_000L, rollingDurationMsForTailPatch(4))
-    assertEquals(2_160L, rollingDurationMsForTailPatch(10))
+    assertEquals(24_000L, rollingDurationMsForTailPatch(0.5f))
+    assertEquals(16_000L, rollingDurationMsForTailPatch(0.75f))
+    assertEquals(12_000L, rollingDurationMsForTailPatch(1f))
+    assertEquals(6_000L, rollingDurationMsForTailPatch(4f))
+    assertEquals(2_160L, rollingDurationMsForTailPatch(10f))
   }
 
   @Test

@@ -679,7 +679,7 @@ class DanmakuView @JvmOverloads constructor(
                 ),
                 fontBorder = 0
             ),
-            speedLevel = 4,
+            speedLevel = 4f,
             area = 1f,
             laneDensity = DanmakuLaneDensity.Standard,
         )

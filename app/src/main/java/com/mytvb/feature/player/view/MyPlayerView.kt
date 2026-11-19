@@ -813,7 +813,7 @@ class MyPlayerView @JvmOverloads constructor(
                 syncDanmakuSettings()
             }
 
-            override fun onDmSpeed(speed: Int) {
+            override fun onDmSpeed(speed: Float) {
                 syncDanmakuSettings()
             }
 
@@ -3790,7 +3790,7 @@ class MyPlayerView @JvmOverloads constructor(
             enabled = settingView?.getDmEnable() ?: true,
             alpha = settingView?.getDmAlpha() ?: 1f,
             textSize = settingView?.getDmTextScaleParam() ?: 40,
-            speed = settingView?.getDmSpeedParam() ?: 4,
+            speed = settingView?.getDmSpeedParam() ?: 4f,
             screenArea = settingView?.getScreenPartParam() ?: 3,
             allowTop = settingView?.getDmAllowTop() ?: true,
             allowBottom = settingView?.getDmAllowBottom() ?: true,

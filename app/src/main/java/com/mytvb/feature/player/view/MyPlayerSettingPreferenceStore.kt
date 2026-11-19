@@ -34,7 +34,7 @@ internal class MyPlayerSettingPreferenceStore(
                     }
                 } ?: 40
             ),
-            dmSpeed = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_SPEED)?.toIntOrNull() ?: 4,
+            dmSpeed = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_SPEED)?.toFloatOrNull() ?: 4f,
             dmArea = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_AREA)?.let {
                 when (it) {
                     "1/8" -> DmScreenArea.OneEighth.area

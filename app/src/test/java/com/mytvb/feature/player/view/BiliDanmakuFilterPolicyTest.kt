@@ -133,7 +133,7 @@ class BiliDanmakuFilterPolicyTest {
             enabled = true,
             alpha = 1f,
             textSize = 40,
-            speed = 4,
+            speed = 4f,
             screenArea = 3,
             allowTop = allowTop,
             allowBottom = allowBottom,

@@ -846,7 +846,7 @@ class BlblDanmakuController(
                 textSizePx = 18f * density,
                 fontBorder = DANMAKU_FONT_BORDER_DEFAULT
             ),
-            speedLevel = 4,
+            speedLevel = 4f,
             area = 0.5f,
             laneDensity = DanmakuLaneDensity.Standard,
             trackSpacing = DanmakuTrackSpacing.DEFAULT,
@@ -873,8 +873,8 @@ class BlblDanmakuController(
         else -> 8.65f
     }
 
-    /** speed(1-9) → blbl speedLevel(1-10)。直接对应，9 以上不动（不使用 level 10）。 */
-    private fun Int.toBlblSpeedLevel(): Int = coerceIn(1, 10)
+    /** speed(0.5/0.75/1-9) → 引擎 speedLevel。档位直传，低于 0.5 钳到 0.5、高于 9 钳到 9。 */
+    private fun Float.toBlblSpeedLevel(): Float = coerceIn(0.5f, 9f)
 
     /**
      * screenArea → blbl area(0-1)。
@@ -960,15 +960,17 @@ internal fun resolveDanmakuTailPatchStartMs(
 }
 
 /** Keep the tail patch outside the longest rolling lifetime for the active speed setting. */
-internal fun rollingDurationMsForTailPatch(speedLevel: Int): Long =
-    when (speedLevel.coerceIn(1, 10)) {
-        1 -> 12_000L
-        2 -> 10_200L
-        3 -> 8_400L
-        4, 5 -> 6_000L
-        6 -> 4_800L
-        7 -> 3_840L
-        8 -> 3_000L
+internal fun rollingDurationMsForTailPatch(speedLevel: Float): Long =
+    when (speedLevel.coerceIn(0.5f, 9f)) {
+        0.5f -> 24_000L
+        0.75f -> 16_000L
+        1f -> 12_000L
+        2f -> 10_200L
+        3f -> 8_400L
+        4f, 5f -> 6_000L
+        6f -> 4_800L
+        7f -> 3_840L
+        8f -> 3_000L
         else -> 2_160L
     }
 

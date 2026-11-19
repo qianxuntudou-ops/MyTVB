@@ -42,7 +42,7 @@ internal class MyPlayerSettingMenuBuilder(
         val dmEnabled: Boolean = true,
         val dmAlpha: Float = 1.0f,
         val dmTextSize: Int = 40,
-        val dmSpeed: Int = 4,
+        val dmSpeed: Float = 4f,
         val dmArea: Int = DmScreenArea.Half.area,
         val dmAllowTop: Boolean = false,
         val dmAllowBottom: Boolean = false,
@@ -304,7 +304,7 @@ internal class MyPlayerSettingMenuBuilder(
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_ALPHA, context.getString(R.string.dm_alpha), state.dmAlpha.toDisplayString()),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_TEXT_SIZE, context.getString(R.string.dm_text_size), dmTextSizeToLabel(state.dmTextSize)),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_AREA, context.getString(R.string.dm_screen_area), getAreaDisplay(state.dmArea)),
-            PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_SPEED, context.getString(R.string.dm_speed), state.dmSpeed.toString()),
+            PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_SPEED, context.getString(R.string.dm_speed), MyPlayerSettingView.dmSpeedToLabel(state.dmSpeed)),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_ALLOW_TOP, context.getString(R.string.dm_allow_top), state.dmAllowTop.toOpenCloseLabel()),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_ALLOW_BOTTOM, context.getString(R.string.dm_allow_bottom), state.dmAllowBottom.toOpenCloseLabel()),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_MERGE_DUPLICATE, context.getString(R.string.dm_merge_duplicate), state.dmMergeDuplicate.toOpenCloseLabel()),
@@ -344,8 +344,8 @@ internal class MyPlayerSettingMenuBuilder(
             MyPlayerSettingView.ITEM_DM_SPEED -> buildChoiceMenu(
                 menuKey = MyPlayerSettingView.ITEM_DM_SPEED,
                 title = context.getString(R.string.dm_speed),
-                values = MyPlayerSettingView.DM_SPEED_VALUES.map(Int::toString),
-                selectedIndex = MyPlayerSettingView.DM_SPEED_VALUES.indexOf(state.dmSpeed).coerceAtLeast(0)
+                values = MyPlayerSettingView.DM_SPEED_VALUES.map(MyPlayerSettingView::dmSpeedToLabel),
+                selectedIndex = MyPlayerSettingView.DM_SPEED_VALUES.indexOfFirst { it == state.dmSpeed }.coerceAtLeast(0)
             )
 
             MyPlayerSettingView.ITEM_DM_ALLOW_TOP -> buildBooleanChoiceMenu(
