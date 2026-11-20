@@ -75,6 +75,18 @@ internal object HongguoPlaybackV5 {
 
     internal class SignedV5(val query: String, val headers: List<Pair<String, String>>)
 
+    /**
+     * 单独生成 x-medusa 头（2026-11-21）：preload/v1 Argus 头集（kotlinSignedPost）
+     * 补齐对齐 HGTV 1.3.8.6——它播放请求的主力内容签名就是 medusa（G1.c v5 签名器），
+     * argus/ladon 反而是 8 字符假头（b64(le32(ts))/b64(rand4)）。query 须传实际发送
+     * 的完整 query 串（含 ts/_rticket），body 为实际发送的 gzip 字节。
+     */
+    fun medusaHeaderFor(query: String, gzipBody: ByteArray, tsSec: Int): String {
+        val queryHash = HongguoCrypto.sm3(query.toByteArray(Charsets.UTF_8))
+        val bodyMd5 = HongguoCrypto.md5(gzipBody)
+        return medusa(query, queryHash, bodyMd5, tsSec, drawEntropy())
+    }
+
     internal class Entropy(val messageRandom: Int, val random: Int, val packedRandom: Int, val heliosRandom: Int)
 
     private fun drawEntropy(): Entropy {
@@ -190,12 +202,15 @@ internal object HongguoPlaybackV5 {
     ): String {
         val deviceID = queryValue(query, "device_id")
         val version = queryValue(query, "version_name")
+        // brand 从 query 取（preload 全参 query 带 device_brand=Redmi）；缺失回落
+        // HONOR（PR#13 手机端模板口径，保 V5 向量单测对拍不变）
+        val brand = queryValue(query, "device_brand").ifEmpty { "HONOR" }
         val device = concat(
             protoSInt(1, 1), protoSInt(2, 2), protoString(3, APP_ID), protoString(4, deviceID),
             protoString(5, nonceV), protoString(6, "!noperm!"), protoString(12, "Asia/Shanghai,8"),
             protoString(13, "zh_CN"), protoString(22, queryValue(query, "os_version")), protoSInt(25, started),
-            protoString(30, queryValue(query, "device_type")), protoString(31, "HONOR"),
-            protoString(32, queryValue(query, "device_type")), protoString(34, "HONOR")
+            protoString(30, queryValue(query, "device_type")), protoString(31, brand),
+            protoString(32, queryValue(query, "device_type")), protoString(34, brand)
         )
         val env = concat(
             protoString(6, "v04.10.03.04-bugfix"), protoString(8, queryValue(query, "channel")),

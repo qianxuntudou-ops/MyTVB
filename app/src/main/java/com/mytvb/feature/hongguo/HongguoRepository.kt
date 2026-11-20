@@ -89,18 +89,8 @@ class HongguoRepository private constructor(context: Context) {
         cachedIdentity = id
     }
 
-    /** 空响应=身份被拒时轮换新注册身份重试一次（对照 Node getPlaybackDevice.reset）。 */
-    private fun withIdentity(block: (HongguoDeviceRegister.Identity) -> Unit): Boolean {
-        return try {
-            block(identity()); true
-        } catch (e: Exception) {
-            // 走 AppLog：release 包 LAN 日志可见（android.util.Log 的 W 级在 release 不落任何盘）
-            AppLog.w("Hongguo", "withIdentity failed: ${e.javaClass.simpleName}: ${e.message}", e)
-            cachedIdentity = null
-            session.clearAll()
-            false
-        }
-    }
+    /* withIdentity 已删（2026-11-21）：唯一调用方 playUrl 改为同身份退避重试——
+     * 失败换号重注册是重试风暴根源，且 clearAll 连坐清登录态。见 playUrl 注释。 */
 
     // ---- 内容缓存（首屏 TTL；进程内存级，翻页不缓存） ----
     // 一进红果页 ViewPager2 全离屏会并发拉 6 个子页（推荐/分类×3/榜单/历史），
@@ -460,6 +450,15 @@ class HongguoRepository private constructor(context: Context) {
             com.mytvb.core.common.cache.GlobalCacheBudget.register(this)
         }
 
+    /** 批量预取的磁盘层存在性判断（存在且未过期；不做反序列化，纯探测）。 */
+    private fun playUrlDiskCacheHas(key: String): Boolean {
+        val f = java.io.File(playUrlDiskDir(), "$key.purl")
+        return f.isFile && System.currentTimeMillis() - f.lastModified() <= PLAY_URL_TTL_MS
+    }
+
+    /** 批量预取 in-flight 闸（快速连切防重复请求）。 */
+    private val preloadInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
     /** DataOutputStream 二进制序列化（writeUTF 对任意字符串安全，零第三方依赖）。 */
     private fun writeDiskPlayUrl(key: String, value: HongguoPlay.PlayUrl) {
         runCatching {
@@ -552,12 +551,25 @@ class HongguoRepository private constructor(context: Context) {
                 return@withContext it
             }
             var result: HongguoPlay.PlayUrl? = null
+            // 2026-11-21 重试收敛（去风暴）：失败不再换号重注册、不清 session——
+            // 探针实证 preload/v1 连假身份都放行（空 body 的变量是端点/头集，非设备），
+            // 旧「空响应=身份被拒→换号」模型已过时，且失败即 registerFresh+重发
+            // 是官方 App 不会有的农场画像；顺带修掉连坐 bug：旧路径 session.clearAll()
+            // 会把 account_cookies/token 一并清空（播放失败一次=登录态丢失）。
+            // 现模型：同一身份贯穿，2 发之间 1.5s 退避（保住网络抖动的重试价值）。
+            val id = identity()
             for (attempt in 0 until 2) {
-                if (withIdentity { id -> result = play.playUrl(vid, id, preferredPixels) }) break
+                result = try {
+                    play.playUrl(vid, id, preferredPixels)
+                } catch (e: Exception) {
+                    AppLog.w("Hongguo", "playUrl attempt${attempt + 1} failed vid=$vid q=$preferredPixels: ${e.message}")
+                    null
+                }
+                if (result != null) break
+                if (attempt == 0) kotlinx.coroutines.delay(1500)
             }
             result?.also { cachePlayUrl(key, it) }
                 ?: run {
-                    // 两次 attempt 全败的真实原因在 withIdentity 逐条 AppLog（LAN 日志可见）
                     AppLog.w("Hongguo", "playUrl resolve failed vid=$vid q=$preferredPixels after 2 attempts")
                     throw IllegalStateException("红果播放地址解析失败")
                 }
@@ -572,19 +584,48 @@ class HongguoRepository private constructor(context: Context) {
      * （探针实证）；下一集地址由本层顺带覆盖，下下集不再预取（快速连切空档由实时
      * 直取 ~300ms 兜底）。全部失败静默，切集实时解析兜底。
      */
-    fun preloadNextEpisode(nextVid: String) {
-        if (nextVid.isEmpty()) return
+    /**
+     * 批量地址预取（2026-11-21 B 改造，对齐 HGTV 1.3.8.6 V()：一次 12 集、
+     * [com.mytvb.feature.hongguo.net.HongguoPlay.playUrlBatch]）：起播/切集后
+     * 一次 preload/v1 覆盖后续多集——连播期地址层 API 请求从「每集一发」降为
+     * 「12 集一发」，请求画像与官方剧场页批量预取一致。
+     * 已缓存的集先过滤（命中免重），全部命中直接跳过（零请求）。
+     * 媒体头预取（moov+首GOP 512KB）仍只对即将播放的下一集做——CDN 数据预取
+     * 与地址层互补，逐集全拉头部是流量浪费（HGTV 同款克制）。
+     * in-flight 闸防快速连切并发重复请求（HGTV Semaphore 同义）。
+     */
+    fun preloadUpcoming(vids: List<String>) {
+        if (vids.isEmpty()) return
         val pixels = defaultQualityPixels()
         cloudScope.launch {
-            runCatching {
-                // playUrl 内部先查地址缓存（预热/整集兜底命中免请求），miss 走直取
-                val play = playUrl(nextVid, pixels)
-                if (play.contentKeyHex != null) {
-                    prefetchHead(play)
-                } else {
-                    AppLog.d("Hongguo", "prefetch next plain vid=$nextVid (直链不走 PSSH 手术)")
+            if (!preloadInFlight.compareAndSet(false, true)) {
+                AppLog.d("Hongguo", "preload upcoming skip (in-flight)")
+                return@launch
+            }
+            try {
+                val missing = vids.filter {
+                    synchronized(playUrlCacheLock) { playUrlCache["$it@$pixels"] == null } &&
+                        playUrlDiskCacheHas("$it@$pixels").not()
                 }
-            }.onFailure { AppLog.d("Hongguo", "prefetch next fail vid=$nextVid: ${it.message}") }
+                if (missing.isEmpty()) return@launch
+                val batch = runCatching {
+                    play.playUrlBatch(missing, identity(), pixels)
+                }.onFailure {
+                    AppLog.d("Hongguo", "preload upcoming fail first=${vids.first()}: ${it.message}")
+                }.getOrNull() ?: return@launch
+                batch.forEach { (vid, play) -> cachePlayUrl("$vid@$pixels", play) }
+                AppLog.d("Hongguo", "preload upcoming ok ${batch.size}/${missing.size} pixels=$pixels")
+                // 媒体头预取：仅即将播放的下一集（列表首个成功项）
+                batch.values.firstOrNull()?.let { play ->
+                    if (play.contentKeyHex != null) {
+                        runCatching { prefetchHead(play) }
+                    } else {
+                        AppLog.d("Hongguo", "prefetch next plain vid=${play.vid} (直链不走 PSSH 手术)")
+                    }
+                }
+            } finally {
+                preloadInFlight.set(false)
+            }
         }
     }
 
@@ -718,7 +759,7 @@ class HongguoRepository private constructor(context: Context) {
      * 3. 加密流未落地：**直链 + 密钥** 软解密流式播（DataSource 层 AES-CTR 还原，
      *    2026-11-18 P3 全面替代 ClearKey/MediaDrm——设备 DRM 栈兼容性无底洞）；
      *    兜底：软解流式播放失败走 [fallbackDownload] 整集下载解密。
-     * 预取链路（[preloadNextEpisodes]）走头部落盘，与流式播并存。
+     * 预取链路（[preloadUpcoming] 批量地址 + 首集头部落盘）与流式播并存。
      */
     suspend fun resolvePlayableSource(play: HongguoPlay.PlayUrl): PlayableSource {
         val keyHex = play.contentKeyHex ?: return PlayableSource(play.url, null, null)

@@ -394,14 +394,16 @@ class HongguoPlayerActivity : AppCompatActivity() {
         thumbProvider?.bind(play.bigThumbs)
     }
 
-    /** 起播/切集成功后预热下一集（地址直取入缓存+加密流头部落盘，见 Repository）。 */
+    /** 起播/切集成功后批量预热后续剧集（地址一次 12 集入缓存+下一集头部落盘，见 Repository）。 */
     private fun preloadFollowingEpisodes() {
         if (seriesId.isEmpty()) return
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 val episodes = repository.detail(seriesId).episodes
-                // episodeIndex 为 1-based：下一集 = getOrNull(episodeIndex)
-                episodes.getOrNull(episodeIndex)?.let { repository.preloadNextEpisode(it.videoId) }
+                // episodeIndex 为 1-based：下一集起 = drop(episodeIndex)；一次 12 集
+                //（对齐 HGTV 1.3.8.6 手机播放页批量预取）
+                val upcoming = episodes.drop(episodeIndex).take(12).map { it.videoId }
+                if (upcoming.isNotEmpty()) repository.preloadUpcoming(upcoming)
             }
         }
     }
