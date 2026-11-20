@@ -273,6 +273,7 @@ class HongguoPlay(
     ): JSONObject {
         var current = startIdentity
         val m1Url = "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/"
+        val ver = HongguoVersionProfiles.default
         for (m1Attempt in 0 until 2) {
             if (m1Attempt == 1 && allowRotate) current = runCatching { rotateIdentity() }.getOrElse { current }
             val m1q = java.util.LinkedHashMap<String, String>()
@@ -281,19 +282,19 @@ class HongguoPlay(
             if (current.deviceToken.isNotEmpty()) m1q["device_token"] = current.deviceToken
             m1q["ac"] = "wifi"; m1q["channel"] = "update_64"; m1q["aid"] = "8662"
             m1q["app_name"] = "novelread"
-            m1q["version_code"] = "74532"; m1q["version_name"] = "7.4.5.32"
+            m1q["version_code"] = ver.code; m1q["version_name"] = ver.versionName
             m1q["device_platform"] = "android"; m1q["os"] = "android"; m1q["ssmix"] = "a"
             m1q["device_type"] = "25053RT47C"; m1q["device_brand"] = "Redmi"; m1q["language"] = "zh"
             m1q["os_api"] = "36"; m1q["os_version"] = "16"
-            m1q["manifest_version_code"] = "74532"
+            m1q["manifest_version_code"] = ver.code
             m1q["resolution"] = "1280*2772"; m1q["dpi"] = "520"
-            m1q["update_version_code"] = "74532"; m1q["host_abi"] = "arm64-v8a"
-            m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = "74532"
+            m1q["update_version_code"] = ver.code; m1q["host_abi"] = "arm64-v8a"
+            m1q["dragon_device_type"] = "phone"; m1q["pv_player"] = ver.code
             m1q["compliance_status"] = "0"; m1q["need_personal_recommend"] = "1"
             m1q["player_so_load"] = "1"; m1q["is_android_pad_screen"] = "0"
             AppLog.d(TAG, "play fallback K-M1 vid=$vid attempt=$m1Attempt device=${current.deviceId}")
-            val text = kotlinSignedPost(m1Url, m1q, body, "7.4.5.32", current.deviceId,
-                Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua("74532"), gzipHeader = false)
+            val text = kotlinSignedPost(m1Url, m1q, body, ver.versionName, current.deviceId,
+                Triple("25053RT47C", "16", "update_64"), HongguoEnv.ua(ver.code), gzipHeader = false)
             if (text.isNotEmpty()) return extractEntry(vid, JSONObject(text))
         }
         throw EmptyBodyException()

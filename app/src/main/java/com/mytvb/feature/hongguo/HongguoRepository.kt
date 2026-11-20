@@ -4,6 +4,7 @@ import android.content.Context
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.hongguo.net.HongguoAccount
 import com.mytvb.feature.hongguo.net.HongguoClient
+import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
 import com.mytvb.feature.hongguo.net.HongguoDeviceRegister
 import com.mytvb.feature.hongguo.net.HongguoHeadCache
 import com.mytvb.feature.hongguo.net.HongguoPlay
@@ -33,6 +34,11 @@ class HongguoRepository private constructor(context: Context) {
     private val play = HongguoPlay(rotateIdentity = { registerAndSave() })
     private val search = HongguoSearch(client)
     val account = HongguoAccount(session)
+
+    init {
+        // 恢复上次远程下发的版本档案（红果首请求前；见 HongguoVersionProfiles）
+        HongguoVersionProfiles.restore(appContext)
+    }
 
     // ---- 身份（真注册，multi_video_model 需要） ----
     @Volatile

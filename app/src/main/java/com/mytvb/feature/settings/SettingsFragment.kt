@@ -36,6 +36,7 @@ import com.mytvb.feature.category.CategoryTabPrefs
 import com.mytvb.feature.category.CategoryTabsDialog
 import com.mytvb.feature.home.FeedSourceSetting
 import com.mytvb.feature.home.HomeFragmentStateAdapter
+import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
 import com.mytvb.model.SettingModel
 import com.mytvb.ui.adapter.SettingAdapter
 import com.mytvb.ui.adapter.SettingRow
@@ -1273,6 +1274,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         updateScope.launch {
             try {
                 val releaseInfo = ApkUpdater.fetchLatestRelease()
+                // 红果签名版本档案热更：随 version.json 捎带，与有无新版本无关（没新版也生效）
+                HongguoVersionProfiles.applyFrom(
+                    requireContext().applicationContext, releaseInfo.hongguoVersions
+                )
                 if (ApkUpdater.isRemoteNewer(releaseInfo.versionName)) {
                     updateCheckState.value = UpdateCheckState.UpdateAvailable(releaseInfo.versionName)
                     updateUpdateEntry()

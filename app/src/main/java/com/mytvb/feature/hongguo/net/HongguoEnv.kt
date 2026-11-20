@@ -50,13 +50,10 @@ internal object HongguoEnv {
 
     /**
      * 请求 UA（HGTV F0.r3.c 同款模板）：POST 带 Cronet 尾串，版本号取 query 的
-     * version_code（feed=73532 / 播放实测样本=71332；版本位不敏感，两形态均过）。
+     * version_code（由调用方传入，随签名档案热更）。
      */
     fun ua(versionCode: String): String =
         "com.phoenix.read/$versionCode (Linux; U; Android $osVersion; zh_CN; $deviceType; " +
             "Build/${Build.ID ?: "V417IR"}; " +
             "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
-
-    /** 播放 UA：版本 74532（2026-11-14 随 player/v1 档案弃用 73932/71332 一同对齐官方 App）。 */
-    fun playbackUa(): String = ua("74532")
 }

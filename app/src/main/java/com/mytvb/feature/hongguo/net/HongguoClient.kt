@@ -328,7 +328,7 @@ class HongguoClient(
         return try {
             val payload = getSignedJson(
                 "/reading/bookapi/plan/v1/", values,
-                baseUrl = altBase, version = HongguoApiVersion.V72232
+                baseUrl = altBase, version = HongguoVersionProfiles.plan
             )
             // 系列剧只认 547 cell；相关推荐接受任意带剧数据的 cell（匿名回 401 通用推荐）
             parseRelatedCells(payload, bookId, exactOnly = from == "single_col_same_ip_series")
@@ -750,7 +750,7 @@ class HongguoClient(
      */
     private fun signedJson(
         method: String, path: String, raw: ByteArray?,
-        baseUrl: String, version: HongguoApiVersion,
+        baseUrl: String, version: HongguoVersionRef,
         extraQuery: Map<String, String>, auth: Boolean,
         attempts: Int, retryOn: (ApiException) -> Boolean
     ): JSONObject {
@@ -793,7 +793,7 @@ class HongguoClient(
     private fun once(
         method: String, path: String, raw: ByteArray?,
         identity: HongguoDeviceRegister.Identity,
-        baseUrl: String, version: HongguoApiVersion,
+        baseUrl: String, version: HongguoVersionRef,
         extraQuery: Map<String, String>, auth: Boolean
     ): JSONObject {
         val q = java.util.LinkedHashMap<String, String>()
@@ -912,11 +912,11 @@ class HongguoClient(
         }
     }
 
-    /** 匿名签名 POST（默认 74532 官方抓包口径；空响应轮换重试）。 */
+    /** 匿名签名 POST（默认档案走热更 profiles；空响应轮换重试）。 */
     private fun postSignedJson(
         path: String, body: JSONObject,
         baseUrl: String = apiBase,
-        version: HongguoApiVersion = HongguoApiVersion.V74532,
+        version: HongguoVersionRef = HongguoVersionProfiles.default,
         extraQuery: Map<String, String> = emptyMap()
     ): JSONObject = signedJson(
         "POST", path, body.toString().toByteArray(Charsets.UTF_8),
@@ -927,7 +927,7 @@ class HongguoClient(
     private fun getSignedJson(
         path: String, values: Map<String, String>,
         baseUrl: String = apiBase,
-        version: HongguoApiVersion = HongguoApiVersion.V74532
+        version: HongguoVersionRef = HongguoVersionProfiles.default
     ): JSONObject = signedJson(
         "GET", path, null,
         baseUrl, version, values, auth = false, attempts = 3, retryOn = { false }
@@ -936,19 +936,19 @@ class HongguoClient(
     /** 登录态 POST（账号同步族：Cookie+x-tt-token+token 滚动；身份与账号同源，失败不轮换）。 */
     internal fun authPost(path: String, body: JSONObject): JSONObject = signedJson(
         "POST", path, body.toString().toByteArray(Charsets.UTF_8),
-        altBase, HongguoApiVersion.V74532, emptyMap(), auth = true, attempts = 1, retryOn = { false }
+        altBase, HongguoVersionProfiles.default, emptyMap(), auth = true, attempts = 1, retryOn = { false }
     )
 
     /** 登录态 GET（云端历史/预约列表族）。 */
     internal fun authGet(path: String, values: Map<String, String>): JSONObject = signedJson(
         "GET", path, null,
-        altBase, HongguoApiVersion.V74532, values, auth = true, attempts = 1, retryOn = { false }
+        altBase, HongguoVersionProfiles.default, values, auth = true, attempts = 1, retryOn = { false }
     )
 
     /** 搜索 tab（空响应/100103 游标失效自动轮换身份，其余 code 直接抛给调用方降级）。 */
     internal fun searchTabRequest(values: Map<String, String>): JSONObject = signedJson(
         "GET", "/reading/bookapi/search/tab/v", null,
-        altBase, HongguoApiVersion.V74532, values, auth = false, attempts = 3,
+        altBase, HongguoVersionProfiles.default, values, auth = false, attempts = 3,
         retryOn = { it.code == "100103" }
     )
 
@@ -1107,7 +1107,8 @@ class HongguoClient(
          * 作品钉 72232——服务端按 version_code 下发不同 cell 结构（实证 2026-11-13：
          * 73532 只回「猜你喜欢」st=506，72232 才回「相关作品」st=547）。
          */
-        enum class HongguoApiVersion(val code: String, val versionName: String) {
+        enum class HongguoApiVersion(override val code: String, override val versionName: String) :
+            HongguoVersionRef {
             /** plan/v1 相关作品通道（HGTV t0 同款，服务端版本敏感）。 */
             V72232("72232", "7.2.2.32"),
 
