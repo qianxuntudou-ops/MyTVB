@@ -153,13 +153,6 @@ class HongguoSync(
         return accountPost("/reading/bookapi/read_history/update/v", body).optInt("code") == 0
     }
 
-    fun deleteHistory(seriesIds: List<String>): Boolean {
-        val arr = JSONArray()
-        seriesIds.forEach { arr.put(historyItem(it, 1, 0, 0, 0, true)) }
-        val body = JSONObject().put("update_datas", arr)
-        return accountPost("/reading/bookapi/read_history/update/v", body).optInt("code") == 0
-    }
-
     // ---- 3.5 云端历史读取（HGTV cloud.go：read_history/list GET） ----
 
     /** 云端历史条目（read_history/list/v 的 data_list，同剧多条取最近播放）。 */

@@ -514,11 +514,16 @@ class HongguoAccount(private val session: HongguoSession) {
         }
     }
 
-    /** 退出：清账号票据（设备身份保留，对照 Go logout 语义）。 */
+    /** 退出：清账号票据（设备身份保留，对照 Go logout 语义）。
+     *  票据全部走 Session 持久 setter，赋空即落盘清除——含 x-tt-token/expires/beat，
+     *  否则 Client/Sync 的 x-tt-token 注入会在登出后仍带旧票据发请求。 */
     fun logout() {
         session.accountCookies = mutableMapOf()
         session.profile = null
         session.loginMethod = ""
+        session.accountToken = ""
+        session.accountExpires = 0L
+        session.lastBeatAt = 0L
         cookieStore.clear()
     }
 

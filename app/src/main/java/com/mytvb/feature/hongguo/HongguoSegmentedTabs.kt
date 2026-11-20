@@ -6,7 +6,6 @@ import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.widget.LinearLayout
 import androidx.appcompat.widget.AppCompatTextView
@@ -31,9 +30,6 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
     private var onSelected: ((Int) -> Unit)? = null
     private val tabs = mutableListOf<AppCompatTextView>()
     private var selectedIndex = 0
-    private var suppressCallback = false
-    private var onNavigateUp: (() -> Boolean)? = null
-    private var onNavigateDown: (() -> Boolean)? = null
 
     init {
         orientation = HORIZONTAL
@@ -74,37 +70,10 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
             tabs.add(tab)
         }
         select(this.selectedIndex, fireCallback = false)
-        applyVerticalNavigation()
-    }
-
-    /**
-     * 二级分段 tab 的竖向逃逸接线：UP 回顶部一级 tab、DOWN 落内容区第一张卡
-     * （列表页调用；左右仍走子项间框架自然导航）。
-     * setup() 重建子项时会自动重放本接线。
-     */
-    fun bindVerticalNavigation(onNavigateUp: () -> Boolean, onNavigateDown: () -> Boolean) {
-        this.onNavigateUp = onNavigateUp
-        this.onNavigateDown = onNavigateDown
-        applyVerticalNavigation()
     }
 
     /** 聚焦当前选中项（卡片 UP 回二级 tab 的落点）。 */
     fun focusSelectedTab(): Boolean = tabAt(selectedIndex)?.requestFocus() == true
-
-    private fun applyVerticalNavigation() {
-        val up = onNavigateUp ?: return
-        val down = onNavigateDown ?: return
-        tabs.forEach { tab ->
-            tab.setOnKeyListener { _, keyCode, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> up()
-                    KeyEvent.KEYCODE_DPAD_DOWN -> down()
-                    else -> false
-                }
-            }
-        }
-    }
 
     /** 切换选中项；[fireCallback]=true 时按用户切换（值变化才回调）。 */
     fun select(index: Int, fireCallback: Boolean = false) {
@@ -119,22 +88,10 @@ class HongguoSegmentedTabs @JvmOverloads constructor(
             tab.setTextColor(if (selected) white else grey)
             tab.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
         }
-        if (fireCallback && changed && !suppressCallback) onSelected?.invoke(selectedIndex)
+        if (fireCallback && changed) onSelected?.invoke(selectedIndex)
     }
-
-    fun selectedIndex(): Int = selectedIndex
 
     fun tabAt(index: Int): View? = tabs.getOrNull(index)
 
     private fun greyColor(): Int = context.getColor(R.color.grey)
-
-    /** 页面程序化换板（如登录弹窗切通道）时避免误触发用户回调。 */
-    fun withSuppressCallback(block: () -> Unit) {
-        suppressCallback = true
-        try {
-            block()
-        } finally {
-            suppressCallback = false
-        }
-    }
 }

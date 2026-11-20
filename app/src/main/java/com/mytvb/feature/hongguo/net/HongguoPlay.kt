@@ -15,8 +15,9 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * 红果播放地址解析：multi_video_model/v1（签名 POST）→ video_model 内联/fallback 二跳
- * → video_list 编码过滤 → spade_a 密钥派生 → URL 解密 + CDN 域名白名单。
+ * 红果播放地址解析（2026-11-20 起）：video_model/v1 单条直取（签名 POST，对齐
+ * HGTV 1.3.8.4 主通道）→ video_model 内联/fallback 二跳 → video_list 编码过滤
+ * → spade_a 密钥派生 → URL 解密 + CDN 域名白名单。
  * 对照 Node 版 app-source.js fetchAppPlayUrl/parseEntryPlayInfo（线上验证链路）。
  */
 class HongguoPlay {
@@ -72,7 +73,7 @@ class HongguoPlay {
     class PlayException(message: String, val code: String) : IllegalStateException(message)
 
     /**
-     * @param identity 真注册设备身份（multi_video_model 校验设备真实性，
+     * @param identity 真注册设备身份（video_model/v1 校验设备真实性，
      * 匿名随机 id 会被空响应拒绝）。可用 [HongguoDeviceRegister.registerFresh] 获取后持久化复用。
      * @param preferredPixels 目标画质档位（竖屏剧取 min(width,height)，如 1080/720/540/480）；
      * 0 = 默认取最高档。目标档缺失时就近取不超目标的最高档，全超目标取最低档。
@@ -107,8 +108,8 @@ class HongguoPlay {
      * - 传输走 [postVideoModelV5]（V5 签名 medusa/helios + 手机端 74332 query
      *   模板，实测通过；kotlinSignedPost 老 Argus/Ladon 头集在本端点同样被拒）；
      * - 响应 `data` 即外层 entry，`data.video_model` 为**字符串形态**（JSON-in-
-     *   string），由 [parseEntry] 的字符串二跳解开；extractEntry 的 1004 分组
-     *   逻辑不适用本端点。
+     *   string），由 [parseEntry] 的字符串二跳解开（multi 时代的 1004 分组解析
+     *   extractEntry 已随端点换代删除）。
      */
     private fun fetchDirectModelEntry(
         vid: String,
@@ -151,37 +152,14 @@ class HongguoPlay {
         )
         .toString().toByteArray(Charsets.UTF_8)
 
-    private fun extractEntry(vid: String, payload: JSONObject): JSONObject {
-        val code = payload.optInt("Code", payload.optInt("code", 0))
-        if (code != 0) {
-            val msg = payload.optString("message", payload.optString("Message", ""))
-            AppLog.w(TAG, "play biz code=$code msg=$msg")
-            throw PlayException("播放接口 code=$code${if (msg.isNotEmpty()) "：$msg" else ""}", "BUSINESS_REJECTED")
-        }
-        val data0 = payload.optJSONObject("data") ?: JSONObject()
-        // V5 分组响应（2026-11-17 服务端切换）：data["1004"][vid].video_model
-        val data = data0.optJSONObject("1004") ?: data0
-        // 2026-11-20：video_model/v1 直取响应的 data.video_model 是「字符串形态」
-        // （JSON-in-string，需二次 parse；对照 HGTV AbstractC0162h1.N 的容错）
-        return data.optJSONObject("video_model")
-            ?: data.optString("video_model").takeIf { it.isNotEmpty() }
-                ?.let { runCatching { JSONObject(it) }.getOrNull() }
-            ?: data.optJSONObject(vid)
-            ?: runCatching { data.optJSONObject(data.keys().next()) }.getOrNull()
-            ?: throw PlayException("播放接口未返回所选分集", "MISSING_MODEL")
-    }
-
     private class EmptyBodyException(detail: String = "empty body") : IllegalStateException(detail)
 
     private companion object {
         const val TAG = "Hongguo"
 
-        /** 播放 host 集群（HGTV F0.n3.f2118b：a/b/c + lf/lq/hl 共 6 个，取前 3 轮询）。 */
-        val PLAY_HOSTS = listOf(
-            "https://api5-normal-sinfonlinea.fqnovel.com",
-            "https://api5-normal-sinfonlineb.fqnovel.com",
-            "https://api5-normal-sinfonlinec.fqnovel.com"
-        )
+        /** 播放 host（HGTV F0.n3.f2118b 集群 a/b/c + lf/lq/hl 共 6 个中的主用 a 线；
+         *  旧 multi 时代的 host 轮询已随兜底链删除，直取实测 a 线稳定）。 */
+        const val PLAY_HOST = "https://api5-normal-sinfonlinea.fqnovel.com"
 
     }
 
@@ -189,8 +167,7 @@ class HongguoPlay {
      *  gzip body 同字节签名发送 + 74332 手机端模板 query（保序、无 ts）+
      *  x-medusa/x-helios 独立播放签名（旧 Argus/Ladon 头集已被服务端弃用）。 */
     private fun postVideoModelV5(
-        path: String, raw: ByteArray, identity: HongguoDeviceRegister.Identity,
-        hostOverride: String? = null
+        path: String, raw: ByteArray, identity: HongguoDeviceRegister.Identity
     ): JSONObject {
         val body = gzipDeflate(raw)
         // V5 查询模板（PR#13 PlaybackV5Pairs：顺序参与签名；签名时追加 _rticket 挑分支）
@@ -207,8 +184,7 @@ class HongguoPlay {
             if (identity.klinkEgdi.isNotEmpty()) add("klink_egdi" to identity.klinkEgdi)
         }
         val signed = HongguoPlaybackV5.sign(pairs, System.currentTimeMillis(), body)
-        val host = hostOverride ?: PLAY_HOSTS.first()
-        val url = "$host$path?${signed.query}"
+        val url = "$PLAY_HOST$path?${signed.query}"
         // 2026-11-20：叠 HGTV 1.3.8.4 T() 头改写（AbstractC0201p0:680-690）——
         // lc=101 / x-ss-dp=8662 / x-vc-bdturing-sdk-version / passport-sdk-version /
         // x-tt-trace-id，video_model/v1 直取实测要求的完整头形态。
@@ -301,7 +277,7 @@ class HongguoPlay {
                 ?: throw PlayException("片源接口缺少数据", "MISSING_MODEL")
         }
 
-        // video_list 双形态：multi/v1=JSONObject(键值)；player/v1(fplay 同构)=JSONArray
+        // video_list 双形态：直取端点两种都见——JSONObject(键值)与 JSONArray(下标)
         data class Candidate(
             val obj: JSONObject, val codec: String, val codecRank: Int,
             val quality: String, val width: Int, val height: Int, val pixels: Int
@@ -314,10 +290,11 @@ class HongguoPlay {
             ) return
             val meta = item.optJSONObject("video_meta") ?: JSONObject()
             val codec = item.optString("codec_type").ifEmpty { meta.optString("codec_type") }.lowercase()
+            // 编码兼容优先：h264=0 / hevc=1；其余（bytevc2 等自研编码不支持）一律 3
+            // 占位 rank2 已删——when 永假分支不可达，bytevc2 专属报错在 rows 为空时统一判
             val codecRank = when {
                 codec in listOf("h264", "avc", "avc1") -> 0
                 codec in listOf("hevc", "h265", "hvc1", "hev1", "bytevc1") -> 1
-        false -> 2  // bytevc2 自研编码不支持（占位保序）
                 else -> 3
             }
             val quality = item.optString("quality_desc").ifEmpty {
@@ -413,7 +390,7 @@ class HongguoPlay {
         if (kidRaw != null && kidHex == null) {
             AppLog.w(TAG, "kid unparsable len=${kidRaw.length} vid=$vid")
         }
-        // K-M1（multi/v1）响应的 spade_a 可能是非常规形态（base64 解不出/长度不足），
+        // spade_a 可能是非常规形态（base64 解不出/长度不足，直取端点偶见），
         // 容错按无密钥明文处理（URL 为明文流时正确；真加密流会在播放期自然报错）
         val contentKey = if (spade.isNotEmpty()) runCatching { deriveContentKey(spade) }.getOrNull() else null
         val keySeed = info.optString("key_seed")

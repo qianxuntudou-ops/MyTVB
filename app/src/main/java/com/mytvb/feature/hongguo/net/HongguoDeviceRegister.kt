@@ -39,7 +39,7 @@ object HongguoDeviceRegister {
         HongguoHttp.ok
     }
 
-    /** 真注册身份（multi_video_model 播放接口要求，不吃一次性随机值）。 */
+    /** 真注册身份（video_model/v1 播放接口要求，不吃一次性随机值）。 */
     data class Identity(
         val deviceId: String,
         val installId: String,

@@ -39,7 +39,7 @@ class HongguoRepository private constructor(context: Context) {
         HongguoVersionProfiles.restore(appContext)
     }
 
-    // ---- 身份（真注册，multi_video_model 需要） ----
+    // ---- 身份（真注册，video_model/v1 直取需要） ----
     @Volatile
     private var cachedIdentity: HongguoDeviceRegister.Identity? = null
 
@@ -243,8 +243,6 @@ class HongguoRepository private constructor(context: Context) {
         localPrefs.edit().remove("search_history").apply()
     }
 
-    fun accountMethod(): String = session.loginMethod
-
     // ---- 详情 ----
     // 内存缓存(30min 倒计时过期) → 原生 video_detail/v1（~18KB/170ms，2026-11-14 替换
     // SSR 网页主通道——450KB HTML 冷路径 0.8~1.7s）→ SSR 回退兜底。30 分钟对齐 HGTV，
@@ -430,9 +428,9 @@ class HongguoRepository private constructor(context: Context) {
     // ---- 播放 ----
 
     /**
-     * 播放地址预取缓存（官方 preload/v1 批量预取的落点）：条目 = PlayUrl 纯字符串
+     * 播放地址缓存（warmup/preload 命中与 playUrl 解析的落点）：条目 = PlayUrl
      * 轻量对象（每条 <1KB），内存驻留可忽略。URL 有效期约 6h → TTL 5h 留余量，
-     * 过期/未命中走实时解析（player/v1 主链路）。
+     * 过期/未命中走实时解析（video_model/v1 直取主链路）。
      * 2026-11-18 P1 加磁盘层（对齐 HGTV P3 双层缓存）：冷启动/杀进程后重进同集
      * 免 V5 签名请求（起播关键路径最大单项）；文件 mtime 即时间戳，TTL 同内存层。
      */
@@ -877,10 +875,6 @@ class HongguoRepository private constructor(context: Context) {
         durationMs = if (durationMs > 0) durationMs else other.durationMs,
         contentType = contentType.ifEmpty { other.contentType }
     )
-
-    /** 云端历史删除（本地历史清空时同步）。 */
-    fun deleteHistoryCloud(seriesIds: List<String>) =
-        cloudAsync { deleteHistory(seriesIds) }
 
     /**
      * 收藏 tab 数据源：本地记录 + 登录态拉云端书架合并（同剧集新者胜）；

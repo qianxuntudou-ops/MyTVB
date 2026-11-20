@@ -326,88 +326,10 @@ internal object HongguoCrypto {
         0x7aba4fc8.toInt(), 0x67166507, 0x6403fa00.toInt(), 0x340f512f, 984304912, 3005047866.toInt(),
         2874125293.toInt(), 2152413264.toInt()
     )
-    private val BRANCH0_CHOSEN = arrayOf(
-        intArrayOf(101, 5, 7, 6, 3, 2, 1, 0, 5, 4, 3),
-        intArrayOf(96, 0, 6, 7, 5, 3, 2, 1, 5, 4, 4),
-        intArrayOf(96, 7, 6, 2, 1, 4, 0, 5, 4, 3, 5),
-        intArrayOf(99, 3, 6, 2, 4, 5, 1, 0, 0, 7, 6),
-        intArrayOf(96, 0, 5, 6, 7, 3, 1, 2, 5, 4, 4),
-        intArrayOf(100, 2, 0, 3, 5, 4, 6, 7, 2, 1, 5)
-    )
-    private val IV1_LIST = intArrayOf(
-        0xc4a78580.toInt(), 0xb3c0fd39.toInt(), 0xc58c5686.toInt(),
-        0xc9aa3ba7.toInt(), 0xf5a7adf2.toInt(), 0x963c2ed1.toInt()
-    )
 
     internal fun ror32(v: Int, n: Int): Int {
         val k = n and 31
         return if (k == 0) v else Integer.rotateLeft(v, 32 - k)
-    }
-
-    internal fun f13Branch0(iv: Int, ts: Int, q: ByteArray, m: ByteArray): ByteArray {
-        val low = iv and 15
-        val ivV0 = (low * 171) shr 9
-        val ivV1 = IV1_LIST[ivV0]
-        val countV1 = ivV1 + ts + 1 and 255
-        val countV2 = ivV1 + ts
-        val tt = IntArray(64) { ror32(TT02[it], countV1) }
-        val n0 = (countV2 + 2) and 7
-        val padSeed = byteArrayOf(0xFA.toByte(), 0x45, 0x61, 0xD7.toByte())
-        val pad = ByteArray(4) { i ->
-            val v = padSeed[i].toInt() and 0xFF
-            (((v or (v shl 8)) ushr n0) and 0xFF).toByte()
-        }
-        // data = q(32) + m(16) + le(ts)(4) + pad(4) + hex(00000000000001a0)(8) = 64
-        var data = q + m + leU32(ts) + pad +
-            byteArrayOf(0, 0, 0, 0, 0, 0, 0x1A.toByte(), 0xA0.toByte())
-        // 16 个 BE u32 + 112 轮扩展
-        val di = ArrayList<Int>(128)
-        for (i in 0 until 16) {
-            di.add(beU32At(data, i * 4))
-        }
-        var di0 = di[0]
-        for (i in 0 until 112) {
-            val di1 = di[i + 1]
-            val di14 = di[i + 14]
-            val r1 = Integer.rotateLeft(di1, 14) xor Integer.rotateLeft(di1, 25) xor (di1 ushr 3)
-            val r2 = Integer.rotateLeft(di14, 13) xor Integer.rotateLeft(di14, 15) xor (di14 ushr 10)
-            di.add(di0 + di[i + 9] + r1 + r2)
-            di0 = di1
-        }
-        val init = IntArray(8) { ror32(BRANCH0_INIT[it], countV2 and 31) }
-        val chosen = BRANCH0_CHOSEN[ivV0]
-        val d = init.copyOf()
-        for (i in 0 until chosen[0]) {
-            val base = ivV1 + i
-            val n0v = di[base and 127]
-            val n1 = ((d[chosen[3]] xor d[chosen[4]]) and d[chosen[1]]) xor d[chosen[3]]
-            val n2 = Integer.rotateLeft(d[chosen[1]], 26) xor Integer.rotateLeft(d[chosen[1]], 21) xor Integer.rotateLeft(d[chosen[1]], 7)
-            val n4 = n0v + n1 + n2 + tt[base and 63] + d[chosen[5]]
-            val n5 = Integer.rotateLeft(d[chosen[2]], 30) xor Integer.rotateLeft(d[chosen[2]], 19) xor Integer.rotateLeft(d[chosen[2]], 10)
-            val n6 = (d[chosen[2]] and d[chosen[6]]) or ((d[chosen[2]] or d[chosen[6]]) and d[chosen[7]])
-            val n7 = n5 + n6
-            val old = d[chosen[9]]
-            // 循环右移：尾弹出插到头部（对照 d.unshift(d.pop())）
-            val tail = d[7]
-            for (k in 7 downTo 1) d[k] = d[k - 1]
-            d[0] = tail
-            d[chosen[10]] = n7 + n4
-            d[chosen[8]] = old + n4
-        }
-        val ret = ByteArray(32)
-        for (i in 0 until 8) {
-            val v = d[i] + init[i]
-            ret[i * 4] = ((v ushr 24) and 0xFF).toByte()
-            ret[i * 4 + 1] = ((v ushr 16) and 0xFF).toByte()
-            ret[i * 4 + 2] = ((v ushr 8) and 0xFF).toByte()
-            ret[i * 4 + 3] = (v and 0xFF).toByte()
-        }
-        val folded = ByteArray(16)
-        for (i in 0 until 16) {
-            folded[i] = ((ret[i].toInt() and 0xFF) xor (ret[16 + i].toInt() and 0xFF)).toByte()
-        }
-        System.arraycopy(folded, 0, ret, 0, 16)
-        return ret.copyOfRange(0, 16) + leU32(sumMd5Check(ret.copyOfRange(0, 16)))
     }
 
     internal fun sumMd5Check(out16: ByteArray): Int {

@@ -131,14 +131,6 @@ class HongguoSession(context: Context) : HongguoDeviceRegister.SessionView {
         }
     }
 
-    /** 仅清账号票据（登出），设备身份保留。 */
-    fun clearAccount() {
-        prefs.edit()
-            .remove(K_ACCOUNT_COOKIES).remove(K_PROFILE).remove(K_LOGIN_METHOD)
-            .remove(K_ACCOUNT_TOKEN).remove(K_ACCOUNT_EXPIRES).remove(K_LAST_BEAT_AT)
-            .apply()
-    }
-
     /** 清除全部红果身份数据（设备身份+票据），设置页「清除红果数据」入口。 */
     fun clearAll() {
         prefs.edit().clear().apply()
