@@ -19,15 +19,7 @@ import javax.crypto.spec.SecretKeySpec
  * → video_list 编码过滤 → spade_a 密钥派生 → URL 解密 + CDN 域名白名单。
  * 对照 Node 版 app-source.js fetchAppPlayUrl/parseEntryPlayInfo（线上验证链路）。
  */
-class HongguoPlay(
-    private val client: HongguoClient = HongguoClient(),
-    /**
-     * 设备自愈钩子（HGTV b.java "device healed" 同款语义）：空响应=号被拒时换新号。
-     * 注入方负责持久化（HGTV O0/E.java registered-* 持久化复用模型）；不注入则现场注册不落盘。
-     */
-    private val rotateIdentity: () -> HongguoDeviceRegister.Identity =
-        { HongguoDeviceRegister.registerFresh() }
-) {
+class HongguoPlay {
 
     private val http: OkHttpClient by lazy {
         // 共享连接池单例：播放必须复用注册连接（连接会话模型，见 HongguoHttp）

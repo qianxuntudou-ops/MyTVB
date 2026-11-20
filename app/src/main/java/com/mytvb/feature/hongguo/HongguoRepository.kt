@@ -30,8 +30,7 @@ class HongguoRepository private constructor(context: Context) {
     private val session = HongguoSession(appContext)
     private val client = HongguoClient(session = session)
     private val web = HongguoWeb()
-    // 设备自愈钩子（HGTV "device healed" 同款）：空响应=号被拒 → 换新号并持久化
-    private val play = HongguoPlay(rotateIdentity = { registerAndSave() })
+    private val play = HongguoPlay()
     private val search = HongguoSearch(client)
     val account = HongguoAccount(session)
 
