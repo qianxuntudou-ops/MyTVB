@@ -126,4 +126,5 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes-file release_notes.txt \
-            app/build/outputs/renamed_apk/release/MyTVB-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
+            app/build/outputs/renamed_apk/release/MyTVB-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk \
+            version.json
