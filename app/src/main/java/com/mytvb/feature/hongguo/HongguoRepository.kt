@@ -567,42 +567,27 @@ class HongguoRepository private constructor(context: Context) {
         }
 
     /**
-     * 起播/切集成功后后台预热后续集（当前集+1 起 2 集；[vids] 首位=下一集）：
-     * 1) 官方 preload/v1 批量预取地址（服务端 200 空体时全挂，走 2 兜底）；
-     * 2) 下一集地址缓存 miss 时实时解析（player/v1 → K-M1 fallback，历史实证可用）；
-     * 3) 下一集为加密流时**头部预取落盘**（2026-11-18 P2 对齐 HGTV：Range 拉头部段
-     *    截到 moov 结束 ~122KB，替代旧整集预下载——30MB 慢网 90s 难落地还与在播流
-     *    抢带宽；头部秒级完成，切集时 ClearKey 路径的 moov 网络段归零）。
-     *    整集落地链路保留作 ClearKey 不可用/播放失败兜底（[fallbackDownload]）。
-     * 全部失败静默，切集实时解析兜底。
+     * 起播/切集成功后预热**下一集**（2026-11-20 瘦身定案）：
+     * 地址直取（video_model/v1）入缓存 + 加密流时头部预取落盘（2026-11-18 P2 对齐
+     * HGTV：Range 拉头部段截到 moov 结束，切集时 moov 网络段归零）。整集落地链路
+     * 保留作 ClearKey 不可用/播放失败兜底（[fallbackDownload]）。
+     * 批量 preload/v1 地址层已删——multi 系三端点当天全被服务端 200 空 body 封禁
+     * （探针实证）；下一集地址由本层顺带覆盖，下下集不再预取（快速连切空档由实时
+     * 直取 ~300ms 兜底）。全部失败静默，切集实时解析兜底。
      */
-    fun preloadNextEpisodes(vids: List<String>) {
+    fun preloadNextEpisode(nextVid: String) {
+        if (nextVid.isEmpty()) return
         val pixels = defaultQualityPixels()
-        val pending = vids.filter { it.isNotEmpty() && takeCachedPlayUrl("$it@$pixels") == null }
-        if (pending.isNotEmpty()) {
-            AppLog.d("Hongguo", "preload episodes start ${pending.size} q=$pixels")
-            cloudScope.launch {
-                withIdentity { id ->
-                    runCatching { play.preloadEntries(pending, id, pixels) }
-                        .onSuccess { entries ->
-                            entries.forEach { (vid, url) -> cachePlayUrl("$vid@$pixels", url) }
-                            AppLog.d("Hongguo", "preload episodes ok ${entries.keys}")
-                        }
-                        .onFailure { AppLog.w("Hongguo", "preload episodes fail: ${it.message}") }
-                }
-            }
-        }
-        val next = vids.firstOrNull { it.isNotEmpty() } ?: return
         cloudScope.launch {
             runCatching {
-                // playUrl 内部先查地址缓存（preload/v1 命中免请求），miss 走 player/v1→K-M1
-                val play = playUrl(next, pixels)
+                // playUrl 内部先查地址缓存（预热/整集兜底命中免请求），miss 走直取
+                val play = playUrl(nextVid, pixels)
                 if (play.contentKeyHex != null) {
                     prefetchHead(play)
                 } else {
-                    AppLog.d("Hongguo", "prefetch next plain vid=$next (直链不走 PSSH 手术)")
+                    AppLog.d("Hongguo", "prefetch next plain vid=$nextVid (直链不走 PSSH 手术)")
                 }
-            }.onFailure { AppLog.d("Hongguo", "prefetch next fail vid=$next: ${it.message}") }
+            }.onFailure { AppLog.d("Hongguo", "prefetch next fail vid=$nextVid: ${it.message}") }
         }
     }
 

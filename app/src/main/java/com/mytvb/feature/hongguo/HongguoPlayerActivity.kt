@@ -394,17 +394,14 @@ class HongguoPlayerActivity : AppCompatActivity() {
         thumbProvider?.bind(play.bigThumbs)
     }
 
-    /** 起播/切集成功后预取后续集播放地址（官方 preload/v1 批量；地址缓存见 Repository）。 */
+    /** 起播/切集成功后预热下一集（地址直取入缓存+加密流头部落盘，见 Repository）。 */
     private fun preloadFollowingEpisodes() {
         if (seriesId.isEmpty()) return
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 val episodes = repository.detail(seriesId).episodes
                 // episodeIndex 为 1-based：下一集 = getOrNull(episodeIndex)
-                val vids = listOf(episodeIndex, episodeIndex + 1)
-                    .mapNotNull { episodes.getOrNull(it) }
-                    .map { it.videoId }
-                repository.preloadNextEpisodes(vids)
+                episodes.getOrNull(episodeIndex)?.let { repository.preloadNextEpisode(it.videoId) }
             }
         }
     }
