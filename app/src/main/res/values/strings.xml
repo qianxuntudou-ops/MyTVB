@@ -131,6 +131,7 @@
     <string name="hongguo_code_sent">验证码已发送</string>
     <string name="hongguo_sms_login">登录</string>
     <string name="hongguo_mfa_sent">我已发送</string>
+    <string name="hongguo_qr_scan_title">打开红果 App 扫一扫</string>
     <string name="hongguo_qr_wait_scan">等待扫码…</string>
     <string name="hongguo_qr_scanned">已扫码，请在手机确认</string>
     <string name="hongguo_qr_expired">二维码已过期</string>
@@ -155,7 +156,8 @@
     <string name="hongguo_shelf_count">共 %1$d 条</string>
     <string name="hongguo_subscribe_online_at">%1$s 上线</string>
     <string name="hongguo_subscribe_pending">上线时间待定</string>
-    <string name="hongguo_login_privacy">登录后收藏与观看记录将与账号同步；不登录也可正常观看，记录仅保存在本机</string>
+    <string name="hongguo_login_privacy">登录后收藏与观看记录将与账号同步</string>
+    <string name="hongguo_login_privacy_sub">不登录也可正常观看，记录仅保存在本机</string>
     <string name="hongguo_resend_code">重新发送 %1$d 秒</string>
     <string name="hongguo_mfa_tip">需要短信上行验证：请编辑短信「%1$s」发送到 %2$s，完成后点击右侧按钮</string>
     <string name="hongguo_login_import_note">支持三种输入：cookieStore.xml 导出 · 32 位 token hex · 原始 cookie 串</string>

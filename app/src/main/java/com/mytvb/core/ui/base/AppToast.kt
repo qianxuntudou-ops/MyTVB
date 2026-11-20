@@ -55,6 +55,25 @@ object AppToast {
     private var overlay: TextView? = null
     private var overlayHide: Runnable? = null
 
+    /**
+     * 高层宿主栈：Activity 之上的独立窗口（Dialog 等，z 序高于 Activity）显示时注册、
+     * 消失时注销。提示浮层挂在 Activity decor 上会被这些窗口压在下层，所以 show 时
+     * 取栈顶仍 attach 的宿主——Toast 自己决定层级，与具体弹窗解耦。
+     */
+    private val hostStack = ArrayList<ViewGroup>()
+
+    /** 注册高层宿主（Dialog 的 window.decorView）；传空直接忽略。 */
+    fun attachHost(decor: ViewGroup?) {
+        if (decor != null && !hostStack.contains(decor)) hostStack.add(decor)
+    }
+
+    /** 注销高层宿主（对应窗口 dismiss 时调用）；传空直接忽略。 */
+    fun detachHost(decor: ViewGroup?) {
+        if (decor == null) return
+        hostStack.remove(decor)
+        if (overlay?.parent === decor) dismissOverlay()
+    }
+
     /** 记录前台 Activity，供浮层挂载；须在主线程调用一次。 */
     fun install(application: Application) {
         application.registerActivityLifecycleCallbacks(
@@ -119,41 +138,37 @@ object AppToast {
         yOffsetPx: Int
     ) {
         val metrics = context.resources.displayMetrics
-        val density = metrics.density.takeIf { it > 0f } ?: 1f
-        val design = UiScale.designScale(metrics.widthPixels, metrics.heightPixels)
-        val rawPx36 = context.resources.getDimension(R.dimen.px36)
-        // 系统会在 WebView 初始化、窗口切换等无重建路径上把 DisplayMetrics 重置回面板
-        // density（投影仪实测 1.0→2.0），而 UiScale 钉的是 Activity resources；提示常由
-        // applicationContext 发出，getDimension 会直接拿到翻倍值（36dip→72px）。
-        // 故先除掉当前 density 还原设计值，再乘设计倍率，绕开被污染的 density。
-        val appliedPx = rawPx36 / density * design * UiTextScale.scale()
+        val appliedPx = appliedTextPx(context)
 
         val activity = resumedActivity?.get()
-        val decor = activity?.window?.decorView as? ViewGroup
+        val topHost = hostStack.lastOrNull { it.isAttachedToWindow }
+        val decor = topHost ?: (activity?.window?.decorView as? ViewGroup)
+        val hostReady = decor != null && decor.isAttachedToWindow &&
+            (topHost != null || (activity != null && !activity.isFinishing && !activity.isDestroyed))
+        val hostContext = decor?.context ?: context
 
         AppLog.i(
             TAG,
-            "show render=${if (decor != null && decor.isAttachedToWindow &&
-                !activity.isFinishing && !activity.isDestroyed) "overlay" else "systemToast"} " +
+            "show render=${if (hostReady) "overlay" else "systemToast"} " +
+                "host=${if (topHost != null) "window" else "activity"} " +
                 "text=\"$text\" " +
                 "screen=${metrics.widthPixels}x${metrics.heightPixels} " +
                 "density=${metrics.density} scaledDensity=${metrics.density * context.resources.configuration.fontScale} " +
-                "design=$design userScale=${UiScale.scale()} textScale=${UiTextScale.scale()} " +
+                "userScale=${UiScale.scale()} textScale=${UiTextScale.scale()} " +
                 "fontScale=${context.resources.configuration.fontScale} " +
-                "rawPx36=$rawPx36 appliedPx=$appliedPx"
+                "appliedPx=$appliedPx"
         )
 
-        if (activity != null && decor != null && decor.isAttachedToWindow &&
-            !activity.isFinishing && !activity.isDestroyed
-        ) {
-            showOverlay(activity, decor, text, appliedPx, duration, gravity, yOffsetPx)
+        val target = decor?.takeIf { hostReady }
+        if (target != null) {
+            showOverlay(hostContext, target, text, appliedPx, duration, gravity, yOffsetPx)
         } else {
             showSystemToast(context, text, appliedPx, duration, gravity, yOffsetPx, metrics)
         }
     }
 
     private fun showOverlay(
-        activity: Activity,
+        context: Context,
         decor: ViewGroup,
         text: String,
         textPx: Float,
@@ -162,10 +177,10 @@ object AppToast {
         yOffsetPx: Int
     ) {
         dismissOverlay()
-        val padH = designPx(activity, R.dimen.px24)
-        val padV = designPx(activity, R.dimen.px16)
-        val screenW = activity.resources.displayMetrics.widthPixels
-        val view = TextView(activity).apply {
+        val padH = designPx(context, R.dimen.px24)
+        val padV = designPx(context, R.dimen.px16)
+        val screenW = context.resources.displayMetrics.widthPixels
+        val view = TextView(context).apply {
             setText(text)
             setTextColor(Color.BLACK)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
@@ -175,7 +190,7 @@ object AppToast {
             ellipsize = TextUtils.TruncateAt.END
             setPadding(padH, padV, padH, padV)
             background = GradientDrawable().apply {
-                cornerRadius = designPx(activity, R.dimen.px16).toFloat()
+                cornerRadius = designPx(context, R.dimen.px16).toFloat()
                 setColor(0xFFF5F6F8.toInt())
             }
             alpha = 0f
@@ -184,7 +199,7 @@ object AppToast {
             isClickable = false
             // 浮层宽度上限取屏幕宽：系统 Toast 的 320dp 上限在 density 钉死后只剩
             // 320px，会把长提示挤成多行；这里彻底绕开。
-            maxWidth = screenW - padH * 2 - designPx(activity, R.dimen.px48) * 2
+            maxWidth = screenW - padH * 2 - designPx(context, R.dimen.px48) * 2
         }
         val overlayGravity = overlayGravity(gravity)
         val params = FrameLayout.LayoutParams(
@@ -244,6 +259,21 @@ object AppToast {
     }
 
     /** 兜底路径：没有前台 Activity（如应用在后台）时仍用系统 Toast。 */
+    /**
+     * 提示字号：设计值 × 设计倍率 × 字体档（不乘界面缩放档）。
+     * 系统会在 WebView 初始化、窗口切换等无重建路径上把 DisplayMetrics 重置回面板
+     * density（投影仪实测 1.0→2.0），而 UiScale 钉的是 Activity resources；提示常由
+     * applicationContext 发出，getDimension 会直接拿到翻倍值（36dip→72px）。
+     * 故先除掉当前 density 还原设计值，再乘设计倍率，绕开被污染的 density。
+     */
+    private fun appliedTextPx(context: Context): Float {
+        val metrics = context.resources.displayMetrics
+        val density = metrics.density.takeIf { it > 0f } ?: 1f
+        val design = UiScale.designScale(metrics.widthPixels, metrics.heightPixels)
+        val rawPx36 = context.resources.getDimension(R.dimen.px36)
+        return rawPx36 / density * design * UiTextScale.scale()
+    }
+
     private fun showSystemToast(
         context: Context,
         text: String,

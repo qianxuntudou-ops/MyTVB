@@ -114,6 +114,7 @@
     <string name="hongguo_mfa_tip">Send "%1$s" to %2$s by SMS, then tap the right button</string>
     <string name="hongguo_input_phone_code">Enter phone number and code</string>
     <string name="hongguo_verify_failed">Verification failed</string>
+    <string name="hongguo_qr_scan_title">Open the Hongguo app and scan</string>
     <string name="hongguo_qr_wait_scan">Waiting for scan…</string>
     <string name="hongguo_qr_scanned">Scanned. Confirm on your phone</string>
     <string name="hongguo_qr_expired">QR code expired</string>
@@ -127,7 +128,8 @@
     <string name="hongguo_import_success">Imported</string>
     <string name="hongguo_import_failed">Import failed</string>
     <string name="hongguo_login_sync_hint">Sign in to sync cloud data</string>
-    <string name="hongguo_login_privacy">Favorites and history sync after sign-in; otherwise kept on this device</string>
+    <string name="hongguo_login_privacy">Favorites and history sync to your account</string>
+    <string name="hongguo_login_privacy_sub">Watch without signing in — records stay on this device</string>
     <string name="hongguo_rank_hot">Trending</string>
     <string name="hongguo_rank_real">Live-action</string>
     <string name="hongguo_rank_comic">Comic</string>

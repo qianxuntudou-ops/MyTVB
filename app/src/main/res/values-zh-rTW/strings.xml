@@ -114,6 +114,7 @@
     <string name="hongguo_mfa_tip">需要簡訊上行驗證：請編輯簡訊「%1$s」傳送到 %2$s，完成後點擊右側按鈕</string>
     <string name="hongguo_input_phone_code">請輸入手機號碼與驗證碼</string>
     <string name="hongguo_verify_failed">驗證失敗</string>
+    <string name="hongguo_qr_scan_title">打開紅果 App 掃一掃</string>
     <string name="hongguo_qr_wait_scan">等待掃描…</string>
     <string name="hongguo_qr_scanned">已掃描，請在手機確認</string>
     <string name="hongguo_qr_expired">QR Code 已過期</string>
@@ -127,7 +128,8 @@
     <string name="hongguo_import_success">匯入成功</string>
     <string name="hongguo_import_failed">匯入失敗</string>
     <string name="hongguo_login_sync_hint">登入後同步雲端資料</string>
-    <string name="hongguo_login_privacy">登入後收藏與觀看記錄將與帳號同步；不登入也可正常觀看，記錄僅儲存在本機</string>
+    <string name="hongguo_login_privacy">登入後收藏與觀看記錄將與帳號同步</string>
+    <string name="hongguo_login_privacy_sub">不登入也可正常觀看，記錄僅儲存在本機</string>
     <string name="hongguo_rank_hot">熱播榜</string>
     <string name="hongguo_rank_real">真人榜</string>
     <string name="hongguo_rank_comic">漫劇榜</string>

@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import androidx.appcompat.app.AppCompatDialog
 import com.mytvb.R
@@ -34,6 +35,12 @@ class HongguoCardMenuDialog(
     private val item: DramaUi,
     private val repository: HongguoRepository
 ) : AppCompatDialog(context, R.style.DialogTheme) {
+
+    override fun show() {
+        super.show()
+        // 提示浮层默认挂 Activity decor，会被 z 序更高的弹窗窗口压住
+        (window?.decorView as? ViewGroup)?.let { AppToast.attachHost(it) }
+    }
 
     private val binding = DialogHongguoCardMenuBinding.inflate(LayoutInflater.from(context))
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -229,6 +236,7 @@ class HongguoCardMenuDialog(
     }
 
     override fun dismiss() {
+        (window?.decorView as? ViewGroup)?.let { AppToast.detachHost(it) }
         scope.cancel()
         super.dismiss()
     }

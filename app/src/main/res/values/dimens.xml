@@ -88,6 +88,7 @@
     <dimen name="px320">320dip</dimen>
     <dimen name="px330">330dip</dimen>
     <dimen name="px350">350dip</dimen>
+    <dimen name="px360">360dip</dimen>
     <dimen name="px394">394dip</dimen>
     <dimen name="px400">400dip</dimen>
     <dimen name="px450">450dip</dimen>

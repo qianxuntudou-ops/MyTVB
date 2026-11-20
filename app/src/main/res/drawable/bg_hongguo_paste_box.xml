@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果登录弹窗虚线粘贴框（2026-11-12 与输入框统一）：底色改 buttonBackgroundColor
-     （与 bg_hongguo_input 同底，原 #0D0D10 比弹窗底还暗被用户否决）；聚焦=主题强调色
-     虚线（全 App 聚焦语言）；非聚焦=#5A5A64 虚线（与输入框实线同亮度，虚线=可粘贴区
-     语义）。圆角对齐全 App 输入框 px22。 -->
+<!-- 红果登录弹窗粘贴框（2026-11-20 重设计·对齐搜索页配色口径）：
+     底/描边与 bg_search_input 同源（?attr/buttonBackgroundColor + dividerColor），
+     虚线表达"可粘贴区"；聚焦=主题强调色虚线。圆角 px22 与搜索输入框一致。 -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item android:state_focused="true">
@@ -22,7 +21,7 @@
             <solid android:color="?attr/buttonBackgroundColor"/>
             <stroke
                 android:width="@dimen/px2"
-                android:color="#5A5A64"
+                android:color="?attr/dividerColor"
                 android:dashWidth="@dimen/px6"
                 android:dashGap="@dimen/px5"/>
             <corners android:radius="@dimen/px22"/>

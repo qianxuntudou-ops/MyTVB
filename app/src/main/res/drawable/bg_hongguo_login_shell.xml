@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果登录弹窗壳体（2026-11-20 重设计）：
+     底色跟 App 页面口径走（?attr/backgroundColor，默认 #303030，与首页/搜索页同色）。
+     弹窗在 60% 黑遮罩下：页面被压暗、弹窗保持原亮度，层次天然拉开；
+     不另造深色（#232323 那版在实机上发闷）也不用全局弹窗壳 #454545
+     （与按钮默认底 divideColor 几乎同色，灰底按钮会被吃掉）。圆角对齐全局弹窗 px20。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="?attr/backgroundColor" />
+    <corners android:radius="@dimen/px20" />
+</shape>

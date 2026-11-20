@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 登录弹窗页签选中指示条（2026-11-20 重设计）：与主界面顶层 tab 同款——
+     选中态=白字加粗 + 底部短条；未选中=灰字无条。颜色由代码按
+     选中(accent)/聚焦(白)切换，这里只给形状。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="?attr/colorAccent" />
+    <corners android:radius="@dimen/px4" />
+</shape>

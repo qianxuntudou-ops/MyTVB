@@ -8,6 +8,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:background="@drawable/dialog_background"
+    android:clickable="true"
     android:paddingStart="@dimen/px35"
     android:paddingTop="@dimen/px30"
     android:paddingEnd="@dimen/px35"

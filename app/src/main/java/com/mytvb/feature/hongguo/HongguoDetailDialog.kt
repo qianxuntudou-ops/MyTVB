@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatDialog
@@ -54,6 +55,17 @@ class HongguoDetailDialog(
     private var pageStart = 0   // 当前页首集序（0-based）
     private val episodeAdapter = EpisodeAdapter()
     private val pageChipAdapter = PageChipAdapter()
+
+    override fun show() {
+        super.show()
+        // 提示浮层默认挂 Activity decor，会被 z 序更高的弹窗窗口压住
+        (window?.decorView as? ViewGroup)?.let { AppToast.attachHost(it) }
+    }
+
+    override fun dismiss() {
+        (window?.decorView as? ViewGroup)?.let { AppToast.detachHost(it) }
+        super.dismiss()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
