@@ -37,10 +37,6 @@ class VideoRepository(
         return delegate.getHotList(page, pageSize).getOrThrow()
     }
 
-    suspend fun getRanking(rid: Int): BaseResponse<List<VideoModel>> {
-        return delegate.getRanking(rid).getOrThrow()
-    }
-
     suspend fun getVideoDetail(avid: Long?, bvid: String?): BaseResponse<VideoDetailModel> {
         return delegate.getVideoDetail(avid, bvid).getOrThrow()
     }

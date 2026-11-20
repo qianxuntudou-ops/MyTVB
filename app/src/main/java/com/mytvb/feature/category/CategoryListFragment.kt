@@ -71,17 +71,24 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
     override fun getSpanCount(): Int = resources.adaptiveSpanCount()
 
     override fun loadData(page: Int) {
-        if (viewModel.loading.value) {
-            return
+        if (page <= 1) {
+            if (viewModel.loading.value) {
+                return
+            }
+            hasMore = true
+            isLoading = true
+            showLoading(true)
+            viewModel.clearError()
+            viewModel.loadCategoryVideos(categoryId, forceRefresh = true)
+        } else {
+            // 追加下一批（滚到底由基类 checkLoadMore 触发）：不弹大圈，
+            // 失败 ViewModel 静默且游标不前进，继续滚动自然重试
+            if (viewModel.loadingMore.value || viewModel.loading.value) {
+                return
+            }
+            isLoading = true
+            viewModel.loadMore(categoryId)
         }
-        hasMore = false
-        isLoading = true
-        showLoading(true)
-        viewModel.clearError()
-        viewModel.loadCategoryVideos(categoryId, forceRefresh = true)
-    }
-
-    override fun checkLoadMore() {
     }
 
     override fun initView() {
@@ -144,15 +151,12 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
                     val videos = ContentFilter.filterVideos(requireContext(), rawVideos)
                     isLoading = false
                     setRefreshing(false)
-                    val currentItemCount = (adapter as? VideoAdapter)?.items?.size ?: 0
-                    if (currentItemCount == videos.size && currentItemCount > 0) {
-                        // 刷新后条数与现列表一致（分区排行榜固定条数，重选/MENU 刷新几乎必中）：
-                        // 不重设列表，但 loadData 已 showLoading(true)，必须关圈，否则永久转圈（issue#123）
-                        showLoading(false)
-                        return@collectLatest
-                    }
+                    // 推荐流语义：刷新后条数与现列表一致（每批条数固定）是常态且内容已换，
+                    // 必须重设列表——旧排行榜「条数一致不重设」的提前返回分支已随数据源下线
                     adapter?.setData(videos)
                     notifyTvListDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+                    // 到底后停用基类滚动的加载更多触发
+                    hasMore = viewModel.hasMoreToLoad(categoryId)
                     if (videos.isEmpty() && viewModel.hasLoaded.value && !viewModel.loading.value) {
                         showEmpty()
                     } else {
@@ -177,6 +181,19 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
                         // 同时清 isLoading 残留，避免 onTabSelected 被永远早退
                         isLoading = false
                         showLoading(false)
+                    }
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // 追加加载收尾：清 isLoading 让基类 checkLoadMore 可再触发，
+                // 并按 ViewModel 的到底判定同步 hasMore（失败时保持 true=可重试）
+                viewModel.loadingMore.collectLatest { loadingMore ->
+                    if (!loadingMore) {
+                        isLoading = false
+                        hasMore = viewModel.hasMoreToLoad(categoryId)
                     }
                 }
             }
@@ -217,7 +234,18 @@ class CategoryListFragment : BaseListFragment<VideoModel>(), com.mytvb.ui.activi
         if (!isAdded || view == null || viewModel.loading.value || isLoading) {
             return
         }
-        if (adapter?.itemCount == 0 || viewModel.isCacheStale(categoryId, CACHE_TTL_MS)) {
+        if (adapter?.itemCount == 0) {
+            if (viewModel.isCacheStale(categoryId, CACHE_TTL_MS)) {
+                loadData(1)
+            } else {
+                // 离屏 tab 的 Fragment 被 ViewPager2 销毁重建（列表空），但静态缓存里已有
+                // 该分区已加载的全部批次且未过期：直接回放，不发请求——推荐流每次内容
+                // 都变，重拉会导致「切个 tab 卡片全换」（旧排行榜数据确定感知不到这一点）
+                viewModel.loadCategoryVideos(categoryId, forceRefresh = false)
+            }
+            return
+        }
+        if (viewModel.isCacheStale(categoryId, CACHE_TTL_MS)) {
             loadData(1)
         }
     }

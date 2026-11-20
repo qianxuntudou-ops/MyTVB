@@ -252,6 +252,84 @@ object BiliApi {
         }
     }
 
+    /**
+     * 官网频道页推荐流（x/web-interface/region/feed/rcmd，WBI 签名）——与官网 /c/{route}/
+     * 分区页同源。from_region 传频道新体系 tid（1001~1031，如动画=1005，见 CategoryTabPrefs），
+     * display_id 是刷新序号而非页码（从 2 起，传 1 返回 62013「暂时没有更多内容了」），
+     * 每批 request_cnt 条（官网同款 15）。返回 data.archives 精简结构：author 而非 owner、
+     * stat 只含 view/like/danmaku，与 VideoModel.fromJson 的完整 archive 结构不兼容，走专属解析。
+     */
+    suspend fun regionFeedRcmd(fromRegion: Int, displayId: Int, requestCnt: Int = 15): List<VideoModel> {
+        val t0 = SystemClock.elapsedRealtime()
+        if (NetworkManager.areWbiKeysStale()) {
+            NetworkManager.ensureWbiKeys()
+        }
+        val url = BiliClient.signedWbiUrl(
+            path = "x/web-interface/region/feed/rcmd",
+            params = mapOf(
+                "from_region" to fromRegion.coerceAtLeast(1).toString(),
+                "request_cnt" to requestCnt.coerceIn(1, 50).toString(),
+                // display_id 从 2 起：传 1 返回 62013「暂时没有更多内容了」（官网首屏=2，MuMu 实测）
+                "display_id" to displayId.coerceAtLeast(2).toString(),
+                "device" to "web",
+                "plat" to "30"
+            )
+        )
+        AppLog.i(
+            TAG,
+            "regionFeedRcmd request from_region=$fromRegion display_id=$displayId cnt=$requestCnt url=$url"
+        )
+        val json = BiliClient.getJson(url, mapOf("Referer" to "https://www.bilibili.com/"))
+        val t1 = SystemClock.elapsedRealtime()
+        AppLog.i(
+            TAG,
+            "regionFeedRcmd response code=${json.optInt("code", -1)} msg=${json.optString("message", "")} net=${t1 - t0}ms"
+        )
+        BiliClient.checkResponse(json, "regionFeedRcmd")
+        val archives = json.optJSONObject("data")?.optJSONArray("archives")
+        if (archives == null) {
+            AppLog.w(TAG, "regionFeedRcmd archives is null, raw=${json.toString().take(200)}")
+            return emptyList()
+        }
+        val result = (0 until archives.length()).mapNotNull { idx ->
+            runCatching { parseRegionFeedItem(archives.getJSONObject(idx)) }
+                .onFailure { AppLog.w(TAG, "regionFeedRcmd parse item failed: ${it.message}") }
+                .getOrNull()
+        }
+        AppLog.i(TAG, "regionFeedRcmd total=${SystemClock.elapsedRealtime() - t0}ms raw=${archives.length()} result=${result.size}")
+        return result
+    }
+
+    /** 频道推荐流条目 → VideoModel。只认 goto=av 的视频卡片，aid 缺失丢弃。 */
+    private fun parseRegionFeedItem(obj: JSONObject): VideoModel? {
+        if (obj.optString("goto", "av") != "av") return null
+        val aid = obj.optLong("aid", 0)
+        if (aid <= 0) return null
+        val cover = obj.optString("cover", "")
+        return VideoModel(
+            aid = aid,
+            bvid = obj.optString("bvid", ""),
+            title = obj.optString("title", ""),
+            pic = cover,
+            cover = cover,
+            duration = obj.optLong("duration", 0),
+            cid = obj.optLong("cid", 0),
+            pubDate = obj.optLong("pubdate", 0),
+            owner = obj.optJSONObject("author")?.let {
+                Owner(mid = it.optLong("mid", 0), name = it.optString("name", ""))
+            },
+            stat = obj.optJSONObject("stat")?.let {
+                Stat(
+                    view = it.optLong("view", 0),
+                    danmaku = it.optLong("danmaku", 0),
+                    like = it.optLong("like", 0)
+                )
+            },
+            trackId = obj.optString("trackid", ""),
+            goto = "av"
+        )
+    }
+
     suspend fun related(aid: Long?, bvid: String?): List<VideoModel> {
         val params = mutableMapOf<String, String>()
         aid?.let { params["avid"] = it.toString() }

@@ -23,6 +23,7 @@ import com.mytvb.core.ui.tab.focusNearestTabTo
 import com.mytvb.core.ui.tab.focusSelectedTab
 import com.mytvb.core.ui.base.OnBackPressedHandler
 import com.mytvb.core.ui.tab.disableAdjacentPagePrefetch
+import com.mytvb.core.ui.tab.retainAllPagesAfterFirstLayout
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -59,6 +60,9 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
         )
         viewPager.adapter = adapter
         viewPager.disableAdjacentPagePrefetch()
+        // 与首页一致：首帧后保留全部 tab 页，切 tab 不销毁 fragment——滚动进度/焦点/
+        // 已加载数据切回来原样保留，不触发重拉（推荐流每次内容都变，重拉=卡片全换）
+        viewPager.retainAllPagesAfterFirstLayout()
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.attach()
@@ -67,11 +71,9 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
             onNavigateDown = ::focusCurrentPageNearestContent,
             onNavigateLeft = ::focusLeftFunctionArea,
             onTabReselected = {
-                // 重选当前分区 tab = 回顶聚焦第一卡；刷新只留 MENU 键（与首页/我的页一致）
-                val page = adapter.getCurrentFragment(viewPager.currentItem)
-                if (page != null && !page.scrollToTopAndFocus()) {
-                    page.scrollToTop()
-                }
+                // 重选当前分区 tab = 刷新（对齐首页 v2.0.9 行为/blbl refreshCurrentPageFromTabReselect）；
+                // 切 tab 不刷新（retainAllPages 保页），刷新入口=重选 tab / MENU 键
+                adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
             }
         )
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {

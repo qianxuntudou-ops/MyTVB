@@ -159,12 +159,6 @@ interface ApiService {
         @Query("ps") pageSize: Int
     ): BaseResponse<ListDataModel<VideoModel>>
 
-    @GET("x/web-interface/ranking/v2")
-    suspend fun getRanking(
-        @Query("rid") rid: Int,
-        @Query("type") type: String = "all"
-    ): BaseResponse<ListDataModel<VideoModel>>
-
     @GET("x/web-interface/dynamic/region")
     suspend fun getRegionLatestVideos(
         @Query("rid") rid: Int,

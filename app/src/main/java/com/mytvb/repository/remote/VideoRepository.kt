@@ -64,15 +64,9 @@ class VideoRepository(
             apiService.getHotList(page, pageSize).mapListData()
         }
 
-    suspend fun getRanking(rid: Int): Result<BaseResponse<List<VideoModel>>> =
-        catchingRequest {
-            sessionGateway.executeWithRiskControlRetry(
-                key = "ranking_$rid",
-                source = "video.getRanking"
-            ) {
-                apiService.getRanking(rid)
-            }.mapListData()
-        }
+    // 分类页 2026-11 切换官网频道推荐流（BiliApi.regionFeedRcmd，见 CategoryFeedRepository），
+    // ranking/v2 链路（ApiService/门面/此处）随旧数据源一并移除
+
 
     suspend fun getVideoByChannel(
         channelId: Long,

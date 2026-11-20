@@ -23,6 +23,7 @@ import com.mytvb.repository.SearchRepository
 import com.mytvb.repository.SeriesRepository
 import com.mytvb.repository.UserRepository
 import com.mytvb.repository.VideoRepository
+import com.mytvb.feature.category.CategoryFeedRepository
 import com.mytvb.feature.category.CategoryViewModel
 import com.mytvb.feature.dynamic.DynamicViewModel
 import com.mytvb.feature.home.HotViewModel
@@ -89,6 +90,7 @@ val repositoryModule = module {
     single { RecommendFeedRepository(androidContext()) }
     single { HotFeedRepository() }
     single { HomeLaneFeedRepository(get()) }
+    single { CategoryFeedRepository() }
 }
 
 @OptIn(UnstableApi::class)
