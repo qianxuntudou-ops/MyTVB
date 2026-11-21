@@ -1986,7 +1986,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
         lifecycleScope.launch {
             viewModel.videoSnapshot.collect { snapshot ->
-                snapshot?.let { playerView.setSeekPreviewSnapshot(it) }
+                // null 也要透传：切视频时 ViewModel 先清空快照，跳过会让缩略图浮窗
+                // 残留上一个视频的雪碧图数据，首次快进秒出旧画面（新快照要等首帧后
+                // 2.5s 延迟+网络才就位）。与 VideoPlayerFragment 的收集保持一致。
+                playerView.setSeekPreviewSnapshot(snapshot)
             }
         }
 
