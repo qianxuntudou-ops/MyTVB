@@ -48,6 +48,9 @@ class MeListViewModel(
     private var historyCursorMax: Long = 0
     private var historyCursorBusiness: String = ""
     private var lastHistoryPayloadSignature = ""
+    // 翻页连续零新增页数：单次整页重复可能是服务端游标偶发未推进（issue#128 报告翻页
+    // 仍停在 79），推进游标重试一页往往就恢复；连续 2 次零新增才判真的到底。
+    private var consecutiveEmptyHistoryPages = 0
     private var lastLaterPayloadSignature = ""
     private var loadJob: Job? = null
     private var silentRefreshJob: Job? = null
@@ -112,6 +115,7 @@ class MeListViewModel(
                 historyCursorViewAt = 0
                 historyCursorMax = 0
                 historyCursorBusiness = ""
+                consecutiveEmptyHistoryPages = 0
             }
 
             val t0 = System.currentTimeMillis()
@@ -152,15 +156,21 @@ class MeListViewModel(
                             // 服务端原样重发同页 → 永远跳过 → 列表卡死不再增长。
                             applyHistoryCursor(response.data.cursor, rawList)
                             if (page > 1) {
-                                // 翻页却零新增（跨页去重后与已有完全一致）：服务端在重复发同页，
-                                // 再翻下去只会循环，直接判到底。
-                                _hasMore.value = false
+                                // 翻页却零新增：可能是服务端游标偶发未推进重发同页（重试一页
+                                // 往往就恢复），连续 2 次零新增才判到底（issue#128 报告仍停 79）
+                                consecutiveEmptyHistoryPages += 1
+                                AppLog.d(
+                                    "MePerf",
+                                    "loadHistory: empty-page $consecutiveEmptyHistoryPages/2, page=$page, raw=${rawList.size}"
+                                )
+                                _hasMore.value = consecutiveEmptyHistoryPages < 2
                             } else {
                                 _hasMore.value = rawList.size >= pageSize
                             }
                             lastLoadedAt = System.currentTimeMillis()
                             return@onSuccess
                         }
+                        consecutiveEmptyHistoryPages = 0
                         lastHistoryPayloadSignature = signature
                         _uiState.value = _uiState.value.copy(historyVideos = merged)
                         applyHistoryCursor(response.data.cursor, rawList)
