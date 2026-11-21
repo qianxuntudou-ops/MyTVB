@@ -62,3 +62,20 @@
 - 每条用 `- ` 开头，一句话，简洁明了
 - 面向普通用户，不要出现技术术语（如"session"、"-352风控"、"CTS偏移"）
 - 合并同类项，不重复，控制在 10 条以内
+
+## 红果配置热更（改版本/画像/host 不发版）
+
+红果播放的版本档案、host、设备画像已支持远程热更，**优先改配置不发版**，改代码重发 APK 是最后手段。
+
+### 热更字段（都在 `version.json`）
+
+- `hg_versions.default` / `hg_versions.plan`：签名链版本档案（code+name 两档，plan=相关作品通道独立钉版）
+- `hg_net`：播放 host + 设备画像四元组（`play_host`/`device_type`/`device_brand`/`os_version`/`channel`，三处同源自洽，改就整组改）
+
+### 操作要点
+
+1. **日常调整只改仓库 main 的 `version.json` 并提交**（App 每次启动检查更新即拉取生效；Release 附件里的 version.json 只在正式发版时同步，平时不用管）
+2. **校验规则**（写非法值会被 App 静默忽略回落内置档）：host 必须 `https://xxx.fqnovel.com`；画像四元组任一非法整档丢弃；版本 code 5~6 位数字
+3. **内置兜底档**在 `HongguoVersionProfiles`（BUILTIN_DEFAULT/PLAN）与 `HongguoNetProfiles`（BUILTIN）——若某组配置被验证长期稳定（如版本号永久切换），应把内置档一并同步，避免每次装机首轮都靠热更
+4. 排障锚点：logcat `HgNetProfiles: restore/applyFrom`、`HgVersionProfiles`、`play preload/v1 vids=N level=`；200 空 body 全线出现时先跑 `HongguoExpandProbeTest.probeStability`（同形态×3 隔时重打）判是否封禁/灰度窗口（2026-11-21 实证窗口约 50 分钟自愈），别急着改代码
+5. 真网探针家族 `HongguoExpandProbeTest`（detail/TNC/beat/host×版本矩阵/x3 形态/稳定性）与 `HongguoPlayProbeTest`：定位放行组合用 JVM 单测跑真网（几分钟），远快于装模拟器迭代
