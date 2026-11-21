@@ -1,6 +1,7 @@
 package com.mytvb.ui.adapter
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -49,6 +50,7 @@ class SettingAdapter(
                         oldItem.model.key == newItem.model.key &&
                             oldItem.model.title == newItem.model.title &&
                             oldItem.model.info == newItem.model.info &&
+                            oldItem.model.description == newItem.model.description &&
                             oldItem.slot == newItem.slot
                     else -> false
                 }
@@ -183,6 +185,13 @@ class SettingAdapter(
         fun bindContent(row: SettingRow.Item) {
             binding.tvTitle.text = row.model.title
             binding.tvInfo.text = row.model.info
+            // 说明小字：无描述时收起不占行
+            if (row.model.description.isNotBlank()) {
+                binding.tvDesc.text = row.model.description
+                binding.tvDesc.visibility = View.VISIBLE
+            } else {
+                binding.tvDesc.visibility = View.GONE
+            }
         }
 
         fun bindFocusState(isFocused: Boolean, slot: Int) {

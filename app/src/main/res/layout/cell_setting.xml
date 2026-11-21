@@ -22,15 +22,31 @@
         android:paddingEnd="@dimen/px50"
         android:paddingBottom="@dimen/px14">
 
-        <androidx.appcompat.widget.AppCompatTextView
-            android:id="@+id/tvTitle"
+        <androidx.appcompat.widget.LinearLayoutCompat
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/clear_cache"
-            android:textColor="?android:attr/textColorPrimary"
-            android:textSize="@dimen/px36"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/tvTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/clear_cache"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="@dimen/px36"
+                android:textStyle="bold" />
+
+            <!-- 标题下说明小字（可选，无描述时收起不占行） -->
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/tvDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px6"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="@dimen/px26"
+                android:visibility="gone" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/tvInfo"

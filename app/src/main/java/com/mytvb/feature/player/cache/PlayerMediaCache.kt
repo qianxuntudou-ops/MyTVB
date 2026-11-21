@@ -33,7 +33,7 @@ object PlayerMediaCache {
     // 与 FileCacheManager 共用同一份"缓存限制"设置键，保证两处口径一致。
     private const val KEY_CACHE_LIMIT = "cache_limit"
 
-    // 「边看边存」开关（SettingsFragment 同名 key）。关 = 播放纯直连不建缓存层：
+    // 「视频本地缓存」开关（SettingsFragment 同名 key）。关 = 播放纯直连不建缓存层：
     // S65（4核1.5GHz）实测边下边存的同步写盘+锁+分配在播放热路径上每帧侵占
     // 7~10ms 渲染预算（OkHttp+Loader+GC 线程峰值 40%+ CPU），弹幕 60fps 跑不动；
     // 关闭后帧成本 17~21ms → 5~15ms，对齐 blbl/BiliPai 的零缓存直连形态。
@@ -83,7 +83,7 @@ object PlayerMediaCache {
         upstreamFactory: DataSource.Factory
     ): DataSource.Factory {
         if (isCacheWriteDisabled()) {
-            // 用户关闭「边看边存」：纯直连，不建缓存层（数据通路零额外成本）
+            // 用户关闭「视频本地缓存」：纯直连，不建缓存层（数据通路零额外成本）
             return upstreamFactory
         }
         val appContext = context.applicationContext
@@ -102,12 +102,13 @@ object PlayerMediaCache {
     }
 
     private fun isCacheWriteDisabled(): Boolean {
-        return appSettings.getCachedString(KEY_MEDIA_CACHE_WRITE) == "关"
+        // 默认关：未显式存过「开」一律视为关（显式选过的老用户不受影响）
+        return appSettings.getCachedString(KEY_MEDIA_CACHE_WRITE) != "开"
     }
 
     /**
      * 弱设备引导（一次性）：adaptive_half_fps 触发 = 设备实测跑不动 60fps。
-     * 此时若「边看边存」仍开着，提示用户可关闭它换取流畅（低端机缓存写入的
+     * 此时若「视频本地缓存」仍开着，提示用户可关闭它换取流畅（低端机缓存写入的
      * CPU 侵占正是降帧诱因之一）。SharedPreferences 记住已提示，永不重复。
      */
     fun maybeHintDisableCacheWrite(context: Context) {
@@ -118,7 +119,7 @@ object PlayerMediaCache {
             if (isCacheWriteDisabled()) return
             AppToast.show(
                 context,
-                "设备性能不足已自动降帧，可在 设置→存储 关闭「边看边存」进一步提升流畅度",
+                "设备性能不足已自动降帧，可在 设置→存储 关闭「视频本地缓存」进一步提升流畅度",
                 Toast.LENGTH_LONG,
             )
         }

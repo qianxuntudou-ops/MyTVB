@@ -570,7 +570,7 @@ class DanmakuView @JvmOverloads constructor(
                     }
                     adaptiveHalfFps = true
                     adaptiveGoodWindows = 0
-                    // 降帧 = 设备实测跑不动 60fps：一次性引导用户可关闭「边看边存」换流畅
+                    // 降帧 = 设备实测跑不动 60fps：一次性引导用户可关闭「视频本地缓存」换流畅
                     com.mytvb.feature.player.cache.PlayerMediaCache.maybeHintDisableCacheWrite(context)
                     AppLog.w(
                         "BlblDmDiag",

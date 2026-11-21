@@ -304,9 +304,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         updateRiskControlStatus()
     }
 
-    /** 构造存储型条目：value=稳定存储值，info=本地化显示文案。 */
-    private fun stored(key: String, titleRes: Int, defaultStored: String): SettingModel =
-        SettingModel(key, getString(titleRes), labelOf(defaultStored), defaultStored)
+    /** 构造存储型条目：value=稳定存储值，info=本地化显示文案；descRes 可选说明小字。 */
+    private fun stored(key: String, titleRes: Int, defaultStored: String, descRes: Int = 0): SettingModel =
+        SettingModel(key, getString(titleRes), labelOf(defaultStored), value = defaultStored).also {
+            if (descRes != 0) it.description = getString(descRes)
+        }
 
     /** 构造动作/信息型条目：无存储值，info 直接展示。 */
     private fun plain(key: String, titleRes: Int, info: String = ""): SettingModel =
@@ -344,7 +346,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_storage, listOf(
                 plain(KEY_CLEAR_CACHE, R.string.clear_cache, "0.0kb"),
                 stored(KEY_CACHE_LIMIT, R.string.cache_limit, "200 MB"),
-                stored(KEY_MEDIA_CACHE_WRITE, R.string.media_cache_write, "开")
+                stored(KEY_MEDIA_CACHE_WRITE, R.string.media_cache_write, "关", R.string.media_cache_write_desc)
             ))
         )
 
@@ -1351,7 +1353,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         }
     }
 
-    /** 「边看边存」开关：切换后释放 SimpleCache 并失效暖复用（对齐缓存上限的处理）。 */
+    /** 「视频本地缓存」开关：切换后释放 SimpleCache 并失效暖复用（对齐缓存上限的处理）。 */
     private fun toggleMediaCacheWrite() {
         val item = itemOf(KEY_MEDIA_CACHE_WRITE) ?: return
         val newValue = if (item.value == "开") "关" else "开"
