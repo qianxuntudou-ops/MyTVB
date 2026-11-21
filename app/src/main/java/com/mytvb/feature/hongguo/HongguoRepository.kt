@@ -3,6 +3,7 @@ package com.mytvb.feature.hongguo
 import android.content.Context
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.hongguo.net.HongguoAccount
+import com.mytvb.feature.hongguo.net.HongguoApplog
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.feature.hongguo.net.HongguoNetProfiles
 import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
@@ -40,6 +41,16 @@ class HongguoRepository private constructor(context: Context) {
         // 见 HongguoVersionProfiles / HongguoNetProfiles）
         HongguoVersionProfiles.restore(appContext)
         HongguoNetProfiles.restore(appContext)
+        // 已注册设备立即补 applog 激活埋点（哑巴设备嫌疑对策）——不等到首次
+        // 播放：纯浏览会话也应带足迹（identity() 出口挂载只覆盖播放链）
+        session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->
+            HongguoApplog.onIdentity(
+                HongguoDeviceRegister.Identity(
+                    s.deviceId, s.installId, s.cdid, s.openUdid, s.cookies,
+                    s.klinkEgdi, s.deviceToken, s.clientUdid
+                )
+            )
+        }
     }
 
     // ---- 身份（真注册，video_model/v1 直取需要） ----
@@ -50,6 +61,14 @@ class HongguoRepository private constructor(context: Context) {
     private val identityLock = Any()
 
     private fun identity(): HongguoDeviceRegister.Identity {
+        val id = identityInner()
+        // 首身份就绪即补 applog 激活埋点（哑巴设备嫌疑对策，进程内一轮；
+        // fire-and-forget，见 HongguoApplog）
+        HongguoApplog.onIdentity(id)
+        return id
+    }
+
+    private fun identityInner(): HongguoDeviceRegister.Identity {
         cachedIdentity?.let { return it }
         session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->
             HongguoDeviceRegister.Identity(
@@ -94,6 +113,30 @@ class HongguoRepository private constructor(context: Context) {
 
     /* withIdentity 已删（2026-11-21）：唯一调用方 playUrl 改为同身份退避重试——
      * 失败换号重注册是重试风暴根源，且 clearAll 连坐清登录态。见 playUrl 注释。 */
+
+    // ---- 设备失效恢复链（2026-11-21 晚，对齐 HGTV 1371 空响应善后） ----
+
+    /** 上次指纹继承重注册时刻（60s 冷却防连续失败每集烧一号）。 */
+    @Volatile private var lastReRegisterAt = 0L
+
+    /**
+     * 重注册触发判据：仅「设备身份失效」特征——PRELOAD_FAIL（空 body 到顶，
+     * HGTV 语义=设备身份已失效）或 BIZ_101000（设备拒收，HGTV 走备用设备通道，
+     * 我们无备用设备池、等效动作=换号）。100001 窗口/参数特征不触发（新号同样
+     * 被清洗，烧号无益）；网络类异常不触发（重注册救不了网络）。
+     */
+    private fun shouldReRegisterForIdentity(e: Exception?): Boolean {
+        val pe = e as? HongguoPlay.PlayException ?: return false
+        return pe.code == "PRELOAD_FAIL" || pe.code == "BIZ_101000"
+    }
+
+    /** 注册冷却闸：60s 内至多放行一次（原子占坑，占不到=冷却中不重注册）。 */
+    private fun takeReRegisterGate(): Boolean = synchronized(identityLock) {
+        val now = System.currentTimeMillis()
+        if (now - lastReRegisterAt < RE_REGISTER_COOLDOWN_MS) return false
+        lastReRegisterAt = now
+        true
+    }
 
     // ---- 内容缓存（首屏 TTL；进程内存级，翻页不缓存） ----
     // 一进红果页 ViewPager2 全离屏会并发拉 6 个子页（推荐/分类×3/榜单/历史），
@@ -554,22 +597,40 @@ class HongguoRepository private constructor(context: Context) {
                 return@withContext it
             }
             var result: HongguoPlay.PlayUrl? = null
-            // 2026-11-21 重试收敛（去风暴）：失败不再换号重注册、不清 session——
+            // 2026-11-21 重试收敛（去风暴）：失败不再无差别换号重注册、不清 session——
             // 探针实证 preload/v1 连假身份都放行（空 body 的变量是端点/头集，非设备），
             // 旧「空响应=身份被拒→换号」模型已过时，且失败即 registerFresh+重发
             // 是官方 App 不会有的农场画像；顺带修掉连坐 bug：旧路径 session.clearAll()
             // 会把 account_cookies/token 一并清空（播放失败一次=登录态丢失）。
             // 现模型：同一身份贯穿，2 发之间 1.5s 退避（保住网络抖动的重试价值）。
+            // 2026-11-21 晚补恢复链（对齐 HGTV 1371，用户拍板 A）：2 发失败且特征=
+            // 设备失效（PRELOAD_FAIL 空 body 到顶 / BIZ_101000 设备拒收）时，走一次
+            // **指纹继承重注册**（registerAndSave carry=旧号声明+cdid/openudid 沿用，
+            // 服务端按「设备换新号」语义关联——与当年风暴链的本质区别：仅设备失效
+            // 触发+每调用最多一次+60s 注册冷却）。100001（窗口/参数特征）不触发——
+            // 窗口期新号同样被清洗（11-21 实证），烧号无益。
             val id = identity()
+            var lastError: Exception? = null
             for (attempt in 0 until 2) {
                 result = try {
                     play.playUrl(vid, id, preferredPixels)
                 } catch (e: Exception) {
                     AppLog.w("Hongguo", "playUrl attempt${attempt + 1} failed vid=$vid q=$preferredPixels: ${e.message}")
+                    lastError = e
                     null
                 }
                 if (result != null) break
                 if (attempt == 0) kotlinx.coroutines.delay(1500)
+            }
+            if (result == null && shouldReRegisterForIdentity(lastError) && takeReRegisterGate()) {
+                val freshId = synchronized(identityLock) { registerAndSave() }
+                AppLog.w("Hongguo", "playUrl identity re-registered did=${freshId.deviceId.take(6)}… retry once vid=$vid")
+                result = try {
+                    play.playUrl(vid, freshId, preferredPixels)
+                } catch (e: Exception) {
+                    AppLog.w("Hongguo", "playUrl retry-after-reregister failed vid=$vid: ${e.message}")
+                    null
+                }
             }
             result?.also { cachePlayUrl(key, it) }
                 ?: run {
@@ -1192,6 +1253,9 @@ class HongguoRepository private constructor(context: Context) {
     companion object {
         /** 预取地址有效期约 6h（x-expires），缓存 5h 留余量防过期 URL 起播 403。 */
         private const val PLAY_URL_TTL_MS = 5L * 60 * 60 * 1000
+
+        /** 指纹继承重注册冷却（对齐风暴教训：连续失败每集烧一号=农场画像）。 */
+        private const val RE_REGISTER_COOLDOWN_MS = 60_000L
 
         /** episodeIndex 0-based 迁移标记（见 migrateEpisodeIndexOnce）。 */
         private const val PREF_KEY_EP_INDEX_MIGRATED = "migrated_episode_index_v1"

@@ -193,7 +193,9 @@ class HongguoPlay {
             }
             val payload = JSONObject(text)
             val code = payload.optInt("Code", payload.optInt("code", 0))
-            if (code != 0) throw PlayException("播放接口 code=$code", "BUSINESS_REJECTED")
+            // 业务码透传进 code（BIZ_101000=设备拒收→上层恢复链触发重注册的判据，
+            // 对齐 HGTV 1371「101000→备用设备」语义；BIZ_100001=窗口/参数特征不触发）
+            if (code != 0) throw PlayException("播放接口 code=$code", "BIZ_$code")
             val data0 = payload.optJSONObject("data") ?: JSONObject()
             data0.optJSONObject("1004") ?: data0
         }.getOrElse { e ->
