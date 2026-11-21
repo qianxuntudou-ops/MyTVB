@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -45,6 +46,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 /**
  * TV 直播主界面（对标参考 utao `LiveActivity.java`，基于系统 WebView）。
@@ -948,6 +950,9 @@ $scriptTags
         // 盖回遮罩（切台/刷新/自动重载）即停停滞监测，避免与新一轮起播轮询并发误判
         stopStallWatch()
         stopNativeStallWatch()
+        // 滑动切台飞出屏的画面层归位（遮罩即将盖住全屏，归零藏在遮罩后无感；
+        // 遥控换台等非滑动路径位移本为 0，无副作用）
+        resetPlayerSurfaceTranslation()
         if (binding.videoCover.visibility != View.VISIBLE) {
             binding.videoCover.visibility = View.VISIBLE
         }
@@ -1397,12 +1402,23 @@ $scriptTags
      * 四向切台（基于过滤后的 provinces 做 D-pad 上下左右环形切台，延迟 1s 加载防抖）。
      */
     private fun goNext(direction: String): Boolean {
-        if (provinces.isEmpty()) return false
-        val vod = currentVod ?: provinces.first().vods.firstOrNull()?.also { currentVod = it } ?: return false
+        val next = neighborVod(direction) ?: return false
+        currentVod = next
+        showLiveName(next.name)
+        // 延迟 1s 加载（参考 handler.sendMessageDelayed），避免快速连按多次加载
+        mainHandler.removeCallbacks(switchChannelRunnable)
+        mainHandler.postDelayed(switchChannelRunnable, 1000)
+        return true
+    }
+
+    /** direction 方向上的相邻频道（up/down=组内上下台跨组接续，left/right=切分组），无可切返回 null。 */
+    private fun neighborVod(direction: String): Vod? {
+        if (provinces.isEmpty()) return null
+        val vod = currentVod ?: provinces.first().vods.firstOrNull()?.also { currentVod = it } ?: return null
         // 基于过滤后的 provinces 做 D-pad 四向环形切台（不再用 MarmotLiveData 的全量导航 map）
         val tagIdx = vod.tagIndex.coerceIn(0, provinces.lastIndex)
         val detailIdx = vod.detailIndex.coerceIn(0, provinces[tagIdx].vods.lastIndex)
-        val next: Vod = when (direction) {
+        return when (direction) {
             "up" -> {
                 val group = provinces[tagIdx].vods
                 // 组内只有一个频道（如少儿组仅 CCTV-14）时上下键在组内环形会切回
@@ -1433,14 +1449,8 @@ $scriptTags
                 val ng = if (tagIdx == provinces.lastIndex) 0 else tagIdx + 1
                 provinces[ng].vods.first()
             }
-            else -> return false
+            else -> null
         }
-        currentVod = next
-        showLiveName(next.name)
-        // 延迟 1s 加载（参考 handler.sendMessageDelayed），避免快速连按多次加载
-        mainHandler.removeCallbacks(switchChannelRunnable)
-        mainHandler.postDelayed(switchChannelRunnable, 1000)
-        return true
     }
 
     /** 转发遥控按键到页面脚本（参考反编译版 `_messageCtrl.ctrl(action)`）。 */
@@ -1449,22 +1459,130 @@ $scriptTags
         webEngine?.evaluateJavascript(js)
     }
 
+    // ==================== 触屏交互：单击 toggle + 垂直滑动切台（画面跟手滑出） ====================
+
+    /** 触屏滑动切台：DOWN 落点（raw 坐标，与 isTouchInPlayerUi 同口径）。 */
+    private var channelSwipeDownX = 0f
+    private var channelSwipeDownY = 0f
+
+    /** 本条触摸序列已判定为垂直滑动（主导轴判定后锁定，防斜滑中途改判）。 */
+    private var channelSwipeVertical = false
+
+    /** DOWN 落在播放UI按钮区，整条序列放行给按钮（不进手势/单击分支）。 */
+    private var touchInPlayerUiSession = false
+
+    // 注意：ViewConfiguration/resources 不得在字段初始化器直取（构造期 attach 前
+    // 取 resources 即崩），一律 by lazy
+    private val touchSlopPx by lazy { ViewConfiguration.get(this).scaledTouchSlop }
+
+    /** 切台触发阈值：屏高 12%（红果垂直滑动切集同款公式）。 */
+    private val channelSwipeThresholdPx by lazy {
+        (resources.displayMetrics.heightPixels * 0.12f).toInt().coerceAtLeast(80)
+    }
+
     /**
-     * 触屏点击：呼出/收起播放UI（对标普通视频播放器点击屏幕 toggle 控制栏，统一交互），
-     * 同时拦截触摸阻止 WebView video 默认暂停。
+     * 触屏交互（对标普通视频播放器统一交互），同时拦截触摸阻止 WebView video 默认暂停：
+     * - 单击：呼出/收起播放UI（延后到 UP 判定，避免滑一下就弹控制栏）
+     * - 垂直滑动：旧画面 1:1 跟手移出（黑底跟随），松手过阈值飞出屏切台、没过弹回
+     *   （上滑=下一个频道、下滑=上一个，与遥控器上下键同走 goNext）
      * 浮层显示时触摸交给浮层；落在播放UI按钮上时正常分发（按钮可点）。
      */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (!isChannelMenuShowing && ev.action == MotionEvent.ACTION_DOWN) {
-            if (isTouchInPlayerUi(ev)) {
-                AppLog.i(TAG, "touch: 命中播放UI按钮区域")
-                return super.dispatchTouchEvent(ev)
+        if (isChannelMenuShowing) return super.dispatchTouchEvent(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                channelSwipeVertical = false
+                channelSwipeDownX = ev.rawX
+                channelSwipeDownY = ev.rawY
+                touchInPlayerUiSession = isTouchInPlayerUi(ev)
+                if (touchInPlayerUiSession) {
+                    AppLog.i(TAG, "touch: 命中播放UI按钮区域")
+                    return super.dispatchTouchEvent(ev)
+                }
+                return true
             }
-            AppLog.i(TAG, "touch: toggle 控制栏 showing=$isControllerShowing")
-            toggleController()
-            return true
+            MotionEvent.ACTION_MOVE -> {
+                if (touchInPlayerUiSession) return super.dispatchTouchEvent(ev)
+                val dx = ev.rawX - channelSwipeDownX
+                val dy = ev.rawY - channelSwipeDownY
+                if (!channelSwipeVertical &&
+                    abs(dy) > touchSlopPx && abs(dy) > abs(dx) * 1.2f
+                ) {
+                    channelSwipeVertical = true
+                    // 画面开始跟手滑出，控制栏杵在原地很怪，顺手收掉
+                    if (isControllerShowing) hideController()
+                }
+                if (channelSwipeVertical) {
+                    translatePlayerSurface(dy)
+                }
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val inUiSession = touchInPlayerUiSession
+                val vertical = channelSwipeVertical
+                val dx = ev.rawX - channelSwipeDownX
+                val dy = ev.rawY - channelSwipeDownY
+                channelSwipeVertical = false
+                touchInPlayerUiSession = false
+                if (inUiSession) return super.dispatchTouchEvent(ev)
+                if (vertical) {
+                    if (ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                        // 系统打断（来电/手势导航等）：画面弹回，不切台
+                        animatePlayerSurfaceBack()
+                        return true
+                    }
+                    if (abs(dy) >= channelSwipeThresholdPx) {
+                        // 上滑=下一个频道、下滑=上一个（对齐红果垂直滑动切集方向语义）
+                        val direction = if (dy < 0) "down" else "up"
+                        AppLog.i(TAG, "touch: 滑动切台 direction=$direction dy=$dy")
+                        if (goNext(direction)) {
+                            // 画面飞出屏外停住（黑底）；1s 防抖后 playCurrent 的
+                            // showVideoCover 遮罩上屏时归位（藏在遮罩后无感）
+                            animatePlayerSurfaceOut(dy)
+                        } else {
+                            animatePlayerSurfaceBack()
+                        }
+                    } else {
+                        animatePlayerSurfaceBack()
+                    }
+                } else if (abs(dx) < touchSlopPx && abs(dy) < touchSlopPx) {
+                    AppLog.i(TAG, "touch: toggle 控制栏 showing=$isControllerShowing")
+                    toggleController()
+                }
+                return true
+            }
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** 播放画面层（WebView 容器 + 原生 PlayerView）整体位移——跟手/飞出/弹回共用。 */
+    private fun translatePlayerSurface(dy: Float) {
+        // cancel 掉上一轮未跑完的弹回/飞出动画，避免动画持续回写覆盖跟手位移
+        binding.webviewWrapper.animate().cancel()
+        binding.nativePlayerView.animate().cancel()
+        binding.webviewWrapper.translationY = dy
+        binding.nativePlayerView.translationY = dy
+    }
+
+    /** 松手切台：画面沿滑动方向飞出屏（黑底跟随），停屏外等起播遮罩上屏后归位。 */
+    private fun animatePlayerSurfaceOut(dy: Float) {
+        val out = if (dy < 0) -resources.displayMetrics.heightPixels.toFloat()
+        else resources.displayMetrics.heightPixels.toFloat()
+        binding.webviewWrapper.animate().translationY(out).setDuration(200L).start()
+        binding.nativePlayerView.animate().translationY(out).setDuration(200L).start()
+    }
+
+    /** 未过阈值/系统打断：画面弹回原位。 */
+    private fun animatePlayerSurfaceBack() {
+        binding.webviewWrapper.animate().translationY(0f).setDuration(200L).start()
+        binding.nativePlayerView.animate().translationY(0f).setDuration(200L).start()
+    }
+
+    /** 画面层归位（取消动画+清位移）：起播遮罩上屏时调用，归位藏在遮罩后无感。 */
+    private fun resetPlayerSurfaceTranslation() {
+        binding.webviewWrapper.animate().cancel()
+        binding.nativePlayerView.animate().cancel()
+        translatePlayerSurface(0f)
     }
 
     /**
