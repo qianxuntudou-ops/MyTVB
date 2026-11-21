@@ -1232,6 +1232,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                     AppLog.w(TAG, "nativeRetry #$nativeRetryCount idx=${episode.index}")
                     player.setMediaItem(MediaItem.fromUri(selectedQualityUrl ?: url))
                     player.prepare()
+                    // 重挂流后回到出错前的位置，不恢复=重试从 0 播（表现为
+                    // "播放一下缓冲又回到开始"，issue#130）
+                    if (positionMs > 0) player.seekTo(positionMs)
                     player.play()
                 } else {
                     fallbackToWebView(episode, "playerError-${error.errorCodeName}")
@@ -1373,9 +1376,16 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         saveTickCounter = 0
     }
 
-    /** 把当前进度写入本地（临近片尾会清掉记录）。 */
+    /**
+     * 把当前进度写入本地（临近片尾会清掉记录）。
+     *
+     * 位置还没起来（刚进页/起播失败回退）时必须跳过：save 对 positionMs<5s 的语义是
+     * 删记录，而 startNativeEpisode/startWebEpisode 都是先 persist 再 load 本集进度，
+     * 带着 0 落盘会把有效续播进度洗掉（issue#130「提示上次播到哪集但进去从头播」）。
+     */
     private fun persistProgress() {
         if (albumId.isBlank() || currentEpisodeIndex <= 0) return
+        if (positionMs <= 0L || durationMs <= 0L) return
         CctvVodProgressStore.save(
             context = this,
             albumId = albumId,
@@ -1496,11 +1506,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 if (ready >= 2 && !paused) showLoading(false)
 
                 // 元数据一到位就按本地记录续播（ready=1 时 duration 已有），
-                // 不必等到 ready>=2，少等一次缓冲
+                // 不必等到 ready>=2，少等一次缓冲。seek 是异步的：挂上 pending
+                // 保护，生效前的旧位置（0 附近）回传不再覆盖 positionMs（否则
+                // 5 秒落盘会把小值存回去，把好进度冲掉，issue#130）。
                 if (!resumeApplied && ready >= 1 && durationMs > 0) {
                     resumeApplied = true
                     if (pendingResumeMs > 0) {
                         AppLog.i(TAG, "resume from $pendingResumeMs")
+                        markPendingPageSeek(pendingResumeMs)
                         js("seekTo", pendingResumeMs)
                     }
                 }
@@ -1526,8 +1539,12 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
 
                 // 页面初始流是 360P（实测 640x360），而菜单默认勾着"超清"，
                 // 不主动切一次的话用户看到的就是标清画质。源最高只有 720P。
+                // 续播 seek 未落地前不升档（issue#130）：升档换流官方播放器会重置
+                // 位置，慢设备上换流恢复窗口（JS 轮询）赶不上就把续播抹成从头播。
+                // seek 生效（pending 清除）或超时（3s 兜底放行）后才允许升档。
                 if (!qualityAutoApplied && ready >= 2 && durationMs > 0 &&
-                    videoH in 1 until MAX_VIDEO_HEIGHT
+                    videoH in 1 until MAX_VIDEO_HEIGHT &&
+                    pendingPageSeekMs < 0
                 ) {
                     qualityAutoApplied = true
                     qualitySwitchAt = nowMs
@@ -2087,8 +2104,8 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             if(!v)return 'novideo';
             if(cmd==='play'){if(P){P.play();}else{v.play();}markPaused(false);return 'ok';}
             if(cmd==='pause'){if(P){P.pause();}else{v.pause();}markPaused(true);return 'ok';}
-            if(cmd==='seek'){var d=v.duration||0;var t=v.currentTime+arg/1000;if(t<0)t=0;if(d>0&&t>d)t=d;v.currentTime=t;return 'ok';}
-            if(cmd==='seekTo'){var d0=v.duration||0;var t0=arg/1000;if(t0<0)t0=0;if(d0>0&&t0>d0)t0=d0;v.currentTime=t0;return 'ok';}
+            if(cmd==='seek'){var d=v.duration||0;var t=v.currentTime+arg/1000;if(t<0)t=0;if(d>0&&t>d)t=d;if(P){try{P.currentTime(t);}catch(e){v.currentTime=t;}}else{v.currentTime=t;}return 'ok';}
+            if(cmd==='seekTo'){var d0=v.duration||0;var t0=arg/1000;if(t0<0)t0=0;if(d0>0&&t0>d0)t0=d0;if(P){try{P.currentTime(t0);}catch(e){v.currentTime=t0;}}else{v.currentTime=t0;}return 'ok';}
             if(cmd==='restyle'){
               if(window.__mybiliRestyle){window.__mybiliRestyle();}
               try{window.scrollTo(0,0);}catch(e){}
@@ -2115,7 +2132,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                   if(wasPaused){try{nv.pause();}catch(e){}}else{try{nv.play();}catch(e){}}
                   clearInterval(timer);
                 }
-                if(tries>25)clearInterval(timer);
+                if(tries>60)clearInterval(timer);
               },300);
               return 'ok clicked='+(li[arg].textContent||'').trim()+' items='+labels.join('/');
             }
