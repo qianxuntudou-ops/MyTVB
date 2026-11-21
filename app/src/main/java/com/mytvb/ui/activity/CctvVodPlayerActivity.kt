@@ -10,6 +10,7 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebSettings
@@ -37,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import okhttp3.OkHttpClient
 import org.koin.android.ext.android.inject
 import java.util.Locale
@@ -1049,6 +1051,13 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         }
     }
 
+    /** 上下滑动切集：+1=下一集，-1=上一集（边界/分集表未就绪静默忽略，红果同款）。 */
+    private fun switchEpisodeRelative(delta: Int) {
+        val next = episodes.firstOrNull { it.index == currentEpisodeIndex + delta } ?: return
+        if (next.pageUrl == pageUrl) return
+        switchEpisode(next)
+    }
+
     private fun switchEpisode(episode: CctvEpisode) {
         // 切集清掉未决的快进/快退会话（挂起的延迟提交会把旧位置 seek 到新集上）
         endSeekSession()
@@ -1547,6 +1556,11 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         // 起播盖层随 loading 同步显隐：loading 结束时 video 已出画面、收敛样式
         // 也已注入，收起后露出的是纯播放态而不是网页原文。
         binding.webCover.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            // 滑动切集飞出屏的画面层归位（webCover 即将盖住全屏，归零藏在盖层后无感；
+            // 选集菜单/连播等非滑动路径位移本为 0，无副作用）
+            resetPlayerSurfaceTranslation()
+        }
     }
 
     private fun showError(message: String) {
@@ -1744,6 +1758,27 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         }
     }
 
+    // ==================== 触屏交互：旁听单击/双击 + 垂直滑动切集（画面跟手滑出） ====================
+
+    /** 滑动切集：DOWN 落点（raw 坐标）。 */
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+
+    /** 本条触摸序列已判定为垂直滑动（主导轴判定后锁定，防斜滑中途改判）。 */
+    private var swipeEpisodeVertical = false
+
+    /** DOWN 落在播放UI（返回按钮/控制栏），本条序列不进滑动手势。 */
+    private var swipeEpisodeUiSession = false
+
+    // 注意：ViewConfiguration/resources 不得在字段初始化器直取（构造期 attach 前
+    // 取 resources 即崩），一律 by lazy
+    private val touchSlopPx by lazy { ViewConfiguration.get(this).scaledTouchSlop }
+
+    /** 切集触发阈值：屏高 12%（红果切集/直播切台同款公式）。 */
+    private val episodeSwipeThresholdPx by lazy {
+        (resources.displayMetrics.heightPixels * 0.12f).toInt().coerceAtLeast(80)
+    }
+
     /**
      * 触摸：单击画面切换我们自己的控制条显隐。
      *
@@ -1756,11 +1791,109 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
         // 以 DOWN 落点决定整条手势序列是否旁听，避免只喂半条序列给 GestureDetector。
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             touchOnBackButton = isInsideBackButton(event.x, event.y)
+            swipeEpisodeUiSession = touchOnBackButton || isTouchInPlayerUi(event)
+            swipeEpisodeVertical = false
+            swipeDownX = event.rawX
+            swipeDownY = event.rawY
         }
         if (!touchOnBackButton) {
             gestureDetector.onTouchEvent(event)
         }
+        handleEpisodeSwipeTouch(event)
         return super.dispatchTouchEvent(event)
+    }
+
+    /**
+     * 垂直滑动切集旁听状态机（上滑=下一集、下滑=上一集）：旧画面 1:1 跟手移出（黑底
+     * 跟随），松手过阈值飞出屏切集、没过/边界弹回。全程不消费事件（WebView 长按教训
+     * 见上）；滑动期间 GestureDetector 自身不会再触发 onSingleTapConfirmed，与单击/
+     * 双击天然互斥，无需去重。
+     */
+    private fun handleEpisodeSwipeTouch(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                if (swipeEpisodeUiSession) return
+                val dx = event.rawX - swipeDownX
+                val dy = event.rawY - swipeDownY
+                if (!swipeEpisodeVertical &&
+                    abs(dy) > touchSlopPx && abs(dy) > abs(dx) * 1.2f
+                ) {
+                    swipeEpisodeVertical = true
+                    // 画面开始跟手滑出，控制栏杵在原地很怪，顺手收掉
+                    if (binding.controller.visibility == View.VISIBLE) hideController()
+                }
+                if (swipeEpisodeVertical) {
+                    translatePlayerSurface(dy)
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val vertical = swipeEpisodeVertical
+                val dy = event.rawY - swipeDownY
+                swipeEpisodeVertical = false
+                swipeEpisodeUiSession = false
+                if (!vertical) return
+                if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    // 系统打断（来电/手势导航等）：画面弹回，不切集
+                    animatePlayerSurfaceBack()
+                    return
+                }
+                val delta = if (dy < 0) 1 else -1
+                // 边界（第 1 集再下滑/末集再上滑）或分集表未就绪：画面能动但松手必弹回，
+                // 跟手-弹回本身就是"到头了"的反馈
+                val target = episodes.firstOrNull { it.index == currentEpisodeIndex + delta }
+                if (abs(dy) >= episodeSwipeThresholdPx && target != null) {
+                    AppLog.i(TAG, "touch: 滑动切集 delta=$delta dy=$dy")
+                    // 先播飞出动画，结束后再切集：switchEpisode 的 showLoading 会同帧上
+                    // 遮罩+归位，若在跟手位移还在时就归零会闪跳回
+                    animatePlayerSurfaceOut(dy) {
+                        switchEpisodeRelative(delta)
+                        resetPlayerSurfaceTranslation()
+                    }
+                } else {
+                    animatePlayerSurfaceBack()
+                }
+            }
+        }
+    }
+
+    /** 触摸是否落在播放UI可交互元素（底部控制栏）范围内：命中则本条序列不做滑动切集。 */
+    private fun isTouchInPlayerUi(ev: MotionEvent): Boolean {
+        if (binding.controller.visibility != View.VISIBLE) return false
+        val rect = android.graphics.Rect()
+        if (!binding.controller.getGlobalVisibleRect(rect)) return false
+        // controller 顶部是渐变羽化 padding（视觉上仍属视频区），滑动应照常生效
+        rect.top += binding.controller.paddingTop
+        return rect.contains(ev.rawX.toInt(), ev.rawY.toInt())
+    }
+
+    /** 播放画面层（WebView 容器 + 原生 PlayerView）整体位移——跟手/飞出/弹回共用。 */
+    private fun translatePlayerSurface(dy: Float) {
+        // cancel 掉上一轮未跑完的弹回/飞出动画，避免动画持续回写覆盖跟手位移
+        binding.webContainer.animate().cancel()
+        binding.nativePlayerView.animate().cancel()
+        binding.webContainer.translationY = dy
+        binding.nativePlayerView.translationY = dy
+    }
+
+    /** 松手切集：画面沿滑动方向飞出屏（黑底跟随），动画结束后回调切集。 */
+    private fun animatePlayerSurfaceOut(dy: Float, onEnd: () -> Unit) {
+        val out = if (dy < 0) -resources.displayMetrics.heightPixels.toFloat()
+        else resources.displayMetrics.heightPixels.toFloat()
+        binding.webContainer.animate().translationY(out).setDuration(200L).withEndAction(onEnd).start()
+        binding.nativePlayerView.animate().translationY(out).setDuration(200L).start()
+    }
+
+    /** 未过阈值/边界/系统打断：画面弹回原位。 */
+    private fun animatePlayerSurfaceBack() {
+        binding.webContainer.animate().translationY(0f).setDuration(200L).start()
+        binding.nativePlayerView.animate().translationY(0f).setDuration(200L).start()
+    }
+
+    /** 画面层归位（取消动画+清位移）：切集遮罩上屏时调用，归位藏在遮罩后无感。 */
+    private fun resetPlayerSurfaceTranslation() {
+        binding.webContainer.animate().cancel()
+        binding.nativePlayerView.animate().cancel()
+        translatePlayerSurface(0f)
     }
 
     private fun isInsideBackButton(x: Float, y: Float): Boolean {
