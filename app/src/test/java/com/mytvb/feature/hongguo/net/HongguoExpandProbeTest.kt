@@ -816,6 +816,110 @@ class HongguoExpandProbeTest {
     }
 
     /**
+     * 通道 12：landpage 推荐流 recommend_info 实证 —— recommend_stat/report 曝光回传
+     * 的前置侦察。官方手机版 bookmall/cell/change 的 item 已实证内嵌 recommend_info
+     * （原样回传即官方行为）；我们的 landpage 流 item 是否携带同款字段待证——
+     * 有=可无缝回传；无=回传需自造 request_id（露馅风险，改走只回 group_id 的最小形态）。
+     * dump 首个 video_data item 的 keys/content_type/series_id/recommend_info。
+     */
+    @Test
+    fun probeLandpageReco() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-RECO register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        val select = JSONObject()
+        for (kind in listOf(
+            "genre", "category_dim_theme", "category_dim_role", "category_dim_epoch",
+            "sort", "gender", "online_time", "creation_status"
+        )) {
+            val arr = org.json.JSONArray()
+            when (kind) {
+                "genre" -> arr.put("short_play")
+                "sort" -> arr.put("hot_score")
+            }
+            select.put(kind, arr)
+        }
+        val body = JSONObject()
+            .put("filter_ids", "").put("req_scene", "default")
+            .put("offset", 0).put("need_selector_panel", false)
+            .put("limit", 15).put("select_items", select)
+            .put("session_id", java.util.UUID.randomUUID().toString())
+            .put("req_type", "only_content").put("client_req_type", 3)
+            .toString().toByteArray(Charsets.UTF_8)
+        val q = fullQuery(id, HongguoVersionProfiles.default.code).apply {
+            put("version_name", HongguoVersionProfiles.default.versionName)
+        }
+        val url = "https://api5-normal-sinfonlineb.fqnovel.com/reading/distribution/category/landpage/v/?${HongguoCrypto.encodeQuery(q)}"
+        val hs = headerSet(q, body, id.deviceId)
+        val out = try {
+            http.newCall(
+                Request.Builder().url(url).apply {
+                    hs.forEach { (k, v) -> addHeader(k, v) }
+                    post(body.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                }.build()
+            ).execute().use { r ->
+                val b = r.body?.bytes() ?: ByteArray(0)
+                if (b.isEmpty()) "http=${r.code} len=0"
+                else {
+                    val sb = StringBuilder("http=${r.code} len=${b.size}")
+                    val data = JSONObject(String(b, Charsets.UTF_8)).optJSONObject("data")
+                    val rows = data?.optJSONArray("video_data") ?: org.json.JSONArray()
+                    sb.append(" items=${rows.length()}")
+                    rows.optJSONObject(0)?.let { first ->
+                        sb.append(" keys=").append(first.keys().asSequence().toList())
+                        sb.append(" ct=").append(first.opt("content_type"))
+                        sb.append(" sid=").append(first.opt("series_id_str") ?: first.opt("series_id"))
+                        sb.append(" reco=").append(first.opt("recommend_info")?.toString()?.take(240))
+                    }
+                    sb.toString()
+                }
+            }
+        } catch (e: Exception) { "EXC ${e.message}" }
+        println("HG-RECO[landpage] $out")
+    }
+
+    /**
+     * 通道 13：recommend_stat/report/v1 曝光回传真网验证（官方行为足迹第 3 项）。
+     * body 形态照抄官方抓包（scene=1+stat_data[]{client_time,content_type,group_id,
+     * recommend_info,stat_item_type:1}，recommend_info 用官方样本原串）。一发即止。
+     */
+    @Test
+    fun probeRecoReport() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-RECO-REPORT register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        val body = JSONObject()
+            .put("scene", 1)
+            .put(
+                "stat_data", org.json.JSONArray().put(
+                    JSONObject()
+                        .put("client_time", System.currentTimeMillis())
+                        .put("content_type", 1004)
+                        .put("group_id", "7705826348597529625")
+                        .put(
+                            "recommend_info",
+                            "{\"channel_id\":\"94349618414\",\"request_id\":\"202611132102294CAEC965009A539D46A3\"," +
+                                "\"rank\":\"1\",\"queue_names\":\"shortplay\",\"gid\":\"7705826348597529625\"}"
+                        )
+                        .put("stat_item_type", 1)
+                )
+            )
+            .toString().toByteArray(Charsets.UTF_8)
+        val q = fullQuery(id, HongguoVersionProfiles.default.code).apply {
+            put("version_name", HongguoVersionProfiles.default.versionName)
+        }
+        val url = "https://api5-normal-sinfonlineb.fqnovel.com/reading/distribution/recommend_stat/report/v1/?${HongguoCrypto.encodeQuery(q)}"
+        val hs = headerSet(q, body, id.deviceId)
+        println("HG-RECO-REPORT[v1] " + send(url, hs, "POST", body))
+    }
+
+    /**
      * 通道 7：HGTV 内置作者共享号 × 我们请求形态 —— 窗口期耐扛真因定案实验。
      * 逆向实锤：HGTV 1.3.7.1(M3)/1.3.8.6(X3) 两版硬编码同一对作者号
      * device_id=1905892595378490 / iid=1905892595382586（全部用户共用、

@@ -65,4 +65,63 @@ class HongguoApplogTest {
         HongguoApplog.onIdentity(id.copy(deviceId = "0"))
         HongguoApplog.resetForTest()
     }
+
+    @Test
+    fun videoPlayEventShape() {
+        // 官方行为足迹：video_play 事件组包（官方 TtsFeedTabView PLAYING 首发，
+        // params=group_id/item_id/enter_from/position）
+        val events = org.json.JSONArray().put(
+            JSONObject().put("time", 1795249007000L).put("event", "video_play")
+                .put(
+                    "params", JSONObject()
+                        .put("group_id", "7705824595416190014")
+                        .put("item_id", "7705826165692304409")
+                        .put("enter_from", "cold")
+                        .put("position", 1)
+                )
+        )
+        val r = HongguoApplog.buildReport(id, 1795249007000L, events)
+        val root = JSONObject(gunzip(r.gzBody))
+        val ev = root.getJSONArray("events")
+        assertEquals(1, ev.length())
+        assertEquals("video_play", ev.getJSONObject(0).getString("event"))
+        val params = ev.getJSONObject(0).getJSONObject("params")
+        assertEquals("7705824595416190014", params.getString("group_id"))
+        assertEquals("7705826165692304409", params.getString("item_id"))
+        // header 与默认轮同源（身份四件套+版本档案）
+        assertEquals(id.deviceId, root.getJSONObject("header").getString("device_id"))
+    }
+
+    @Test
+    fun buildRecoStatFiltersAndKeepsShape() {
+        // 官方 recommend_stat/report 回传条目提取：带 recommend_info+group_id 的
+        // 保留（字段原样），缺任一者静默滤除（不自造字段防露馅）
+        val rows = org.json.JSONArray()
+            .put(
+                JSONObject()
+                    .put("series_id_str", "7705826348597529625")
+                    .put("content_type", 1004)
+                    .put("recommend_info", "{\"channel_id\":\"94349618414\"}")
+            )
+            .put(JSONObject().put("series_id_str", "111").put("content_type", 1)) // 无 reco：滤
+            .put(JSONObject().put("recommend_info", "{\"x\":1}")) // 无 gid：滤
+            .put(
+                JSONObject() // series_id 数字态兜底
+                    .put("series_id", 7706004220599618584L)
+                    .put("content_type", 1)
+                    .put("recommend_info", "{\"rank\":\"1\"}")
+            )
+        val stat = HongguoApplog.buildRecoStat(rows, 1795249007000L)
+        assertEquals(2, stat.length())
+        val first = stat.getJSONObject(0)
+        assertEquals("7705826348597529625", first.getString("group_id"))
+        assertEquals(1004, first.getInt("content_type"))
+        assertEquals("{\"channel_id\":\"94349618414\"}", first.getString("recommend_info"))
+        assertEquals(1, first.getInt("stat_item_type"))
+        assertEquals(1795249007000L, first.getLong("client_time"))
+        assertEquals("7706004220599618584", stat.getJSONObject(1).getString("group_id"))
+        // 空入参零批（landpage 无 reco 字段流静默）
+        assertEquals(0, HongguoApplog.buildRecoStat(null, 1L).length())
+        assertEquals(0, HongguoApplog.buildRecoStat(org.json.JSONArray(), 1L).length())
+    }
 }

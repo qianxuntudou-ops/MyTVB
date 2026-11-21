@@ -420,6 +420,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 binding.progressBuffering.visibility = View.VISIBLE
                 AppLog.d("Hongguo", "player load vid=$vid ep=$episodeIndex")
                 val play = resolvePlayUrl(vid).also { currentPlay = it }
+                // 官方行为足迹：起播 video_play 事件（官方 PLAYING 首发去重上报）
+                com.mytvb.feature.hongguo.net.HongguoApplog.onVideoPlay(
+                    "cold", seriesId, vid, episodeIndex
+                )
                 AppLog.d("Hongguo", "player got url codec=${play.codec} q=${play.quality} key=${play.contentKeyHex != null}")
                 val source = resolvePlayable(play)
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
@@ -1085,6 +1089,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 currentVid = episode.videoId
                 binding.textTitle.text = getString(R.string.hongguo_player_title_episode, title, episodeIndex)
                 val play = resolvePlayUrl(episode.videoId).also { currentPlay = it }
+                // 官方行为足迹：切集 video_play 事件（官方每次换内容重发）
+                com.mytvb.feature.hongguo.net.HongguoApplog.onVideoPlay(
+                    "episode", seriesId, episode.videoId, index
+                )
                 val playable = resolvePlayable(play)
                 binding.textQuality.text = play.quality.ifEmpty { play.codec }
                 bindThumbs(play)

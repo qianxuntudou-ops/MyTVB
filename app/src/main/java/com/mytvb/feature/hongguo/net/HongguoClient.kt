@@ -149,6 +149,9 @@ class HongguoClient(
         val data = payload.optJSONObject("data")
             ?: throw IllegalStateException("分类响应缺少 data")
         val rows = data.optJSONArray("video_data") ?: JSONArray()
+        // 推荐流曝光回传（官方行为足迹：recommend_info 原样回传推荐系统；
+        // 条目无该字段时 buildRecoStat 静默空批，零开销不影响主链路）
+        HongguoApplog.onFeedExposed("category", rows)
         val items = ArrayList<Drama>(rows.length())
         for (i in 0 until rows.length()) {
             normalizeDrama(rows.opt(i))?.let { items.add(it) }
@@ -245,13 +248,17 @@ class HongguoClient(
         val view = data.optJSONObject("cell_view")
         val cellData = view?.optJSONArray("cell_data") ?: JSONArray()
         val items = ArrayList<Drama>()
+        // 曝光回传收集槽（bookmall 流官方实证带 recommend_info，合并一批上报）
+        val exposed = JSONArray()
         for (i in 0 until cellData.length()) {
             val cell = cellData.optJSONObject(i) ?: continue
             val videos = cell.optJSONArray("video_data") ?: continue
             for (j in 0 until videos.length()) {
                 normalizeDrama(videos.opt(j))?.let { items.add(it) }
+                videos.optJSONObject(j)?.let { exposed.put(it) }
             }
         }
+        HongguoApplog.onFeedExposed("rank", exposed)
         val hasMore = data.optBoolean("has_more", view?.optBoolean("has_more", false) ?: false)
         var nextOffset = data.optInt("next_offset", view?.optInt("next_offset", 0) ?: 0)
         if (nextOffset <= maxOf(offset, 0)) {

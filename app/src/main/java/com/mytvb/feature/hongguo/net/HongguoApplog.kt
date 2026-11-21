@@ -49,9 +49,20 @@ internal object HongguoApplog {
     /** 会话内事件序号（AppLog 单调 seq）。 */
     private val seq = AtomicLong(0)
 
-    /** 仅测试用：复位去重标记。 */
+    /** 最近一次合法身份（行为事件 onVideoPlay/onFeedExposed 用）。 */
+    @Volatile
+    private var lastIdentity: HongguoDeviceRegister.Identity? = null
+
+    // video_play 节流（同 vid 60s 一发：失败重试/快速重进不重复计足迹）
+    private var lastVideoPlayKey: String? = null
+    private var lastVideoPlayAt = 0L
+
+    /** 仅测试用：复位去重标记与身份。 */
     internal fun resetForTest() {
         reported.set(false)
+        lastIdentity = null
+        lastVideoPlayKey = null
+        lastVideoPlayAt = 0L
     }
 
     /**
@@ -64,13 +75,97 @@ internal object HongguoApplog {
             reported.set(false) // 非法身份不算已发，下次合法再来
             return
         }
+        lastIdentity = id
         worker.execute {
-            runCatching { report(id) }
+            runCatching { report(id, buildReport(id, System.currentTimeMillis())) }
                 .onFailure { AppLog.w(TAG, "report failed: ${it.message}") }
             // 同轮追加消息同步（klink 长连接的 HTTP 拉模式降级形态，见 syncAll 注释）
             runCatching { syncAll(id) }
                 .onFailure { AppLog.w(TAG, "syncAll failed: ${it.message}") }
         }
+    }
+
+    /**
+     * 播放事件（官方行为足迹第 2 项，2026-11-21 官方 APK 逆向落地）：官方红果
+     * 每次进入 PLAYING 首发去重上报 `video_play`（classes17 TtsFeedTabView.o()，
+     * params 带 group_id/item_id/position）。挂 HongguoPlayerActivity 起播+切集
+     * 两处；画质切换不发（官方同一播放会话只计一次）。同 vid 60s 节流。
+     */
+    fun onVideoPlay(enterFrom: String, seriesId: String, vid: String, position: Int) {
+        val id = lastIdentity ?: return
+        if (vid.isEmpty()) return
+        val now = System.currentTimeMillis()
+        synchronized(this) {
+            if (vid == lastVideoPlayKey && now - lastVideoPlayAt < 60_000L) return
+            lastVideoPlayKey = vid
+            lastVideoPlayAt = now
+        }
+        worker.execute {
+            runCatching {
+                val events = org.json.JSONArray().put(
+                    JSONObject().put("time", now).put("event", "video_play")
+                        .put(
+                            "params", JSONObject()
+                                .put("group_id", seriesId)
+                                .put("item_id", vid)
+                                .put("enter_from", enterFrom)
+                                .put("position", position)
+                        )
+                )
+                report(id, buildReport(id, now, events))
+                AppLog.i(TAG, "video_play sent vid=${vid.take(8)}… enter=$enterFrom")
+            }.onFailure { AppLog.w(TAG, "video_play failed: ${it.message}") }
+        }
+    }
+
+    /**
+     * 推荐流曝光回传（官方行为足迹第 3 项）：官方红果把推荐流所见条目回传推荐
+     * 系统（POST /reading/distribution/recommend_stat/report/v1/，抓包实证
+     * scene=1+stat_data[]{client_time,content_type,group_id,recommend_info,
+     * stat_item_type:1}，recommend_info 为 feed 响应内嵌串**原样回传**——
+     * 推荐闭环=服务端由此知道号在看什么，行为史核心组成）。仅回传带
+     * recommend_info 的条目（官方语义原样回传；landpage 无此字段的流自然静默，
+     * 不自造字段防露馅）。挂 HongguoClient.category/rank 成功路径。
+     */
+    fun onFeedExposed(source: String, rows: org.json.JSONArray?) {
+        val id = lastIdentity ?: return
+        val stat = buildRecoStat(rows, System.currentTimeMillis())
+        if (stat.length() == 0) return
+        worker.execute {
+            runCatching {
+                val body = JSONObject().put("scene", 1).put("stat_data", stat)
+                    .toString().toByteArray(Charsets.UTF_8)
+                val code = signedJsonPost(
+                    "/reading/distribution/recommend_stat/report/v1/", body, id
+                )
+                AppLog.i(TAG, "reco_stat src=$source n=${stat.length()} $code")
+            }.onFailure { AppLog.w(TAG, "reco_stat failed: ${it.message}") }
+        }
+    }
+
+    /** 曝光条目提取（纯函数，可单测）：group_id/content_type/recommend_info。 */
+    internal fun buildRecoStat(rows: org.json.JSONArray?, now: Long): org.json.JSONArray {
+        val stat = org.json.JSONArray()
+        rows ?: return stat
+        for (i in 0 until rows.length()) {
+            val item = rows.optJSONObject(i) ?: continue
+            val reco = item.optString("recommend_info").takeIf { it.isNotEmpty() } ?: continue
+            val gid = item.optString("series_id_str").ifEmpty {
+                item.optString("book_id_str").ifEmpty {
+                    item.optLong("series_id", 0L).takeIf { it > 0 }?.toString() ?: ""
+                }
+            }
+            if (gid.isEmpty()) continue
+            stat.put(
+                JSONObject()
+                    .put("client_time", now)
+                    .put("content_type", item.opt("content_type") ?: JSONObject.NULL)
+                    .put("group_id", gid)
+                    .put("recommend_info", reco)
+                    .put("stat_item_type", 1)
+            )
+        }
+        return stat
     }
 
     /**
@@ -81,8 +176,6 @@ internal object HongguoApplog {
      * 无功能价值，价值在在线足迹），游标 min_seq 从 0 全量拉。
      */
     private fun syncAll(id: HongguoDeviceRegister.Identity) {
-        val profile = HongguoVersionProfiles.default
-        val now = System.currentTimeMillis()
         val body = JSONObject()
             .put(
                 "synclist",
@@ -94,45 +187,8 @@ internal object HongguoApplog {
                 )
             )
             .toString().toByteArray(Charsets.UTF_8)
-        val q = deviceQuery(id, profile, now, now / 1000)
-        val signed = HongguoCrypto.signRequest(
-            q, body, now, id.deviceId, targetBranch = 0, version = profile.versionName
-        )
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (now / 1000).toInt()
-        val req = Request.Builder()
-            .url("${HongguoNetProfiles.playHost()}/reading/msgapi/syncAll/v?${signed.query}")
-            .apply {
-                header("User-Agent", HongguoEnv.ua(profile.code))
-                header("Accept", "application/json; charset=utf-8,application/x-protobuf")
-                header("Content-Type", "application/json; charset=UTF-8")
-                header("X-SS-DP", "8662")
-                header("X-Tt-Store-Region", "cn")
-                header("X-Tt-Store-Region-Src", "did")
-                header("X-XS-From-Web", "0")
-                header("Sdk-Version", "2")
-                header("x-khronos", (signed.headers["X-Khronos"] ?: ""))
-                header("x-argus", java.util.Base64.getEncoder().encodeToString(
-                    java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                        .putInt(nowSec).array()
-                ))
-                header("x-ladon", java.util.Base64.getEncoder().encodeToString(
-                    ByteArray(4).also { SecureRandom().nextBytes(it) }
-                ))
-                header("x-gorgon", (signed.headers["X-Gorgon"] ?: ""))
-                header("x-helios", HongguoArgus.helios(nowSec))
-                header("x-medusa", HongguoPlaybackV5.medusaHeaderFor(signed.query, body, nowSec))
-                header("x-vc-bdturing-sdk-version", "4.0.3.cn")
-                header("x-ss-stub", (signed.headers["X-SS-STUB"] ?: ""))
-                post(body.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
-            }.build()
-        HongguoHttp.ok.newCall(req).execute().use { resp ->
-            val text = resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
-            val code = runCatching { JSONObject(text).optInt("code", -1) }.getOrDefault(-1)
-            val maxSeq = runCatching {
-                JSONObject(text).optJSONArray("data")?.optJSONObject(0)?.optLong("max_seq") ?: -1L
-            }.getOrDefault(-1L)
-            AppLog.i(TAG, "syncAll http=${resp.code} code=$code maxSeq=$maxSeq")
-        }
+        val summary = signedJsonPost("/reading/msgapi/syncAll/v", body, id)
+        AppLog.i(TAG, "syncAll $summary")
     }
 
     /** 组包产物：gzip body + 签名输入 query（纯函数，可单测）。 */
@@ -141,8 +197,12 @@ internal object HongguoApplog {
         override fun hashCode() = System.identityHashCode(this)
     }
 
-    /** 事件+header+query 组装（与注册 payload/播放 query 同源；纯函数，可单测）。 */
-    internal fun buildReport(id: HongguoDeviceRegister.Identity, now: Long): Report {
+    /** 事件+header+query 组装（与注册 payload/播放 query 同源；纯函数，可单测）。
+     *  events 传 null 用默认两事件（activate+app_launch），行为事件传自组数组。 */
+    internal fun buildReport(
+        id: HongguoDeviceRegister.Identity, now: Long,
+        events: org.json.JSONArray? = null
+    ): Report {
         val profile = HongguoVersionProfiles.default
         val nowSec = now / 1000
 
@@ -171,8 +231,8 @@ internal object HongguoApplog {
             .put("sdk_flavor", "china")
         if (id.deviceToken.isNotEmpty()) header.put("ss_app_token", id.deviceToken)
 
-        // 事件刻意只有两个 AppLog 通用事件（克制原则，见类注释）
-        val events = org.json.JSONArray().apply {
+        // 默认事件刻意只有两个 AppLog 通用事件（克制原则，见类注释）
+        val ev = events ?: org.json.JSONArray().apply {
             put(JSONObject().put("time", now).put("event", "__activate").put("params", JSONObject()))
             put(
                 JSONObject().put("time", now).put("event", "app_launch")
@@ -182,7 +242,7 @@ internal object HongguoApplog {
         val raw = JSONObject()
             .put("magic_tag", "ss_app_log")
             .put("header", header)
-            .put("events", events)
+            .put("events", ev)
             .put("seq", seq.incrementAndGet())
             .put("_gen_time", now)
             .toString().toByteArray(Charsets.UTF_8)
@@ -224,8 +284,7 @@ internal object HongguoApplog {
         return q
     }
 
-    private fun report(id: HongguoDeviceRegister.Identity) {
-        val r = buildReport(id, System.currentTimeMillis())
+    private fun report(id: HongguoDeviceRegister.Identity, r: Report) {
         val body = r.gzBody
         val profile = HongguoVersionProfiles.default
 
@@ -268,7 +327,53 @@ internal object HongguoApplog {
         HongguoHttp.ok.newCall(req).execute().use { resp ->
             val text = resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
             val message = JSONObject(text).optString("message")
-            AppLog.i(TAG, "report activate http=${resp.code} message=$message did=${id.deviceId.take(6)}…")
+            AppLog.i(TAG, "app_log http=${resp.code} message=$message did=${id.deviceId.take(6)}…")
+        }
+    }
+
+    /**
+     * 签名 JSON POST（syncAll/recommend_stat 共用头集：signRequest 全签名 +
+     * 假 Argus/Ladon + Gorgon/Helios/Medusa，与播放通道同源自洽）。
+     * 返回 "http=… code=…" 摘要（日志锚点用）。
+     */
+    private fun signedJsonPost(path: String, body: ByteArray, id: HongguoDeviceRegister.Identity): String {
+        val profile = HongguoVersionProfiles.default
+        val now = System.currentTimeMillis()
+        val q = deviceQuery(id, profile, now, now / 1000)
+        val signed = HongguoCrypto.signRequest(
+            q, body, now, id.deviceId, targetBranch = 0, version = profile.versionName
+        )
+        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (now / 1000).toInt()
+        val req = Request.Builder()
+            .url("${HongguoNetProfiles.playHost()}$path?${signed.query}")
+            .apply {
+                header("User-Agent", HongguoEnv.ua(profile.code))
+                header("Accept", "application/json; charset=utf-8,application/x-protobuf")
+                header("Content-Type", "application/json; charset=UTF-8")
+                header("X-SS-DP", "8662")
+                header("X-Tt-Store-Region", "cn")
+                header("X-Tt-Store-Region-Src", "did")
+                header("X-XS-From-Web", "0")
+                header("Sdk-Version", "2")
+                header("x-khronos", (signed.headers["X-Khronos"] ?: ""))
+                header("x-argus", java.util.Base64.getEncoder().encodeToString(
+                    java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                        .putInt(nowSec).array()
+                ))
+                header("x-ladon", java.util.Base64.getEncoder().encodeToString(
+                    ByteArray(4).also { SecureRandom().nextBytes(it) }
+                ))
+                header("x-gorgon", (signed.headers["X-Gorgon"] ?: ""))
+                header("x-helios", HongguoArgus.helios(nowSec))
+                header("x-medusa", HongguoPlaybackV5.medusaHeaderFor(signed.query, body, nowSec))
+                header("x-vc-bdturing-sdk-version", "4.0.3.cn")
+                header("x-ss-stub", (signed.headers["X-SS-STUB"] ?: ""))
+                post(body.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
+            }.build()
+        HongguoHttp.ok.newCall(req).execute().use { resp ->
+            val text = resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
+            val code = runCatching { JSONObject(text).optInt("code", -1) }.getOrDefault(-1)
+            return "http=${resp.code} code=$code"
         }
     }
 }
