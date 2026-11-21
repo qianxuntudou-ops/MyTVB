@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 红果详情选集格：外层格子承接焦点（四态背景由 bg_hongguo_episode 驱动），
-     右上角可挂「上次观看」角标（照 CCTV 影视详情页 cell 做法：badge_background
-     粉底 + 右上/左下圆角、px18 字、贴角无缝隙）。 -->
+     右上角可挂「上次观看」角标（badge_background 粉底 + 右上/左下圆角、贴角无缝隙）。
+     角标压 px14 字（比 CCTV cell 的 px18 小一号）：8 列 152dip 格里缩完后角标左缘
+     ≈100dip，居中数字（两位右缘 ≤91dip）水平错开，无需下沉数字。 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/cell_episode_root"
     android:background="@drawable/bg_hongguo_episode"
@@ -21,13 +22,13 @@
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/text_last_watched"
         android:text="@string/cctv_vod_last_watched"
-        android:textSize="@dimen/px18"
+        android:textSize="@dimen/px14"
         android:textColor="@color/textColor"
         android:background="@drawable/badge_background"
-        android:paddingStart="@dimen/px7"
-        android:paddingTop="@dimen/px3"
-        android:paddingEnd="@dimen/px7"
-        android:paddingBottom="@dimen/px3"
+        android:paddingStart="@dimen/px5"
+        android:paddingTop="@dimen/px2"
+        android:paddingEnd="@dimen/px5"
+        android:paddingBottom="@dimen/px2"
         android:visibility="gone"
         android:layout_gravity="top|end"
         android:layout_width="wrap_content"

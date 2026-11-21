@@ -472,15 +472,10 @@ class HongguoDetailDialog(
             val episode = d.episodes.getOrNull(pageStart + position) ?: return
             val watching = hasWatched && episode.index == lastEpisodeIndex
             holder.cell.text = "${episode.index}"
-            // 8 列格宽（152dp）容不下「上次观看」角标 + 居中数字（CCTV 是 6 列 208dp），
-            // 有角标时把数字下沉到角标下沿，避免被粉色标压住
-            holder.cell.setPadding(
-                0,
-                if (watching) holder.root.resources.getDimensionPixelSize(R.dimen.px30) else 0,
-                0,
-                0
-            )
-            // 选中态挂在格子根上（四态背景 selector 在根），右上角同挂「上次观看」角标
+            // 选中态挂在格子根上（四态背景 selector 在根），右上角同挂「上次观看」角标。
+            // 数字保持与其他格子一致的居中：角标已缩到 px14 字（左缘 ≈100dip），
+            // 两位数居中右缘 ≤91dip，水平错开互不压；之前用 paddingTop 下沉数字
+            // 会把字挤到格子底边被裁（issue：数字太靠下被挡）
             holder.root.isSelected = watching
             holder.lastWatched.visibility = if (watching) View.VISIBLE else View.GONE
             holder.root.setOnClickListener { playEpisode(episode.index) }
