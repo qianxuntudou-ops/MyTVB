@@ -208,14 +208,21 @@ class SeriesDetailContentAdapter(
                 ?.times(1000L)
                 ?: 0L
 
-            val hasHistoryProgress = progress != null && progress.lastEpIndex.isNotBlank()
+            val hasHistoryProgress = progress != null &&
+                (progress.lastEpIndex.isNotBlank() || progress.lastEpId > 0L)
             binding.textWatchInfo.text = if (hasHistoryProgress) {
-                val lastEpIndex = progress?.lastEpIndex.orEmpty()
                 val lastTime = progress?.lastTime ?: 0L
+                // 官方语义：看完上报 last_time=-1（与播放端心跳 played_time=-1 同源），
+                // 直接 formatDuration 会拼出「00:-1」，对齐列表卡显示「已看完」。
+                val progressLabel = if (lastTime < 0L) {
+                    binding.root.context.getString(R.string.adapter_watched_complete)
+                } else {
+                    NumberUtils.formatDuration(lastTime)
+                }
                 binding.root.context.getString(
                     R.string.last_watch_,
-                    lastEpIndex,
-                    NumberUtils.formatDuration(lastTime)
+                    resolveLastWatchEpisodeLabel(detail, progress),
+                    progressLabel
                 )
             } else {
                 detail.newEp?.pubTime?.takeIf { it.isNotBlank() }
@@ -240,6 +247,29 @@ class SeriesDetailContentAdapter(
             )
             binding.buttonContinueWatch.isEnabled = currentContinueEpisode != null
             binding.buttonContinueWatch.alpha = if (currentContinueEpisode != null) 1f else 0.45f
+        }
+
+        /**
+         * 还原「上次观看到第 N 集」的集数：last_ep_index 对部分剧集下发的是集标题
+         * （如「寻参」）而非序号，直接填会显示「第寻参集」。优先用 last_ep_id 匹配
+         * 分集列表取集标题（纯数字即序号），匹配不到再退回正片列表位置，最后兜底原文。
+         */
+        private fun resolveLastWatchEpisodeLabel(
+            detail: EpisodesDetailModel,
+            progress: com.mytvb.model.series.EpisodeProgressModel?
+        ): String {
+            val fallbackIndex = progress?.lastEpIndex.orEmpty()
+            val lastEpId = progress?.lastEpId?.takeIf { it > 0L } ?: return fallbackIndex
+            val episodes = detail.episodes.orEmpty()
+            val matched = episodes.firstOrNull { it.id == lastEpId }
+            matched?.title?.toIntOrNull()?.let { return it.toString() }
+            if (matched != null) {
+                // 集标题非数字（如「寻参」）：用正片列表位置还原「第 15 集」
+                val position = episodes.filter { it.sectionType == 0 }
+                    .indexOfFirst { it.id == lastEpId }
+                if (position >= 0) return (position + 1).toString()
+            }
+            return fallbackIndex
         }
 
         private fun buildSubtitle(detail: EpisodesDetailModel): String {
