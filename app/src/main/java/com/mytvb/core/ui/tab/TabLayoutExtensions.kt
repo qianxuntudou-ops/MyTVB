@@ -3,6 +3,7 @@ package com.mytvb.core.ui.tab
 import com.mytvb.core.ui.focus.SpatialFocusNavigator
 import com.mytvb.core.common.log.AppLog
 
+import android.graphics.Rect
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -31,91 +32,140 @@ fun TabLayout.enableTouchNavigation(
     onTabReselected: ((index: Int) -> Unit)? = null
 ) {
     viewPager.isUserInputEnabled = true
-    post {
-        val tabStrip = getChildAt(0) as? ViewGroup ?: return@post
-        for (index in 0 until tabStrip.childCount) {
-            val tabView = tabStrip.getChildAt(index)
-            tabView.isClickable = true
-            tabView.isFocusable = tabFocusable
-            suppressLongPressTooltip(tabView)
-            applyTabBackground(tabView)
-            bindTabTouchTextColor(tabView)
-            if (tabFocusable) {
-                bindTabFocusTextColor(tabView)
-                tabView.setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        when (keyCode) {
-                            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                                if (viewPager.currentItem != index) {
-                                    viewPager.setCurrentItemFromTab(
-                                        item = index,
-                                        smoothScroll = smoothScrollOnSelection
-                                    )
-                                } else {
-                                    onTabReselected?.invoke(index)
-                                }
-                                keepSelectedTabFocused(tabStrip, index, viewPager)
-                                true
-                            }
-                            KeyEvent.KEYCODE_DPAD_UP -> {
-                                // 无回调时返回 false 走框架默认（历史行为）；
-                                // 复杂布局下默认导航会越层乱飞，调用方应显式传入落点
-                                val result = if (onNavigateUp != null) {
-                                    onNavigateUp.invoke()
-                                } else {
-                                    false
-                                }
-                                AppLog.d("TabNav", "DPAD_UP tab[$index] result=$result")
-                                result
-                            }
-                            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                val result = if (onNavigateDown != null) {
-                                    onNavigateDown.invoke()
-                                } else {
-                                    focusViewPagerContent(viewPager)
-                                }
-                                AppLog.d("TabNav", "DPAD_DOWN tab[$index] result=$result")
-                                result
-                            }
-                            KeyEvent.KEYCODE_DPAD_LEFT -> {
-                                if (index == 0) {
-                                    val r = onNavigateLeft?.invoke() ?: false
-                                    AppLog.d("TabNav", "DPAD_LEFT tab[0] edge->leftArea=$r hasCb=${onNavigateLeft != null}")
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                                if (index == tabStrip.childCount - 1) {
-                                    val r = onNavigateRight?.invoke() ?: false
-                                    AppLog.d("TabNav", "DPAD_RIGHT tab[last] edge->right=$r hasCb=${onNavigateRight != null}")
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                            else -> false
-                        }
+    // 立即装一遍（tab 已填充时生效）+ post 补装（mediator 异步填充）+ layout 时重装：
+    // mediator 在数据集变化（如分类页设置改动后 refreshVisibleCategories → notifyDataSetChanged）
+    // 会 removeAllTabs+addTab 重建 TabView（tabViewPool 还会复用旧实例），单次绑定会丢/错位
+    fun install() {
+        installTabNavigation(
+            viewPager = viewPager,
+            tabFocusable = tabFocusable,
+            smoothScrollOnSelection = smoothScrollOnSelection,
+            onNavigateDown = onNavigateDown,
+            onNavigateUp = onNavigateUp,
+            onNavigateLeft = onNavigateLeft,
+            onNavigateRight = onNavigateRight,
+            onTabReselected = onTabReselected
+        )
+    }
+    install()
+    post { install() }
+    addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> install() }
+    reapplyTextColorOnSelectionChange()
+}
+
+/**
+ * 为 tabStrip 内每个 TabView 装按键/点击/焦点行为（幂等，可重复调用）。
+ * index 一律经 indexOfChild 动态求取，不闭包捕获：tab 重建复用旧 TabView 时，
+ * 捕获的 index 会让复用实例带着旧位置的监听（边缘判断/OK 切页索引全错）。
+ */
+private fun TabLayout.installTabNavigation(
+    viewPager: ViewPager2,
+    tabFocusable: Boolean,
+    smoothScrollOnSelection: Boolean,
+    onNavigateDown: (() -> Boolean)?,
+    onNavigateUp: (() -> Boolean)?,
+    onNavigateLeft: (() -> Boolean)?,
+    onNavigateRight: (() -> Boolean)?,
+    onTabReselected: ((index: Int) -> Unit)?
+) {
+    val tabStrip = getChildAt(0) as? ViewGroup ?: return
+    if (tabStrip.childCount == 0) return
+    for (childIndex in 0 until tabStrip.childCount) {
+        val tabView = tabStrip.getChildAt(childIndex)
+        tabView.isClickable = true
+        tabView.isFocusable = tabFocusable
+        suppressLongPressTooltip(tabView)
+        applyTabBackground(tabView)
+        bindTabTouchTextColor(tabView)
+        if (!tabFocusable) continue
+        bindTabFocusTextColor(tabView, revealOnFocus = true)
+        tabView.setOnKeyListener { v, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            val index = tabStrip.indexOfChild(v)
+            if (index < 0) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    if (viewPager.currentItem != index) {
+                        viewPager.setCurrentItemFromTab(
+                            item = index,
+                            smoothScroll = smoothScrollOnSelection
+                        )
                     } else {
-                        false
+                        onTabReselected?.invoke(index)
+                    }
+                    keepSelectedTabFocused(tabStrip, index, viewPager)
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    // 无回调时返回 false 走框架默认（历史行为）；
+                    // 复杂布局下默认导航会越层乱飞，调用方应显式传入落点
+                    val result = onNavigateUp?.invoke() ?: false
+                    AppLog.d("TabNav", "DPAD_UP tab[$index] result=$result")
+                    result
+                }
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    val result = onNavigateDown?.invoke() ?: focusViewPagerContent(viewPager)
+                    AppLog.d("TabNav", "DPAD_DOWN tab[$index] result=$result")
+                    result
+                }
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (index == 0) {
+                        val r = onNavigateLeft?.invoke() ?: false
+                        AppLog.d("TabNav", "DPAD_LEFT tab[0] edge->leftArea=$r hasCb=${onNavigateLeft != null}")
+                        true
+                    } else {
+                        // 中间 tab 显式步进，不放行 FocusFinder：scrollable 模式下
+                        // 屏外 TabView 仍是 VISIBLE 焦点候选，几何搜索可能把焦点
+                        // 送进屏外或 tab 行外的不可预期位置（表现为焦点“丢失”）
+                        stepTabFocus(tabStrip, index - 1)
                     }
                 }
-            }
-            tabView.setOnClickListener {
-                if (viewPager.currentItem != index) {
-                    viewPager.setCurrentItemFromTab(
-                        item = index,
-                        smoothScroll = smoothScrollOnSelection
-                    )
-                } else {
-                    onTabReselected?.invoke(index)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (index == tabStrip.childCount - 1) {
+                        val r = onNavigateRight?.invoke() ?: false
+                        AppLog.d("TabNav", "DPAD_RIGHT tab[last] edge->right=$r hasCb=${onNavigateRight != null}")
+                        true
+                    } else {
+                        stepTabFocus(tabStrip, index + 1)
+                    }
                 }
-                keepSelectedTabFocused(tabStrip, index, viewPager)
+                else -> false
             }
         }
-        reapplyTextColorOnSelectionChange()
+        tabView.setOnClickListener { v ->
+            val index = tabStrip.indexOfChild(v)
+            if (index < 0) return@setOnClickListener
+            if (viewPager.currentItem != index) {
+                viewPager.setCurrentItemFromTab(
+                    item = index,
+                    smoothScroll = smoothScrollOnSelection
+                )
+            } else {
+                onTabReselected?.invoke(index)
+            }
+            keepSelectedTabFocused(tabStrip, index, viewPager)
+        }
     }
+}
+
+/**
+ * 中间 tab 左右键显式步进到相邻 tab。目标 requestFocus 失败（异常状态）时
+ * 返回 false 保留系统兜底；成功时滚动跟随由 revealTabInViewport 负责。
+ */
+private fun stepTabFocus(tabStrip: ViewGroup, targetIndex: Int): Boolean {
+    val target = tabStrip.getChildAt(targetIndex) ?: return false
+    if (!target.isFocusable) return false
+    return target.requestFocus()
+}
+
+/**
+ * 焦点落到 tab 时把它即时滚进 TabLayout 视口：scrollable 模式下 material 只在
+ * “选中”时滚动 tab 栏，屏外 tab 获焦后无任何滚随逻辑，高亮停在屏外=用户感知
+ * “焦点丢失”（分类区第 9 个 tab 起丢焦的根因之一）。已完全可见时是 no-op。
+ */
+private fun revealTabInViewport(tabView: View) {
+    if (!tabView.isShown || tabView.width <= 0) return
+    tabView.requestRectangleOnScreen(Rect(0, 0, tabView.width, tabView.height), true)
 }
 
 fun TabLayout.enableTouchNavigation(
@@ -298,10 +348,14 @@ private fun applyTabBackground(tabView: View) {
  * 焦点移入 tab 时文字提亮为选中色（白），避免默认灰字与焦点高亮色块融在一起难以辨认；
  * 失焦后按 tab 自身选中状态恢复（选中→选中色，未选中→默认灰）。
  * 颜色全部取自 tabTextColors（含 tabSelectedTextColor 合入后的 selected 态），不硬编码。
+ * revealOnFocus=true 时获焦额外滚进视口（scrollable tab 栏超一屏的场景，见 revealTabInViewport）。
  */
-private fun TabLayout.bindTabFocusTextColor(tabView: View) {
+private fun TabLayout.bindTabFocusTextColor(tabView: View, revealOnFocus: Boolean = false) {
     tabView.setOnFocusChangeListener { _, hasFocus ->
         applyTabTextColor(tabView, hasFocus)
+        if (hasFocus && revealOnFocus) {
+            revealTabInViewport(tabView)
+        }
     }
     if (tabView.hasFocus()) {
         applyTabTextColor(tabView, true)
