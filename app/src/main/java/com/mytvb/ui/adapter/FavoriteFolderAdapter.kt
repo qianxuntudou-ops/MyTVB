@@ -142,7 +142,10 @@ class FavoriteFolderAdapter(
                 binding.root,
                 onTopEdgeUp = onTopEdgeUp,
                 onLeftEdge = onLeftEdge,
-                onRightEdge = onRightEdge
+                onRightEdge = onRightEdge,
+                // 收藏夹列表是 list-all 全量接口无分页，最后一排 DOWN 无下一行可去：
+                // 不吞键会穿透到全窗口 focusSearch，焦点跳出列表（感知为“丢焦”）
+                onBottomEdgeDown = { true }
             )
         }
 
