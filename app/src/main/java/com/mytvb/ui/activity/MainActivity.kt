@@ -41,6 +41,7 @@ import com.mytvb.feature.category.CategoryFragment
 import com.mytvb.feature.cctv.vod.CctvVodFragment
 import com.mytvb.feature.detail.VideoDetailFragment
 import com.mytvb.feature.dynamic.DynamicFragment
+import com.mytvb.feature.hongguo.net.HongguoNetProfiles
 import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
 import com.mytvb.feature.home.HomeFragment
 import com.mytvb.feature.home.HomeFragmentStateAdapter
@@ -879,6 +880,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             val releaseInfo = ApkUpdater.fetchLatestRelease()
             // 红果签名版本档案热更：随 version.json 捎带，与有无新版本无关（没新版也生效）
             HongguoVersionProfiles.applyFrom(applicationContext, releaseInfo.hongguoVersions)
+            // 红果播放 host/画像热更：同捎带语义（被封后不发版切换，2026-11-21 起）
+            HongguoNetProfiles.applyFrom(applicationContext, releaseInfo.hongguoNet)
             if (!ApkUpdater.isRemoteNewer(releaseInfo.versionName)) return
             if (appSettings.getCachedString(ApkUpdater.KEY_IGNORED_VERSION) == releaseInfo.versionName) return
             // fetch 期间用户可能已进设置手动检查弹窗，落弹窗前再守一次

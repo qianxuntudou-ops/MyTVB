@@ -36,6 +36,7 @@ import com.mytvb.feature.category.CategoryTabPrefs
 import com.mytvb.feature.category.CategoryTabsDialog
 import com.mytvb.feature.home.FeedSourceSetting
 import com.mytvb.feature.home.HomeFragmentStateAdapter
+import com.mytvb.feature.hongguo.net.HongguoNetProfiles
 import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
 import com.mytvb.model.SettingModel
 import com.mytvb.ui.adapter.SettingAdapter
@@ -1277,6 +1278,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 // 红果签名版本档案热更：随 version.json 捎带，与有无新版本无关（没新版也生效）
                 HongguoVersionProfiles.applyFrom(
                     requireContext().applicationContext, releaseInfo.hongguoVersions
+                )
+                // 红果播放 host/画像热更：同捎带语义（被封后不发版切换，2026-11-21 起）
+                HongguoNetProfiles.applyFrom(
+                    requireContext().applicationContext, releaseInfo.hongguoNet
                 )
                 if (ApkUpdater.isRemoteNewer(releaseInfo.versionName)) {
                     updateCheckState.value = UpdateCheckState.UpdateAvailable(releaseInfo.versionName)

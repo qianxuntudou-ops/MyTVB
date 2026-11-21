@@ -11,5 +11,12 @@
       "code": "72232",
       "name": "7.2.2.32"
     }
+  },
+  "hg_net": {
+    "play_host": "https://api5-normal-sinfonlineb.fqnovel.com",
+    "device_type": "25053RT47C",
+    "device_brand": "Redmi",
+    "os_version": "16",
+    "channel": "update_64"
   }
 }

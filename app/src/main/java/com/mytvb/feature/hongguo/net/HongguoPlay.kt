@@ -158,12 +158,13 @@ class HongguoPlay {
         q["device_id"] = identity.deviceId
         q["iid"] = identity.installId
         if (identity.deviceToken.isNotEmpty()) q["device_token"] = identity.deviceToken
-        q["ac"] = "wifi"; q["channel"] = CHANNEL; q["aid"] = "8662"
+        q["ac"] = "wifi"; q["channel"] = HongguoNetProfiles.channel(); q["aid"] = "8662"
         q["app_name"] = "novelread"
         q["version_code"] = ver.code; q["version_name"] = ver.versionName
         q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = DEVICE_TYPE; q["device_brand"] = DEVICE_BRAND; q["language"] = "zh"
-        q["os_api"] = "36"; q["os_version"] = OS_VERSION
+        q["device_type"] = HongguoNetProfiles.deviceType()
+        q["device_brand"] = HongguoNetProfiles.deviceBrand(); q["language"] = "zh"
+        q["os_api"] = "36"; q["os_version"] = HongguoNetProfiles.osVersion()
         q["manifest_version_code"] = ver.code
         q["resolution"] = "1280*2772"; q["dpi"] = "520"
         q["update_version_code"] = ver.code; q["host_abi"] = "arm64-v8a"
@@ -178,7 +179,7 @@ class HongguoPlay {
             while (true) {
                 // gzip body 同字节签名发送（对齐 HGTV o0：GZIPOutputStream + Content-Encoding）
                 text = kotlinSignedPost(
-                    "$PLAY_HOST/novel/player/multi_video_model/preload/v1",
+                    "${HongguoNetProfiles.playHost()}/novel/player/multi_video_model/preload/v1",
                     q, gzipDeflate(preloadBody(vids, deviceLevel)), ver.versionName, identity.deviceId, ua(ver.code)
                 )
                 respProbe = text.take(1200)
@@ -242,20 +243,16 @@ class HongguoPlay {
     private companion object {
         const val TAG = "Hongguo"
 
-        /** 播放 host（探针实证 b 线；HGTV F0.n3.f2118b 集群 a/b/c + lf/lq/hl 共 6 个）。 */
-        const val PLAY_HOST = "https://api5-normal-sinfonlineb.fqnovel.com"
-
-        /** 播放画像（三处同源：query / Argus deviceProfile / UA；探针通过组合）。 */
-        const val DEVICE_TYPE = "25053RT47C"
-        const val DEVICE_BRAND = "Redmi"
-        const val OS_VERSION = "16"
-        const val CHANNEL = "update_64"
+        /** 播放 host 与画像四元组：改读 HongguoNetProfiles（version.json `hg_net`
+         *  热更覆盖，2026-11-21 起；探针实证通过的组合就是其内置档——b 线 host +
+         *  Redmi 25053RT47C / Android 16 / update_64，HGTV F0.n3.f2118b 集群 a/b/c
+         *  + lf/lq/hl 共 6 个候选）。 */
 
         /** 播放 UA（X3.d 形态，与 query 画像同源；勿用 HongguoEnv 运行设备型号——
          *  模拟器型号未验证，探针通过的是本硬编码形态）。 */
         fun ua(versionCode: String): String =
-            "com.phoenix.read/$versionCode (Linux; U; Android $OS_VERSION; zh_CN; " +
-                "$DEVICE_TYPE; Build/BP2A.250605.031.A3; " +
+            "com.phoenix.read/$versionCode (Linux; U; Android ${HongguoNetProfiles.osVersion()}; zh_CN; " +
+                "${HongguoNetProfiles.deviceType()}; Build/BP2A.250605.031.A3; " +
                 "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
     }
 
