@@ -160,9 +160,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var swipeDownY = 0f
     private var swipeStartMs = 0L
     private var swipeTargetMs = 0L
-    /** 垂直滑动切集会话（与水平 seek 互斥，按主导轴判定）。 */
+    /** 垂直滑动切集会话（与水平 seek 互斥，按主导轴判定）：画面跟手滑出模式。 */
     private var isSwipeEpisode = false
-    private var swipeEpisodeArmed = false
     /** 切集触发阈值：屏高 12%（约 130px）。 */
     private val episodeSwipeThresholdPx by lazy {
         (resources.displayMetrics.heightPixels * 0.12f).toInt().coerceAtLeast(80)
@@ -1183,9 +1182,11 @@ class HongguoPlayerActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(event)
     }
 
-    /** 屏幕水平滑动快进（B 站 MyPlayerView.handleSwipeSeekTouch 同款）：
-     * 超过 touchSlop 且水平为主的拖动 → 瞬时条+预览浮窗跟随实时预览，松手提交、取消回退。
-     * 滑动期间画面不冻结（与 B 站一致），交由现有 seek 会话状态机统一渲染。 */
+    /** 屏幕滑动（B 站 MyPlayerView.handleSwipeSeekTouch 同款）：
+     * - 水平为主的拖动 → 快进：瞬时条+预览浮窗实时预览，松手提交、取消回退，
+     *   滑动期间画面不冻结（与 B 站一致），交由现有 seek 会话状态机统一渲染
+     * - 垂直为主的拖动 → 切集：旧画面 1:1 跟手移出（黑底跟随），松手过阈值飞出屏
+     *   切集、没过/边界弹回（CCTV 直播/影视两页同款交互） */
     private fun handleSwipeSeekTouch(event: MotionEvent): Boolean {
         val p = player ?: return false
         when (event.actionMasked) {
@@ -1195,7 +1196,6 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 swipeStartMs = p.currentPosition.coerceAtLeast(0L)
                 swipeTargetMs = swipeStartMs
                 isSwipeEpisode = false
-                swipeEpisodeArmed = false
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - swipeDownX
@@ -1217,20 +1217,15 @@ class HongguoPlayerActivity : AppCompatActivity() {
                     } else if (vertical) {
                         // 垂直滑动 = 切集（上滑下一集 / 下滑上一集），与水平 seek 按主导轴区分
                         isSwipeEpisode = true
+                        // 画面开始跟手滑出，控制面板杵在原地很怪，顺手收掉
+                        if (binding.panelBottom.visibility == View.VISIBLE) hideControls()
                     } else {
                         return false
                     }
                 }
                 if (isSwipeEpisode) {
-                    val armed = kotlin.math.abs(dy) >= episodeSwipeThresholdPx
-                    if (armed != swipeEpisodeArmed) {
-                        swipeEpisodeArmed = armed
-                        if (armed) showEpisodeSwipeHint(
-                            if (dy < 0) getString(R.string.hongguo_release_next)
-                            else getString(R.string.hongguo_release_prev)
-                        )
-                        else hideSeekHint()
-                    }
+                    // 旧画面 1:1 跟手移出（translationY 纯绘制位移，不影响播放）
+                    translatePlayerSurface(dy)
                     return true
                 }
                 val dur = p.duration.coerceAtLeast(0L)
@@ -1243,13 +1238,24 @@ class HongguoPlayerActivity : AppCompatActivity() {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (isSwipeEpisode) {
                     val dy = event.y - swipeDownY
-                    val trigger = event.actionMasked == MotionEvent.ACTION_UP &&
-                        kotlin.math.abs(dy) >= episodeSwipeThresholdPx
                     isSwipeEpisode = false
-                    swipeEpisodeArmed = false
                     hideSeekHint()
-                    if (trigger) {
-                        if (dy < 0) switchEpisodeRelative(1) else switchEpisodeRelative(-1)
+                    val delta = if (dy < 0) 1 else -1
+                    // 边界（第 1 集再下滑/末集再上滑）：画面能动但松手必弹回，跟手-弹回
+                    // 本身就是"到头了"的反馈；switchingSource 期间同弹回
+                    val target = episodeIndex + delta
+                    val inRange = target >= 1 && (episodeCount <= 0 || target <= episodeCount)
+                    if (event.actionMasked == MotionEvent.ACTION_UP &&
+                        kotlin.math.abs(dy) >= episodeSwipeThresholdPx && inRange && !switchingSource
+                    ) {
+                        // 先播飞出动画，结束后再切集；归位用 post 排在 switchEpisode 的
+                        // launch 体（progressBuffering 亮起）之后，画面跳回藏在圈亮后
+                        animatePlayerSurfaceOut(dy) {
+                            switchEpisodeRelative(delta)
+                            binding.playerView.post { resetPlayerSurfaceTranslation() }
+                        }
+                    } else {
+                        animatePlayerSurfaceBack()
                     }
                     return true
                 }
@@ -1276,10 +1282,29 @@ class HongguoPlayerActivity : AppCompatActivity() {
         switchEpisode(target)
     }
 
-    /** 切集滑动提示复用中央快退/快进提示位。 */
-    private fun showEpisodeSwipeHint(text: String) {
-        binding.textSeekHint.text = text
-        binding.textSeekHint.visibility = View.VISIBLE
+    /** 播放画面层位移——垂直滑动切集跟手/飞出/弹回共用。 */
+    private fun translatePlayerSurface(dy: Float) {
+        // cancel 掉上一轮未跑完的弹回/飞出动画，避免动画持续回写覆盖跟手位移
+        binding.playerView.animate().cancel()
+        binding.playerView.translationY = dy
+    }
+
+    /** 松手切集：画面沿滑动方向飞出屏（黑底跟随），动画结束后回调切集。 */
+    private fun animatePlayerSurfaceOut(dy: Float, onEnd: () -> Unit) {
+        val out = if (dy < 0) -resources.displayMetrics.heightPixels.toFloat()
+        else resources.displayMetrics.heightPixels.toFloat()
+        binding.playerView.animate().translationY(out).setDuration(200L).withEndAction(onEnd).start()
+    }
+
+    /** 未过阈值/边界/系统打断：画面弹回原位。 */
+    private fun animatePlayerSurfaceBack() {
+        binding.playerView.animate().translationY(0f).setDuration(200L).start()
+    }
+
+    /** 画面层归位（取消动画+清位移）。 */
+    private fun resetPlayerSurfaceTranslation() {
+        binding.playerView.animate().cancel()
+        translatePlayerSurface(0f)
     }
 
     /** 滑满一整屏宽 = 100% 时长，滑动比例即时长比例（B 站 computeSwipeSeekDeltaMs 同款手感）。 */

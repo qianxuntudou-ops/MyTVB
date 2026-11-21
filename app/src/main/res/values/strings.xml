@@ -208,8 +208,6 @@
     <string name="hongguo_seek_forward">快进 %1$d 秒</string>
     <string name="hongguo_seek_backward">快退 %1$d 秒</string>
     <string name="hongguo_switch_failed">切换失败</string>
-    <string name="hongguo_release_next">松开播放下一集</string>
-    <string name="hongguo_release_prev">松开播放上一集</string>
     <string name="setting_group_teen_time">时间限制</string>
     <string name="setting_group_teen_psas">公益广告</string>
     <string name="setting_group_about_app">应用</string>

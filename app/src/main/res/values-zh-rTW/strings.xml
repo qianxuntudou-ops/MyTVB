@@ -178,8 +178,6 @@
     <string name="hongguo_seek_forward">快轉 %1$d 秒</string>
     <string name="hongguo_seek_backward">倒轉 %1$d 秒</string>
     <string name="hongguo_switch_failed">切換失敗</string>
-    <string name="hongguo_release_next">放開播放下一集</string>
-    <string name="hongguo_release_prev">放開播放上一集</string>
     <string name="hongguo_play_encrypted">本集為加密串流</string>
     <string name="hongguo_play_bytevc2">本集僅提供 ByteVC2 編碼，暫不支援</string>
     <string name="setting_group_teen_time">時間限制</string>
