@@ -1563,7 +1563,11 @@ object ImageLoader {
 
     private fun isCacheableImageUrl(url: String): Boolean {
         return isBilibiliImageUrl(url) ||
-            url.contains("cctvpic.com", ignoreCase = true)
+            url.contains("cctvpic.com", ignoreCase = true) ||
+            // CCTV 台标源：ghfast/jsdelivr 仅透传上游 max-age=300（5 分钟），
+            // 不强制写长缓存则每次开 App 缓存皆过期回源重下
+            url.contains("ghfast.top", ignoreCase = true) ||
+            url.contains("cdn.jsdelivr.net", ignoreCase = true)
     }
 
     private fun appendImageSuffix(url: String, suffix: String): String {
