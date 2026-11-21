@@ -42,13 +42,6 @@
             android:textSize="@dimen/px26"
             android:importantForAccessibility="no"/>
     </androidx.appcompat.widget.LinearLayoutCompat>
-    <!-- 抖音模式视频切换过渡遮罩 -->
-    <ImageView
-        android:id="@+id/image_douyin_transition"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="centerCrop"
-        android:visibility="gone"/>
     <androidx.appcompat.widget.LinearLayoutCompat
         android:gravity="start"
         android:layout_gravity="bottom|right"

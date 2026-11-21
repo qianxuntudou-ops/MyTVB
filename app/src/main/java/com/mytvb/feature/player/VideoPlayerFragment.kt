@@ -2013,9 +2013,8 @@ class VideoPlayerFragment : Fragment() {
 
         val next = douyinModeManager.next()
         if (next == null) {
+            // 边界静默：画面飞出后归位即可（对齐红果/CCTV 滑动切换的到头反馈）
             playerView.cancelDouyinPageTransition()
-            playerView.showDouyinBoundaryBounce(1)
-            AppToast.show(requireContext(), getString(R.string.player_no_recommendation))
             return true
         }
         playDouyinVideo(next, direction = 1)
@@ -2029,7 +2028,6 @@ class VideoPlayerFragment : Fragment() {
         // 抖音模式激活时，始终消费上键事件，不弹出控制器
         if (!douyinModeManager.hasList()) {
             playerView.cancelDouyinPageTransition()
-            playerView.showDouyinBoundaryBounce(-1)
             return true
         }
         val prev = douyinModeManager.previous()
@@ -2037,7 +2035,6 @@ class VideoPlayerFragment : Fragment() {
             playDouyinVideo(prev, direction = -1)
         } else {
             playerView.cancelDouyinPageTransition()
-            playerView.showDouyinBoundaryBounce(-1)
         }
         return true
     }
@@ -2066,8 +2063,7 @@ class VideoPlayerFragment : Fragment() {
         } else if (direction != 0 && !douyinTransitionRunning) {
             douyinTransitionRunning = true
             val transitionStarted = playerView.startDouyinPageTransition(
-                direction,
-                targetPreview = video.toDouyinPreview()
+                direction
             ) {
                 playTarget()
                 douyinTransitionRunning = false
@@ -2174,9 +2170,8 @@ class VideoPlayerFragment : Fragment() {
             }
             if (!douyinModeManager.hasList()) {
                 if (douyinPendingNextAfterInit) {
+                    // 边界静默：画面归位即可，无弹跳无 Toast
                     playerView.cancelDouyinPageTransition()
-                    playerView.showDouyinBoundaryBounce(1)
-                    AppToast.show(requireContext(), getString(R.string.player_no_recommendation))
                 }
                 douyinPendingNextAfterInit = false
                 return@launch
@@ -2187,8 +2182,6 @@ class VideoPlayerFragment : Fragment() {
                 val next = douyinModeManager.next()
                 if (next == null) {
                     playerView.cancelDouyinPageTransition()
-                    playerView.showDouyinBoundaryBounce(1)
-                    AppToast.show(requireContext(), getString(R.string.player_no_recommendation))
                 } else {
                     playDouyinVideo(next, direction = 1)
                 }

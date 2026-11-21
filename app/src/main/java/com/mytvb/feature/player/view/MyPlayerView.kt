@@ -32,7 +32,6 @@ import android.widget.TextClock
 import android.widget.TextView
 import android.view.ViewStub
 import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import androidx.annotation.OptIn
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.media3.common.C
@@ -216,19 +215,19 @@ class MyPlayerView @JvmOverloads constructor(
     private var pendingDmMaskRequest: DmMaskRequest? = null
 
     private var touchInterceptListener: ((MotionEvent) -> Boolean)? = null
-    private var douyinPreviewLayer: FrameLayout? = null
-    private var douyinPreviewImage: ImageView? = null
-    private var douyinPreviewTitle: AppCompatTextView? = null
     private var isDouyinDragging = false
     private var douyinDragDirection: DouyinSwipeDirection? = null
     private var douyinDragHasTarget = false
     private var douyinTransitionRunning = false
     private var douyinGestureCommittedTransition = false
     private var douyinTouchStartedInInteractiveArea = false
-    private var douyinPendingTargetOffset = 0f
     private var douyinFirstFrameWaitRegistered = false
-    private val douyinCommitThresholdRatio = 0.22f
-    private val douyinAnimationDurationMs = 220L
+
+    /** 提交阈值：屏高 12%（红果/直播/CCTV点播滑动切换同款公式）。 */
+    private val douyinCommitThresholdPx by lazy {
+        (resources.displayMetrics.heightPixels * 0.12f).toInt().coerceAtLeast(80)
+    }
+    private val douyinAnimationDurationMs = 200L
 
     private val controllerComponentListener = object : MyPlayerControlView.VisibilityListener {
         override fun onVisibilityChange(visibility: Int) {
@@ -608,7 +607,6 @@ class MyPlayerView @JvmOverloads constructor(
 
         bufferingView?.visibility = GONE
         errorMessageView?.visibility = GONE
-        setupDouyinPreviewLayer()
 
         AppLog.i("PlayerViewPerf", "setupController deferred")
         val settingStartMs = SystemClock.elapsedRealtime()
@@ -636,48 +634,6 @@ class MyPlayerView @JvmOverloads constructor(
         }
     }
 
-
-    private fun setupDouyinPreviewLayer() {
-        if (douyinPreviewLayer != null) return
-        val layer = FrameLayout(context).apply {
-            visibility = GONE
-            alpha = 0f
-            setBackgroundColor(Color.BLACK)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        }
-        val image = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        }
-        val dim = View(context).apply {
-            setBackgroundColor(0x66000000)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        }
-        val title = ScaledTextView(context).apply {
-            setTextColor(Color.WHITE)
-            setTextSize(
-                android.util.TypedValue.COMPLEX_UNIT_PX,
-                resources.getDimension(R.dimen.px44)
-            )
-            maxLines = 2
-            includeFontPadding = false
-            setShadowLayer(6f, 0f, 2f, Color.BLACK)
-            val horizontal = resources.getDimensionPixelSize(R.dimen.px50)
-            val bottom = resources.getDimensionPixelSize(R.dimen.px120)
-            setPadding(horizontal, 0, horizontal, 0)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                gravity = Gravity.BOTTOM
-                bottomMargin = bottom
-            }
-        }
-        layer.addView(image)
-        layer.addView(dim)
-        layer.addView(title)
-        addView(layer)
-        douyinPreviewLayer = layer
-        douyinPreviewImage = image
-        douyinPreviewTitle = title
-    }
 
     private fun ensureController(reason: String): MyPlayerControlView? {
         controller?.let { return it }
@@ -2238,8 +2194,8 @@ class MyPlayerView @JvmOverloads constructor(
             MotionEvent.ACTION_UP -> {
                 if (!isDouyinDragging) return false
                 val deltaY = event.y - downTouchY
-                val shouldCommit = douyinDragHasTarget &&
-                    kotlin.math.abs(deltaY) >= height.coerceAtLeast(1) * douyinCommitThresholdRatio
+              val shouldCommit = douyinDragHasTarget &&
+                  kotlin.math.abs(deltaY) >= douyinCommitThresholdPx
                 val direction = douyinDragDirection
                 if (shouldCommit && direction != null) {
                     finishDouyinSwipe(direction)
@@ -2288,7 +2244,8 @@ class MyPlayerView @JvmOverloads constructor(
         douyinDragHasTarget = preview != null
         parent?.requestDisallowInterceptTouchEvent(true)
         hideController()
-        prepareDouyinPreview(direction, preview)
+        contentFrame?.animate()?.cancel()
+        dmkMaskHost?.animate()?.cancel()
     }
 
     private fun douyinPreview(direction: DouyinSwipeDirection): DouyinModePreview? {
@@ -2299,25 +2256,6 @@ class MyPlayerView @JvmOverloads constructor(
         }
     }
 
-    private fun prepareDouyinPreview(direction: DouyinSwipeDirection, preview: DouyinModePreview?) {
-        val layer = douyinPreviewLayer ?: return
-        layer.animate().cancel()
-        contentFrame?.animate()?.cancel()
-        dmkMaskHost?.animate()?.cancel()
-        val h = height.coerceAtLeast(1).toFloat()
-        douyinPendingTargetOffset = if (direction == DouyinSwipeDirection.Next) h else -h
-        douyinPreviewTitle?.text = preview?.title.orEmpty()
-        if (preview?.coverUrl?.isNotBlank() == true) {
-            douyinPreviewImage?.let { ImageLoader.loadVideoCover(it, preview.coverUrl) }
-        } else {
-            douyinPreviewImage?.setImageResource(R.drawable.default_video)
-        }
-        layer.translationY = douyinPendingTargetOffset
-        layer.alpha = if (preview == null) 0f else 1f
-        layer.visibility = if (preview == null) GONE else VISIBLE
-        restoreOverlayZOrder()
-    }
-
     private fun updateDouyinDrag(deltaY: Float) {
         val direction = douyinDragDirection ?: return
         val h = height.coerceAtLeast(1).toFloat()
@@ -2325,16 +2263,9 @@ class MyPlayerView @JvmOverloads constructor(
             DouyinSwipeDirection.Next -> deltaY.coerceAtMost(0f)
             DouyinSwipeDirection.Previous -> deltaY.coerceAtLeast(0f)
         }
-        val dragOffset = if (douyinDragHasTarget) {
-            signedDelta.coerceIn(-h, h)
-        } else {
-            (signedDelta * 0.18f).coerceIn(-h * 0.16f, h * 0.16f)
-        }
-        applyDouyinContentTranslation(dragOffset)
-        douyinPreviewLayer?.let { layer ->
-            layer.translationY = douyinPendingTargetOffset + dragOffset
-            layer.alpha = if (douyinDragHasTarget) 1f else 0f
-        }
+        // 无目标（队列头/尾或未建）也 1:1 跟手，松手必弹回=到头反馈；
+        // douyinDragHasTarget 只留给 UP 提交判定（红果/CCTV点播同款语义）
+        applyDouyinContentTranslation(signedDelta.coerceIn(-h, h))
     }
 
     private fun finishDouyinSwipe(direction: DouyinSwipeDirection) {
@@ -2344,7 +2275,6 @@ class MyPlayerView @JvmOverloads constructor(
         val exitOffset = if (direction == DouyinSwipeDirection.Next) -h else h
         animateDouyinLayers(
             contentOffset = exitOffset,
-            previewOffset = 0f,
             durationMs = douyinAnimationDurationMs
         ) {
             douyinGestureCommittedTransition = true
@@ -2370,9 +2300,7 @@ class MyPlayerView @JvmOverloads constructor(
         isDouyinDragging = false
         animateDouyinLayers(
             contentOffset = 0f,
-            previewOffset = douyinPendingTargetOffset,
-            durationMs = 180L,
-            useOvershoot = true
+            durationMs = douyinAnimationDurationMs
         ) {
             resetDouyinVisualState()
         }
@@ -2380,7 +2308,6 @@ class MyPlayerView @JvmOverloads constructor(
 
     fun startDouyinPageTransition(
         directionValue: Int,
-        targetPreview: DouyinModePreview? = null,
         onReady: () -> Unit
     ): Boolean {
         if (douyinGestureCommittedTransition) {
@@ -2391,12 +2318,10 @@ class MyPlayerView @JvmOverloads constructor(
         if (douyinTransitionRunning || isDouyinDragging) return false
         val direction = if (directionValue >= 0) DouyinSwipeDirection.Next else DouyinSwipeDirection.Previous
         douyinTransitionRunning = true
-        prepareDouyinPreview(direction, targetPreview ?: douyinPreview(direction))
         val h = height.coerceAtLeast(1).toFloat()
         val exitOffset = if (direction == DouyinSwipeDirection.Next) -h else h
         animateDouyinLayers(
             contentOffset = exitOffset,
-            previewOffset = 0f,
             durationMs = douyinAnimationDurationMs
         ) {
             onReady()
@@ -2432,63 +2357,29 @@ class MyPlayerView @JvmOverloads constructor(
         resetDouyinVisualState()
     }
 
-    fun showDouyinBoundaryBounce(directionValue: Int) {
-        if (douyinTransitionRunning || isDouyinDragging) return
-        val direction = if (directionValue >= 0) DouyinSwipeDirection.Next else DouyinSwipeDirection.Previous
-        val h = height.coerceAtLeast(1).toFloat()
-        val bounceOffset = h * 0.08f * if (direction == DouyinSwipeDirection.Next) -1f else 1f
-        applyDouyinContentTranslation(bounceOffset)
-        contentFrame?.animate()
-            ?.translationY(0f)
-            ?.setDuration(180L)
-            ?.setInterpolator(OvershootInterpolator(0.7f))
-            ?.start()
-        dmkMaskHost?.animate()
-            ?.translationY(0f)
-            ?.setDuration(180L)
-            ?.setInterpolator(OvershootInterpolator(0.7f))
-            ?.start()
-    }
-
+    /** 画面层（内容+弹幕）位移动画：飞出/弹回共用，Decelerate 插值。 */
     private fun animateDouyinLayers(
         contentOffset: Float,
-        previewOffset: Float,
         durationMs: Long,
-        useOvershoot: Boolean = false,
         onEnd: () -> Unit
     ) {
-        val interpolator = if (useOvershoot) OvershootInterpolator(0.7f) else DecelerateInterpolator()
-        var remaining = 2
-        fun markEnd() {
-            remaining--
-            if (remaining <= 0) onEnd()
+        val interpolator = DecelerateInterpolator()
+        // 结束计数 = 实际动画器数量（删预览层后曾误保持 remaining=2，飞出动画
+        // 结束后计数到不了 0，切视频 onEnd 永不执行——滑动无反应的根因）
+        val animators = listOfNotNull(contentFrame?.animate(), dmkMaskHost?.animate())
+        if (animators.isEmpty()) {
+            onEnd()
+            return
         }
-        val contentAnimator = contentFrame?.animate()
-        val maskAnimator = dmkMaskHost?.animate()
-        if (contentAnimator == null && maskAnimator == null) {
-            remaining--
-        } else {
-            contentAnimator?.translationY(contentOffset)
-                ?.setDuration(durationMs)
-                ?.setInterpolator(interpolator)
-                ?.withEndAction { markEnd() }
-                ?.start()
-            maskAnimator?.translationY(contentOffset)
-                ?.setDuration(durationMs)
-                ?.setInterpolator(interpolator)
-                ?.start()
-            if (contentAnimator == null) markEnd()
-        }
-        val layer = douyinPreviewLayer
-        if (layer == null) {
-            markEnd()
-        } else {
-            layer.animate()
-                .translationY(previewOffset)
-                .alpha(1f)
+        var remaining = animators.size
+        animators.forEach { animator ->
+            animator.translationY(contentOffset)
                 .setDuration(durationMs)
                 .setInterpolator(interpolator)
-                .withEndAction { markEnd() }
+                .withEndAction {
+                    remaining--
+                    if (remaining <= 0) onEnd()
+                }
                 .start()
         }
     }
@@ -2500,17 +2391,12 @@ class MyPlayerView @JvmOverloads constructor(
 
     private fun resetDouyinVisualState() {
         parent?.requestDisallowInterceptTouchEvent(false)
-        douyinPreviewLayer?.animate()?.cancel()
         contentFrame?.animate()?.cancel()
         dmkMaskHost?.animate()?.cancel()
         applyDouyinContentTranslation(0f)
-        douyinPreviewLayer?.visibility = GONE
-        douyinPreviewLayer?.alpha = 0f
-        douyinPreviewLayer?.translationY = 0f
         douyinDragDirection = null
         douyinDragHasTarget = false
         douyinTouchStartedInInteractiveArea = false
-        douyinPendingTargetOffset = 0f
         douyinFirstFrameWaitRegistered = false
     }
 
@@ -2866,7 +2752,6 @@ class MyPlayerView @JvmOverloads constructor(
         findViewById<View>(R.id.super_chat_host)?.bringToFront()
         findViewById<View>(R.id.interaction_view)?.bringToFront()
         pauseIndicatorView?.bringToFront()
-        douyinPreviewLayer?.bringToFront()
         controllerLayer?.bringToFront()
         alwaysOnClockView?.bringToFront()
         resumeHintView?.bringToFront()
@@ -2878,7 +2763,6 @@ class MyPlayerView @JvmOverloads constructor(
             findViewById<View>(R.id.super_chat_host)?.translationZ = 1.5f
             findViewById<View>(R.id.interaction_view)?.translationZ = 2f
             pauseIndicatorView?.translationZ = 3f
-            douyinPreviewLayer?.translationZ = 4f
             controllerLayer?.translationZ = 5f
             // 常显时钟：控制栏层之上（控制栏可见时本就避让）、提示条/seek 层之下
             alwaysOnClockView?.translationZ = 5.5f

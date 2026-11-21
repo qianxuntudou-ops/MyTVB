@@ -25,7 +25,6 @@
 
     <!-- 播放器：推薦/連播/選集 -->
     <string name="player_loading_recommendations">載入推薦中...</string>
-    <string name="player_no_recommendation">該影片無推薦</string>
     <string name="player_repeat_mode_one">單集循環</string>
     <string name="player_repeat_mode_all">順序播放</string>
     <string name="player_no_episodes_toast">目前暫無可選分集</string>

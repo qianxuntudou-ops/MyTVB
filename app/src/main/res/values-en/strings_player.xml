@@ -25,7 +25,6 @@
 
     <!-- Player: recommendations / autoplay / episodes -->
     <string name="player_loading_recommendations">Loading recommendations...</string>
-    <string name="player_no_recommendation">No recommendations for this video</string>
     <string name="player_repeat_mode_one">Repeat one</string>
     <string name="player_repeat_mode_all">Play in order</string>
     <string name="player_no_episodes_toast">No episodes available</string>
