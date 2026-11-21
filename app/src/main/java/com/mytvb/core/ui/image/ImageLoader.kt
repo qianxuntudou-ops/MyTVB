@@ -151,12 +151,14 @@ object ImageLoader {
         imageView: ImageView,
         url: String?,
         placeholder: Drawable?,
-        error: Drawable?
+        error: Drawable?,
+        trimTransparent: Boolean = false
     ) {
         val optimizedUrl = buildOptimizedCommonImageUrl(url)
         val normalizedUrl = normalizeUrl(url)
         loadIntoDrawable(imageView, optimizedUrl, placeholder, error,
-            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null
+            fallbackUrl = if (optimizedUrl != normalizedUrl) normalizedUrl else null,
+            trimTransparent = trimTransparent
         )
     }
 
@@ -889,7 +891,8 @@ object ImageLoader {
         placeholderDrawable: Drawable?,
         errorDrawable: Drawable?,
         fallbackUrl: String? = null,
-        priority: Priority = Priority.NORMAL
+        priority: Priority = Priority.NORMAL,
+        trimTransparent: Boolean = false
     ) {
         val ctx = imageView.context
         if (ctx is Activity && ctx.isDestroyed) return
@@ -924,7 +927,7 @@ object ImageLoader {
 
         if (!imageView.isAttachedToWindow) {
             deferLoadUntilAttached(imageView, url) {
-                loadIntoDrawable(imageView, url, placeholderDrawable, errorDrawable, fallbackUrl, priority)
+                loadIntoDrawable(imageView, url, placeholderDrawable, errorDrawable, fallbackUrl, priority, trimTransparent)
             }
             return
         }
@@ -941,14 +944,16 @@ object ImageLoader {
                         imageView.setImageDrawable(gifDrawable)
                     }
                 } else {
-                    val bmp = data.bitmap
+                    val bmp = withContext(imageIoDispatcher) {
+                        if (trimTransparent) data.bitmap?.trimTransparentPadding() else data.bitmap
+                    }
                     if (bmp != null) {
                         cache.put(url, bmp)
                         if ((imageView.getTag(R.id.tag_image_loader_url) as? String) == url) {
                             imageView.setImageBitmap(bmp)
                         }
                     } else if (fallbackUrl != null) {
-                        loadIntoDrawable(imageView, fallbackUrl, placeholderDrawable, errorDrawable, priority = priority)
+                        loadIntoDrawable(imageView, fallbackUrl, placeholderDrawable, errorDrawable, priority = priority, trimTransparent = trimTransparent)
                     } else {
                         if ((imageView.getTag(R.id.tag_image_loader_url) as? String) == url) {
                             imageView.setImageDrawable(errorDrawable)
@@ -961,13 +966,47 @@ object ImageLoader {
                 }
                 AppLog.w(TAG, "load failed url=${url.takeLast(50)}", t)
                 if (fallbackUrl != null) {
-                    loadIntoDrawable(imageView, fallbackUrl, placeholderDrawable, errorDrawable, priority = priority)
+                    loadIntoDrawable(imageView, fallbackUrl, placeholderDrawable, errorDrawable, priority = priority, trimTransparent = trimTransparent)
                 } else if ((imageView.getTag(R.id.tag_image_loader_url) as? String) == url) {
                     imageView.setImageDrawable(errorDrawable)
                 }
             }
         }
         inFlight[imageView] = job
+    }
+
+    /**
+     * 裁掉四周的纯透明边。台标源图（logos 仓库）画布比例/留白不一：固定 2:1 容器
+     * fitCenter 下，留白大的省台标显小、字形小到看不清；裁边后字形满幅显示，
+     * 本就满幅的央视标（180x90 顶格）是 no-op。全透明时返回原图；
+     * RGB_565 等无有效 alpha 的图整图命中 → 满幅 → no-op。
+     */
+    private fun Bitmap.trimTransparentPadding(): Bitmap {
+        val w = width
+        val h = height
+        if (w <= 2 || h <= 2) return this
+        val pixels = IntArray(w * h)
+        getPixels(pixels, 0, w, 0, 0, w, h)
+        var left = w
+        var top = h
+        var right = -1
+        var bottom = -1
+        // 阈值 8：忽略抗锯齿/淡阴影级别的近透明噪点
+        val alphaThreshold = 8
+        for (y in 0 until h) {
+            val row = y * w
+            for (x in 0 until w) {
+                if ((pixels[row + x] ushr 24) > alphaThreshold) {
+                    if (x < left) left = x
+                    if (x > right) right = x
+                    if (y < top) top = y
+                    if (y > bottom) bottom = y
+                }
+            }
+        }
+        if (right < left || bottom < top) return this
+        if (left == 0 && top == 0 && right == w - 1 && bottom == h - 1) return this
+        return Bitmap.createBitmap(this, left, top, right - left + 1, bottom - top + 1)
     }
 
     private fun handleLoadError(

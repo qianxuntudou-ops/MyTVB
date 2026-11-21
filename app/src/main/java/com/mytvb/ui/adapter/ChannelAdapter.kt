@@ -58,13 +58,15 @@ class ChannelAdapter(
         holder.name.text = item.name
         // 台标：未命中隐藏（文字顶格）；命中加载（ImageLoader LruCache 兜住焦点滚动重复 bind）。
         // 占位/失败图传透明 ColorDrawable——fanmingming 部分网络环境（DNS 解析境外节点）
-        // 会超时，默认灰块占位在列表里成排出现太丑，失败就当没有台标
+        // 会超时，默认灰块占位在列表里成排出现太丑，失败就当没有台标。
+        // trimTransparent：省台标源图 180x108 且留白大，固定 2:1 容器 fitCenter 下显小，
+        // 裁掉透明边后字形满幅（央视标本就满幅，no-op）
         val logoUrl = CctvChannelLogo.logoUrlFor(item.name)
         if (logoUrl == null) {
             holder.channelLogo.visibility = View.GONE
         } else {
             holder.channelLogo.visibility = View.VISIBLE
-            ImageLoader.load(holder.channelLogo, logoUrl, transparentPlaceholder, transparentPlaceholder)
+            ImageLoader.load(holder.channelLogo, logoUrl, transparentPlaceholder, transparentPlaceholder, trimTransparent = true)
         }
         val isPlaying = item.url == currentPlayingUrl
         holder.playingMark.visibility = if (isPlaying) View.VISIBLE else View.GONE
