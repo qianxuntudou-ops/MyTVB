@@ -37,6 +37,15 @@ class VideoPlayerProgressCoordinator(
         private const val NETWORK_STALL_SINGLE_MS = 7_000L
         // 救援冷却：换线重建后给新节点攒水位的时间，窗口期内不重复触发
         private const val NETWORK_STALL_RESCUE_COOLDOWN_MS = 20_000L
+
+        // ===== seek 缓冲豁免（issue#128 第6条）=====
+        // seek 引起的 BUFFERING 不是网络断粮：跳过恰饭片段（远点取流）一次跳变就能凑出
+        // 「窗口内 2 次 rebuffer」或累计 10s，误弹「网络卡顿」提示。500ms tick 下正常播放
+        // 推进 ≤2s（4x 倍速），位置跳变超过该值即视为 seek。
+        private const val SEEK_JUMP_DETECT_MS = 3_000L
+        // 距 seek 跳变在该窗口内开始的 BUFFERING 段不计入 rebuffer 窗口；
+        // seek 后真正播放起来再掉的 BUFFERING 照常判，不放过真网络卡顿。
+        private const val SEEK_BUFFER_GRACE_MS = 2_000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -55,6 +64,7 @@ class VideoPlayerProgressCoordinator(
     private var networkRebufferStartedAtMs = 0L
     private val recentRebufferEvents = ArrayDeque<RebufferEvent>()
     private var lastNetworkRescueAtMs = 0L
+    private var lastSeekJumpAtElapsedMs = 0L
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -114,11 +124,13 @@ class VideoPlayerProgressCoordinator(
         networkRebufferStartedAtMs = 0L
         recentRebufferEvents.clear()
         lastNetworkRescueAtMs = 0L
+        lastSeekJumpAtElapsedMs = 0L
     }
 
     private fun sync(player: Player, publishProgressState: Boolean) {
         val positionMs = player.currentPosition.coerceAtLeast(0L)
         val durationMs = player.duration.takeIf { it > 0L } ?: 0L
+        maybeDetectSeekJump(positionMs)
         maybeHandlePlaybackStall(player, positionMs, durationMs)
         maybeHandleNetworkStall(player, positionMs)
         val playbackChanged =
@@ -175,6 +187,15 @@ class VideoPlayerProgressCoordinator(
         }
     }
 
+    /** 轮询 tick 间位置跳变检测：跳变超过 [SEEK_JUMP_DETECT_MS] 视为一次 seek（豁免窗口起点）。 */
+    private fun maybeDetectSeekJump(positionMs: Long) {
+        if (lastPlaybackSyncPositionMs < 0L) return
+        val delta = positionMs - lastPlaybackSyncPositionMs
+        if (kotlin.math.abs(delta) > SEEK_JUMP_DETECT_MS) {
+            lastSeekJumpAtElapsedMs = SystemClock.elapsedRealtime()
+        }
+    }
+
     /**
      * 网络性卡顿监控（issue#114）：与 [maybeHandlePlaybackStall] 的分工——那条链管
      * "画面停摆"（READY 冻结 / BUFFERING 但不缺数据的解码停摆），本链管"网络断粮循环"
@@ -189,11 +210,14 @@ class VideoPlayerProgressCoordinator(
 
         // 事件检测：播放中（READY 态、非起播）掉进 BUFFERING 才算 rebuffer。
         // 换线重建引起的 IDLE→BUFFERING 不算（lastState 是 IDLE 不是 READY）；
-        // 起播阶段（position=0）由 first_frame_timeout 看门狗负责。
+        // 起播阶段（position=0）由 first_frame_timeout 看门狗负责；
+        // seek 引起的缓冲不算（issue#128 第6条：跳过恰饭片段=READY→seek→BUFFERING，
+        // 远点取流慢时一次就能凑出判据，误弹「网络卡顿」提示）。
         if (state == Player.STATE_BUFFERING &&
             lastObservedPlaybackState == Player.STATE_READY &&
             player.playWhenReady &&
-            positionMs > 0L
+            positionMs > 0L &&
+            nowMs - lastSeekJumpAtElapsedMs >= SEEK_BUFFER_GRACE_MS
         ) {
             networkRebufferStartedAtMs = nowMs
         } else if (state == Player.STATE_READY && networkRebufferStartedAtMs != 0L) {
@@ -217,6 +241,10 @@ class VideoPlayerProgressCoordinator(
 
         if (recentRebufferEvents.isEmpty() && networkRebufferStartedAtMs == 0L) return
         if (!player.playWhenReady) return
+        // seek 后的首次缓冲（跳过恰饭片段/快进到远点）不该计入窗口：缓冲在 grace 内
+        // 已经开始但尚未记成事件时，把它从累计里剔掉，避免凑出判据二/三
+        val seekGraceActive = nowMs - lastSeekJumpAtElapsedMs < SEEK_BUFFER_GRACE_MS
+        if (seekGraceActive && networkRebufferStartedAtMs == 0L) return
         if (lastNetworkRescueAtMs != 0L &&
             nowMs - lastNetworkRescueAtMs < NETWORK_STALL_RESCUE_COOLDOWN_MS
         ) {

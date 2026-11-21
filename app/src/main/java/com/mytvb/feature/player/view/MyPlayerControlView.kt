@@ -636,11 +636,12 @@ class MyPlayerControlView @JvmOverloads constructor(
         setButtonVisibility(buttonPlaySpeed, show)
     }
 
-    fun showHideNextPrevious(show: Boolean) {
-        setButtonVisibility(buttonPrevious, show)
-        setButtonVisibility(buttonNext, show)
-        updateButtonEnabled(buttonPrevious, previousButtonEnabled)
-        updateButtonEnabled(buttonNext, nextButtonEnabled)
+    /** 上/下集按钮独立显隐：没有上一集/下一集时直接隐藏对应按钮，不灰置占位（issue#128）。 */
+    fun showHideNextPrevious(previousShow: Boolean, nextShow: Boolean) {
+        setButtonVisibility(buttonPrevious, previousShow)
+        setButtonVisibility(buttonNext, nextShow)
+        updateButtonEnabled(buttonPrevious, previousShow && previousButtonEnabled)
+        updateButtonEnabled(buttonNext, nextShow && nextButtonEnabled)
     }
 
     fun setEpisodeNavigationEnabled(previousEnabled: Boolean, nextEnabled: Boolean) {

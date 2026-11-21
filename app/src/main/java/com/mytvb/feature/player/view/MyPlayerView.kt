@@ -157,6 +157,10 @@ class MyPlayerView @JvmOverloads constructor(
     private var resumeHintPositionText: TextView? = null
     private var qualitySwitchingHideRunnable: Runnable? = null
     private var qualitySwitchingTargetName: String? = null
+    // 续播提示当前生效文案（非 null=提示处于 3s 窗口内）。画质切换提示复用同一容器，
+    // 展示期间会覆盖续播文案（issue#128 反馈「续播提示只显示不到1秒」的根因）：
+    // 用它标记续播提示还活着，画质流程收尾时恢复显示剩余窗口。
+    private var activeResumeHintText: String? = null
 
     private var player: ExoPlayer? = null
     private var showBuffering: Int = SHOW_BUFFERING_WHEN_PLAYING
@@ -189,7 +193,7 @@ class MyPlayerView @JvmOverloads constructor(
     private var pendingScSwitchEnabled: Boolean? = null
     private var pendingMirrorVisible: Boolean? = null
     private var pendingPlaySpeedButtonVisible: Boolean? = null
-    private var pendingNextPreviousVisible: Boolean? = null
+    private var pendingNextPreviousVisible: Pair<Boolean, Boolean>? = null
     private var pendingFfReVisible: Boolean? = null
     private var pendingEpisodeButtonVisible: Boolean? = null
     private var pendingActionButtonVisible: Boolean? = null
@@ -747,7 +751,7 @@ class MyPlayerView @JvmOverloads constructor(
         pendingScSwitchEnabled?.let(target::scSwitchButtonChange)
         pendingMirrorVisible?.let(target::showHideMirrorButton)
         pendingPlaySpeedButtonVisible?.let(target::showHidePlaySpeedButton)
-        pendingNextPreviousVisible?.let(target::showHideNextPrevious)
+        pendingNextPreviousVisible?.let { (prevShow, nextShow) -> target.showHideNextPrevious(prevShow, nextShow) }
         pendingFfReVisible?.let(target::showHideFfRe)
         pendingEpisodeButtonVisible?.let(target::showHideEpisodeButton)
         pendingActionButtonVisible?.let(target::showHideActionButton)
@@ -2892,6 +2896,7 @@ class MyPlayerView @JvmOverloads constructor(
         qualitySwitchingTargetName = null
         hintView.getChildAt(1)?.visibility = VISIBLE
         hintView.isClickable = true
+        activeResumeHintText = text
         resumeHintPositionText?.text = text
         updateResumeHintPosition(animate = false)
         hintView.animate().cancel()
@@ -2901,6 +2906,10 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun hideResumeHint() {
+        activeResumeHintText = null
+        // 画质切换提示正在展示时只撤续播状态、不碰视图：
+        // 两提示复用同一容器，直接 GONE 会把「正在为您切换到XX」一起藏掉
+        if (qualitySwitchingHideRunnable != null) return
         resumeHintView?.let { view ->
             view.animate().cancel()
             view.visibility = GONE
@@ -2962,6 +2971,13 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     private fun restoreResumeHintStructureAndHide() {
+        val pendingResumeText = activeResumeHintText
+        if (pendingResumeText != null) {
+            // 续播提示在画质切换展示期间被覆盖（文案/动作区被换）：其 3s 窗口由
+            // VideoPlayerResumeHintController 独立计时尚未走完，收尾时恢复显示剩余窗口
+            showResumeHint(pendingResumeText)
+            return
+        }
         resumeHintView?.let { hint ->
             hint.getChildAt(1)?.visibility = VISIBLE
             hint.isClickable = true
@@ -3058,9 +3074,9 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.showHideMirrorButton(show)
     }
 
-    fun showHideNextPrevious(show: Boolean) {
-        pendingNextPreviousVisible = show
-        controller?.showHideNextPrevious(show)
+    fun showHideNextPrevious(previousShow: Boolean, nextShow: Boolean) {
+        pendingNextPreviousVisible = previousShow to nextShow
+        controller?.showHideNextPrevious(previousShow, nextShow)
     }
 
     fun showHideFfRe(show: Boolean) {

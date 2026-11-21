@@ -828,7 +828,7 @@ class VideoPlayerFragment : Fragment() {
             }
         )
         playerView.showSettingButton(false)
-        playerView.showHideNextPrevious(false)
+        playerView.showHideNextPrevious(false, false)
         playerView.showHideFfRe(playerSettings.showRewindFastForward)
         playerView.showHideActionButton(false)
         playerView.showHideEpisodeButton(false)
@@ -1645,11 +1645,11 @@ class VideoPlayerFragment : Fragment() {
     private fun updateEpisodeNavigationVisibility() {
         val episodes = sessionCoordinator.getEpisodes()
         val showNavigation = playerSettings.showNextPrevious && episodes.size > 1
-        playerView.showHideNextPrevious(showNavigation)
-        playerView.setEpisodeNavigationEnabled(
-            previousEnabled = showNavigation && viewModel.hasPreviousEpisode(),
-            nextEnabled = showNavigation && viewModel.hasNextEpisode()
-        )
+        // 显隐拆开：已是第一集/最后一集时对应按钮直接隐藏，不灰置占位（issue#128 第4条）
+        val hasPrevious = showNavigation && viewModel.hasPreviousEpisode()
+        val hasNext = showNavigation && viewModel.hasNextEpisode()
+        playerView.showHideNextPrevious(hasPrevious, hasNext)
+        playerView.setEpisodeNavigationEnabled(hasPrevious, hasNext)
     }
 
     private fun updateDanmakuSwitchVisibility() {
