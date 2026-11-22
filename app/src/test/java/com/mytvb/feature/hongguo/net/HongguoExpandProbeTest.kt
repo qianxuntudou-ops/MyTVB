@@ -920,6 +920,121 @@ class HongguoExpandProbeTest {
     }
 
     /**
+     * 通道 14：TLS 指纹取证（第三窗口定案后续：豁免=完整客户端形态，头号嫌疑
+     * TLS/JA4 指纹——okhttp 与 Cronet 的 ClientHello 差异）。用 tls.peet.ws
+     * 回显服务拿真实指纹：A=探针默认 OkHttpClient（JVM JSSE）；B=定制
+     * ConnectionSpec（Cronet 同款 cipher 列表+顺序，模拟 Chrome 家族）。
+     * 对照 JA4 前缀（Chrome 家族 t13d1516h2_*）判伪装成败。
+     */
+    @Test
+    fun probeTlsEcho() {
+        val echo = { c: OkHttpClient, tag: String ->
+            try {
+                c.newCall(Request.Builder().url("https://tls.peet.ws/api/all").build())
+                    .execute().use { r ->
+                        val t = r.body?.string() ?: ""
+                        val ja3 = Regex("\"ja3\":\\s*\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: "?"
+                        val ja4 = Regex("\"ja4\":\\s*\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: "?"
+                        val tlsV = Regex("\"tls_version\":\\s*\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: "?"
+                        val h2 = t.contains("\"http_version\": \"HTTP/2\"") || t.contains("\"http_version\":\"h2\"")
+                        println("HG-TLS[$tag] http=${r.code} tls=$tlsV h2=$h2")
+                        println("HG-TLS[$tag] ja3=$ja3")
+                        println("HG-TLS[$tag] ja4=$ja4")
+                    }
+            } catch (e: Exception) {
+                println("HG-TLS[$tag] EXC ${e.message}")
+            }
+        }
+        echo(http, "A-default")
+        // B：Cronet/Chrome 家族 cipher 列表（BoringSSL 默认启用顺序，TLS1.3 三件套
+        // 在前+TLS1.2 主力套件），配合 TLS1.3+1.2 与 ALPN h2/http1.1
+        val cronetSpec = okhttp3.ConnectionSpec.Builder(okhttp3.ConnectionSpec.MODERN_TLS)
+            .tlsVersions(okhttp3.TlsVersion.TLS_1_3, okhttp3.TlsVersion.TLS_1_2)
+            .cipherSuites(
+                // TLS 1.3（JSSE 侧固定集合，顺序由引擎决定）
+                okhttp3.CipherSuite.TLS_AES_128_GCM_SHA256,
+                okhttp3.CipherSuite.TLS_AES_256_GCM_SHA384,
+                okhttp3.CipherSuite.TLS_CHACHA20_POLY1305_SHA256,
+                // TLS 1.2（BoringSSL 默认启用集，顺序对齐 Cronet）
+                okhttp3.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                okhttp3.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                okhttp3.CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                okhttp3.CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                okhttp3.CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+                okhttp3.CipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                okhttp3.CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+                okhttp3.CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA
+            )
+            .build()
+        val httpB = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
+            .connectionSpecs(listOf(cronetSpec))
+            .build()
+        echo(httpB, "B-cronet-cipher")
+    }
+
+    /**
+     * 通道 15：边缘集群假设验证（2026-11-22 长窗口）。取证：HGTV 1.3.8.12 同机
+     * 同 IP 能播，其 dns-v1.txt（TNC httpDns 直连表）用 api3/api5-normal-{lf,hl,lq}
+     * + 运营商边缘 IP（124.227.185.x/103.52.103.x/182.242.45.x），**无 sinfonline**；
+     * 我们走系统 DNS 解析 sinfonlineb→113.96.133.x（金山云公网入口）。
+     * 假设：服务端按边缘集群下发清洗（公网入口集群全清，运营商边缘正常）。
+     * A/B=lf 域名+固定边缘 IP 直连（okhttp Dns 覆写，SNI/Host 不变）；C=对照系统 DNS。
+     */
+    @Test
+    fun probeEdgeIp() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-EDGE register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        val vid = "7705826165692304409"
+        val arr = org.json.JSONArray().apply { put(vid) }
+        val raw = JSONObject()
+            .put("biz_param", JSONObject()
+                .put("detail_page_version", 0).put("device_level", 4)
+                .put("disable_digg_stat", false).put("disable_video_relate_book", false)
+                .put("need_all_video_definition", true).put("need_mp4_align", false)
+                .put("use_os_player", false).put("use_server_dns", true)
+                .put("use_server_dns_scene", "cold_start_stage").put("video_platform", 1024))
+            .put("dr_scene", "preload")
+            .put("mixed_video_id_map", JSONObject().put("1004", arr))
+            .toString().toByteArray(Charsets.UTF_8)
+        val bos = ByteArrayOutputStream(); java.util.zip.GZIPOutputStream(bos).use { it.write(raw) }
+        val gz = bos.toByteArray()
+
+        fun run(tag: String, host: String, pinnedIp: String?) {
+            val client = if (pinnedIp == null) http else OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) =
+                        java.net.InetAddress.getAllByName(pinnedIp).toList()
+                })
+                .build()
+            val q = fullQuery(id, HongguoVersionProfiles.default.code).apply {
+                put("version_name", HongguoVersionProfiles.default.versionName)
+            }
+            val url = "https://$host/novel/player/multi_video_model/preload/v1?${HongguoCrypto.encodeQuery(q)}"
+            val hs = headerSet(q, gz, id.deviceId) + ("Content-Encoding" to "gzip")
+            val out = try {
+                client.newCall(
+                    Request.Builder().url(url).apply {
+                        hs.forEach { (k, v) -> addHeader(k, v) }
+                        post(gz.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                    }.build()
+                ).execute().use { r -> "http=${r.code} len=${r.body?.bytes()?.size ?: 0}" }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-EDGE[$tag] $out")
+            Thread.sleep(2000)
+        }
+        run("A-lf-edge-124.227.185.79", "api5-normal-lf.fqnovel.com", "124.227.185.79")
+        run("B-lf-edge-103.52.103.203", "api5-normal-lf.fqnovel.com", "103.52.103.203")
+        run("C-lf-system-dns", "api5-normal-lf.fqnovel.com", null)
+        run("D-lf-edge-182.242.45.70", "api5-normal-lf.fqnovel.com", "182.242.45.70")
+    }
+
+    /**
      * 通道 7：HGTV 内置作者共享号 × 我们请求形态 —— 窗口期耐扛真因定案实验。
      * 逆向实锤：HGTV 1.3.7.1(M3)/1.3.8.6(X3) 两版硬编码同一对作者号
      * device_id=1905892595378490 / iid=1905892595382586（全部用户共用、
@@ -1294,5 +1409,409 @@ class HongguoExpandProbeTest {
             "sdk-version" to "2", "passport-sdk-version" to "5051452",
             "Cookie" to cookie, "x-tt-token" to id.deviceToken
         )))
+    }
+
+    /**
+     * 通道 16（2026-11-22）：device_token query 参数 + Cookie 回传放行实验。
+     * 背景：HGTV 1.3.8.12 卸载重装能播 + 它是纯 okhttp 栈（无网络 so，TLS 与我们同款）
+     * + query 工厂 Z3.f2112a 与我们 fullQuery 逐字段同款 → 差异收敛到两个我们从没带过的
+     * 字段：query 的 device_token（HGTV L3.java:250 签名时读取，每请求随带；开源参考线
+     * 全丢弃）与 Cookie 头（registered-cookies 持久化 install_id/store-region/ttreq，
+     * okhttp 无 CookieJar 从不回传）。四枪递进：
+     * A=我们号+token+cookie；B=A 去 Cookie；C=A 去 token；D=HGTV 原装身份（MuMu 提取）。
+     */
+    @Test
+    fun probeTokenCookie() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-TC register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        println("HG-TC id=${id.deviceId} iid=${id.installId} cookies=${id.cookies} token=${id.deviceToken.take(16)}… egdi=${id.klinkEgdi.take(16)}…")
+
+        val vid = "7705826165692304409"
+        val arr = org.json.JSONArray().apply { put(vid) }
+        val raw = JSONObject()
+            .put("biz_param", JSONObject()
+                .put("detail_page_version", 0).put("device_level", 4)
+                .put("disable_digg_stat", false).put("disable_video_relate_book", false)
+                .put("need_all_video_definition", true).put("need_mp4_align", false)
+                .put("use_os_player", false).put("use_server_dns", true)
+                .put("use_server_dns_scene", "cold_start_stage").put("video_platform", 1024))
+            .put("dr_scene", "preload")
+            .put("mixed_video_id_map", JSONObject().put("1004", arr))
+            .toString().toByteArray(Charsets.UTF_8)
+        val bos = ByteArrayOutputStream(); java.util.zip.GZIPOutputStream(bos).use { it.write(raw) }
+        val gz = bos.toByteArray()
+
+        // HGTV 原装身份（MuMu /data/data/com.hgtv.star/shared_prefs/native-session-v1.xml）
+        val hgtvId = HongguoDeviceRegister.Identity(
+            deviceId = "577656266427931", installId = "577656266432027",
+            cdid = "79b944d0-5563-42cb-8782-e07738f19618",
+            openUdid = "b17430ac4c001686",
+            cookies = mapOf(
+                "install_id" to "577656266432027", "store-region" to "cn-sc",
+                "ttreq" to "1\$68d073a6ebeed170bff11453b19bbf879a9f0861",
+                "store-region-src" to "did"
+            ),
+            klinkEgdi = "AAL2CI6sA_54XbvP4VGIroJlCEoIjPrdeYhgvMx7-1Z-Tg5fi1DYGYTT",
+            deviceToken = "AAAWMH44GD5H64JLWSRK6U532XESTTPQEIS5CEIN3JSD6A3HUNCEFWDUIU42Z2A5UX6GYU4CCHYK3R4RVK7WF5ANYKKRKBVMSXLESJKJ5SY3GOC4B63TD5W7FZDO6C7PLHR3BLCS4JHVJSG36GFGUZI"
+        )
+
+        fun shoot(
+            tag: String, who: HongguoDeviceRegister.Identity,
+            withToken: Boolean, withCookie: Boolean
+        ) {
+            val q = fullQuery(who).apply {
+                if (withToken && who.deviceToken.isNotEmpty()) put("device_token", who.deviceToken)
+            }
+            val signed = HongguoCrypto.signRequest(
+                q, gz, System.currentTimeMillis(), who.deviceId, targetBranch = 0, version = "7.4.3.32"
+            )
+            val hs = headerSet(q, gz, who.deviceId).toMutableList().apply {
+                if (withCookie) add("Cookie" to cookieHeader(who))
+            }
+            val url = "https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/preload/v1?${signed.query}"
+            val req = Request.Builder().url(url).apply {
+                hs.forEach { (k, v) -> addHeader(k, v) }
+                post(gz.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+            }.build()
+            val out = try {
+                http.newCall(req).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size}" + if (b.isEmpty()) "" else " " + String(b, Charsets.UTF_8).take(80)
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-TC[$tag] $out")
+            Thread.sleep(1500)
+        }
+
+        shoot("A-ours-token+cookie", id, withToken = true, withCookie = true)
+        shoot("B-ours-cookie-only", id, withToken = false, withCookie = true)
+        shoot("C-ours-token-only", id, withToken = true, withCookie = false)
+        shoot("D-hgtv-full", hgtvId, withToken = true, withCookie = true)
+        shoot("E-hgtv-no-extras", hgtvId, withToken = false, withCookie = false)
+    }
+
+    /**
+     * 通道 17（2026-11-22）：TNC httpDns 入口 IP 直连实验（豁免机制定案）。
+     * 背景：HGTV 同刻在 MuMu 能播（弹幕活），其 TNC 实时配置（字节官方 tnc 端点下发）
+     * 给 sinfonlinea/b/c 独占入口 101.126.1.155~162 段，其运行连接正在该段上；
+     * 而公网 DNS 把同域名解析到 222.210.37.x/125.64.109.x 段（我们一直在用的），
+     * 200 空 body 清洗只挂公网入口段。四枪：
+     * A=sinfonlineb→101.126.1.161；B=sinfonlinea→101.126.1.155（HGTV lastGoodHost）；
+     * C=sinfonlineb→101.126.1.156；D=系统 DNS 对照（应空）。
+     */
+    @Test
+    fun probeTncIp() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-TNC register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        val vid = "7705826165692304409"
+        val arr = org.json.JSONArray().apply { put(vid) }
+        val raw = JSONObject()
+            .put("biz_param", JSONObject()
+                .put("detail_page_version", 0).put("device_level", 4)
+                .put("disable_digg_stat", false).put("disable_video_relate_book", false)
+                .put("need_all_video_definition", true).put("need_mp4_align", false)
+                .put("use_os_player", false).put("use_server_dns", true)
+                .put("use_server_dns_scene", "cold_start_stage").put("video_platform", 1024))
+            .put("dr_scene", "preload")
+            .put("mixed_video_id_map", JSONObject().put("1004", arr))
+            .toString().toByteArray(Charsets.UTF_8)
+        val bos = ByteArrayOutputStream(); java.util.zip.GZIPOutputStream(bos).use { it.write(raw) }
+        val gz = bos.toByteArray()
+
+        fun shoot(tag: String, host: String, pinnedIp: String?) {
+            val client = if (pinnedIp == null) http else OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) =
+                        java.net.InetAddress.getAllByName(pinnedIp).toList()
+                })
+                .build()
+            val q = fullQuery(id)
+            val signed = HongguoCrypto.signRequest(
+                q, gz, System.currentTimeMillis(), id.deviceId, targetBranch = 0, version = "7.4.3.32"
+            )
+            val hs = headerSet(q, gz, id.deviceId) + ("Content-Encoding" to "gzip")
+            val url = "https://$host/novel/player/multi_video_model/preload/v1?${signed.query}"
+            val out = try {
+                client.newCall(
+                    Request.Builder().url(url).apply {
+                        hs.forEach { (k, v) -> addHeader(k, v) }
+                        post(gz.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                    }.build()
+                ).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size}" + if (b.isEmpty()) "" else " " + String(b, Charsets.UTF_8).take(80)
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-TNC[$tag] $out")
+            Thread.sleep(1500)
+        }
+
+        shoot("A-sinfonb-101.126.1.161", "api5-normal-sinfonlineb.fqnovel.com", "101.126.1.161")
+        shoot("B-sinfona-101.126.1.155", "api5-normal-sinfonlinea.fqnovel.com", "101.126.1.155")
+        shoot("C-sinfonb-101.126.1.156", "api5-normal-sinfonlineb.fqnovel.com", "101.126.1.156")
+        shoot("D-system-dns-ctrl", "api5-normal-sinfonlineb.fqnovel.com", null)
+    }
+
+    /**
+     * 通道 18（2026-11-22）：TNC settings 拉取复刻（动态 httpDns 跟随可行性）。
+     * HGTV D.O：GET https://<tncHost>/service/settings/v3/?<query>（app=0 settings_time=0
+     * _rticket=now + 标准 query），同款签名头管线，成功后按 tnc_update_interval（1h）刷新。
+     * 关键差异：HGTV 用 tnc0 集群（tnc0-alisc1/tnc0-aliec2），此前探针 MISS 是打的 tnc3。
+     * 成功判据：data.ttnet_http_dns_addr 出现 sinfonlinea/b/c → 101.126.1.x 映射。
+     */
+    @Test
+    fun probeTncFetch() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-TNCF register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+
+        fun fetch(tag: String, host: String, pinnedIp: String?, withAuth: Boolean = false) {
+            val client = if (pinnedIp == null) http else OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
+                .dns(object : okhttp3.Dns {
+                    override fun lookup(hostname: String) =
+                        java.net.InetAddress.getAllByName(pinnedIp).toList()
+                })
+                .build()
+            val q = fullQuery(id).apply {
+                put("app", "0"); put("settings_time", "0")
+                put("_rticket", System.currentTimeMillis().toString())
+            }
+            val empty = ByteArray(0)
+            val signed = HongguoCrypto.signRequest(
+                q, empty, System.currentTimeMillis(), id.deviceId, targetBranch = 0, version = "7.4.3.32"
+            )
+            val hs = headerSet(q, empty, id.deviceId).toMutableList().apply {
+                if (withAuth) {
+                    add("Cookie" to cookieHeader(id))
+                    if (id.deviceToken.isNotEmpty()) add("x-tt-token" to id.deviceToken)
+                }
+            }
+            val url = "https://$host/service/settings/v3/?${signed.query}"
+            val out = try {
+                client.newCall(
+                    Request.Builder().url(url).apply {
+                        hs.forEach { (k, v) -> addHeader(k, v) }
+                        get()
+                    }.build()
+                ).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size} " + when {
+                        b.isEmpty() -> "EMPTY"
+                        else -> {
+                            val s = String(b, Charsets.UTF_8)
+                            val keys = runCatching {
+                                JSONObject(s).optJSONObject("data")
+                                    ?.optJSONObject("settings")?.keySet()?.toList()
+                            }.getOrNull().orEmpty()
+                            val st = runCatching { JSONObject(s).optJSONObject("data")?.optJSONObject("settings") }.getOrNull()
+                            val mdl = st?.optString("mdl_dns_config_v637").orEmpty()
+                            "dns_key=${s.contains("ttnet_http_dns_addr")} " +
+                                "101.126=${s.contains("101.126.")} nKeys=${keys.size} " +
+                                "mdl_dns=${if (mdl.isEmpty()) "MISS" else mdl.take(700)}"
+                        }
+                    }
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-TNCF[$tag] $out")
+            Thread.sleep(1500)
+        }
+
+        fetch("D-is-dns", "is.snssdk.com", null)
+        fetch("E-is-auth", "is.snssdk.com", null, withAuth = true)
+        fetch("F-tnc3-aliec2-auth", "tnc3-aliec2.zijieapi.com", null, withAuth = true)
+    }
+
+    /**
+     * 通道 19（2026-11-22）：video_model/v1 单视频直取通道（HGTV 1.3.8.12 播放主通道）。
+     * 逆向定案（AbstractC0172j1.P:153 + r0.T/U）：HGTV 播放主请求是
+     * POST /novel/player/video_model/v1/，body={video_id,content_type,biz_param{…
+     * from_video_id:"",source:4}}（gzip）——**不是**我们一直打的
+     * multi_video_model/preload/v1（那是预加载通道）。窗口期同刻 HGTV 能播我们空，
+     * 号/token/cookie/IP 段/TLS 全排除后 body+path 是最后一块没对拍的差异。
+     */
+    @Test
+    fun probeVideoModel() {
+        val id = try {
+            HongguoDeviceRegister.registerFresh()
+        } catch (e: Exception) {
+            println("HG-VM register fail: ${e.message}"); return
+        }
+        Thread.sleep(800)
+        val vid = "7705826165692304409"
+
+        fun shoot(tag: String, host: String, level: Int = 4) {
+            val body = JSONObject()
+                .put("video_id", vid)
+                .put("content_type", 1004)
+                .put("biz_param", JSONObject()
+                    .put("detail_page_version", 0).put("device_level", level)
+                    .put("disable_digg_stat", false).put("disable_video_relate_book", false)
+                    .put("from_video_id", "").put("need_all_video_definition", true)
+                    .put("need_mp4_align", false).put("use_os_player", false)
+                    .put("use_server_dns", true).put("use_server_dns_scene", "cold_start_stage")
+                    .put("source", 4).put("video_platform", 1024))
+                .toString().toByteArray(Charsets.UTF_8)
+            val bos = ByteArrayOutputStream(); java.util.zip.GZIPOutputStream(bos).use { it.write(body) }
+            val gz = bos.toByteArray()
+            val q = fullQuery(id)
+            val signed = HongguoCrypto.signRequest(
+                q, gz, System.currentTimeMillis(), id.deviceId, targetBranch = 0, version = "7.4.3.32"
+            )
+            val hs = headerSet(q, gz, id.deviceId) + ("Content-Encoding" to "gzip")
+            val url = "https://$host/novel/player/video_model/v1/?${signed.query}"
+            val out = try {
+                http.newCall(
+                    Request.Builder().url(url).apply {
+                        hs.forEach { (k, v) -> addHeader(k, v) }
+                        post(gz.toRequestBody("application/json; charset=UTF-8".toMediaType()))
+                    }.build()
+                ).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size}" + if (b.isEmpty()) "" else " " + String(b, Charsets.UTF_8).take(100)
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-VM[$tag] $out")
+            Thread.sleep(1500)
+        }
+
+        shoot("A-sinfonb", "api5-normal-sinfonlineb.fqnovel.com")
+        shoot("B-sinfona", "api5-normal-sinfonlinea.fqnovel.com")
+        shoot("C-lf", "api5-normal-lf.fqnovel.com")
+    }
+
+    /**
+     * 通道 20（2026-11-22）：frida 实抓 HGTV wire 请求的**原样重放**（终局定案）。
+     * hook H0.m0.p（HGTV 全 API 执行入口）抓到的 K3 四元组（url/headers 保序/body），
+     * 存 .zcode/hgtv-frida/reqs.json。已实证：原样重放=394KB 放行（同刻我们自构请求空）
+     * → 豁免=请求内容。本探针四枪二分定位内容差异（签名外字段先行，避免重签名污染）：
+     * A=去 Cookie；B=去 Content-Encoding；C=换我们 headerSet（重签名，判签名实现+头序）；
+     * D=原样头+我们自构 body（重签名，判 body）。
+     */
+    @Test
+    fun probeExactClone() {
+        val reqsFile = java.io.File("G:\\MyTool\\MyBLBL\\.zcode\\hgtv-frida\\reqs.json")
+        if (!reqsFile.exists()) { println("HG-CLONE reqs.json missing"); return }
+        val reqs = org.json.JSONArray(reqsFile.readText())
+        val play = (0 until reqs.length()).map { reqs.getJSONObject(it) }
+            .firstOrNull { it.getString("url").contains("multi_video_model") }
+            ?: run { println("HG-CLONE no play req"); return }
+
+        val url = play.getString("url")
+        val headers = play.getJSONObject("headers")
+        val body = java.util.Base64.getDecoder().decode(play.getString("body_b64"))
+        println("HG-CLONE base ${url.take(80)}… hdrs=${headers.length()} body=${body.size}")
+
+        fun fire(tag: String, dropHeaders: Set<String> = emptySet()) {
+            val hb = okhttp3.Headers.Builder()
+            for (k in headers.keys()) if (k !in dropHeaders) hb.add(k, headers.getString(k))
+            val req = Request.Builder().url(url).headers(hb.build())
+                .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val out = try {
+                http.newCall(req).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size}" + if (b.isEmpty()) "" else " code-hit"
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-CLONE[$tag] $out")
+            Thread.sleep(1200)
+        }
+
+        fire("A-drop-cookie", dropHeaders = setOf("Cookie"))
+        fire("B-drop-cenc", dropHeaders = setOf("Content-Encoding"))
+        fire("C-drop-store-region", dropHeaders = setOf("x-tt-store-region"))
+
+        // 第二轮：重签名二分（HongguoCrypto 与 HGTV 同源 V5 算法，签名覆盖 query+body+khronos）
+        val qHgtv = java.util.LinkedHashMap<String, String>()
+        url.substringAfter("?").split("&").forEach {
+            val i = it.indexOf('='); if (i > 0) qHgtv[it.take(i)] = java.net.URLDecoder.decode(it.substring(i + 1), "UTF-8")
+        }
+        fun resignKeyes(
+            tag: String, mutateQuery: (java.util.LinkedHashMap<String, String>) -> Unit = {},
+            uaOverride: String? = null
+        ) {
+            val q = java.util.LinkedHashMap(qHgtv)
+            mutateQuery(q)
+            val now = System.currentTimeMillis()
+            val signed = HongguoCrypto.signRequest(
+                q, body, now, q["device_id"] ?: "", targetBranch = 0, version = "7.4.3.32"
+            )
+            val newTicket = signed.headers["X-SS-Req-Ticket"] ?: now.toString()
+            val hb = okhttp3.Headers.Builder()
+            for (k in headers.keys()) {
+                when (k) {
+                    "x-gorgon" -> hb.add(k, signed.headers["X-Gorgon"] ?: "")
+                    "x-khronos" -> hb.add(k, signed.headers["X-Khronos"] ?: "")
+                    "x-ss-req-ticket" -> hb.add(k, newTicket)
+                    "x-reading-request" -> hb.add(k, "$newTicket-${java.security.SecureRandom().nextLong() and 0xffffffffL}")
+                    "User-Agent" -> hb.add(k, uaOverride ?: headers.getString(k))
+                    else -> hb.add(k, headers.getString(k))
+                }
+            }
+            val newUrl = url.substringBefore("?") + "?" + signed.query
+            val req = Request.Builder().url(newUrl).headers(hb.build())
+                .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            val out = try {
+                http.newCall(req).execute().use { r ->
+                    val b = r.body?.bytes() ?: ByteArray(0)
+                    "http=${r.code} len=${b.size}" + if (b.isEmpty()) "" else " hit"
+                }
+            } catch (e: Exception) { "EXC ${e.message}" }
+            println("HG-CLONE[$tag] $out")
+            Thread.sleep(1200)
+        }
+
+        // D：query 原样（SDY-AN00 全套）+ 我们重签名 → 验签名实现等价+头集足够
+        resignKeyes("D-resign-asis")
+        // E：画像组换回我们 Redmi 全套 → 判画像
+        resignKeyes("E-redmi", mutateQuery = { q ->
+            q["ssmix"] = "v"; q["channel"] = "update_64"
+            q["resolution"] = "1280*2772"; q["dpi"] = "520"
+            q["device_type"] = "25053RT47C"; q["device_brand"] = "Redmi"
+            q["os_api"] = "36"; q["os_version"] = "16"
+            q["need_personal_recommend"] = "0"; q["player_so_load"] = "0"
+            q["is_android_pad_screen"] = "0"; q["rom_version"] = "BP2A.250605.031.A3"
+        })
+        // F：仅 UA 换 Redmi 版（query 保持 SDY-AN00）→ 判 UA 与画像的交叉校验
+        resignKeyes("F-ua-redmi", uaOverride = ua())
+        // D2：全套重算（gorgon/khronos/helios/medusa/argus/ladon 一套我们的，自洽）
+        val q2 = java.util.LinkedHashMap(qHgtv)
+        val now2 = System.currentTimeMillis()
+        val signed2 = HongguoCrypto.signRequest(q2, body, now2, q2["device_id"] ?: "", targetBranch = 0, version = "7.4.3.32")
+        val sec2 = signed2.headers["X-Khronos"]?.toIntOrNull() ?: (now2 / 1000).toInt()
+        val ticket2 = signed2.headers["X-SS-Req-Ticket"] ?: now2.toString()
+        val hb2 = okhttp3.Headers.Builder()
+        for (k in headers.keys()) {
+            when (k) {
+                "x-gorgon" -> hb2.add(k, signed2.headers["X-Gorgon"] ?: "")
+                "x-khronos" -> hb2.add(k, sec2.toString())
+                "x-helios" -> hb2.add(k, HongguoArgus.helios(sec2))
+                "x-medusa" -> hb2.add(k, HongguoPlaybackV5.medusaHeaderFor(signed2.query, body, sec2))
+                "x-argus" -> hb2.add(k, java.util.Base64.getEncoder().encodeToString(
+                    java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(sec2).array()))
+                "x-ss-req-ticket" -> hb2.add(k, ticket2)
+                "x-reading-request" -> hb2.add(k, "$ticket2-${java.security.SecureRandom().nextLong() and 0xffffffffL}")
+                else -> hb2.add(k, headers.getString(k))
+            }
+        }
+        val req2 = Request.Builder().url(url.substringBefore("?") + "?" + signed2.query).headers(hb2.build())
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType())).build()
+        println("HG-CLONE[D2-full-resign] " + try {
+            http.newCall(req2).execute().use { r -> "http=${r.code} len=${r.body?.bytes()?.size ?: 0}" }
+        } catch (e: Exception) { "EXC ${e.message}" })
     }
 }
