@@ -49,11 +49,11 @@ class HongguoCryptoTest {
         val query = "aid=8662&resolution=1280*2772&ts=1794212010&version_name=7.3.5.32"
         val body = "{\"filter_ids\":\"\",\"req_scene\":\"default\",\"offset\":0,\"limit\":15}".toByteArray()
         assertEquals(
-            "84047856400101344d45afa5dfcf57b9bea69da8e1bd1a3fdace",
+            "84047856008101344d45afa5dfcf57b9bea69da8e1bd1a3fdace",
             HongguoCrypto.gorgon(query, body, 1794212010, 0x5678)
         )
         assertEquals(
-            "8404341240011d3d86d6d9fe6cc91364e71df6105ab658b32e07",
+            "8404341200811d3d86d6d9fe6cc91364e71df6105ab658b32e07",
             HongguoCrypto.gorgon(query, null, 1794212010, 0x1234)
         )
     }
@@ -72,7 +72,7 @@ class HongguoCryptoTest {
             HongguoCrypto.toHex(HongguoCrypto.f13(14, 1794212010, q, m))
         )
         assertEquals(
-            "8N68mira1ay5oL2qHRx72QeYJamrsjG7Nnep6e4KlrQ6lDSs",
+            "8N68msIBSgiUYnsY6oF2+mlLPe+xq+5+eH8yp8z748Jd4aTu",
             HongguoCrypto.helios(1794212010, -0x65432110) // 0x9ABCDEF0
         )
     }

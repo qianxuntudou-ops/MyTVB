@@ -63,7 +63,7 @@ internal object HongguoArgus {
     /**
      * X-Helios（HGTV C0257s1.d 内联 Simon 版，2026-11-10 静态对齐）：
      * 种子=md5hex(le32(rand)+"8662")，34 轮 Simon 密钥链（与 Ladon 同构），
-     * 明文="$ts-1588093228-8662"（Helios 专属 salt），输出 base64(le32(rand)+密文)。
+     * 明文="$ts-646637794-8662"（HGTV 1.3.8.12 L3.f 实抓对拍定案 license=licenseID 646637794，旧 1588093228 是 passport 系 channelID），输出 base64(le32(rand)+密文)。
      * 替代 HongguoCrypto.helios 的 Node 简易版——模拟器环境服务端差异化校验。
      */
     fun helios(tsSec: Int): String {
@@ -87,7 +87,7 @@ internal object HongguoArgus {
             left = next xor java.lang.Long.rotateLeft(left, 3)
             right = queue.removeFirst()
         }
-        val data = pad("$tsSec-1588093228-8662".toByteArray())
+        val data = pad("$tsSec-646637794-8662".toByteArray())
         val out = ByteArrayOutputStream()
         out.write(le32)
         var at = 0

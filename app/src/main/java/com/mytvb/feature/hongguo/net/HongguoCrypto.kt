@@ -192,14 +192,16 @@ internal object HongguoCrypto {
             val next = if (i < 19) data[i + 1] else data[0]
             data[i] = ((rev8((data[i].toInt() and 0xFF) xor (next.toInt() and 0xFF)) xor 20).inv()).toByte()
         }
-        val out = byteArrayOf(0x84.toByte(), 4, (nonce and 0xFF).toByte(), ((nonce ushr 8) and 0xFF).toByte(), 0x40, 1) + data
+        // 版本字节 0x00,0x81：HGTV 1.3.8.12 frida 对拍定案（旧 0x40,0x01 是 passport 系版本，
+        // 35 组实抓对拍唯一 diff 就是这两字节，2026-11-22）
+        val out = byteArrayOf(0x84.toByte(), 4, (nonce and 0xFF).toByte(), ((nonce ushr 8) and 0xFF).toByte(), 0x00, 0x81.toByte()) + data
         return toHex(out)
     }
 
     // ---- X-Helios，对照 passportHelios ----
     // license 参数化：普通接口=channelID(1588093228)，播放 V5 协议=646637794
     // （openhongguo PR#13 playbackV5Helios，2026-11-17 对照确认与本品同构）。
-    fun helios(ts: Int, nonce: Int, license: String = "1588093228"): String {
+    fun helios(ts: Int, nonce: Int, license: String = "646637794"): String {
         val key = md5(leU32(nonce) + "8662".toByteArray(Charsets.UTF_8))
         val raw = toHex(key).toByteArray(Charsets.UTF_8)
         fun u64(b: ByteArray, o: Int): Long {
