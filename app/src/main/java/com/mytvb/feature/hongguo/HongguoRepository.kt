@@ -38,7 +38,7 @@ class HongguoRepository private constructor(context: Context) {
 
     init {
         // 恢复上次远程下发的版本档案与网络画像（红果首请求前；
-        // 见 HongguoVersionProfiles / HongguoNetProfiles）
+        // 见 HongguoVersionProfiles / HongguoNetProfiles——含 TNC httpDns 直连表）
         HongguoVersionProfiles.restore(appContext)
         HongguoNetProfiles.restore(appContext)
         // 已注册设备立即补 applog 激活埋点（哑巴设备嫌疑对策）——不等到首次

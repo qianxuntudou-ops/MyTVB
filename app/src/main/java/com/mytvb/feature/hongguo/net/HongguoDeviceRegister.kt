@@ -33,11 +33,10 @@ object HongguoDeviceRegister {
         "4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58"
     )
 
-    private val http: OkHttpClient by lazy {
-        // 共享连接池单例：注册建立的 keep-alive 连接是播放会话载体
+    private val http: okhttp3.Call.Factory get() =
+        // 共享出口单例：注册建立的 keep-alive 连接是播放会话载体
         //（连接会话模型：号绑定注册连接，跨连接空响应——2026-11-10 Node D/E 双实证）
-        HongguoHttp.ok
-    }
+        HongguoHttp.client()
 
     /** 真注册身份（video_model/v1 播放接口要求，不吃一次性随机值）。 */
     data class Identity(

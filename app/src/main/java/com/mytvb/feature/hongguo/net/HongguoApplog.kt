@@ -324,7 +324,7 @@ internal object HongguoApplog {
                 )
                 post(body.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull()))
             }.build()
-        HongguoHttp.ok.newCall(req).execute().use { resp ->
+        HongguoHttp.client().newCall(req).execute().use { resp ->
             val text = resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
             val message = JSONObject(text).optString("message")
             AppLog.i(TAG, "app_log http=${resp.code} message=$message did=${id.deviceId.take(6)}…")
@@ -370,7 +370,7 @@ internal object HongguoApplog {
                 header("x-ss-stub", (signed.headers["X-SS-STUB"] ?: ""))
                 post(body.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull()))
             }.build()
-        HongguoHttp.ok.newCall(req).execute().use { resp ->
+        HongguoHttp.client().newCall(req).execute().use { resp ->
             val text = resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
             val code = runCatching { JSONObject(text).optInt("code", -1) }.getOrDefault(-1)
             return "http=${resp.code} code=$code"

@@ -74,4 +74,61 @@ class HongguoNetProfilesTest {
         assertEquals("16", HongguoNetProfiles.osVersion())
         assertEquals("update_64", HongguoNetProfiles.channel())
     }
+
+    // ---- TNC httpDns 直连表（hg_dns，2026-11-22 豁免入口段） ----
+
+    @Test
+    fun parseValidDnsTable() {
+        val t = HongguoNetProfiles.parseDnsTable(
+            JSONObject().put("api5-normal-sinfonlineb.fqnovel.com", org.json.JSONArray(listOf("101.126.1.161", "101.126.1.156")))
+        )!!
+        assertEquals(listOf("101.126.1.161", "101.126.1.156"), t["api5-normal-sinfonlineb.fqnovel.com"])
+    }
+
+    @Test
+    fun parseDnsTableRejectsPoisonedHost() {
+        // 非红果域不许注入 IP（防投毒：劫持 B 站/任意站点的解析）
+        assertNull(
+            HongguoNetProfiles.parseDnsTable(
+                JSONObject().put("evil.example.com", org.json.JSONArray(listOf("1.2.3.4")))
+            )
+        )
+        assertNull(
+            HongguoNetProfiles.parseDnsTable(
+                JSONObject().put("fqnovel.com.evil.example.com", org.json.JSONArray(listOf("1.2.3.4")))
+            )
+        )
+    }
+
+    @Test
+    fun parseDnsTableRejectsBadIps() {
+        // 空 IP 列表 / 非 IPv4 字面量（域名值/端口/IPv6）——整表丢弃
+        assertNull(
+            HongguoNetProfiles.parseDnsTable(
+                JSONObject().put("api5-normal-lf.fqnovel.com", org.json.JSONArray(emptyList<String>()))
+            )
+        )
+        assertNull(
+            HongguoNetProfiles.parseDnsTable(
+                JSONObject().put("api5-normal-lf.fqnovel.com", org.json.JSONArray(listOf("api.fqnovel.com")))
+            )
+        )
+        assertNull(
+            HongguoNetProfiles.parseDnsTable(
+                JSONObject().put("api5-normal-lf.fqnovel.com", org.json.JSONArray(listOf("101.126.1.161:443")))
+            )
+        )
+    }
+
+    @Test
+    fun builtinDnsTableHasPlaybackHosts() {
+        HongguoNetProfiles.resetForTest()
+        val t = HongguoNetProfiles.dnsTable()
+        // 播放 host 必须在表内（豁免入口段直连是本表的存在意义）
+        org.junit.Assert.assertTrue(t.containsKey(HongguoNetProfiles.playHost().removePrefix("https://")))
+        // 内置档 IP 全为 IPv4 字面量
+        t.values.flatten().forEach { ip ->
+            org.junit.Assert.assertTrue("bad builtin ip $ip", ip.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}")))
+        }
+    }
 }

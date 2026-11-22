@@ -13,9 +13,11 @@ import org.json.JSONObject
  * 覆盖范围仅播放通道（HongguoPlay）：query/UA 画像同源改读本对象；登录
  * （HongguoAccount）与环境（HongguoEnv）链路画像独立，不受影响。
  *
- * 校验：host 必须是 https 且 fqnovel.com 子域（防投毒，对齐 HGTV T3.d 的
- * .fqnovel.com 域过滤思路）；画像四元组各有格式约束，任一非法整档丢弃
- * （画像三处同源自洽是放行前提，禁止半新半旧部分采用）。
+ * 2026-11-22 新增 `hg_dns`：TNC httpDns 直连表（host→IP 列表）。长窗口定案
+ * 清洗挂公网 DNS 入口段（222.210.37.x/125.64.109.x），字节官方 TNC 下发的
+ * 独占段（101.126.1.x/122.14.229.x）豁免——[HongguoHttp] 的 Dns 覆写读本表。
+ * 内置档抄自 HGTV 运行时 TNC 表（tnc-v1.json 实抓），IP 轮换后改 version.json
+ * 热更即可。校验：host 须 .fqnovel.com 子域（防投毒），IP 须 IPv4 字面量。
  */
 internal object HongguoNetProfiles {
 
@@ -27,6 +29,7 @@ internal object HongguoNetProfiles {
     private const val K_DEVICE_BRAND = "net_device_brand"
     private const val K_OS_VERSION = "net_os_version"
     private const val K_CHANNEL = "net_channel"
+    private const val K_DNS = "net_dns_table"
 
     /** 覆写档案值（与内置档案同构，仅内存态）。 */
     data class Net(
@@ -46,6 +49,7 @@ internal object HongguoNetProfiles {
     fun deviceBrand(): String = current.deviceBrand
     fun osVersion(): String = current.osVersion
     fun channel(): String = current.channel
+    fun dnsTable(): Map<String, List<String>> = dnsTable
 
     /**
      * 启动恢复（红果首请求前，挂 HongguoRepository init，与 VersionProfiles.restore
@@ -67,11 +71,17 @@ internal object HongguoNetProfiles {
                 overrideNet = net
                 AppLog.i(TAG, "restore host=${net.playHost} type=${net.deviceType}")
             }
+            prefs.getString(K_DNS, null)?.let { saved ->
+                parseDnsTable(JSONObject(saved))?.let {
+                    dnsTable = it
+                    AppLog.i(TAG, "restore dns ${it.size} hosts")
+                }
+            }
         }.onFailure { AppLog.w(TAG, "restore failed: ${it.message}") }
     }
 
     /**
-     * 远程下发入口（version.json `hg_net`）：合法整档覆写内存+落盘，非法忽略。
+     * 远程下发入口（version.json `hg_net`/`hg_dns`）：合法整档覆写内存+落盘，非法忽略。
      * 缺失/null 不动现有值（可选字段，老 version.json 兼容）。
      */
     fun applyFrom(context: Context, json: JSONObject?) {
@@ -92,6 +102,23 @@ internal object HongguoNetProfiles {
                 .apply()
         }.onFailure { AppLog.w(TAG, "persist failed: ${it.message}") }
         AppLog.i(TAG, "applyFrom host=${net.playHost} type=${net.deviceType}")
+
+        // hg_dns 可选：null/缺失不动现有表；空对象 {} 显式清空回落内置
+        if (json.has("hg_dns")) {
+            val dnsJson = json.optJSONObject("hg_dns")
+            if (dnsJson == null) {
+                AppLog.w(TAG, "applyFrom: hg_dns 非 JSON 对象，忽略")
+            } else {
+                parseDnsTable(dnsJson)?.let { table ->
+                    dnsTable = table
+                    runCatching {
+                        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                            .edit().putString(K_DNS, table.toJsonString()).apply()
+                    }
+                    AppLog.i(TAG, "applyFrom dns ${table.size} hosts")
+                }
+            }
+        }
     }
 
     /** 整档解析+校验：字段缺失/格式非法返回 null（不部分采用）。纯函数，可单测。 */
@@ -115,6 +142,31 @@ internal object HongguoNetProfiles {
             n.osVersion.matches(Regex("\\d{1,3}")) &&
             n.channel.matches(Regex("[a-z0-9_]{2,40}"))
 
+    /**
+     * dns 表解析+校验：host 须 .fqnovel.com 子域（防投毒——非红果域名不许注入 IP），
+     * 值须非空 IPv4 字面量列表；任一条目非法整表丢弃（不部分采用）。纯函数，可单测。
+     */
+    fun parseDnsTable(obj: JSONObject): Map<String, List<String>>? {
+        val table = linkedMapOf<String, List<String>>()
+        val hosts = obj.keys().asSequence().toList()
+        for (host in hosts) {
+            if (!host.matches(Regex("[a-z0-9.-]+\\.fqnovel\\.com"))) return null
+            val ips = obj.optJSONArray(host)?.let { arr ->
+                (0 until arr.length()).mapNotNull { arr.optString(it) }
+            } ?: return null
+            if (ips.isEmpty() || ips.any { !it.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}")) }) return null
+            table[host] = ips
+        }
+        // 空表合法（显式清空语义），但至少不能带任何非法条目
+        return table
+    }
+
+    private fun Map<String, List<String>>.toJsonString(): String {
+        val obj = JSONObject()
+        forEach { (h, ips) -> obj.put(h, org.json.JSONArray(ips)) }
+        return obj.toString()
+    }
+
     private val BUILTIN = Net(
         playHost = "https://api5-normal-sinfonlineb.fqnovel.com",
         deviceType = "25053RT47C",
@@ -123,8 +175,26 @@ internal object HongguoNetProfiles {
         channel = "update_64",
     )
 
+    /**
+     * 内置 TNC httpDns 表：抄自 HGTV 1.3.8.12 运行时 TNC 下发（MuMu 实抓
+     * tnc-v1.json，2026-11-22 定案=豁免入口段）。api3 系列与 log/i 域不在播放
+     * 链路上，不占表；表只服务 sinfonline/lf/lq/hl 六个 api5 播放 host。
+     */
+    private val BUILTIN_DNS: Map<String, List<String>> = linkedMapOf(
+        "api5-normal-sinfonlinea.fqnovel.com" to listOf("101.126.1.155", "101.126.1.160"),
+        "api5-normal-sinfonlineb.fqnovel.com" to listOf("101.126.1.161", "101.126.1.156"),
+        "api5-normal-sinfonlinec.fqnovel.com" to listOf("101.126.1.162", "101.126.1.157"),
+        "api5-normal-lf.fqnovel.com" to listOf("122.14.229.102", "122.14.229.7"),
+        "api5-normal-lq.fqnovel.com" to listOf("122.14.229.103", "101.126.58.177"),
+        "api5-normal-hl.fqnovel.com" to listOf("101.126.58.175", "101.126.58.176"),
+    )
+
+    /** TNC httpDns 直连表（内存态；restore/applyFrom 载入，置于 BUILTIN_DNS 之后初始化）。 */
+    @Volatile private var dnsTable: Map<String, List<String>> = BUILTIN_DNS
+
     /** 仅测试用：清空内存覆写，回落内置档案。 */
     internal fun resetForTest() {
         overrideNet = null
+        dnsTable = BUILTIN_DNS
     }
 }

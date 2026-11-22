@@ -13,8 +13,8 @@ import org.json.JSONObject
  */
 class HongguoSearch(private val client: HongguoClient) {
 
-    /** TLS 定制共享 client（HongguoTls；搜索接口同样校验 TLS 形态）。 */
-    private val http: OkHttpClient by lazy { HongguoHttp.ok }
+    /** 共享出口单例（TNC httpDns 直连，见 HongguoHttp）。 */
+    private val http: okhttp3.Call.Factory get() = HongguoHttp.client()
 
     data class SearchResult(
         val seriesId: String,

@@ -21,10 +21,9 @@ import javax.crypto.spec.SecretKeySpec
  */
 class HongguoPlay {
 
-    private val http: OkHttpClient by lazy {
-        // 共享连接池单例：播放必须复用注册连接（连接会话模型，见 HongguoHttp）
-        HongguoHttp.ok
-    }
+    private val http: okhttp3.Call.Factory get() =
+        // 共享出口单例：播放必须复用注册连接（连接会话模型，见 HongguoHttp）
+        HongguoHttp.client()
 
     data class PlayUrl(
         val url: String,

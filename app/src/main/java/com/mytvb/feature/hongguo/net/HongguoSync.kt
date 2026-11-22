@@ -36,7 +36,7 @@ class HongguoSync(
         val onlineText: String = ""
     )
 
-    private val http get() = HongguoHttp.ok
+    private val http get() = HongguoHttp.client()
 
     // ---- 通用登录态通道（client.authPost/authGet：74532+登录头+token 滚动） ----
 
