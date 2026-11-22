@@ -420,6 +420,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     override fun onDestroy() {
         persistProgress()
         releaseNativePlayback()
+        com.mytvb.feature.cctv.h5e.H5eWebViewDecryptor.release()
         handler.removeCallbacksAndMessages(null)
         episodesJob?.cancel()
         playbackSession++
@@ -1061,6 +1062,9 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
     private fun switchEpisode(episode: CctvEpisode) {
         // 切集清掉未决的快进/快退会话（挂起的延迟提交会把旧位置 seek 到新集上）
         endSeekSession()
+        // H5e WebView 解密会话跨集不通用（VMP 状态绑定当前流），切集即终结，
+        // 下一次分片解密时自动重建（lazy beginSession）。
+        com.mytvb.feature.cctv.h5e.H5eWebViewDecryptor.endSession()
         // 原生优先：极速模式开且有 guid 就走 ExoPlayer；WebView 是兜底路径
         if (nativeVodEnabled && !webFallbackLocked && episode.guid.isNotBlank()) {
             startNativeEpisode(episode)
@@ -1276,7 +1280,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             .setConnectTimeoutMs(8_000)
             .setReadTimeoutMs(8_000)
             .setAllowCrossProtocolRedirects(true)
-        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true).apply {
+        val dataSourceFactory = CctvH5eDataSource.Factory(http, vodMode = true, context = applicationContext).apply {
             // 同段解密三次失败=确定性解不出（wasm trap）：绕过 media3 错误传播链
             // （其内部恢复/重试要拖几十秒），直接切 WebView 续播同一集。
             fatalDecryptListener = { key ->

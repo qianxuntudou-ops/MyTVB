@@ -27,7 +27,9 @@ class CctvH5eDataSource(
     private val vodMode: Boolean = false,
     /** 同段解密失败达到 [TRAP_FAIL_LIMIT] 时的直通通知（宿主用于立即回退，
      *  不等 media3 错误传播链）。在加载线程回调，宿主自行切主线程。 */
-    private val fatalListener: ((String) -> Unit)? = null
+    private val fatalListener: ((String) -> Unit)? = null,
+    /** VOD 模式下 WebView 解密器使用的 context（Application 级即可）。 */
+    private val context: android.content.Context? = null
 ) : DataSource {
 
     companion object {
@@ -87,7 +89,20 @@ class CctvH5eDataSource(
             val started = android.os.SystemClock.elapsedRealtime()
             val decrypted = try {
                 if (vodMode) {
-                    CctvH5eDecryptor.decryptVodTransportStream(bytes)
+                    // 影视 VOD：优先离屏 WebView（官方 JS 引擎跑 worker，与上游参照
+                    // 字节级一致）；WebView 不可用/失败时回退 native（trap 概率高，
+                    // 走既有 fatal 链兜底）。
+                    val jsDecrypted = context?.let { ctx ->
+                        runCatching {
+                            H5eWebViewDecryptor.decryptVodSegment(ctx, bytes)
+                        }.getOrNull()
+                    }
+                    if (jsDecrypted != null) {
+                        jsDecrypted
+                    } else {
+                        AppLog.w(TAG, "WebView 解密失败，回退 native uri=${dataSpec.uri.lastPathSegment}")
+                        CctvH5eDecryptor.decryptVodTransportStream(bytes)
+                    }
                 } else {
                     CctvH5eDecryptor.decryptTransportStream(bytes)
                 }
@@ -150,9 +165,10 @@ class CctvH5eDataSource(
     class Factory(
         private val upstreamFactory: DataSource.Factory,
         private val vodMode: Boolean = false,
-        var fatalDecryptListener: ((String) -> Unit)? = null
+        var fatalDecryptListener: ((String) -> Unit)? = null,
+        private val context: android.content.Context? = null
     ) : DataSource.Factory {
         override fun createDataSource(): DataSource =
-            CctvH5eDataSource(upstreamFactory.createDataSource(), vodMode, fatalDecryptListener)
+            CctvH5eDataSource(upstreamFactory.createDataSource(), vodMode, fatalDecryptListener, context)
     }
 }
