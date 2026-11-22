@@ -17,6 +17,17 @@ target_include_directories(cctv_h5e PRIVATE generated wasm-rt)
 target_compile_options(cctv_h5e PRIVATE -O3 -DNDEBUG -std=c99 -DWASM_RT_USE_MMAP=0 -fvisibility=hidden)
 target_link_libraries(cctv_h5e log m)
 
+# 取证命令行（不进 APK）：解密单个本地分片，跑真机/模拟器排除 App 层噪声。
+add_executable(host_h5e_test
+    host_h5e_test.c
+    cctv_h5e_decryptor.c
+    generated/cctv_h5e_wasm.c
+    wasm-rt/wasm-rt-impl.c
+    wasm-rt/wasm-rt-mem-impl.c)
+target_include_directories(host_h5e_test PRIVATE generated wasm-rt)
+target_compile_options(host_h5e_test PRIVATE -O0 -g -std=c99 -DWASM_RT_USE_MMAP=0 -funwind-tables)
+target_link_libraries(host_h5e_test log m)
+
 # 央视频（yangshipin）CMG 直播解密 + 签名 wasm（卫视/央视频超清组原生直拉，issue#106 阶段二延伸）。
 # - cmg_decryptor.c + generated_cmg/ + cmg-rt/：CMG wasm（hls.cmg.js）的 wasm2c 产物与
 #   封装，源自 TvWasm/cjs sites/yangshipin.cn（仅供学习研究用途，非商用，经用户确认引入）；

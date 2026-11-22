@@ -22,14 +22,27 @@
 #define TABLE_ELEMENTS 544
 #define DYNAMIC_TOP_PTR 40512u
 #define TEMP_DOUBLE_PTR 40528u
+/* worker2011 配套常量（generated wasm 即该版 worker 内嵌 wasm 的 wasm2c 产物）。
+ * 语义溯源（worker2011.js 427-430 行）：instantiate 前宿主 getMemory 依次分配
+ * EMTSTACKTOP(1MiB)=5283424 与 eb(embind 区,721256B)=6332000，随后堆顶对齐到
+ * 7053264；a=tempDoublePtr(40528)、b=DYNAMICTOP_PTR(40512) 为静态值。旧版
+ * 移植缺的是 37KB 真 data 段的加载（新版 wasm2c instantiate 自动 LOAD_DATA
+ * 到 __memory_base=1024 起），2026-11-22 换生成物后补齐。 */
 #define EMT_STACK_TOP 5283424u
 #define EMBIND_STORAGE 6332000u
 #define DYNAMIC_TOP_AFTER_SHELL_ALLOCATIONS 7053264u
 #define MEMORY_EXTEND 2048u
-/* The wasm VOD output function uses the allocation tail as transform scratch.
- * Valid CCTV slices can require close to 2 MiB even when the NAL itself is only
- * a few KiB. A 2 KiB tail causes deterministic wasm bounds traps after startup. */
-#define NAL_MEMORY_EXTEND (2u * 1024u * 1024u)
+/* The wasm VOD output function does NOT use the allocation tail as scratch.
+ * Node-side instrumentation of the reference implementation showed a fixed
+ * 16 MiB heap with the NAL block ending around 7 MiB and no growth — the
+ * transform scratch is the free heap space ABOVE the malloc block (sbrk room),
+ * not bytes inside the allocation. Wasm2c grows memory lazily and only by the
+ * exact malloc amount, so a bigger per-NAL tail actually shrinks the free
+ * space above the block and makes traps MORE likely (65699-byte NAL trapped
+ * with its block ending 38 KiB below the 74.45 MiB ceiling).
+ * Fix: keep the node-identical 2 KiB tail and pre-grow the VOD heap to the
+ * 96 MiB page ceiling once per session so free space always exists. */
+#define NAL_MEMORY_EXTEND (2u * 1024u)
 /* This must match the video element id used by the current CCTV live player.
  * It is part of the H5E key state, not merely a diagnostic label. */
 #define PLAYER_TAG "h5player_player"
@@ -506,6 +519,10 @@ static int reset_module_state(void) {
   g_vod_tag_argument = 0;
   reset_emval_state();
   memset(g_env.memory.data, 0, g_env.memory.size);
+  /* eb 区（embind 注册态）快照注入先于 instantiate：ctors（La）要在「已注册」
+   * 状态上跑（f50(d+719480) 的静态对象读快照态），顺序反了会在 0 起步的 eb 区
+   * 上构造出坏链表（实测 global-ctors 越界）。宿主的 __embind_register_* 导入
+   * 是 no-op，这里用 node 宿主跑完注册后的 721256B 快照等价替代。 */
   if (EMBIND_STORAGE + sizeof(CCTV_H5E_MEMORY_INIT) > g_env.memory.size) {
     return 0;
   }
@@ -521,6 +538,8 @@ static int reset_module_state(void) {
     }
     *target += EMBIND_STORAGE;
   }
+  /* 堆顶基线：EMT(1MiB@5283424) 与 eb(721256B@6332000) 区一次性划出后的对齐值
+   * （worker2011.js 427-430 的 getMemory 序列），后续分配从这里起。 */
   dynamic_top = (uint32_t*) env_pointer(&g_env, DYNAMIC_TOP_PTR, sizeof(uint32_t));
   if (dynamic_top == NULL) {
     return 0;
@@ -579,6 +598,19 @@ static u32 allocate_player_argument(void) {
 static int begin_session(void) {
   if (g_session_started) {
     return 1;
+  }
+  if (g_vod_mode) {
+    /* VOD 输出函数把 malloc 块上方的堆自由区当 transform scratch（node 参考实
+     * 现 heap 恒 16MB、块尾 7MB、块后 ~9MB 自由区从不越界）。wasm2c 的惰性
+     * grow 只按 malloc 需求精确扩，块会贴着内存顶、scratch 无处可写（实测
+     * 65699B NAL 块尾距内存顶仅 38KB 时 trap）。会话开始时一次撑到页上限，
+     * 保证块后自由区恒有 ~89MB。直播路径分片小（scratch 温和）不预扩。 */
+    if (g_env.memory.pages < MEMORY_MAX_PAGES) {
+      wasm_rt_grow_memory(&g_env.memory, MEMORY_MAX_PAGES - g_env.memory.pages);
+      LOGI("vod heap pre-grown to %u pages (%llu bytes)",
+          (unsigned) g_env.memory.pages,
+          (unsigned long long) g_env.memory.size);
+    }
   }
   g_player_argument = allocate_player_argument();
   if (g_player_argument == 0) {
@@ -692,8 +724,16 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   }
   g_wasm_stage = "nal-malloc";
   u32 data_address = w2c_cctv__h5e_Da(&g_module,
-      (u32) nal_length + (u32) host_length + NAL_MEMORY_EXTEND);
+      (u32) (nal_length + host_length + NAL_MEMORY_EXTEND));
   g_wasm_stage = "idle";
+  if (data_address == 0) {
+    /* wasm malloc returning NULL (grow rejected at the page ceiling) would
+     * otherwise alias the allocation to offset 0 and trash the module data. */
+    LOGW("nal malloc rejected len=%u pages=%llu",
+        (unsigned int) nal_length,
+        (unsigned long long) g_env.memory.pages);
+    return 0;
+  }
   uint8_t* data = env_pointer(&g_env, data_address,
       nal_length + host_length + NAL_MEMORY_EXTEND);
   if (data == NULL) {
@@ -726,7 +766,22 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
     g_wasm_stage = "idle";
     return 0;
   }
-  memcpy(*result, data, output_length);
+  /* The dispatch/output calls above may trigger memory.grow inside the wasm,
+   * which reallocs memory.data and dangles the `data` pointer captured before
+   * them. Re-derive the host pointer from the (stable u32) address here —
+   * copying through the stale base crashed with SIGSEGV in memmove. */
+  {
+    uint8_t* fresh = env_pointer(&g_env, data_address, output_length);
+    if (fresh == NULL) {
+      free(*result);
+      *result = NULL;
+      g_wasm_stage = "nal-free";
+      w2c_cctv__h5e_Ca(&g_module, data_address);
+      g_wasm_stage = "idle";
+      return 0;
+    }
+    memcpy(*result, fresh, output_length);
+  }
   *result_length = output_length;
   g_wasm_stage = "nal-free";
   w2c_cctv__h5e_Ca(&g_module, data_address);
@@ -984,7 +1039,7 @@ static int decrypt_transport_stream(uint8_t* output, const uint8_t* input, size_
    * proxy connection and the video Surface alive across the boundary.
    * VOD keeps the session across segments instead (cctv-h5e-decrypt runs one
    * session over the whole file; MuMu-verified with the jsdecVOD entries). */
-  if (g_session_started && !g_vod_mode) {
+  if (g_session_started) {
     g_session_started = 0;
     g_should_decrypt = 0;
     g_ready = reset_module_state();
@@ -1173,4 +1228,24 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* en
   g_vod_tag_argument = 0;
   g_worker_clock_frozen = 0;
   g_wasm_stage = "idle";
+}
+
+/* ---------------------------------------------------------------- 取证入口（命令行，不进 App 链路） */
+
+int cctv_h5e_host_decrypt_vod(const uint8_t* input, size_t length, uint8_t* output) {
+  g_vod_mode = 1;
+  g_decrypt_generation = __sync_add_and_fetch(&g_cancel_generation, 0);
+  g_decrypt_cancelled = 0;
+  gettimeofday(&g_worker_now, NULL);
+  wasm_rt_trap_t trap = (wasm_rt_trap_t) wasm_rt_try(g_wasm_rt_jmp_buf);
+  if (trap == WASM_RT_TRAP_NONE) {
+    return decrypt_transport_stream(output, input, length) ? 1 : 0;
+  }
+  LOGE("host trap during %s: %s nalType=%d nalLen=%u updateTag=%s",
+      g_wasm_stage, wasm_rt_strerror(trap), g_current_nal_type,
+      (unsigned int) g_current_nal_length, g_current_update_tag);
+  g_ready = 0;
+  g_session_started = 0;
+  g_worker_clock_frozen = 0;
+  return -1;
 }
