@@ -54,6 +54,9 @@ class SeriesDetailFragment : Fragment() {
     private var lastRecommendKey: String? = null
     private var pendingHeaderFocusAnchorX: Int? = null
     private var pendingHeaderFocusRetries: Int = 0
+    private var pendingContentFocusRow: Int? = null
+    private var pendingContentFocusAnchorX: Int = 0
+    private var pendingContentFocusRetries: Int = 0
     private val appEventHub: AppEventHub by inject()
 
     override fun onCreateView(
@@ -109,6 +112,13 @@ class SeriesDetailFragment : Fragment() {
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                 super.onScrollStateChanged(recyclerView, newState)
                 if (newState != RecyclerView.SCROLL_STATE_IDLE) {
+                    return
+                }
+                // 逐行上滚后的落焦优先：与 header pending 由同一按键产生，不会并存
+                if (pendingContentFocusRow != null) {
+                    if (isAdded && view != null) {
+                        focusPendingContentRow()
+                    }
                     return
                 }
                 val anchorX = pendingHeaderFocusAnchorX ?: return
@@ -233,6 +243,8 @@ class SeriesDetailFragment : Fragment() {
             return
         }
         pendingPrimaryFocus = true
+        // 换季整页重建：取消未完成的滚动落焦，防止陈旧 pending 在下次滚动停止时误抢焦点
+        pendingContentFocusRow = null
         viewModel.loadSeriesDetail(targetSeasonId, series.firstEp)
         binding.recyclerView.scrollToPosition(0)
     }
@@ -397,6 +409,8 @@ class SeriesDetailFragment : Fragment() {
     }
 
     private fun handleContentVerticalKey(source: View, keyCode: Int): Boolean {
+        // 新的导航意图到达：取消上一轮未完成的滚动落焦，防止旧滚动停下后把焦点拽回去
+        pendingContentFocusRow = null
         val currentRowPosition = findContainingRowPosition(source) ?: return false
         val anchorX = source.centerXOnScreen()
         return when (keyCode) {
@@ -408,7 +422,8 @@ class SeriesDetailFragment : Fragment() {
                         startRow = currentRowPosition - 1,
                         step = -1,
                         anchorX = anchorX
-                    ) || focusNearestPrimaryHeaderAction(anchorX)
+                    ) || focusRowByScrolling(currentRowPosition - 1, anchorX)
+                        || focusNearestPrimaryHeaderAction(anchorX)
                 }
             }
 
@@ -433,6 +448,60 @@ class SeriesDetailFragment : Fragment() {
             row += step
         }
         return false
+    }
+
+    /**
+     * 上方行都未进屏（ViewHolder 已被回收）时不直接跳顶：滚动到紧邻上一行，
+     * 滚动停止（SCROLL_STATE_IDLE）后再落焦，保持「一层一层往上」的导航手感。
+     * 直接跳顶会整页长滚，焦点行被滚出屏回收导致焦点丢失（globalFocusChange old=null），
+     * 系统把焦点还给布局里第一个可聚焦的返回按钮，IDLE 后 header 落焦又把焦点
+     * 拉到「继续观看」——用户看到的就是焦点先跳返回按钮再自动跳继续观看。
+     */
+    private fun focusRowByScrolling(targetRow: Int, anchorX: Int): Boolean {
+        if (targetRow < 1) {
+            return false
+        }
+        pendingContentFocusRow = targetRow
+        pendingContentFocusAnchorX = anchorX
+        pendingContentFocusRetries = CONTENT_FOCUS_SCROLL_RETRIES
+        binding.recyclerView.smoothScrollToPosition(targetRow)
+        return true
+    }
+
+    private fun focusPendingContentRow() {
+        val row = pendingContentFocusRow ?: return
+        pendingContentFocusRow = null
+        val anchorX = pendingContentFocusAnchorX
+        val retries = pendingContentFocusRetries
+        pendingContentFocusRetries = 0
+        when {
+            // 滚动被打断/未达目标行：再滚一次（重试次数递减，防死循环）
+            binding.recyclerView.findViewHolderForAdapterPosition(row) == null -> {
+                if (retries > 0 && focusRowByScrolling(row, anchorX)) {
+                    pendingContentFocusRetries = retries - 1
+                }
+            }
+
+            // 行已进屏：直接落焦
+            focusNearestTargetInRow(row, anchorX) -> Unit
+
+            // 行进了屏但嵌套子项尚未布局完（childCount=0）：post 一帧再试
+            retries > 0 -> binding.recyclerView.post {
+                if (!isAdded || view == null) {
+                    return@post
+                }
+                if (focusNearestTargetInRow(row, anchorX)) {
+                    return@post
+                }
+                // 该行确实无可聚焦项：继续向上（已进屏行优先，不行再继续滚动）
+                focusNearestContentRow(
+                    startRow = row - 1,
+                    step = -1,
+                    anchorX = anchorX
+                ) || focusRowByScrolling(row - 1, anchorX)
+                    || focusNearestPrimaryHeaderAction(anchorX)
+            }
+        }
     }
 
     private fun focusNearestTargetInRow(rowPosition: Int, anchorX: Int): Boolean {
@@ -607,6 +676,7 @@ class SeriesDetailFragment : Fragment() {
     companion object {
         const val ARG_SEASON_ID = "season_id"
         const val ARG_EP_ID = "ep_id"
+        private const val CONTENT_FOCUS_SCROLL_RETRIES = 3
 
         fun newInstance(seasonId: Long, epId: Long = 0): SeriesDetailFragment {
             return SeriesDetailFragment().apply {
