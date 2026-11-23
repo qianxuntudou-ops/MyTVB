@@ -4,6 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!-- tabMode=fixed：五个短页签远窄于栏宽；scrollable 选中右侧页签时会把选中项
+         滚到居中导致整栏左移（issue#131），TV 上又滚不回来 -->
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
         android:focusable="false"
@@ -18,7 +20,7 @@
         app:tabIndicatorColor="?attr/colorAccent"
         app:tabIndicatorFullWidth="false"
         app:tabIndicatorHeight="@dimen/px10"
-        app:tabMode="scrollable"
+        app:tabMode="fixed"
         app:tabPaddingEnd="@dimen/px20"
         app:tabPaddingStart="@dimen/px20"
         app:tabRippleColor="@android:color/transparent"
