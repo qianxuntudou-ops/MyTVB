@@ -599,18 +599,21 @@ static int begin_session(void) {
   if (g_session_started) {
     return 1;
   }
-  if (g_vod_mode) {
-    /* VOD 输出函数把 malloc 块上方的堆自由区当 transform scratch（node 参考实
-     * 现 heap 恒 16MB、块尾 7MB、块后 ~9MB 自由区从不越界）。wasm2c 的惰性
-     * grow 只按 malloc 需求精确扩，块会贴着内存顶、scratch 无处可写（实测
-     * 65699B NAL 块尾距内存顶仅 38KB 时 trap）。会话开始时一次撑到页上限，
-     * 保证块后自由区恒有 ~89MB。直播路径分片小（scratch 温和）不预扩。 */
-    if (g_env.memory.pages < MEMORY_MAX_PAGES) {
-      wasm_rt_grow_memory(&g_env.memory, MEMORY_MAX_PAGES - g_env.memory.pages);
-      LOGI("vod heap pre-grown to %u pages (%llu bytes)",
-          (unsigned) g_env.memory.pages,
-          (unsigned long long) g_env.memory.size);
-    }
+  /* wasm 输出函数把 malloc 块上方的堆自由区当 transform scratch（node 参考
+   * 实现 heap 恒 16MB、块尾 7MB、块后 ~9MB 自由区从不越界）。wasm2c 的惰性
+   * grow 只按 malloc 需求精确扩，块会贴着内存顶、scratch 无处可写（实测
+   * 65699B NAL 块尾距内存顶仅 38KB 时 trap）。会话开始时一次撑到页上限，
+   * 保证块后自由区恒有 ~89MB。
+   * 直播同样预扩（issue#132）：worker2011 生成物下直播输出函数同语义，
+   * 61e89c1a 起直播 NAL 尾巴收窄到 2KiB 又无预扩，首个触发惰性扩容的分片
+   * 贴顶后 deterministic trap → fatal 三连 → 回退 WebView（用户表现为加载/
+   * 换台极慢 + 官方页「暂时不支持播放」）。预扩是 wasm 线性内存（宿主按触页
+   * 计 RSS），直播会话实际只写几十 KB 级，低内存盒子无压力。 */
+  if (g_env.memory.pages < MEMORY_MAX_PAGES) {
+    wasm_rt_grow_memory(&g_env.memory, MEMORY_MAX_PAGES - g_env.memory.pages);
+    LOGI("wasm heap pre-grown to %u pages (%llu bytes)",
+        (unsigned) g_env.memory.pages,
+        (unsigned long long) g_env.memory.size);
   }
   g_player_argument = allocate_player_argument();
   if (g_player_argument == 0) {
