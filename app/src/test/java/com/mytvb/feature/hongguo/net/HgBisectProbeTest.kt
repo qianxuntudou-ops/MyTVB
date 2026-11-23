@@ -64,16 +64,9 @@ class HgBisectProbeTest {
         throw IllegalStateException("no branch found")
     }
 
-    /** 我方现行 x-medusa（HongguoPlaybackV5.medusa：固定分支 12 摘要参数）。 */
-    private fun ourMedusa(s: GSigned, body: ByteArray?): String {
-        val bodyMd5 = if (body != null && body.isNotEmpty()) HongguoCrypto.md5(body) else ByteArray(16)
-        val random = java.security.SecureRandom()
-        fun u32() = random.nextInt()
-        return HongguoPlaybackV5.medusa(
-            s.query, HongguoCrypto.sm3(s.query.toByteArray(Charsets.UTF_8)), bodyMd5, s.ts,
-            HongguoPlaybackV5.Entropy(u32(), u32(), u32(), u32())
-        )
-    }
+    /** 我方现行 x-medusa（HongguoMedusa：HGTV 精确移植，只实现了 selector-12 分支，query 须已调谐到 12）。 */
+    private fun ourMedusa(s: GSigned, body: ByteArray?): String =
+        HongguoPlaybackV5.medusaHeaderFor(s.query, body, s.ts)
 
     private fun gzip(data: ByteArray): ByteArray {
         val bos = ByteArrayOutputStream()

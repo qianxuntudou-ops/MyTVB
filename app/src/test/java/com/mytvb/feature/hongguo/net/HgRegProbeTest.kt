@@ -164,13 +164,15 @@ class HgRegProbeTest {
 
     // ---- 果映 getVideoTab 同形态请求（V5 签名，_rticket 位置可指定） ----
 
-    /** V5 签名核心（HongguoPlaybackV5.signWith 同构），仅 _rticket 插入位置与 body MD5 口径可控。 */
+    /** V5 签名核心（与 HongguoPlaybackV5.signWith 同构），仅 _rticket 插入位置可控。
+     *  无 body 与空 body 的摘要种子同为全零 MD5（HGTV I1.e 口径）。 */
     private class V5Signed(val query: String, val ts: Int, val ticket: String, val medusa: String, val helios: String)
 
-    private fun v5Sign(base: List<Pair<String, String>>, ticketAfter: String, bodyMd5: ByteArray): V5Signed {
+    private fun v5Sign(base: List<Pair<String, String>>, ticketAfter: String, body: ByteArray?): V5Signed {
         val now = System.currentTimeMillis()
         val ts = (now / 1000).toInt()
         val random = SecureRandom()
+        val bodyMd5 = if (body != null && body.isNotEmpty()) HongguoCrypto.md5(body) else ByteArray(16)
         for (offset in 0 until 1024) {
             val ticket = now + offset
             val pairs = ArrayList<Pair<String, String>>(base.size + 1)
@@ -180,14 +182,10 @@ class HgRegProbeTest {
             }
             val query = HongguoPlaybackV5.encodeQuery(pairs)
             val queryHash = HongguoCrypto.sm3(query.toByteArray(Charsets.UTF_8))
-            var iv = HongguoCrypto.ivTransform(queryHash, 0x20230928)
-            iv = HongguoCrypto.ivTransform(bodyMd5, iv)
-            iv = HongguoCrypto.ivTransform(HongguoCrypto.leU32(ts), iv)
-            if (iv and 15 != 12) continue
-            fun u32() = random.nextInt()
+            if (HongguoMedusa.selectorOf(queryHash, bodyMd5, ts) != 12) continue
             return V5Signed(
                 query, ts, ticket.toString(),
-                HongguoPlaybackV5.medusa(query, queryHash, bodyMd5, ts, HongguoPlaybackV5.Entropy(u32(), u32(), u32(), u32())),
+                HongguoMedusa.medusaFor(query, body, ts, now + offset),
                 HongguoCrypto.helios(ts, random.nextInt(), "646637794")
             )
         }
@@ -257,8 +255,8 @@ class HgRegProbeTest {
             "use_os_player" to "0", "video_platform" to "1024",
             "source" to "0", "from_video_id" to ""
         )
-        val bodyMd5 = if (shape.emptyBodyMd5) HongguoCrypto.md5(ByteArray(0)) else ByteArray(16)
-        return v5Sign(base, shape.ticketAfter, bodyMd5)
+        // emptyBodyMd5 形态（空 body 的 MD5 进种子）已无意义：HGTV 口径下空 body 的种子同为全零 MD5
+        return v5Sign(base, shape.ticketAfter, null)
     }
 
     /** 同刻对照：aston 形态（14:00~14:15 全空）vs 果映形态，并把果映形态逐项退化。 */

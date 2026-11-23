@@ -13,12 +13,13 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * 红果播放地址解析。取源路由按 [HongguoNetProfiles.playRoutes] 顺序回退（version.json
- * `hg_net.play_routes` 热更，默认只开 v5tab）：
- * - `v5tab`（2026-11-23 起首选）：V5 签名 `GET /reading/bookapi/video_tab/multi_video_model/v1`。
- *   服务端 11-23 起把 POST 播放端点（preload/v1、player/v1、video_model/v1）全部收成
- *   200 空 body，只放行这一条；它只认 x-medusa，尾斜线/版本/stub/UA 等形态细节不敏感，
- *   注册方式与入口 IP 无关（果映TV 11-23 ff4d1d2 独立实证同结论）；
- * - `preload`（次选，默认关）：preload/v1 批量 POST + Argus/Ladon/Gorgon 全头集，11-21~11-22 放行。
+ * `hg_net.play_routes` 热更，内置默认 preload 首选、v5tab 次选）。两条路由的签名都是
+ * [HongguoMedusa]（HGTV 精确移植，selector 调谐到 12）：
+ * - `preload`（首选）：`POST /novel/player/multi_video_model/preload/v1` + V5 签名全头集，
+ *   对齐 HGTV 1.3.8.x 实测请求。2026-11-24 00:02 我方新实现以这一形态真网放行
+ *   （`HgMedusaVerifyProbeTest`：HTTP 200 / 26.8KB / code=0 / 带片源）；
+ * - `v5tab`（次选）：V5 签名 `GET /reading/bookapi/video_tab/multi_video_model/v1`（果映TV 形态，
+ *   只有三个签名头）。11-23 上午宽松期放行过 31 次，严格期未确认。
  *
  * 拿到 entry 后 → video_model 内联/fallback 二跳 → video_list 编码过滤 → spade_a 密钥派生 →
  * URL 解密 + CDN 域名白名单（[parseEntry]，对照 Node 版 app-source.js parseEntryPlayInfo）。
@@ -224,15 +225,15 @@ class HongguoPlay {
     }
 
     /**
-     * `preload` 路由（次选，默认关）：2026-11-20 晚~11-22 的放行端点，11-23 起 200 空 body。
-     * 对齐 HGTV 1.3.7.1 主通道（V 函数 multi 分支 + kotlinSignedPost 11-10 形态传输）。要点：
+     * `preload` 路由（首选）：对齐 HGTV 1.3.8.x 的播放主通道（POST preload/v1 + V5 签名全头集）。
+     * 要点：
      * - body：`mixed_video_id_map` 单集形态 + `dr_scene="preload"`、gzip；device_level
      *   空响应 4→5 升级重发、video_platform=1024、use_server_dns=true（对齐 HGTV 1.3.8.6 o0）；
-     * - 传输：老 Argus/Ladon/Gorgon 全头集（kotlinSignedPost 复活；V5 medusa/helios
-     *   纯头集与端点组合在探针实验中全挂）；
-     * - 画像三处同源：query device_type/brand + Argus deviceProfile + UA 一律
-     *   Redmi 25053RT47C / Android 16 / update_64（探针通过组合，勿用运行设备
-     *   真实型号——模拟器型号未验证）；
+     * - 传输：[v5SignedPost]——query 经 V5 签名把 medusa selector 调谐到 12，头集与 HGTV 的
+     *   V5 分支同名同序（21 个）。2026-11-24 00:02 真网放行（HGTV 真机请求原样重放、我方
+     *   新实现各验证过一次）；此前这里用 Argus 通道的 query 再补 medusa，selector 没调谐；
+     * - 画像三处同源：query device_type/brand + UA 一律 Redmi 25053RT47C / Android 16 /
+     *   update_64（探针通过组合，勿用运行设备真实型号——模拟器型号未验证）；
      * - 版本走 [HongguoVersionProfiles.default]（74532 探针实证通过；73932 亦过，
      *   保持热更档案能力）；
      * - 响应 data 按 vid 分 key（1004 分组兜底），entry.video_model 字符串二跳
@@ -249,14 +250,8 @@ class HongguoPlay {
             ?: throw PlayException("播放接口未返回本集片源", "MISSING_MODEL")
     }
 
-    /** preload/v1 数据获取（单集/批量共用主体），返回 vid→entry 的 data 对象。
-     *  空 body 自动重试对齐 HGTV o0：device_level 4→5 升级立即重发一次（会话级
-     *  单调不降，[deviceLevel]），到顶仍空才判失败——这是它唯一的自动重试策略。 */
-    private fun fetchPreloadData(
-        vids: List<String>,
-        identity: HongguoDeviceRegister.Identity
-    ): JSONObject {
-        AppLog.d(TAG, "play preload/v1 vids=${vids.size} first=${vids.first()} level=$deviceLevel device=${identity.deviceId}")
+    /** preload/v1 的 query（画像与 UA、签名同源：device_type/brand/os_version 取自 [HongguoNetProfiles]）。 */
+    internal fun preloadQuery(identity: HongguoDeviceRegister.Identity): java.util.LinkedHashMap<String, String> {
         val ver = HongguoVersionProfiles.default
         val q = java.util.LinkedHashMap<String, String>()
         q["device_id"] = identity.deviceId
@@ -275,6 +270,19 @@ class HongguoPlay {
         q["dragon_device_type"] = "phone"; q["pv_player"] = ver.code
         q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
         q["player_so_load"] = "1"; q["is_android_pad_screen"] = "0"
+        return q
+    }
+
+    /** preload/v1 数据获取（单集/批量共用主体），返回 vid→entry 的 data 对象。
+     *  空 body 自动重试对齐 HGTV o0：device_level 4→5 升级立即重发一次（会话级
+     *  单调不降，[deviceLevel]），到顶仍空才判失败——这是它唯一的自动重试策略。 */
+    private fun fetchPreloadData(
+        vids: List<String>,
+        identity: HongguoDeviceRegister.Identity
+    ): JSONObject {
+        AppLog.d(TAG, "play preload/v1 vids=${vids.size} first=${vids.first()} level=$deviceLevel device=${identity.deviceId}")
+        val ver = HongguoVersionProfiles.default
+        val q = preloadQuery(identity)
         // 诊断期：响应摘要塞进异常 message（android_logs 只回传异常行，message 可观测；
         // 真机验证稳定后 resp 探针可缩短或移除）
         var respProbe = ""
@@ -282,9 +290,9 @@ class HongguoPlay {
             var text: String
             while (true) {
                 // gzip body 同字节签名发送（对齐 HGTV o0：GZIPOutputStream + Content-Encoding）
-                text = kotlinSignedPost(
+                text = v5SignedPost(
                     "${HongguoNetProfiles.playHost()}$PRELOAD_PATH",
-                    q, gzipDeflate(preloadBody(vids, deviceLevel)), ver.versionName, identity.deviceId, ua(ver.code)
+                    q, gzipDeflate(preloadBody(vids, deviceLevel)), ua(ver.code)
                 )
                 respProbe = text.take(1200)
                 if (text.isNotEmpty()) break
@@ -313,7 +321,7 @@ class HongguoPlay {
      *  use_server_dns=true + cold_start_stage / video_platform=1024 /
      *  dr_scene=preload / mixed_video_id_map；1.3.8.6 对响应无 server_dns
      *  特殊解析，结构与 false 相同）。 */
-    private fun preloadBody(vids: List<String>, deviceLevel: Int): ByteArray {
+    internal fun preloadBody(vids: List<String>, deviceLevel: Int): ByteArray {
         val arr = org.json.JSONArray()
         vids.forEach { arr.put(it) }
         return JSONObject()
@@ -340,7 +348,7 @@ class HongguoPlay {
     @Volatile private var deviceLevel = 4
 
     /** 标准 gzip（HGTV G0/o0 用 GZIPOutputStream；同一份字节既签名又发送）。 */
-    private fun gzipDeflate(data: ByteArray): ByteArray {
+    internal fun gzipDeflate(data: ByteArray): ByteArray {
         val bos = java.io.ByteArrayOutputStream()
         java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
         return bos.toByteArray()
@@ -356,7 +364,7 @@ class HongguoPlay {
 
         /** video_tab 路径（果映形态无尾斜线；带不带尾斜线实测都放行）。 */
         private const val TAB_PATH = "/reading/bookapi/video_tab/multi_video_model/v1"
-        private const val PRELOAD_PATH = "/novel/player/multi_video_model/preload/v1"
+        internal const val PRELOAD_PATH = "/novel/player/multi_video_model/preload/v1"
 
         /** 播放接口 200 空 body 的异常 code：服务端限流特征，与设备身份无关（换注册方式
          *  同样空），不触发上层重注册，只触发熔断。 */
@@ -411,89 +419,76 @@ class HongguoPlay {
 
         /** 播放 UA（X3.d 形态，与 query 画像同源；勿用 HongguoEnv 运行设备型号——
          *  模拟器型号未验证，探针通过的是本硬编码形态）。 */
-        private fun ua(versionCode: String): String =
+        internal fun ua(versionCode: String): String =
             "com.phoenix.read/$versionCode (Linux; U; Android ${HongguoNetProfiles.osVersion()}; zh_CN; " +
                 "${HongguoNetProfiles.deviceType()}; Build/BP2A.250605.031.A3; " +
                 "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
     }
 
     /**
-     * 纯 Kotlin 签名传输（2026-11-10 去黑盒定稿形态，11-20 晚随 preload/v1 切换复活，
-     * 现为 `preload` 路由的传输层）：按 HGTV F0.x1.d 形态构造 Argus/Ladon/Gorgon 全头集
-     * （E0 外层+G0 改写后）发送。明文 body（preload 探针实证形态）。
+     * `preload` 路由的传输（2026-11-23 改走 V5 签名）：query 经 [HongguoPlaybackV5.sign] 把 medusa
+     * selector 调谐到 12，头集对齐 HGTV 1.3.8.x V5 分支（L3.h，21 个头同名同序）。这份形态
+     * 2026-11-24 00:02 在服务端收紧 medusa 校验后真网放行（`HgMedusaVerifyProbeTest`）。
+     *
+     * 此前这里用 Argus 通道的 signRequest 出 query 再补 medusa：query 的 selector 没调谐，
+     * 15/16 的概率与只实现了 12 号分支的 medusa 不自洽。[body] 为 gzip 后的字节，签名与发送同一份。
      */
-    private fun kotlinSignedPost(
-        baseUrl: String, q: java.util.LinkedHashMap<String, String>, body: ByteArray,
-        versionName: String, deviceId: String, ua: String
+    private fun v5SignedPost(
+        baseUrl: String, q: java.util.LinkedHashMap<String, String>, body: ByteArray, ua: String
     ): String {
-        val signed = HongguoCrypto.signRequest(
-            q, body, System.currentTimeMillis(), deviceId, targetBranch = 0, version = versionName
-        )
-        val nowSec = signed.headers["X-Khronos"]?.toIntOrNull() ?: (System.currentTimeMillis() / 1000).toInt()
-        // argus/ladon 对齐 HGTV 1.3.8.6 假头（J3.h: b64(le32(ts)) / b64(rand4)）——
-        // 播放接口真正的内容签名是 gorgon+medusa，装饰头用最便宜形态；真 Argus
-        // （HongguoArgus 完整实现）反而是画像异类（正常客户端这里是 8 字符）。
+        val req = buildPreloadRequest(baseUrl, q, body, ua)
+        http.newCall(req).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: ByteArray(0)
+            AppLog.i(TAG, "play preload resp http=${resp.code} len=${bytes.size}")
+            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+            return String(bytes, Charsets.UTF_8)
+        }
+    }
+
+    /** 构造 preload 路由的请求（不发送）：V5 签名 + 头集组装都在这里，签名与 body 为同一份字节。 */
+    internal fun buildPreloadRequest(
+        baseUrl: String, q: java.util.LinkedHashMap<String, String>, body: ByteArray, ua: String
+    ): Request {
+        val signed = HongguoPlaybackV5.sign(q.entries.map { it.key to it.value }, System.currentTimeMillis(), body)
+        val signedHeaders = signed.headers.toMap()
+        val nowSec = requireNotNull(signedHeaders["x-khronos"]).toInt()
+        val ticket = HongguoMedusa.queryValue(signed.query, "_rticket") ?: ""
+        val random = java.security.SecureRandom()
+        // argus/ladon 对齐 HGTV V5 分支的 8 字符装饰头（b64(le32(ts)) / b64(rand4)）——
+        // 播放接口真正的内容签名是 gorgon + helios + medusa
         fun b64le32(v: Int) = java.util.Base64.getEncoder().encodeToString(
             java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(v).array()
         )
-        val fakeArgus = b64le32(nowSec)
-        val fakeLadon = java.util.Base64.getEncoder().encodeToString(ByteArray(4).also {
-            java.security.SecureRandom().nextBytes(it)
-        })
-        val ticket = signed.headers["X-SS-Req-Ticket"] ?: ""
-        val headers = mutableListOf(
-            // E0 外层 7 头
+        val fakeLadon = java.util.Base64.getEncoder().encodeToString(ByteArray(4).also { random.nextBytes(it) })
+        val headers = listOf(
             "User-Agent" to ua,
-            "Accept-Language" to "zh-CN,zh;q=0.9",
-            "X-SS-DP" to "8662",
-            "X-Tt-Store-Region" to "cn",
-            "X-Tt-Store-Region-Src" to "did",
-            "X-XS-From-Web" to "0",
-            "Sdk-Version" to "2",
-            // F0.x1.d 签名头集（G0 改写后）
             "Accept" to "application/json; charset=utf-8,application/x-protobuf",
             "x-ss-req-ticket" to ticket,
             "sdk-version" to "2",
             "passport-sdk-version" to "5051452",
-            "x-xs-from-web" to "0",
-            "x-khronos" to (signed.headers["X-Khronos"] ?: ""),
-            "x-ladon" to fakeLadon,
-            "x-argus" to fakeArgus,
-            "x-gorgon" to (signed.headers["X-Gorgon"] ?: ""),
-            "x-helios" to HongguoArgus.helios(nowSec),
-            // x-medusa（2026-11-21 补齐）：HGTV 1.3.8.6 播放主力内容签名（G1.c v5），
-            // 当前服务端未强制但属最大未对齐点——开启校验时兜底。
-            "x-medusa" to HongguoPlaybackV5.medusaHeaderFor(signed.query, body, nowSec),
-            "Content-Type" to "application/json; charset=UTF-8",
-            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
-            "x-reading-request" to "$ticket-${java.security.SecureRandom().nextLong() and 0xffffffffL}",
-            "x-ss-stub" to (signed.headers["X-SS-STUB"] ?: ""),
-            // gzip body 声明（2026-11-21 对齐 HGTV o0：签名与发送同一份 gzip 字节）
-            "Content-Encoding" to "gzip",
-            // G0 追加
             "lc" to "101",
+            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
+            "x-xs-from-web" to "0",
             "x-ss-dp" to "8662",
-            "x-tt-trace-id" to traceId()
+            "x-tt-store-region" to "cn-gd",
+            "x-tt-store-region-src" to "did",
+            "x-khronos" to nowSec.toString(),
+            "x-ladon" to fakeLadon,
+            "x-argus" to b64le32(nowSec),
+            "x-gorgon" to HongguoCrypto.gorgon(signed.query, body, nowSec, random.nextInt(65536)),
+            "x-helios" to requireNotNull(signedHeaders["x-helios"]),
+            "x-medusa" to requireNotNull(signedHeaders["x-medusa"]),
+            "Content-Type" to "application/json; charset=utf-8",
+            // gzip body 声明（对齐 HGTV o0：签名与发送同一份 gzip 字节）
+            "Content-Encoding" to "gzip",
+            "x-reading-request" to "$ticket-${random.nextLong() and 0xffffffffL}",
+            "x-ss-stub" to requireNotNull(signedHeaders["x-ss-stub"])
         )
-        val url = "$baseUrl?${signed.query}"
-        val req = Request.Builder()
-            .url(url)
+        return Request.Builder()
+            .url("$baseUrl?${signed.query}")
             .post(body.toRequestBody("application/json; charset=UTF-8".toMediaType()))
-            .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
+            .apply { headers.forEach { (k, v) -> header(k, v) } }
             .build()
-        http.newCall(req).execute().use { resp ->
-                val bytes = resp.body?.bytes() ?: ByteArray(0)
-                AppLog.i(TAG, "play preload resp http=${resp.code} len=${bytes.size}")
-                if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
-                return String(bytes, Charsets.UTF_8)
-        }
-    }
-
-
-    /** x-tt-trace-id（W3C traceparent 变体，对齐 HGTV W2.b()）。 */
-    private fun traceId(): String {
-        val hex = java.util.UUID.randomUUID().toString().replace("-", "")
-        return "00-$hex-${hex.substring(0, 16)}-01"
     }
 
     // ---- entry 解析：video_model 内联或 fallback_api 二跳（对照 parseEntryPlayInfo） ----

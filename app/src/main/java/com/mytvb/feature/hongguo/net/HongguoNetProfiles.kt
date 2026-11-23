@@ -36,8 +36,9 @@ internal object HongguoNetProfiles {
     private const val K_DNS = "net_dns_table"
     private const val K_ROUTES = "net_play_routes"
 
-    /** 取源路由名（`hg_net.play_routes` 的合法取值）：v5tab=V5 签名 GET video_tab（2026-11-23 起
-     *  唯一放行）；preload=preload/v1 批量 POST（11-21~11-22 放行，11-23 起 200 空 body）。 */
+    /** 取源路由名（`hg_net.play_routes` 的合法取值）：preload=preload/v1 POST + V5 签名全头集
+     *  （对齐 HGTV 实测请求；2026-11-24 服务端收紧 medusa 校验后真网放行）；
+     *  v5tab=V5 签名 GET video_tab（果映TV 形态，严格期放行与否未确认，留作次选）。 */
     const val ROUTE_V5TAB = "v5tab"
     const val ROUTE_PRELOAD = "preload"
     private val KNOWN_ROUTES = setOf(ROUTE_V5TAB, ROUTE_PRELOAD)
@@ -49,8 +50,8 @@ internal object HongguoNetProfiles {
         val deviceBrand: String,
         val osVersion: String,
         val channel: String,
-        /** 取源路由顺序：首个返回片源的胜出，其后依次回退。 */
-        val playRoutes: List<String> = listOf(ROUTE_V5TAB),
+        /** 取源路由顺序：首个返回片源的胜出，其后依次回退（空 body 视为被拒/限流，熔断后不回退）。 */
+        val playRoutes: List<String> = listOf(ROUTE_PRELOAD, ROUTE_V5TAB),
     )
 
     val current: Net get() = overrideNet ?: BUILTIN

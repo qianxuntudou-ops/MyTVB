@@ -73,8 +73,8 @@ class HongguoNetProfilesTest {
         assertEquals("Redmi", HongguoNetProfiles.deviceBrand())
         assertEquals("16", HongguoNetProfiles.osVersion())
         assertEquals("update_64", HongguoNetProfiles.channel())
-        // 内置档只开 v5tab（2026-11-23 起唯一放行；preload 回空 body，默认不打）
-        assertEquals(listOf("v5tab"), HongguoNetProfiles.playRoutes())
+        // 内置档：preload 首选（HGTV 实测放行形态）、v5tab 次选
+        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.playRoutes())
     }
 
     // ---- 取源路由（hg_net.play_routes，2026-11-23） ----
@@ -98,11 +98,11 @@ class HongguoNetProfilesTest {
 
     @Test
     fun parsePlayRoutesFallsBackToBuiltin() {
-        // 缺失 / 非数组 / 全非法 → 保持默认 v5tab
-        assertEquals(listOf("v5tab"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
-        assertEquals(listOf("v5tab"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
+        // 缺失 / 非数组 / 全非法 → 保持内置默认（preload, v5tab）
+        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
+        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
         assertEquals(
-            listOf("v5tab"),
+            listOf("preload", "v5tab"),
             HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("bogus"))))!!.playRoutes
         )
     }
