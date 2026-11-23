@@ -10,7 +10,8 @@
 | `run_capture.py` | 常驻抓包驱动，等 pid 稳定 42 秒后 attach，落盘 jsonl |
 | `rpc_sign.py` | 读 `sign_requests.json` → 调 RPC 签名 → 写 `sign_results.json` |
 | `exclude-probes.init.gradle` | 全量单测排除真网探针的 init 脚本（`--init-script` 传入） |
-| `FINDINGS.md` | 2026-11-23 排查结论：根因、证据表、已推翻假说、复现步骤、探针纪律 |
+| `FINDINGS.md` | 2026-11-23～24 排查结论与定案：根因（x-medusa 实现不等价 + selector 未调谐）、离线对拍证据、真网验证结果、发版注意、探针纪律 |
+| `../hgtv-sign/` | x-medusa 离线对拍工具链：解密器、参考实现、金标准/合成向量生成、发枪前的落盘请求核对（README 有单枪验证流程） |
 | `sample/hgtv-13813-playback-requests.json` | 已脱敏的两条实测播放请求（query 键序 / header 顺序 / body 明文），签名与设备标识已抹除 |
 
 ## 用法
