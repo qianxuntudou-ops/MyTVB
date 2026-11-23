@@ -1,0 +1,12 @@
+// 排除真网测试：探针类（*Probe*）、冒烟类（*Smoke*）与类内冒烟方法（*.*Smoke*）。
+// 真网请求密集发出会让红果服务端把本机 IP 的播放接口回空 body（2026-11-23 实证），
+// 本地全量回归不应触碰真网。
+allprojects {
+    tasks.withType(Test).configureEach {
+        filter {
+            excludeTestsMatching "*Probe*"
+            excludeTestsMatching "*Smoke*"
+            excludeTestsMatching "*.*Smoke*"
+        }
+    }
+}

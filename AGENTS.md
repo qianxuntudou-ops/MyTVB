@@ -71,11 +71,12 @@
 
 - `hg_versions.default` / `hg_versions.plan`：签名链版本档案（code+name 两档，plan=相关作品通道独立钉版）
 - `hg_net`：播放 host + 设备画像四元组（`play_host`/`device_type`/`device_brand`/`os_version`/`channel`，三处同源自洽，改就整组改）
+- `hg_net.play_routes`：取源路由顺序（按序回退）——`v5tab`=V5 签名 GET `video_tab`，`preload`=`preload/v1` 批量 POST。**2026-11-23 现状：两路对我方都回空 body**（根因见下方第 4 点的「签名被拒」；`v5tab` 当天上午放行 31 次、17:30 后转空，是否被服务端关闭未确认）。换首选通道改这里
 
 ### 操作要点
 
 1. **日常调整只改仓库 main 的 `version.json` 并提交**（App 每次启动检查更新即拉取生效；Release 附件里的 version.json 只在正式发版时同步，平时不用管）
-2. **校验规则**（写非法值会被 App 静默忽略回落内置档）：host 必须 `https://xxx.fqnovel.com`；画像四元组任一非法整档丢弃；版本 code 5~6 位数字
+2. **校验规则**（写非法值会被 App 静默忽略回落内置档）：host 必须 `https://xxx.fqnovel.com`；画像四元组任一非法整档丢弃；版本 code 5~6 位数字；`play_routes` 只认 `v5tab`/`preload`，未知名与重复项剔除、全非法回落 `["v5tab"]`（不影响 host/画像采用）
 3. **内置兜底档**在 `HongguoVersionProfiles`（BUILTIN_DEFAULT/PLAN）与 `HongguoNetProfiles`（BUILTIN）——若某组配置被验证长期稳定（如版本号永久切换），应把内置档一并同步，避免每次装机首轮都靠热更
-4. 排障锚点：logcat `HgNetProfiles: restore/applyFrom`、`HgVersionProfiles`、`play preload/v1 vids=N level=`；200 空 body 全线出现时先跑 `HongguoExpandProbeTest.probeStability`（同形态×3 隔时重打）判是否封禁/灰度窗口（2026-11-21 实证窗口约 50 分钟自愈），别急着改代码
-5. 真网探针家族 `HongguoExpandProbeTest`（detail/TNC/beat/host×版本矩阵/x3 形态/稳定性）与 `HongguoPlayProbeTest`：定位放行组合用 JVM 单测跑真网（几分钟），远快于装模拟器迭代
+4. 排障锚点（均走 AppLog，用户开「日志记录」导出即见）：`HgNetProfiles: restore/applyFrom … routes=`、`play video_tab ok/failed http= len=`、`play empty body path= … cooldown=`、`device register failed`。**200 空 body 有两个来源，先分清再动手**：①**签名被拒**——2026-11-23 根因：我方 `x-medusa`（`HongguoPlaybackV5.medusa`，Go 版移植的简化实现）被服务端拒绝，HGTV 的请求只把这一个头换成我方的就回空、只换 `x-helios` 则照常放行；同出口同时刻放行与被拒并存，可据此与 ② 区分。②**IP 限流**——被拒请求累积后触发，同出口所有红果客户端一起挂，恢复 8~31 分钟以上不固定。App 已内置递增熔断（`HongguoPlay`，3→30 分钟），排障时别连打
+5. 真网探针（JVM 单测跑真网）：`HgHgtvReplayProbeTest`（HGTV wire 请求原样重放 + 单头替换，签名类问题的首选手法）、`HgRegProbeTest.probeOnce`（单枪，长时静默后探测限流是否解除）、`HgChannelProbeTest`/`HgBisectProbeTest`/`HgRegProbeTest.probeTabShapes`（逐端点、逐变量定位放行形态），旧家族 `HongguoExpandProbeTest` 与 `HongguoPlayProbeTest`。**枪间隔 ≥25s，被拒的枪同样计入限流，连续 2~3 枪被拒立即停手**（2026-11-23 教训：半小时二十多枪把用户出口打进限流，用户所有红果客户端都不能播）；本地全量单测须用 init 脚本排除真网类（`filter { excludeTestsMatching "*Probe*"; excludeTestsMatching "*Smoke*" }`），否则一次全量就把本机 IP 打进限流
