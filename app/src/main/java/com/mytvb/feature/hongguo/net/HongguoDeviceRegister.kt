@@ -1,5 +1,6 @@
 package com.mytvb.feature.hongguo.net
 
+import com.mytvb.core.common.log.AppLog
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -74,7 +75,15 @@ object HongguoDeviceRegister {
             holder.installId = it.installId
             holder.klinkEgdi = it.klinkEgdi
         }
-        registerDevice(holder)
+        try {
+            registerDevice(holder)
+        } catch (e: Exception) {
+            // 失败原因落 AppLog（用户开「日志记录」即可导出）：注册流程此前只有 D 级
+            // 裸日志，release 包被混淆剥掉后注册失败不留痕迹，表现为播放器打开即退
+            // 而无从排查（2026-11-23）
+            AppLog.w("Hongguo", "device register failed carry=${carry != null}: ${e.message}")
+            throw e
+        }
         return Identity(
             holder.deviceId, holder.installId, cdid, openUdid,
             holder.cookies, holder.klinkEgdi, holder.deviceToken, clientUdid
@@ -309,7 +318,7 @@ object HongguoDeviceRegister {
             require(did.isNotEmpty() && iid.isNotEmpty() && did != "0" && iid != "0") {
                 "设备注册未返回有效身份"
             }
-            android.util.Log.d(
+            AppLog.d(
                 "Hongguo",
                 "register resp keys=${obj.keys().asSequence().take(24).toList()} " +
                     "klink=${obj.optString("klink_egdi").take(20)} token=${obj.optString("device_token").length}ch"

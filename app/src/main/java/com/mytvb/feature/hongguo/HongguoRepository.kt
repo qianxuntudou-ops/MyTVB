@@ -120,14 +120,14 @@ class HongguoRepository private constructor(context: Context) {
     @Volatile private var lastReRegisterAt = 0L
 
     /**
-     * 重注册触发判据：仅「设备身份失效」特征——PRELOAD_FAIL（空 body 到顶，
-     * HGTV 语义=设备身份已失效）或 BIZ_101000（设备拒收，HGTV 走备用设备通道，
-     * 我们无备用设备池、等效动作=换号）。100001 窗口/参数特征不触发（新号同样
-     * 被清洗，烧号无益）；网络类异常不触发（重注册救不了网络）。
+     * 重注册触发判据：仅「设备拒收」特征 BIZ_101000（HGTV 走备用设备通道，我们没有
+     * 备用设备池、等效动作=换号）。空 body（[HongguoPlay.EMPTY_BODY]，已进熔断）2026-11-23 探针
+     * 实证与身份无关（换注册方式同样空），不再触发——重注册救不了且烧号；网络类异常
+     * 不触发（重注册救不了网络）。
      */
     private fun shouldReRegisterForIdentity(e: Exception?): Boolean {
         val pe = e as? HongguoPlay.PlayException ?: return false
-        return pe.code == "PRELOAD_FAIL" || pe.code == "BIZ_101000"
+        return pe.code == "BIZ_101000"
     }
 
     /** 注册冷却闸：60s 内至多放行一次（原子占坑，占不到=冷却中不重注册）。 */
@@ -579,7 +579,7 @@ class HongguoRepository private constructor(context: Context) {
     }
 
     /** 播放地址解析（纯 Kotlin 签名+JVM okhttp；WebView 通道已删——实证从未成功）。
-     *  预取命中直接返回，未命中走 player/v1 实时解析并回填缓存。 */
+     *  预取命中直接返回，未命中按取源路由实时解析并回填缓存。 */
     suspend fun playUrl(vid: String, preferredPixels: Int = 0): HongguoPlay.PlayUrl =
         withContext(Dispatchers.IO) {
             val key = "$vid@$preferredPixels"
@@ -596,22 +596,18 @@ class HongguoRepository private constructor(context: Context) {
                 }
                 return@withContext it
             }
-            var result: HongguoPlay.PlayUrl? = null
-            // 2026-11-21 重试收敛（去风暴）：失败不再无差别换号重注册、不清 session——
-            // 探针实证 preload/v1 连假身份都放行（空 body 的变量是端点/头集，非设备），
-            // 旧「空响应=身份被拒→换号」模型已过时，且失败即 registerFresh+重发
-            // 是官方 App 不会有的农场画像；顺带修掉连坐 bug：旧路径 session.clearAll()
-            // 会把 account_cookies/token 一并清空（播放失败一次=登录态丢失）。
-            // 现模型：同一身份贯穿，2 发之间 1.5s 退避（保住网络抖动的重试价值）。
-            // 2026-11-21 晚补恢复链（对齐 HGTV 1371，用户拍板 A）：2 发失败且特征=
-            // 设备失效（PRELOAD_FAIL 空 body 到顶 / BIZ_101000 设备拒收）时，走一次
-            // **指纹继承重注册**（registerAndSave carry=旧号声明+cdid/openudid 沿用，
-            // 服务端按「设备换新号」语义关联——与当年风暴链的本质区别：仅设备失效
-            // 触发+每调用最多一次+60s 注册冷却）。100001（窗口/参数特征）不触发——
-            // 窗口期新号同样被清洗（11-21 实证），烧号无益。
+            // 2026-11-23 重试链收敛（去空响应风暴）：11-23 探针实证服务端空 body 与设备
+            // 身份无关（换注册方式同样空），重发、换号都救不了，只会多制造空响应，且密集
+            // 空响应会让服务端把后续请求一并回空。现模型：
+            // - 取址只发一次（端点回退已在 HongguoPlay 路由内）；
+            // - 仅网络层异常（超时/连接失败）同身份退避 1.5s 重试一次；
+            // - 仅 BIZ_101000（设备拒收）走一次指纹继承重注册后再试（对齐 HGTV 1371：
+            //   仅设备失效触发 + 每调用最多一次 + 60s 注册冷却）。不清 session——旧路径
+            //   session.clearAll() 会把 account_cookies/token 一并清空（播放失败一次=登录态丢失）。
             val id = identity()
             var lastError: Exception? = null
-            for (attempt in 0 until 2) {
+            var result: HongguoPlay.PlayUrl? = null
+            for (attempt in 0..1) {
                 result = try {
                     play.playUrl(vid, id, preferredPixels)
                 } catch (e: Exception) {
@@ -620,7 +616,12 @@ class HongguoRepository private constructor(context: Context) {
                     null
                 }
                 if (result != null) break
-                if (attempt == 0) kotlinx.coroutines.delay(1500)
+                // 只有网络层异常值得同身份重试；服务端的空 body/业务码重发无益
+                if (attempt == 0 && lastError is java.io.IOException) {
+                    kotlinx.coroutines.delay(1500)
+                } else {
+                    break
+                }
             }
             if (result == null && shouldReRegisterForIdentity(lastError) && takeReRegisterGate()) {
                 val freshId = synchronized(identityLock) { registerAndSave() }
@@ -634,29 +635,28 @@ class HongguoRepository private constructor(context: Context) {
             }
             result?.also { cachePlayUrl(key, it) }
                 ?: run {
-                    AppLog.w("Hongguo", "playUrl resolve failed vid=$vid q=$preferredPixels after 2 attempts")
-                    throw IllegalStateException("红果播放地址解析失败")
+                    AppLog.w("Hongguo", "playUrl resolve failed vid=$vid q=$preferredPixels: ${lastError?.message}")
+                    // 熔断冷却中：剩余时间透传给用户；其余原因统一文案
+                    val e = lastError
+                    throw IllegalStateException(
+                        if (e is HongguoPlay.PlayException && e.code == HongguoPlay.COOLDOWN) {
+                            e.message ?: "红果播放地址解析失败"
+                        } else {
+                            "红果播放地址解析失败"
+                        }
+                    )
                 }
         }
 
     /**
-     * 起播/切集成功后预热**下一集**（2026-11-20 瘦身定案）：
-     * 地址直取（video_model/v1）入缓存 + 加密流时头部预取落盘（2026-11-18 P2 对齐
+     * 后续剧集地址预取（起播/切集成功后调用，[com.mytvb.feature.hongguo.net.HongguoPlay.playUrlBatch]
+     * 逐集限速取址入缓存，切集即命中；加密流时下一集头部预取落盘——2026-11-18 P2 对齐
      * HGTV：Range 拉头部段截到 moov 结束，切集时 moov 网络段归零）。整集落地链路
      * 保留作 ClearKey 不可用/播放失败兜底（[fallbackDownload]）。
-     * 批量 preload/v1 地址层已删——multi 系三端点当天全被服务端 200 空 body 封禁
-     * （探针实证）；下一集地址由本层顺带覆盖，下下集不再预取（快速连切空档由实时
-     * 直取 ~300ms 兜底）。全部失败静默，切集实时解析兜底。
-     */
-    /**
-     * 批量地址预取（2026-11-21 B 改造，对齐 HGTV 1.3.8.6 V()：一次 12 集、
-     * [com.mytvb.feature.hongguo.net.HongguoPlay.playUrlBatch]）：起播/切集后
-     * 一次 preload/v1 覆盖后续多集——连播期地址层 API 请求从「每集一发」降为
-     * 「12 集一发」，请求画像与官方剧场页批量预取一致。
      * 已缓存的集先过滤（命中免重），全部命中直接跳过（零请求）。
      * 媒体头预取（moov+首GOP 512KB）仍只对即将播放的下一集做——CDN 数据预取
      * 与地址层互补，逐集全拉头部是流量浪费（HGTV 同款克制）。
-     * in-flight 闸防快速连切并发重复请求（HGTV Semaphore 同义）。
+     * 全部失败静默，切集实时解析兜底。in-flight 闸防快速连切并发重复请求。
      */
     fun preloadUpcoming(vids: List<String>) {
         if (vids.isEmpty()) return

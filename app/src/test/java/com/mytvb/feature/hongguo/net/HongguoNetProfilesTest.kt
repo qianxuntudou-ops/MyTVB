@@ -73,6 +73,38 @@ class HongguoNetProfilesTest {
         assertEquals("Redmi", HongguoNetProfiles.deviceBrand())
         assertEquals("16", HongguoNetProfiles.osVersion())
         assertEquals("update_64", HongguoNetProfiles.channel())
+        // 内置档只开 v5tab（2026-11-23 起唯一放行；preload 回空 body，默认不打）
+        assertEquals(listOf("v5tab"), HongguoNetProfiles.playRoutes())
+    }
+
+    // ---- 取源路由（hg_net.play_routes，2026-11-23） ----
+
+    @Test
+    fun parsePlayRoutesInOrder() {
+        val n = HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("preload", "v5tab"))))!!
+        // 顺序即回退顺序，原样保留
+        assertEquals(listOf("preload", "v5tab"), n.playRoutes)
+    }
+
+    @Test
+    fun parsePlayRoutesFiltersUnknownAndDuplicates() {
+        val n = HongguoNetProfiles.parseNet(
+            net().put("play_routes", org.json.JSONArray(listOf("v5tab", "bogus", "v5tab", "")))
+        )!!
+        // 未知路由名与重复项剔除，不影响 host/画像整档采用
+        assertEquals(listOf("v5tab"), n.playRoutes)
+        assertEquals("https://api5-normal-sinfonlinea.fqnovel.com", n.playHost)
+    }
+
+    @Test
+    fun parsePlayRoutesFallsBackToBuiltin() {
+        // 缺失 / 非数组 / 全非法 → 保持默认 v5tab
+        assertEquals(listOf("v5tab"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
+        assertEquals(listOf("v5tab"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
+        assertEquals(
+            listOf("v5tab"),
+            HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("bogus"))))!!.playRoutes
+        )
     }
 
     // ---- TNC httpDns 直连表（hg_dns，2026-11-22 豁免入口段） ----

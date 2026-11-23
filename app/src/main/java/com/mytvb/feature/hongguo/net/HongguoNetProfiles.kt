@@ -13,6 +13,10 @@ import org.json.JSONObject
  * 覆盖范围仅播放通道（HongguoPlay）：query/UA 画像同源改读本对象；登录
  * （HongguoAccount）与环境（HongguoEnv）链路画像独立，不受影响。
  *
+ * 2026-11-23 新增 `play_routes`：取源路由顺序（v5tab / preload），服务端在形态间来回切换
+ * （11-20 关 POST → 11-22 恢复 → 11-23 再关），改配置即可换首选通道。缺失或无合法项
+ * =保持默认 v5tab；路由名不在白名单的剔除，且不参与整档校验。
+ *
  * 2026-11-22 新增 `hg_dns`：TNC httpDns 直连表（host→IP 列表）。长窗口定案
  * 清洗挂公网 DNS 入口段（222.210.37.x/125.64.109.x），字节官方 TNC 下发的
  * 独占段（101.126.1.x/122.14.229.x）豁免——[HongguoHttp] 的 Dns 覆写读本表。
@@ -30,6 +34,13 @@ internal object HongguoNetProfiles {
     private const val K_OS_VERSION = "net_os_version"
     private const val K_CHANNEL = "net_channel"
     private const val K_DNS = "net_dns_table"
+    private const val K_ROUTES = "net_play_routes"
+
+    /** 取源路由名（`hg_net.play_routes` 的合法取值）：v5tab=V5 签名 GET video_tab（2026-11-23 起
+     *  唯一放行）；preload=preload/v1 批量 POST（11-21~11-22 放行，11-23 起 200 空 body）。 */
+    const val ROUTE_V5TAB = "v5tab"
+    const val ROUTE_PRELOAD = "preload"
+    private val KNOWN_ROUTES = setOf(ROUTE_V5TAB, ROUTE_PRELOAD)
 
     /** 覆写档案值（与内置档案同构，仅内存态）。 */
     data class Net(
@@ -38,6 +49,8 @@ internal object HongguoNetProfiles {
         val deviceBrand: String,
         val osVersion: String,
         val channel: String,
+        /** 取源路由顺序：首个返回片源的胜出，其后依次回退。 */
+        val playRoutes: List<String> = listOf(ROUTE_V5TAB),
     )
 
     val current: Net get() = overrideNet ?: BUILTIN
@@ -49,6 +62,7 @@ internal object HongguoNetProfiles {
     fun deviceBrand(): String = current.deviceBrand
     fun osVersion(): String = current.osVersion
     fun channel(): String = current.channel
+    fun playRoutes(): List<String> = current.playRoutes
     fun dnsTable(): Map<String, List<String>> = dnsTable
 
     /**
@@ -65,11 +79,15 @@ internal object HongguoNetProfiles {
                     put("device_brand", prefs.getString(K_DEVICE_BRAND, "") ?: "")
                     put("os_version", prefs.getString(K_OS_VERSION, "") ?: "")
                     put("channel", prefs.getString(K_CHANNEL, "") ?: "")
+                    // 路由有序，落盘用逗号串（StringSet 不保序）
+                    prefs.getString(K_ROUTES, null)?.let { saved ->
+                        put("play_routes", org.json.JSONArray(saved.split(',').filter { it.isNotBlank() }))
+                    }
                 }
             )
             if (net != null && net != overrideNet) {
                 overrideNet = net
-                AppLog.i(TAG, "restore host=${net.playHost} type=${net.deviceType}")
+                AppLog.i(TAG, "restore host=${net.playHost} type=${net.deviceType} routes=${net.playRoutes}")
             }
             prefs.getString(K_DNS, null)?.let { saved ->
                 parseDnsTable(JSONObject(saved))?.let {
@@ -98,10 +116,12 @@ internal object HongguoNetProfiles {
                 .putString(K_DEVICE_TYPE, net.deviceType)
                 .putString(K_DEVICE_BRAND, net.deviceBrand)
                 .putString(K_OS_VERSION, net.osVersion)
-                .putString(K_CHANNEL, net.channel)
-                .apply()
+                    .putString(K_CHANNEL, net.channel)
+                    // 路由有序，落盘用逗号串（StringSet 不保序）
+                    .putString(K_ROUTES, net.playRoutes.joinToString(","))
+                    .apply()
         }.onFailure { AppLog.w(TAG, "persist failed: ${it.message}") }
-        AppLog.i(TAG, "applyFrom host=${net.playHost} type=${net.deviceType}")
+        AppLog.i(TAG, "applyFrom host=${net.playHost} type=${net.deviceType} routes=${net.playRoutes}")
 
         // hg_dns 可选：null/缺失不动现有表；空对象 {} 显式清空回落内置
         if (json.has("hg_dns")) {
@@ -121,7 +141,9 @@ internal object HongguoNetProfiles {
         }
     }
 
-    /** 整档解析+校验：字段缺失/格式非法返回 null（不部分采用）。纯函数，可单测。 */
+    /** 整档解析+校验：字段缺失/格式非法返回 null（不部分采用）。纯函数，可单测。
+     *  `play_routes` 可选：缺失或无合法项=保持默认（v5tab），未知路由名与重复项剔除；
+     *  它不参与整档校验，配置写错不至于连 host/画像一起回落。 */
     fun parseNet(obj: JSONObject?): Net? {
         if (obj == null) return null
         val net = Net(
@@ -130,6 +152,10 @@ internal object HongguoNetProfiles {
             deviceBrand = obj.optString("device_brand").trim(),
             osVersion = obj.optString("os_version").trim(),
             channel = obj.optString("channel").trim(),
+            playRoutes = obj.optJSONArray("play_routes")?.let { arr ->
+                (0 until arr.length()).mapNotNull { arr.optString(it).trim() }
+                    .filter { it in KNOWN_ROUTES }.distinct()
+            }?.takeIf { it.isNotEmpty() } ?: BUILTIN.playRoutes,
         )
         return net.takeIf { isValid(it) }
     }

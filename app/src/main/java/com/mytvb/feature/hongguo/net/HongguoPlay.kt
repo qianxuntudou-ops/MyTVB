@@ -1,7 +1,6 @@
 package com.mytvb.feature.hongguo.net
 
 import android.util.Base64
-import android.util.Log
 import com.mytvb.core.common.log.AppLog
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -13,11 +12,16 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * 红果播放地址解析（2026-11-20 晚起）：multi_video_model/preload/v1 批量端点
- * （签名 POST，对齐 HGTV 1.3.7.1 主通道 + Argus/Ladon/Gorgon 全头集）→
- * video_model 内联/fallback 二跳 → video_list 编码过滤 → spade_a 密钥派生 →
- * URL 解密 + CDN 域名白名单。
- * 对照 Node 版 app-source.js fetchAppPlayUrl/parseEntryPlayInfo（线上验证链路）。
+ * 红果播放地址解析。取源路由按 [HongguoNetProfiles.playRoutes] 顺序回退（version.json
+ * `hg_net.play_routes` 热更，默认只开 v5tab）：
+ * - `v5tab`（2026-11-23 起首选）：V5 签名 `GET /reading/bookapi/video_tab/multi_video_model/v1`。
+ *   服务端 11-23 起把 POST 播放端点（preload/v1、player/v1、video_model/v1）全部收成
+ *   200 空 body，只放行这一条；它只认 x-medusa，尾斜线/版本/stub/UA 等形态细节不敏感，
+ *   注册方式与入口 IP 无关（果映TV 11-23 ff4d1d2 独立实证同结论）；
+ * - `preload`（次选，默认关）：preload/v1 批量 POST + Argus/Ladon/Gorgon 全头集，11-21~11-22 放行。
+ *
+ * 拿到 entry 后 → video_model 内联/fallback 二跳 → video_list 编码过滤 → spade_a 密钥派生 →
+ * URL 解密 + CDN 域名白名单（[parseEntry]，对照 Node 版 app-source.js parseEntryPlayInfo）。
  */
 class HongguoPlay {
 
@@ -71,8 +75,8 @@ class HongguoPlay {
     class PlayException(message: String, val code: String) : IllegalStateException(message)
 
     /**
-     * @param identity 真注册设备身份（video_model/v1 校验设备真实性，
-     * 匿名随机 id 会被空响应拒绝）。可用 [HongguoDeviceRegister.registerFresh] 获取后持久化复用。
+     * @param identity 真注册设备身份（播放接口校验设备真实性，匿名随机 id 会被空响应拒绝）。
+     * 可用 [HongguoDeviceRegister.registerFresh] 获取后持久化复用。
      * @param preferredPixels 目标画质档位（竖屏剧取 min(width,height)，如 1080/720/540/480）；
      * 0 = 默认取最高档。目标档缺失时就近取不超目标的最高档，全超目标取最低档。
      */
@@ -82,23 +86,116 @@ class HongguoPlay {
         preferredPixels: Int = 0,
     ): PlayUrl {
         require(vid.matches(Regex("\\d{1,30}"))) { "分集编号无效" }
-        // 沿革：11-13 弃 73932 档（code=100001）→ 11-14 起 74532 空 body 换 V5 头集
-        // → 11-17 接 multi player/v1+V5 → 11-20 白天切 video_model/v1 直取（当时通过）
-        // → **11-20 晚起服务端把播放放行收窄到 multi_video_model/preload/v1 单端点**
-        // （video_model/v1、multi_video_model/v1/、player/v1 全量 200 空 body；版本
-        // 73932/74332/74532 无关——单变量探针实验实证，见 HongguoPlayProbeTest）。
-        // 本通道=preload/v1 批量端点 + Argus/Ladon/Gorgon 全头集（11-20 探针实证
-        // 组合）；2026-11-21 body/重试再对齐 HGTV 1.3.8.6 o0：gzip body、
-        // use_server_dns=true+cold_start_stage、device_level 4→5 升级重试。
-        val entry = fetchPreloadEntry(vid, identity)
+        val entry = fetchEntry(vid, identity)
         return parseEntry(vid, entry, preferredPixels)
     }
 
     /**
-     * 批量地址预取（对齐 HGTV 1.3.8.6 V()：mixed_video_id_map 一次多集，手机播放页
-     * 实测一次 12 集、上限 20）：连播期间地址层一个请求覆盖后续多集，请求画像与
-     * 官方「剧场页批量预取」一致。个别集缺失/解析失败跳过（切到时实时解析兜底），
-     * 返回成功解析的 vid→PlayUrl（保持入参顺序）。
+     * 按路由顺序取源：首个返回片源的 entry 胜出；全部失败抛最后一路的异常
+     * （code 透传给上层恢复链判定）。空 body 即服务端限流，进入熔断后不再回退
+     * 下一路由（同样会空，且续封）。
+     */
+    private fun fetchEntry(vid: String, identity: HongguoDeviceRegister.Identity): JSONObject {
+        checkCooldown()
+        val routes = HongguoNetProfiles.playRoutes()
+        var lastError: Exception? = null
+        for ((index, route) in routes.withIndex()) {
+            try {
+                val entry = when (route) {
+                    HongguoNetProfiles.ROUTE_V5TAB -> fetchTabEntry(vid, identity)
+                    HongguoNetProfiles.ROUTE_PRELOAD -> fetchPreloadEntry(vid, identity)
+                    // 路由名在 HongguoNetProfiles 解析时已过滤，此处仅防御
+                    else -> throw PlayException("未知取源路由 $route", "UNKNOWN_ROUTE")
+                }
+                noteSuccess()
+                return entry
+            } catch (e: Exception) {
+                if (e is PlayException && e.code == EMPTY_BODY) throw e
+                lastError = e
+                if (index < routes.lastIndex) {
+                    AppLog.w(TAG, "play route=$route failed, fall back to ${routes[index + 1]}: ${e.message}")
+                }
+            }
+        }
+        throw lastError ?: PlayException("没有可用的取源路由", "NO_ROUTE")
+    }
+
+    /** 收到空 body：记连续次数、按 [backoffMs] 进入冷却，并以 [EMPTY_BODY] 抛出。 */
+    private fun onEmptyBody(path: String): Nothing {
+        val backoff = noteEmptyBody()
+        AppLog.w(TAG, "play empty body path=$path cooldown=${backoff / 1000}s")
+        throw PlayException("empty body path=$path", EMPTY_BODY)
+    }
+
+    /** 冷却期内的取址直接拒绝（不发请求），剩余分钟数写进 message 供界面提示。 */
+    private fun checkCooldown() {
+        val remaining = cooldownRemainingMs()
+        if (remaining <= 0L) return
+        throw PlayException("红果服务端限流，约 ${(remaining + 59_999) / 60_000} 分钟后再试", COOLDOWN)
+    }
+
+    /**
+     * 形态「V5 签名 GET video_tab」（对齐果映TV MobilePlayback.getVideoTab / aston
+     * recoverVideoTab）：query=V5 模板公共参数 + 单集业务参数，签名走 [HongguoPlaybackV5.sign]
+     * （_rticket 调谐分支 12，头只有 x-khronos/x-helios/x-medusa），无 body 无 SS-STUB。
+     */
+    private fun fetchTabEntry(vid: String, identity: HongguoDeviceRegister.Identity): JSONObject {
+        val ver = HongguoVersionProfiles.default
+        val pairs = listOf(
+            "aid" to "8662", "app_name" to "novelread",
+            "version_code" to ver.code, "version_name" to ver.versionName,
+            "channel" to V5_CHANNEL, "device_platform" to "android",
+            "device_type" to V5_DEVICE_TYPE, "os_version" to V5_OS_VERSION,
+            "update_version_code" to ver.code,
+            "iid" to identity.installId, "cdid" to identity.cdid, "device_id" to identity.deviceId,
+            "video_id" to vid, "video_id_type" to "0", "device_level" to "1",
+            "need_all_video_definition" to "1", "need_mp4_align" to "0",
+            "use_os_player" to "0", "video_platform" to "1024",
+            "source" to "0", "from_video_id" to ""
+        )
+        val signed = HongguoPlaybackV5.sign(pairs, System.currentTimeMillis(), null)
+        val req = Request.Builder()
+            .url("${HongguoNetProfiles.playHost()}$TAB_PATH?${signed.query}")
+            .header("User-Agent", HongguoPlaybackV5.PLAYBACK_UA)
+            .header("Accept", "application/json")
+            .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
+            .build()
+        AppLog.d(TAG, "play video_tab req vid=$vid device=${identity.deviceId}")
+        return http.newCall(req).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: ByteArray(0)
+            if (!resp.isSuccessful) {
+                AppLog.w(TAG, "play video_tab failed http=${resp.code}")
+                throw IllegalStateException("HTTP ${resp.code}")
+            }
+            if (bytes.isEmpty()) onEmptyBody(TAB_PATH)
+            AppLog.i(TAG, "play video_tab ok http=${resp.code} len=${bytes.size}")
+            tabEntryOf(vid, String(bytes, Charsets.UTF_8))
+        }
+    }
+
+    /**
+     * video_tab 响应 → 本集 entry（含 `video_model` 键，交 [parseEntry] 二跳）。
+     * 行在 `data.video_model_data[vid]`，少数形态直接 `data[vid]`；都没有则取首行兜底。
+     * 纯函数，可单测。
+     */
+    internal fun tabEntryOf(vid: String, text: String): JSONObject {
+        val payload = JSONObject(text)
+        val code = payload.optInt("Code", payload.optInt("code", 0))
+        // 业务码透传进 code（BIZ_101000=设备拒收→上层恢复链触发重注册的判据）
+        if (code != 0) throw PlayException("播放接口 code=$code", "BIZ_$code")
+        val data = payload.optJSONObject("data") ?: JSONObject()
+        val rows = data.optJSONObject("video_model_data") ?: data
+        return rows.optJSONObject(vid)
+            ?: data.optJSONObject(vid)
+            ?: runCatching { rows.optJSONObject(rows.keys().next()) }.getOrNull()
+            ?: throw PlayException("播放接口未返回本集片源", "MISSING_MODEL")
+    }
+
+    /**
+     * 后续剧集地址预取：逐集走与 [playUrl] 相同的路由（video_tab 是单集接口），集间限速。
+     * 任一集**取址**失败即止——服务端回空 body 时继续打只会多制造空响应；单集**解析**
+     * 失败（如片源不兼容）只跳过该集。返回成功解析的 vid→PlayUrl（保持入参顺序），
+     * 未命中的集切到时实时解析兜底。
      */
     fun playUrlBatch(
         vids: List<String>,
@@ -107,22 +204,30 @@ class HongguoPlay {
     ): Map<String, PlayUrl> {
         require(vids.isNotEmpty()) { "预取集数为空" }
         require(vids.all { it.matches(Regex("\\d{1,30}")) }) { "分集编号无效" }
-        val bounded = vids.take(20)
-        val data = fetchPreloadData(bounded, identity)
         val out = LinkedHashMap<String, PlayUrl>()
-        for (vid in bounded) {
-            val entry = data.optJSONObject(vid) ?: continue
+        for ((index, vid) in vids.withIndex()) {
+            val entry = try {
+                fetchEntry(vid, identity)
+            } catch (e: Exception) {
+                if (e is PlayException && e.code == COOLDOWN) {
+                    // 冷却期内预取静默放弃（不发网络；前台起播时会给出限流提示）
+                    AppLog.d(TAG, "prefetch skip: cooldown")
+                } else {
+                    AppLog.w(TAG, "prefetch stop at vid=$vid: ${e.message}")
+                }
+                break
+            }
             runCatching { out[vid] = parseEntry(vid, entry, preferredPixels) }
+            if (index < vids.lastIndex) Thread.sleep(PREFETCH_GAP_MS)
         }
         return out
     }
 
     /**
-     * preload/v1 批量端点（2026-11-20 晚播放全挂救援）：当前服务端唯一放行的
-     * 播放取流端点。对齐 HGTV 1.3.7.1 主通道（V 函数 multi 分支 + kotlinSignedPost
-     * 11-10 形态传输）。要点：
-     * - body：`mixed_video_id_map` 单集形态 + `dr_scene="preload"`，device_level=1 /
-     *   video_platform=1024（1.3.7.1 V 函数 multi 分支同值）；
+     * `preload` 路由（次选，默认关）：2026-11-20 晚~11-22 的放行端点，11-23 起 200 空 body。
+     * 对齐 HGTV 1.3.7.1 主通道（V 函数 multi 分支 + kotlinSignedPost 11-10 形态传输）。要点：
+     * - body：`mixed_video_id_map` 单集形态 + `dr_scene="preload"`、gzip；device_level
+     *   空响应 4→5 升级重发、video_platform=1024、use_server_dns=true（对齐 HGTV 1.3.8.6 o0）；
      * - 传输：老 Argus/Ladon/Gorgon 全头集（kotlinSignedPost 复活；V5 medusa/helios
      *   纯头集与端点组合在探针实验中全挂）；
      * - 画像三处同源：query device_type/brand + Argus deviceProfile + UA 一律
@@ -151,7 +256,7 @@ class HongguoPlay {
         vids: List<String>,
         identity: HongguoDeviceRegister.Identity
     ): JSONObject {
-        Log.w(TAG, "play preload/v1 vids=${vids.size} first=${vids.first()} level=$deviceLevel device=${identity.deviceId}")
+        AppLog.d(TAG, "play preload/v1 vids=${vids.size} first=${vids.first()} level=$deviceLevel device=${identity.deviceId}")
         val ver = HongguoVersionProfiles.default
         val q = java.util.LinkedHashMap<String, String>()
         q["device_id"] = identity.deviceId
@@ -178,17 +283,17 @@ class HongguoPlay {
             while (true) {
                 // gzip body 同字节签名发送（对齐 HGTV o0：GZIPOutputStream + Content-Encoding）
                 text = kotlinSignedPost(
-                    "${HongguoNetProfiles.playHost()}/novel/player/multi_video_model/preload/v1",
+                    "${HongguoNetProfiles.playHost()}$PRELOAD_PATH",
                     q, gzipDeflate(preloadBody(vids, deviceLevel)), ver.versionName, identity.deviceId, ua(ver.code)
                 )
                 respProbe = text.take(1200)
                 if (text.isNotEmpty()) break
                 if (deviceLevel < 5) {
-                    Log.w(TAG, "play empty body, escalate device_level $deviceLevel->${deviceLevel + 1}")
+                    AppLog.w(TAG, "play preload empty body, escalate device_level $deviceLevel->${deviceLevel + 1}")
                     deviceLevel += 1
                     continue
                 }
-                throw EmptyBodyException("empty body path=/novel/player/multi_video_model/preload/v1 level=5")
+                onEmptyBody(PRELOAD_PATH)
             }
             val payload = JSONObject(text)
             val code = payload.optInt("Code", payload.optInt("code", 0))
@@ -198,7 +303,9 @@ class HongguoPlay {
             val data0 = payload.optJSONObject("data") ?: JSONObject()
             data0.optJSONObject("1004") ?: data0
         }.getOrElse { e ->
-            throw PlayException("${e.message} || resp=$respProbe", (e as? PlayException)?.code ?: "PRELOAD_FAIL")
+            // PlayException（空 body 熔断 / 业务码）原样抛出，其余（HTTP 码/解析）归入路由失败
+            if (e is PlayException) throw e
+            throw PlayException("${e.message} || resp=$respProbe", "PRELOAD_FAIL")
         }
     }
 
@@ -239,27 +346,80 @@ class HongguoPlay {
         return bos.toByteArray()
     }
 
-    private class EmptyBodyException(detail: String = "empty body") : IllegalStateException(detail)
-
-    private companion object {
-        const val TAG = "Hongguo"
+    companion object {
+        private const val TAG = "Hongguo"
 
         /** 播放 host 与画像四元组：改读 HongguoNetProfiles（version.json `hg_net`
          *  热更覆盖，2026-11-21 起；探针实证通过的组合就是其内置档——b 线 host +
          *  Redmi 25053RT47C / Android 16 / update_64，HGTV F0.n3.f2118b 集群 a/b/c
          *  + lf/lq/hl 共 6 个候选）。 */
 
+        /** video_tab 路径（果映形态无尾斜线；带不带尾斜线实测都放行）。 */
+        private const val TAB_PATH = "/reading/bookapi/video_tab/multi_video_model/v1"
+        private const val PRELOAD_PATH = "/novel/player/multi_video_model/preload/v1"
+
+        /** 播放接口 200 空 body 的异常 code：服务端限流特征，与设备身份无关（换注册方式
+         *  同样空），不触发上层重注册，只触发熔断。 */
+        const val EMPTY_BODY = "EMPTY_BODY"
+
+        /** 熔断冷却期内的异常 code（未发网络请求）。 */
+        const val COOLDOWN = "COOLDOWN"
+
+        /** V5 模板画像：与 [HongguoPlaybackV5] 签名 proto 同源（proto 从 query 取
+         *  channel/device_type/os_version），版本号另走 [HongguoVersionProfiles.default]。 */
+        private const val V5_CHANNEL = "vivo_8662_64"
+        private const val V5_DEVICE_TYPE = "PGT-AN10"
+        private const val V5_OS_VERSION = "12"
+
+        /** 批量预取集间限速：密集请求会让服务端把后续请求一并回空（2026-11-23 探针实证）。 */
+        private const val PREFETCH_GAP_MS = 250L
+
+        // ---- 空响应熔断（2026-11-23 探针实证）----
+        // 服务端对短时密集的播放接口请求回 200 空 body，封禁期内继续请求不提前解除，
+        // 完全静默 8~30 分钟后恢复（当天 4 次变空全部发生在密集请求之后）。收到空 body
+        // 即按连续次数递增冷却，冷却期内的取址直接拒绝、不发请求；成功一次清零。进程内存态。
+
+        private const val COOLDOWN_BASE_MS = 3L * 60_000L
+        private const val COOLDOWN_MAX_MS = 30L * 60_000L
+
+        @Volatile private var blockedUntil = 0L
+        @Volatile private var emptyStreak = 0
+
+        /** 递增冷却：3 → 6 → 12 → 24 → 30 分钟封顶。 */
+        internal fun backoffMs(streak: Int): Long =
+            (COOLDOWN_BASE_MS shl (streak - 1).coerceIn(0, 4)).coerceAtMost(COOLDOWN_MAX_MS)
+
+        /** 记一次空响应并进入冷却，返回本次冷却时长。 */
+        internal fun noteEmptyBody(): Long {
+            emptyStreak += 1
+            val backoff = backoffMs(emptyStreak)
+            blockedUntil = System.currentTimeMillis() + backoff
+            return backoff
+        }
+
+        /** 冷却剩余毫秒；0 = 可发请求。 */
+        internal fun cooldownRemainingMs(now: Long = System.currentTimeMillis()): Long =
+            (blockedUntil - now).coerceAtLeast(0L)
+
+        /** 取址成功：连续空响应计数与冷却清零。 */
+        internal fun noteSuccess() {
+            emptyStreak = 0
+            blockedUntil = 0L
+        }
+
+        internal fun resetCooldownForTest() = noteSuccess()
+
         /** 播放 UA（X3.d 形态，与 query 画像同源；勿用 HongguoEnv 运行设备型号——
          *  模拟器型号未验证，探针通过的是本硬编码形态）。 */
-        fun ua(versionCode: String): String =
+        private fun ua(versionCode: String): String =
             "com.phoenix.read/$versionCode (Linux; U; Android ${HongguoNetProfiles.osVersion()}; zh_CN; " +
                 "${HongguoNetProfiles.deviceType()}; Build/BP2A.250605.031.A3; " +
                 "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
     }
 
     /**
-     * 纯 Kotlin 签名传输（2026-11-10 去黑盒定稿形态，11-20 晚随 preload/v1 切换
-     * 复活为播放唯一通道）：按 HGTV F0.x1.d 形态构造 Argus/Ladon/Gorgon 全头集
+     * 纯 Kotlin 签名传输（2026-11-10 去黑盒定稿形态，11-20 晚随 preload/v1 切换复活，
+     * 现为 `preload` 路由的传输层）：按 HGTV F0.x1.d 形态构造 Argus/Ladon/Gorgon 全头集
      * （E0 外层+G0 改写后）发送。明文 body（preload 探针实证形态）。
      */
     private fun kotlinSignedPost(
@@ -322,12 +482,10 @@ class HongguoPlay {
             .apply { headers.forEach { (k, v) -> addHeader(k, v) } }
             .build()
         http.newCall(req).execute().use { resp ->
-            val bytes = resp.body?.bytes() ?: ByteArray(0)
-            // 诊断期裸 Log（端点切换排查期，稳定后回 AppLog.d）；
-            // http 码塞进日志——android_logs 工具只回传异常行/告警，W 级可观测
-            Log.w(TAG, "play preload resp http=${resp.code} len=${bytes.size} tls=${resp.handshake?.tlsVersion}")
-            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
-            return String(bytes, Charsets.UTF_8)
+                val bytes = resp.body?.bytes() ?: ByteArray(0)
+                AppLog.i(TAG, "play preload resp http=${resp.code} len=${bytes.size}")
+                if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+                return String(bytes, Charsets.UTF_8)
         }
     }
 
