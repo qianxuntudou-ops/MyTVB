@@ -165,7 +165,7 @@ class MeListViewModel(
                                 )
                                 _hasMore.value = consecutiveEmptyHistoryPages < 2
                             } else {
-                                _hasMore.value = rawList.size >= pageSize
+                                _hasMore.value = rawList.isNotEmpty()
                             }
                             lastLoadedAt = System.currentTimeMillis()
                             return@onSuccess
@@ -174,7 +174,10 @@ class MeListViewModel(
                         lastHistoryPayloadSignature = signature
                         _uiState.value = _uiState.value.copy(historyVideos = merged)
                         applyHistoryCursor(response.data.cursor, rawList)
-                        _hasMore.value = rawList.size >= pageSize
+                        // 不满页不再直接判底（issue#131 仍停 79/99）：服务端遇失效视频/
+                        // 同秒边界会返回不满页但后面还有数据。放宽为「有数据就继续」，
+                        // 真正的到底交给上面的连续 2 页零新增兜底（空页自然推进计数）。
+                        _hasMore.value = rawList.isNotEmpty()
                         lastLoadedAt = System.currentTimeMillis()
                     } else {
                         _error.value = response.errorMessage
@@ -443,7 +446,7 @@ class MeListViewModel(
     private fun applyHistoryCursor(cursor: CursorModel?, rawList: List<HistoryVideoModel>) {
         historyCursorViewAt = cursor?.viewAt
             ?: rawList.lastOrNull()?.viewAt
-            ?: 0L
+            ?: historyCursorViewAt // 空页且无 cursor：保持旧游标，归零会从头重拉一整页
         historyCursorMax = cursor?.max ?: 0L
         historyCursorBusiness = cursor?.business.orEmpty()
     }

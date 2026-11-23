@@ -503,6 +503,12 @@ class TvListFocusController(
             logD("restoreFocusAfterReturn: polling already active, skip duplicate call")
             return
         }
+        if (isHiddenBehindVisibleOwner()) {
+            // 被盖住的列表没有可恢复的焦点：不启动轮询（轮询窗口会把该页后续 onDataChanged
+            // 全部导入恢复仲裁），也不回调 onFailed（各页兜底同样会被 focusPosition 拦下）
+            logD("restoreFocusAfterReturn: list hidden behind visible owner, skip")
+            return
+        }
         val anchor = capturedAnchor ?: currentAnchor ?: run {
             logD("restoreFocusAfterReturn: no anchor, onFailed")
             onFailed()
@@ -575,6 +581,21 @@ class TvListFocusController(
         }
         recyclerView.postDelayed(runnable, retryDelayMs)
         logD("restoreFocusAfterReturn: scheduled retry, pos=$position")
+    }
+
+    /**
+     * 列表已 attach 但不可见，且焦点正由列表外的**可见**控件持有：典型为宿主 Fragment 被
+     * overlay（详情页等）`hide()` 盖住——hide 不改生命周期，onResume 照常触发返回恢复，
+     * `allowOutsideFocus` 的强制拉回会把焦点拽进不可见列表，可见页表现为「焦点丢失」且
+     * 方向键全被隐藏列表吃掉（issue#131 动态页→详情页→播放器返回）。
+     *
+     * 列表仅因自身刷新/加载态暂不可见、且没有可见持焦者时不算被盖住，保持旧行为
+     * （盲恢复后内容显示即落焦）。
+     */
+    private fun isHiddenBehindVisibleOwner(): Boolean {
+        if (!recyclerView.isAttachedToWindow || recyclerView.isShown) return false
+        val focused = recyclerView.rootView?.findFocus() ?: return false
+        return !focused.isDescendantOf(recyclerView) && focused.isShown
     }
 
     /** 结束返回恢复轮询窗口，清空仲裁槽位。 */
@@ -815,6 +836,10 @@ class TvListFocusController(
         val focused = recyclerView.rootView?.findFocus()
         if (focused != null && !focused.isDescendantOf(recyclerView) && reason != "move" && reason != "primary" && !allowOutsideFocus) {
             logD("focusPosition: BLOCKED reason=$reason focus outside RV on ${describeView(focused)}")
+            return false
+        }
+        if (focused != null && isHiddenBehindVisibleOwner()) {
+            logD("focusPosition: BLOCKED reason=$reason list hidden, visible owner=${describeView(focused)}")
             return false
         }
         logD("focusPosition: pos=$position offset=$offsetTop reason=$reason focused=${describeView(focused)}")

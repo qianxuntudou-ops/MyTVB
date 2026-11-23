@@ -778,6 +778,12 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
             TYPE_HISTORY -> {
                 // 重复 payload 被跳过：静默刷新若已应用/无 diff，标志到此为止，别劫持下次正常刷新
                 pendingSilentHistoryRefresh = false
+                // 本次刷新没走 FirstScreenRenderer（onFirstFrame/追加回调都不会执行），
+                // loadData() 开头置 false 的翻页开关必须在此恢复，否则列表永久锁死在
+                // 当前页数，触底加载入口全被守卫挡死（issue#131 偶发只显示 20 个）
+                if ((historyAdapter?.contentCount() ?: 0) > 0) {
+                    allowHistoryLoadMore = true
+                }
                 if (pendingHistoryScrollToTop) {
                     pendingHistoryScrollToTop = false
                     scrollHistoryListToTopAfterRefresh()

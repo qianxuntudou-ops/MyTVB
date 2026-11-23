@@ -35,16 +35,17 @@ class MyPlayerControlViewLayoutManager(
     private val extraControlsScrollView: ViewGroup = playerControlView.findViewById(R.id.exo_extra_controls_scroll_view)
     private val overflowShowButton: View = playerControlView.findViewById(R.id.exo_overflow_show)
     private val overflowHideButton: View = playerControlView.findViewById(R.id.exo_overflow_hide)
-    // 排列顺序按使用频率：上一个/暂停/下一个/更多(三连菜单)/弹幕/评论/字幕/倍速/选集/
+    // 排列顺序按使用频率：上一个/暂停/下一个/更多(三连菜单)/评论/弹幕/字幕/倍速/选集/
     // UP主/推荐/循环/总设置，其余低频按钮（刷新/快退快进/SC开关/镜像/直播设置/关闭）排尾。
-    // 评论后移是 issue#128 反馈：评论区遮挡大且低频，排在三连菜单与弹幕之后。
+    // 评论后移是 issue#128 反馈：评论区遮挡大且低频；用户三选一拍板「放三连菜单后面」
+    // （方案①），issue#131 指出上版落在弹幕后差了一位，现紧跟三连菜单。
     private val orderedButtons: List<View> = listOf(
         playerControlView.findViewById(R.id.button_previous),
         playerControlView.findViewById(R.id.button_play),
         playerControlView.findViewById(R.id.button_next),
         playerControlView.findViewById(R.id.button_more),
-        playerControlView.findViewById(R.id.button_dm_switch),
         playerControlView.findViewById(R.id.button_comment),
+        playerControlView.findViewById(R.id.button_dm_switch),
         playerControlView.findViewById(R.id.button_subtitle),
         playerControlView.findViewById(R.id.button_play_speed),
         playerControlView.findViewById(R.id.button_choose_episode),
@@ -75,8 +76,8 @@ class MyPlayerControlViewLayoutManager(
         R.id.button_choose_episode,
         R.id.button_play_speed,
         R.id.button_subtitle,
-        R.id.button_comment,
         R.id.button_dm_switch,
+        R.id.button_comment,
         R.id.button_more,
         R.id.button_next,
         R.id.button_previous

@@ -570,6 +570,14 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             if (!isAdded || view == null) {
                 return@post
             }
+            // 「详情页优先」路由下点卡进的是 overlay：播放器返回时本页仍被 hide() 盖住
+            // （hide 不改生命周期，onResume 照常触发），此时恢复焦点只会把焦点拽进不可见
+            // 列表、反复抢走详情页焦点（issue#131）。被盖住就不恢复，回到本页时由
+            // MainActivity 的 overlay 弹出锚点恢复接管。
+            if (isHidden) {
+                pendingVideoFocusRestoreOnResume = false
+                return@post
+            }
             val currentFocus = activity?.currentFocus
             if (currentFocus != null && currentFocus.isDescendantOf(binding.recyclerViewRight)) {
                 pendingVideoFocusRestoreOnResume = false
