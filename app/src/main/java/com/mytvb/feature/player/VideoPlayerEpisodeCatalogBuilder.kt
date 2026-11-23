@@ -7,6 +7,7 @@ import com.mytvb.R
 import com.mytvb.model.episode.EpisodeModel
 import com.mytvb.model.episode.EpisodeStatModel
 import com.mytvb.model.series.EpisodesDetailModel
+import com.mytvb.model.video.VideoModel
 import com.mytvb.model.video.VideoPvModel
 import com.mytvb.model.video.detail.VideoDetailModel
 import com.mytvb.model.video.detail.UgcEpisode
@@ -66,25 +67,58 @@ class VideoPlayerEpisodeCatalogBuilder(
         val mainEpisodes = detail.episodes.orEmpty().mapIndexed { index, episode ->
             episode.toPlayableEpisode(index, detail.cover, seasonId)
         }
-        if (mainEpisodes.isNotEmpty()) {
-            return mainEpisodes
+        if (mainEpisodes.isEmpty()) {
+            return detail.section.orEmpty()
+                .flatMap { section ->
+                    section.episodes.mapIndexed { index, episode ->
+                        episode.toSectionPlayableEpisode(
+                            index = index,
+                            sectionTitle = section.title,
+                            fallbackCover = detail.cover,
+                            fallbackSeasonId = seasonId
+                        )
+                    }
+                }
         }
-        return detail.section.orEmpty()
-            .flatMap { section -> section.episodes }
-            .mapIndexed { index, episode ->
-                VideoPlayerViewModel.PlayableEpisode(
-                    cid = episode.cid,
-                    title = episode.title.ifBlank { "EP${index + 1}" },
-                    panelTitle = episode.title.ifBlank { "EP${index + 1}" },
-                    subtitle = episode.desc.ifBlank { episode.typeName },
-                    cover = episode.coverUrl.ifBlank { detail.cover },
-                    aid = episode.aid,
-                    bvid = episode.bvid,
-                    epId = episode.epid,
-                    seasonId = episode.sid.takeIf { it > 0L } ?: seasonId,
-                    source = VideoPlayerViewModel.EpisodeCatalogSource.PGC_EPISODES
-                )
+        // 花絮/PV/预告等 section 条目并入选集目录：入口点击的 epId 才能在
+        // resolvePgcEpisodeIndex 里命中，否则被回退成正片第 1 集（issue#135
+        // 「番剧的花絮看不了」——点花絮实际播正片）。连载中正片行末已由
+        // EpisodeListMerge 补「下一集预告」，按 cid 去重避免重复条目。
+        val mainCids = mainEpisodes.mapTo(mutableSetOf()) { it.cid }
+        return mainEpisodes + detail.section.orEmpty()
+            .flatMap { section ->
+                section.episodes.mapIndexed { index, episode ->
+                    episode.toSectionPlayableEpisode(
+                        index = index,
+                        sectionTitle = section.title,
+                        fallbackCover = detail.cover,
+                        fallbackSeasonId = seasonId
+                    )
+                }
             }
+            .filter { it.cid > 0L && mainCids.add(it.cid) }
+    }
+
+    private fun VideoModel.toSectionPlayableEpisode(
+        index: Int,
+        sectionTitle: String,
+        fallbackCover: String,
+        fallbackSeasonId: Long
+    ): VideoPlayerViewModel.PlayableEpisode {
+        return VideoPlayerViewModel.PlayableEpisode(
+            cid = cid,
+            title = title.ifBlank { "EP${index + 1}" },
+            panelTitle = title.ifBlank { "EP${index + 1}" },
+            subtitle = sectionTitle.ifBlank { desc.ifBlank { typeName } },
+            cover = coverUrl.ifBlank { fallbackCover },
+            aid = aid,
+            bvid = bvid,
+            // section 接口条目没有 ep_id 字段，epid 恒 0；share_url(/bangumi/play/epXX)
+            // 兜底解析出的 playbackEpId 才是真实集 id（心跳/目录命中都依赖它）。
+            epId = epid.takeIf { it > 0L } ?: playbackEpId,
+            seasonId = sid.takeIf { it > 0L } ?: fallbackSeasonId,
+            source = VideoPlayerViewModel.EpisodeCatalogSource.PGC_EPISODES
+        )
     }
 
     fun resolvePgcEpisodeIndex(

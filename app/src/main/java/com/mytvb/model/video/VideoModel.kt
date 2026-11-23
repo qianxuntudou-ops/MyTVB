@@ -10,7 +10,10 @@ import com.mytvb.model.user.OfficialVerifySimple
 import org.json.JSONObject
 
 data class VideoModel(
-    @SerializedName(value = "aid", alternate = ["id"])
+    // 不做 alternate=["id"]：PGC 系接口（season/section 的条目）同时下发 aid 与 id
+    // （id=episode id），Gson 按出现顺序后者覆盖，会把真实 aid 覆盖成 ep id，
+    // 导致花絮/PV 按 UGC 稿件回落播放时主键错误（issue#135）。
+    @SerializedName("aid")
     val aid: Long = 0,
     
     @SerializedName("bvid")

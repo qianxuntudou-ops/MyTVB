@@ -270,6 +270,17 @@ class SeriesDetailFragment : Fragment() {
                 playQueue = buildSectionPlayQueue(video),
                 forcePlayer = true
             )
+            return
+        }
+        // 「UP论道」等 section 只下发 aid（cid=0、bvid 空、epid 指向站外引用），
+        // PGC 播放链路走不通：抹掉 PGC 身份按普通 UGC 稿件播放（issue#135）。
+        if (video.aid > 0L) {
+            VideoRouteNavigator.openVideo(
+                context = requireContext(),
+                video = video.copy(epid = 0L, sid = 0L),
+                playQueue = buildSectionPlayQueue(video),
+                forcePlayer = true
+            )
         }
     }
 

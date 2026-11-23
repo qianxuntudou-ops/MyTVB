@@ -111,7 +111,16 @@ class VideoPlayerPlayInfoGateway(
                 "playback_diag playinfo finished type=pgc cid=$cid totalMs=${SystemClock.elapsedRealtime() - requestStartedAtMs} " +
                     "code=${result?.code ?: "none"} playable=${hasPlayableMedia(result?.data)}"
             )
-            return result
+            // 花絮/PV/预告等 section 条目本质是挂在番剧下的普通 UGC 稿件：PGC
+            // playurl 对它们返回 -404「啥都木有」（issue#135 番剧花絮看不了），
+            // 携带稿件 aid 回落到普通 playurl（avid 未登录也可取流，实测 dash 正常）。
+            if (result == null || result.code != -404 || ((aid ?: 0L) <= 0L && bvid.isNullOrBlank())) {
+                return result
+            }
+            AppLog.w(
+                logTag,
+                "pgc playinfo -404, fallback to ugc playurl: aid=$aid bvid=$bvid cid=$cid epId=$epId"
+            )
         }
 
         val resolvedBvid = bvid?.takeIf { it.isNotBlank() }

@@ -1,5 +1,8 @@
 package com.mytvb.feature.player
 
+import com.mytvb.model.episode.EpisodeModel
+import com.mytvb.model.series.EpisodesDetailModel
+import com.mytvb.model.series.SectionModel
 import com.mytvb.model.video.VideoModel
 import com.mytvb.model.video.VideoPvModel
 import com.mytvb.model.video.detail.UgcEpisode
@@ -71,6 +74,81 @@ class VideoPlayerEpisodeCatalogBuilderTest {
         assertEquals("Archive A · P2", episodes[1].title)
         assertEquals(2001L, episodes[2].cid)
         assertEquals("Archive B", episodes[2].title)
+    }
+
+    @Test
+    fun pgcCatalogAppendsSectionEntriesAfterMainEpisodes() = runBlocking {
+        val detail = EpisodesDetailModel(
+            seasonId = 28747L,
+            episodes = listOf(
+                EpisodeModel(id = 733316L, aid = 1L, bvid = "BV1", cid = 1001L, title = "1", longTitle = "第一集"),
+                EpisodeModel(id = 733317L, aid = 2L, bvid = "BV2", cid = 1002L, title = "2", longTitle = "第二集")
+            ),
+            section = listOf(
+                SectionModel(
+                    title = "特别花絮",
+                    type = 2,
+                    episodes = listOf(
+                        // 真实形态：section 接口条目没有 ep_id/bvid，只有 cid+aid+share_url
+                        VideoModel(
+                            aid = 11L,
+                            cid = 43705764573L,
+                            title = "2026年发布会PV",
+                            redirectUrl = "https://www.bilibili.com/bangumi/play/ep8012711"
+                        ),
+                        // 「UP论道」类纯引用条目：cid=0，进目录也无法播放，应被过滤
+                        VideoModel(aid = 12L, epid = 215048L, title = "UP论道条目")
+                    )
+                ),
+                SectionModel(
+                    title = "预告",
+                    type = 1,
+                    episodes = listOf(
+                        // 与正片重复的 cid 应去重（正片行末已补下一集预告）
+                        VideoModel(aid = 13L, cid = 1001L, epid = 999L, title = "重复预告")
+                    )
+                )
+            )
+        )
+
+        val episodes = builder.buildPgcEpisodes(detail)
+
+        assertEquals(3, episodes.size)
+        assertEquals(8012711L, episodes[2].epId)
+        assertEquals(43705764573L, episodes[2].cid)
+        assertEquals("2026年发布会PV", episodes[2].title)
+        assertEquals("特别花絮", episodes[2].subtitle)
+        assertEquals(28747L, episodes[2].seasonId)
+
+        // 点击花絮入口的 epId 必须能命中目录，否则被回退成正片第 1 集（issue#135）
+        val selectedIndex = builder.resolvePgcEpisodeIndex(
+            episodes = episodes,
+            targetEpId = 8012711L,
+            targetCid = 0L,
+            targetBvid = null,
+            fallbackIndex = -1
+        )
+        assertEquals(2, selectedIndex)
+    }
+
+    @Test
+    fun pgcCatalogSectionOnlyWhenMainEmpty() = runBlocking {
+        val detail = EpisodesDetailModel(
+            seasonId = 9L,
+            episodes = emptyList(),
+            section = listOf(
+                SectionModel(
+                    title = "花絮",
+                    episodes = listOf(VideoModel(cid = 901L, epid = 9011L, title = "pv"))
+                )
+            )
+        )
+
+        val episodes = builder.buildPgcEpisodes(detail)
+
+        assertEquals(1, episodes.size)
+        assertEquals(9011L, episodes[0].epId)
+        assertEquals("花絮", episodes[0].subtitle)
     }
 
     private fun ugcEpisode(
