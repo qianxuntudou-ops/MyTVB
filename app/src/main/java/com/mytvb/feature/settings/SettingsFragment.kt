@@ -207,6 +207,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_RISK_CONTROL = "action_risk_control"
         private const val KEY_APP_VERSION = "info_app_version"
         private const val KEY_CHECK_UPDATE = "action_check_update"
+        // 「启动检测更新」开关（issue#133，默认关）：关=启动只捎带红果热更配置，不弹更新提醒。
+        // MainActivity.checkUpdateOnStartup 按字面量读，两端改 key 必须同步
+        private const val KEY_STARTUP_UPDATE_CHECK = "startup_update_check"
         private const val KEY_USAGE_TIPS = "action_usage_tips"
         private const val KEY_X5_CORE = "action_x5_core"
         private const val KEY_LOG_RECORD = "action_log_record"
@@ -492,7 +495,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         aboutGroups = listOf(
             SettingGroup(R.string.setting_group_about_app, listOf(
                 plain(KEY_APP_VERSION, R.string.app_version, BuildConfig.VERSION_NAME),
-                plain(KEY_CHECK_UPDATE, R.string.check_update, getString(R.string.update_click_to_check))
+                plain(KEY_CHECK_UPDATE, R.string.check_update, getString(R.string.update_click_to_check)),
+                stored(KEY_STARTUP_UPDATE_CHECK, R.string.startup_update_check, "关")
                 // 使用技巧入口暂时屏蔽,弹窗实现保留(showUsageTipsDialog),放开加回:
                 // plain(KEY_USAGE_TIPS, R.string.usage_tips)
             )),
@@ -917,6 +921,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_PSAS_INTERVAL -> showPsasIntervalChoiceDialog()
             // —— 关于 ——
             KEY_CHECK_UPDATE -> checkForUpdate()
+            KEY_STARTUP_UPDATE_CHECK -> toggle(key)
             KEY_USAGE_TIPS -> showUsageTipsDialog()
             KEY_LOG_RECORD -> {
                 val newValue = if (AppLog.isEnabled) "关" else "开"
@@ -1547,6 +1552,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         }
         applyStored(KEY_DM_SMART_SHIELD)
         applyStored(KEY_DM_MERGE_DUPLICATE)
+
+        // —— 关于 ——
+        applyStored(KEY_STARTUP_UPDATE_CHECK)
 
         // —— 电视直播（X5 状态刷新）——
         updateX5Status()

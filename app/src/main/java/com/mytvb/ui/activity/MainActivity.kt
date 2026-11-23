@@ -882,6 +882,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             HongguoVersionProfiles.applyFrom(applicationContext, releaseInfo.hongguoVersions)
             // 红果播放 host/画像热更：同捎带语义（被封后不发版切换，2026-11-21 起）
             HongguoNetProfiles.applyFrom(applicationContext, releaseInfo.hongguoNet)
+            // 「启动检测更新」开关（issue#133，默认关）：关闭时只捎带上面的红果热更配置，
+            // 不弹更新提醒；设置页手动「检查更新」不受此开关影响
+            if (appSettings.getCachedString("startup_update_check", "关") != "开") return
             if (!ApkUpdater.isRemoteNewer(releaseInfo.versionName)) return
             if (appSettings.getCachedString(ApkUpdater.KEY_IGNORED_VERSION) == releaseInfo.versionName) return
             // fetch 期间用户可能已进设置手动检查弹窗，落弹窗前再守一次
