@@ -269,8 +269,8 @@ internal object HongguoMedusa {
                     out.write(le32(java.lang.Float.floatToRawIntBits(fv)))
                 }
                 T_MSG -> {
-                    @Suppress("UNCHECKED_CAST")
                     val subPath = "$path$id."
+                    @Suppress("UNCHECKED_CAST")
                     val sub = serialize(v as Map<Int, Any>, SC_NESTED.getValue(subPath.dropLast(1)), subPath)
                     writeVarint(out, ((id shl 3) or 2).toLong())
                     writeVarint(out, sub.size.toLong())

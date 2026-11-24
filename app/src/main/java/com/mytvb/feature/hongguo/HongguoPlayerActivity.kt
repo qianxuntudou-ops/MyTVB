@@ -399,9 +399,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
         lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             runCatching {
                 val episodes = repository.detail(seriesId).episodes
-                // episodeIndex 为 1-based：下一集起 = drop(episodeIndex)；只取接下来 4 集——
-                // video_tab 是单集接口，逐集请求，多取只会多打接口
-                val upcoming = episodes.drop(episodeIndex).take(4).map { it.videoId }
+                // episodeIndex 为 1-based：下一集起 = drop(episodeIndex)；只取接下来 2 集——
+                // video_tab 是单集接口，逐集请求，多取只会多打接口（2026-11-24 起 4→2，
+                // 配合集间 800ms，降低被服务端按请求次数限流的风险）
+                val upcoming = episodes.drop(episodeIndex).take(2).map { it.videoId }
                 if (upcoming.isNotEmpty()) repository.preloadUpcoming(upcoming)
             }
         }

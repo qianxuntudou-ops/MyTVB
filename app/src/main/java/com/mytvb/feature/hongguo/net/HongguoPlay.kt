@@ -380,7 +380,7 @@ class HongguoPlay {
         private const val V5_OS_VERSION = "12"
 
         /** 批量预取集间限速：密集请求会让服务端把后续请求一并回空（2026-11-23 探针实证）。 */
-        private const val PREFETCH_GAP_MS = 250L
+        private const val PREFETCH_GAP_MS = 800L
 
         // ---- 空响应熔断（2026-11-23 探针实证）----
         // 服务端对短时密集的播放接口请求回 200 空 body，封禁期内继续请求不提前解除，
