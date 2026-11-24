@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.view.Gravity
 import android.view.View
+import android.view.View.MeasureSpec
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -65,6 +66,11 @@ internal class HongguoSeekPreviewView(context: Context) : FrameLayout(context) {
             hideNow()
             return
         }
+        // 首次显示尚未经历 layout（width=0）：不预布局的话 positionToTrack 少减 width/2、
+        // 少减 height，窗体会贴在进度条上（手指附近）而不是上方；本窗尺寸固定，直接
+        // 按 LayoutParams 手动 measure+layout 补上（B 站版等出图才 VISIBLE 无此问题，
+        // 本窗降级形态要立即可见，只能预布局）
+        ensureLaidOut()
         textTime.text = formatMs(positionMs.coerceIn(0L, durationMs))
         positionToTrack(trackBounds, positionMs, durationMs)
         // 帧未就绪先不露黑底空窗：无图时只剩时间提示也保持可见（降级形态）
@@ -100,9 +106,23 @@ internal class HongguoSeekPreviewView(context: Context) : FrameLayout(context) {
         postDelayed(hideRunnable, delayMs)
     }
 
+    /** 首次显示前按 LayoutParams 固定尺寸手动预布局（对齐 TimelineThumbPreviewView 的
+     * width<=0 守卫意图：定位依赖自身 width/height，未布局时算出的位置必错）。 */
+    private fun ensureLaidOut() {
+        if (width > 0 && height > 0) return
+        val w = layoutParams?.width ?: 0
+        val h = layoutParams?.height ?: 0
+        if (w <= 0 || h <= 0) return
+        measure(
+            MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY),
+        )
+        layout(0, 0, w, h)
+    }
+
     private fun positionToTrack(trackBounds: Rect, positionMs: Long, durationMs: Long) {
         val host = parent as? View ?: return
-        if (host.width <= 0 || trackBounds.width() <= 0) return
+        if (width <= 0 || height <= 0 || host.width <= 0 || trackBounds.width() <= 0) return
         val progressRatio =
             (positionMs.coerceIn(0L, durationMs).toDouble() / durationMs.toDouble())
         val rawOffset = trackBounds.left + trackBounds.width() * progressRatio - width / 2.0
