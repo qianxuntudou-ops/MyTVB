@@ -1,6 +1,8 @@
 package com.mytvb.feature.player.danmaku
 
+import com.mytvb.core.common.coroutine.catchingRequest
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.model.dm.DmModel
 import com.mytvb.model.live.ChatRoomWrapper
 import com.mytvb.network.WbiGenerator
@@ -9,12 +11,15 @@ import com.mytvb.network.session.NetworkSessionGateway
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.OkHttpClient
+import java.util.concurrent.ConcurrentHashMap
 
 class LiveDanmakuManager(
     private val apiService: ApiService,
     private val okHttpClient: OkHttpClient,
     private val sessionGateway: NetworkSessionGateway,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** 设置→弹幕→过滤「屏蔽抽奖弹幕」，每条弹幕读一次（读的是内存缓存，改设置即时生效）。 */
+    private val isLotteryDanmakuBlocked: () -> Boolean = { PlayerSettingsStore.isLotteryDanmakuBlocked() }
 ) {
     companion object {
         private const val TAG = "LiveDanmakuManager"
@@ -28,6 +33,9 @@ class LiveDanmakuManager(
     private var currentRoomId: Long = 0L
     private var danmakuIdCounter = 0L
 
+    // 本场抽奖口令（天选/人气红包的 danmu）：断线重连保留，换房或退出直播清空
+    private val blockedLotteryDanmu: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     private val _danmakuFlow = MutableSharedFlow<DmModel>(extraBufferCapacity = 128)
     val danmakuFlow: SharedFlow<DmModel> = _danmakuFlow.asSharedFlow()
 
@@ -38,7 +46,10 @@ class LiveDanmakuManager(
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     fun start(roomId: Long) {
+        // 同一场重复 start（重建连接）保留已收到的口令，换房才清
+        val sameRoom = roomId == currentRoomId
         stop()
+        if (!sameRoom) blockedLotteryDanmu.clear()
         currentRoomId = roomId
         connectJob = scope.launch {
             var attempt = 0
@@ -72,6 +83,7 @@ class LiveDanmakuManager(
 
     fun release() {
         stop()
+        blockedLotteryDanmu.clear()
         scope.cancel()
     }
 
@@ -88,16 +100,33 @@ class LiveDanmakuManager(
 
         val messageJob = scope.launch {
             client.danmakuMessages.collect { message ->
-                if (message.type == LiveDanmakuMessage.Type.DANMU) {
-                    val dmModel = DmModel(
-                        id = ++danmakuIdCounter,
-                        content = message.content,
-                        color = message.color,
-                        mode = 1,
-                        fontSize = 25,
-                        progress = 0
-                    )
-                    _danmakuFlow.tryEmit(dmModel)
+                when (message.type) {
+                    LiveDanmakuMessage.Type.DANMU -> {
+                        if (LiveLotteryDanmakuFilter.shouldDrop(
+                                message.content, isLotteryDanmakuBlocked(), blockedLotteryDanmu
+                            )
+                        ) {
+                            AppLog.d(TAG, "DANMU dropped as lottery danmu: ${message.content}")
+                            return@collect
+                        }
+                        val dmModel = DmModel(
+                            id = ++danmakuIdCounter,
+                            content = message.content,
+                            color = message.color,
+                            mode = 1,
+                            fontSize = 25,
+                            progress = 0
+                        )
+                        _danmakuFlow.tryEmit(dmModel)
+                    }
+                    // 抽奖口令只登记不上屏；开关关着也登记，中途打开开关时本场已开的抽奖立即生效
+                    LiveDanmakuMessage.Type.LOTTERY_DANMU -> {
+                        val keyword = LiveLotteryDanmakuFilter.normalize(message.content)
+                        if (blockedLotteryDanmu.add(keyword)) {
+                            AppLog.i(TAG, "lottery danmu registered keyword=$keyword total=${blockedLotteryDanmu.size}")
+                        }
+                    }
+                    else -> Unit
                 }
             }
         }
@@ -109,27 +138,77 @@ class LiveDanmakuManager(
             }
         }
 
-        // 监听连接状态，断开时取消 messageJob 让 connectOnce 结束
-        val stateJob = scope.launch {
-            client.connectionState.collect { state ->
-                _isConnected.value = state == LiveDanmakuClient.ConnectionState.CONNECTED
-                if (state == LiveDanmakuClient.ConnectionState.FAILED ||
-                    state == LiveDanmakuClient.ConnectionState.DISCONNECTED
-                ) {
-                    messageJob.cancel()
-                }
-            }
-        }
+        // 与 WS 并行补拉一次当前抽奖口令（此时弹幕服务器配置已拿到，密钥是新的，直接复用）
+        val lotteryJob = scope.launch { prefetchLotteryDanmu(roomId, uid) }
 
+        var stateJob: Job? = null
         try {
             client.connect(roomId, danmuConfig.token, uid, hostList)
+            // 监听连接状态，断开时取消 messageJob 让 connectOnce 结束。
+            // 必须在 connect() 之后再订阅：状态流的初始值是 DISCONNECTED，和 connect() 并发启动时，
+            // 订阅若先跑会把这个初始值当成「已断开」而取消 messageJob——首连白费，空等一个重连间隔。
+            // connect() 返回时状态已是 CONNECTING（或更早的 FAILED），首次值不会再是初始值
+            stateJob = scope.launch {
+                client.connectionState.collect { state ->
+                    _isConnected.value = state == LiveDanmakuClient.ConnectionState.CONNECTED
+                    if (state == LiveDanmakuClient.ConnectionState.FAILED ||
+                        state == LiveDanmakuClient.ConnectionState.DISCONNECTED
+                    ) {
+                        messageJob.cancel()
+                    }
+                }
+            }
             // 等待 messageJob 结束（连接断开时会 cancel）
             messageJob.join()
         } finally {
+            stateJob?.cancel()
+            lotteryJob.cancel()
             client.release()
-            stateJob.cancel()
             superChatJob.cancel()
         }
+    }
+
+    /**
+     * 补拉本场当前进行中的抽奖口令。WS 只在抽奖开启那一刻推一次，中途进房（含断线重连）收不到，
+     * 从 getLotteryInfoWeb 取。访客态该接口实测直接 -352，所以只在已登录且开关打开时发；
+     * 失败不重试——补不到只是本场前半段的口令屏蔽不到。
+     */
+    private suspend fun prefetchLotteryDanmu(roomId: Long, uid: Long) {
+        if (!isLotteryDanmakuBlocked()) {
+            AppLog.d(TAG, "lottery prefetch skipped: switch off")
+            return
+        }
+        if (uid <= 0L) {
+            AppLog.d(TAG, "lottery prefetch skipped: not logged in")
+            return
+        }
+        catchingRequest {
+            val (imgKey, subKey) = sessionGateway.getWbiKeys()
+            apiService.getLiveLotteryInfoWeb(
+                WbiGenerator.generateWbiParams(
+                    mapOf(
+                        "roomid" to roomId.toString(),
+                        "web_location" to WEB_LOCATION_LIVE_ROOM
+                    ),
+                    imgKey, subKey
+                )
+            )
+        }.onSuccess { response ->
+            val data = response.data
+            AppLog.i(TAG, "lottery prefetch code=${response.code} msg=${response.message} data=$data")
+            if (response.code != 0 || data == null) return@onSuccess
+            // 天选在 anchor，人气红包在 popularity_red_pocket
+            for (key in listOf("anchor", "popularity_red_pocket")) {
+                for (keyword in LiveLotteryDanmakuFilter.keywordsOf(data.get(key))) {
+                    if (blockedLotteryDanmu.add(keyword)) {
+                        AppLog.i(
+                            TAG,
+                            "lottery danmu registered(prefetch $key) keyword=$keyword total=${blockedLotteryDanmu.size}"
+                        )
+                    }
+                }
+            }
+        }.onFailure { AppLog.w(TAG, "lottery prefetch failed: ${it.message}") }
     }
 
     private suspend fun getDanmuConfig(roomId: Long): ChatRoomWrapper {

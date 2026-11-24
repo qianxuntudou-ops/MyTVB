@@ -1224,9 +1224,9 @@ class HongguoClient(
                         seriesId = id,
                         title = title,
                         cover = HongguoCoverUrl.rewrite(
-                            common.optString("cover").takeIf { it.startsWith("http") } ?: ""
+                            common?.optString("cover")?.takeIf { it.startsWith("http") } ?: ""
                         ),
-                        intro = common.optString("intro"),
+                        intro = common?.optString("intro").orEmpty(),
                         score = "",
                         playCount = stat?.optLong("play_cnt", 0L) ?: 0L,
                         episodeCount = expand?.optInt("episode_cnt", 0) ?: 0,

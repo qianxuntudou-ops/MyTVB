@@ -17,7 +17,7 @@
     <string name="video_watch_progress_format">%1$s/%2$s</string>
     <string name="app_exit">再按一次返回退出应用</string>
     <string name="usage_tip_title">使用提示</string>
-    <string name="usage_tip_content">1. 本应用仅供学习研究使用，请勿用于商业用途，避免侵犯哔哩哔哩相关权益。&lt;br&gt;&lt;br&gt;2. 应用支持直播入口和青少年模式，均可在设置中开启或关闭。&lt;br&gt;&lt;br&gt;3. 青少年模式关闭方法：&lt;b&gt;&lt;font color=\"#e74c3c\"&gt;遥控器依次按「上上下下左右左右」；触摸屏连续快速点击验证码区域 7 次即可通过验证。&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;4. 长按视频卡片可进行「稍后再看」等更多操作。</string>
+    <string name="usage_tip_content">1. 本应用仅供学习研究使用，请勿用于商业用途，避免侵犯哔哩哔哩相关权益。&lt;br&gt;&lt;br&gt;2. 应用支持B站直播入口和青少年模式，均可在设置中开启或关闭。&lt;br&gt;&lt;br&gt;3. 青少年模式关闭方法：&lt;b&gt;&lt;font color=\"#e74c3c\"&gt;遥控器依次按「上上下下左右左右」；触摸屏连续快速点击验证码区域 7 次即可通过验证。&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;4. 长按视频卡片可进行「稍后再看」等更多操作。</string>
     <string name="app_name">MyTVB</string>
     <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
     <string name="audioTrack">音轨</string>
@@ -233,6 +233,7 @@
     <string name="dm_filter_weight">弹幕智能屏蔽等级</string>
     <string name="dm_merge_duplicate">重复弹幕合并</string>
     <string name="dm_smart_shield">智能防挡（低性能设备不建议开启）</string>
+    <string name="dm_block_lottery">屏蔽抽奖弹幕</string>
     <string name="dm_screen_area">弹幕占屏比</string>
     <string name="dm_setting">弹幕设置</string>
     <string name="dm_speed">弹幕速度</string>
@@ -347,7 +348,7 @@
     <string name="like">点赞</string>
     <string name="liked_">已点赞</string>
     <string name="live">直播</string>
-    <string name="live_entry">直播入口</string>
+    <string name="live_entry">B站直播入口</string>
     <string name="home_personal_tabs">首页显示历史、稍后观看、收藏</string>
     <string name="edge_tab_switch">卡片边缘切换标签</string>
     <string name="exit_double_confirm">退出二次确认</string>

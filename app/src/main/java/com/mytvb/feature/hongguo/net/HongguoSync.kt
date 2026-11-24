@@ -330,7 +330,7 @@ class HongguoSync(
         if (out.isEmpty() && items.length() > 0) {
             android.util.Log.w(
                 "HongguoSync",
-                "subscribe parse miss: ${payload.optJSONObject("data").toString().take(600)}"
+                "subscribe parse miss: ${payload.optJSONObject("data")?.toString()?.take(600)}"
             )
         }
         return out
@@ -408,7 +408,7 @@ class HongguoSync(
         if (out.size != rows.length() || out.any { it.title.isEmpty() || it.cover.isEmpty() }) {
             android.util.Log.w(
                 "HongguoSync",
-                "favorites parse miss: ${payload.optJSONObject("data").toString().take(1200)}"
+                "favorites parse miss: ${payload.optJSONObject("data")?.toString()?.take(1200)}"
             )
         }
         return out

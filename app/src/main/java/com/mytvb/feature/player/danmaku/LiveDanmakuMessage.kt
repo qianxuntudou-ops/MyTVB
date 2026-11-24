@@ -10,6 +10,8 @@ data class LiveDanmakuMessage(
         GIFT,
         SUPER_CHAT,
         WELCOME,
-        GUARD_BUY
+        GUARD_BUY,
+        /** 天选/人气红包的参与口令：不是要上屏的弹幕，是本场要屏蔽的文本。 */
+        LOTTERY_DANMU
     }
 }

@@ -501,6 +501,11 @@ interface ApiService {
         @QueryMap params: Map<String, String>
     ): BaseResponse<ChatRoomWrapper>
 
+    @GET("https://api.live.bilibili.com/xlive/lottery-interface/v1/lottery/getLotteryInfoWeb")
+    suspend fun getLiveLotteryInfoWeb(
+        @QueryMap params: Map<String, String>
+    ): BaseResponse<JsonObject>
+
     @POST("https://api.live.bilibili.com/xlive/web-room/v1/index/roomEntryAction")
     @FormUrlEncoded
     suspend fun liveRoomEntryAction(

@@ -64,6 +64,7 @@ import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
 import com.mytvb.feature.player.settings.AudioBalanceSettings
+import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.player.shortcut.PlayerShortcutStore
 import com.mytvb.feature.player.shortcut.ShortcutManageDialog
 import com.mytvb.feature.player.speed.PlaybackSpeedPolicy
@@ -186,6 +187,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_DM_ALLOW_VIP_COLORFUL_DM = "dm_allow_vip_colorful_dm"
         private const val KEY_DM_MERGE_DUPLICATE = "dm_merge_duplicate"
         private const val KEY_DM_SMART_SHIELD = "dm_smart_shield"
+        // 直播抽奖口令屏蔽（issue#122）：只管直播弹幕，键与读取逻辑在 PlayerSettingsStore
+        private const val KEY_DM_BLOCK_LOTTERY = PlayerSettingsStore.KEY_BLOCK_LOTTERY_DANMAKU
         private const val KEY_GAIA_VGATE_V_VOUCHER = "gaia_vgate_v_voucher"
         private const val KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS = "gaia_vgate_v_voucher_saved_at_ms"
         private const val KEY_IPV4_ONLY = "ipv4_only"
@@ -369,7 +372,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             // 页面级显示开关（原通用·浏览与入口组迁入：除来源/投屏外均属「显示什么」）
             SettingGroup(R.string.setting_group_pages, listOf(
                 stored(KEY_DEFAULT_START_PAGE, R.string.default_start_page, "热门"),
-                stored(KEY_LIVE_ENTRY, R.string.live_entry, "关"),
                 stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
                 // 打开方式：点卡片直接播放 / 先进详情页
                 stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
@@ -460,18 +462,22 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_dm_filter, listOf(
                 stored(KEY_DM_SMART_SHIELD, R.string.dm_smart_shield, "关"),
                 stored(KEY_DM_FILTER_WEIGHT, R.string.dm_filter_weight, "关"),
-                stored(KEY_DM_MERGE_DUPLICATE, R.string.dm_merge_duplicate, "开")
+                stored(KEY_DM_MERGE_DUPLICATE, R.string.dm_merge_duplicate, "开"),
+                stored(KEY_DM_BLOCK_LOTTERY, R.string.dm_block_lottery, "关")
             ))
         )
 
-        // 电视直播：CCTV 直播（入口/极速模式/X5 内核）/ CCTV 影视
+        // 电视直播：CCTV 直播（入口/极速模式/X5 内核）/ B站直播入口 / CCTV 影视
         // X5 内核只服务于直播 WebView 路径（极速模式关闭时的兜底，以及央视频超清组整页播放），
         // 因此从「关于·组件与诊断」归入本分类，与极速模式放一组形成语义衔接。
+        // B站「直播入口」从「显示·页面显示」归入本组（2026-11-24），排在 CCTV 三项之后，
+        // 不隔断 CCTV 主开关与极速模式/X5 的从属关系。
         tvGroups = listOf(
             SettingGroup(R.string.setting_group_tv_live, listOf(
                 stored(KEY_CCTV_LIVE_ENTRY, R.string.cctv_live, "关"),
                 stored(KEY_CCTV_NATIVE_LIVE, R.string.cctv_native_live, "开"),
-                plain(KEY_X5_CORE, R.string.x5_core_replace, getString(R.string.x5_status_not_installed))
+                plain(KEY_X5_CORE, R.string.x5_core_replace, getString(R.string.x5_status_not_installed)),
+                stored(KEY_LIVE_ENTRY, R.string.live_entry, "关")
             )),
             SettingGroup(R.string.setting_group_tv_vod, listOf(
                 stored(KEY_CCTV_VOD_ENTRY, R.string.cctv_vod, "关"),
@@ -919,6 +925,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_DM_SMART_SHIELD -> toggle(key)
             KEY_DM_FILTER_WEIGHT -> showDmChoiceDialog(key, DM_SMART_FILTER_OPTIONS)
             KEY_DM_MERGE_DUPLICATE -> toggle(key)
+            KEY_DM_BLOCK_LOTTERY -> toggle(key)
             // —— 青少年·时间限制 ——
             KEY_MINOR_PROTECTION -> toggle(key) {
                 appSettings.putStringAsync(key, it)
@@ -1590,6 +1597,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         }
         applyStored(KEY_DM_SMART_SHIELD)
         applyStored(KEY_DM_MERGE_DUPLICATE)
+        applyStored(KEY_DM_BLOCK_LOTTERY)
 
         // —— 关于 ——
         applyStored(KEY_STARTUP_UPDATE_CHECK)

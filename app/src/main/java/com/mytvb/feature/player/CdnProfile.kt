@@ -534,7 +534,8 @@ internal object CdnProfile {
         }.getOrNull()
         if (stored.isNullOrBlank()) return
         runCatching {
-            val parsed: MutableMap<String, CdnHostSignal> = gson.fromJson(stored, recordType)
+            // 值声明为可空：Gson 不认 Kotlin 的非空类型，脏档案里出现 null 时下面 signal == null 才拦得住
+            val parsed: MutableMap<String, CdnHostSignal?> = gson.fromJson(stored, recordType)
             parsed.forEach { (host, signal) ->
                 // 脏数据判据：正常运行记录的 host 恒等于 map key（v2.1.27 起播即崩防线）。
                 if (host.isBlank() || signal == null || signal.host != host) {

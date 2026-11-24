@@ -9,7 +9,7 @@
     <string name="video">Video</string>
     <string name="app_exit">Press back again to exit</string>
     <string name="usage_tip_title">Usage tips</string>
-    <string name="usage_tip_content">1. This app is for learning and research only. Do not use it commercially, to avoid infringing bilibili\'s rights.&lt;br&gt;&lt;br&gt;2. Live entry and teen mode are supported and can be turned on or off in Settings.&lt;br&gt;&lt;br&gt;3. To turn off teen mode: &lt;b&gt;&lt;font color=\"#e74c3c\"&gt;press Up, Up, Down, Down, Left, Right, Left, Right on the remote; on a touch screen, quickly tap the captcha area 7 times to pass verification.&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;4. Long-press a video card for more actions such as Watch later.</string>
+    <string name="usage_tip_content">1. This app is for learning and research only. Do not use it commercially, to avoid infringing bilibili\'s rights.&lt;br&gt;&lt;br&gt;2. Bilibili Live and teen mode are supported and can be turned on or off in Settings.&lt;br&gt;&lt;br&gt;3. To turn off teen mode: &lt;b&gt;&lt;font color=\"#e74c3c\"&gt;press Up, Up, Down, Down, Left, Right, Left, Right on the remote; on a touch screen, quickly tap the captcha area 7 times to pass verification.&lt;/font&gt;&lt;/b&gt;&lt;br&gt;&lt;br&gt;4. Long-press a video card for more actions such as Watch later.</string>
     <string name="audioTrack">Audio track</string>
     <string name="auto">Cars</string>
     <string name="back">Back</string>
@@ -205,6 +205,7 @@
     <string name="dm_filter_weight">Danmaku smart filter level</string>
     <string name="dm_merge_duplicate">Merge duplicate danmaku</string>
     <string name="dm_smart_shield">Smart danmaku shield (not recommended on low-end devices)</string>
+    <string name="dm_block_lottery">Block lottery danmaku</string>
     <string name="dm_screen_area">Danmaku display area</string>
     <string name="dm_setting">Danmaku settings</string>
     <string name="dm_speed">Danmaku speed</string>
@@ -282,7 +283,7 @@
     <string name="like">Like</string>
     <string name="liked_">Liked</string>
     <string name="live">Live</string>
-    <string name="live_entry">Live entry</string>
+    <string name="live_entry">Bilibili Live</string>
     <string name="home_personal_tabs">History, watch later and favorites on home</string>
     <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="exit_double_confirm">Press back twice to exit</string>

@@ -427,7 +427,7 @@ class HgRegProbeTest {
             val entry = fetch.invoke(HongguoPlay(), vid, id) as JSONObject
             val ms = System.currentTimeMillis() - started
             java.io.File(
-                java.io.File(System.getProperty("user.dir")).parentFile, ".trae/hg-log-1123/tab_dump.json"
+                java.io.File(System.getProperty("user.dir")!!).parentFile, ".trae/hg-log-1123/tab_dump.json"
             ).writeText(entry.toString())
             val raw = entry.opt("video_model")
             val model = when (raw) {

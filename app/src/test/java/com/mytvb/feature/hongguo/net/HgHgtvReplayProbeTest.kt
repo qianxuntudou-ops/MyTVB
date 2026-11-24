@@ -167,7 +167,7 @@ class HgHgtvReplayProbeTest {
     }
 
     // Gradle 测试进程的 user.dir 是模块目录 app/，回溯一级即仓库根（跨机器免配置）
-    private val dir = File(File(System.getProperty("user.dir")).parentFile, ".trae/hg-log-1123/hgtv-frida")
+    private val dir = File(File(System.getProperty("user.dir")!!).parentFile, ".trae/hg-log-1123/hgtv-frida")
 
     private val hostB = "https://api5-normal-sinfonlineb.fqnovel.com"
 

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 int cctv_h5e_host_decrypt_vod(const unsigned char* input, size_t length, unsigned char* output);
 

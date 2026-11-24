@@ -244,11 +244,30 @@ class LiveDanmakuClient(
                 if (id > 0) {
                     _superChatSignals.tryEmit(LiveSuperChatSignal.Delete(id))
                 }
+            } else if (cmd.isCmd("ANCHOR_LOT_START") || cmd.isCmd("POPULARITY_RED_POCKET_START")) {
+                handleLotteryDanmu(cmd, obj.optJSONObject("data"))
             }
         } catch (e: Exception) {
             AppLog.w(TAG, "handleSingleCommand error: ${e.message}")
         }
     }
+
+    /**
+     * 天选时刻 / 人气红包的参与口令：两条命令的 data 都带 danmu（观众参与时代发的弹幕）。
+     * 当成一条不上屏的消息交给 Manager 记入本场屏蔽。data 全量打日志——文档只给了示例没给字段表。
+     */
+    private fun handleLotteryDanmu(cmd: String, data: JSONObject?) {
+        val danmu = LiveLotteryDanmakuFilter.keywordOf(data?.optString("danmu"))
+        AppLog.d(TAG, "LOTTERY: cmd=$cmd danmu=$danmu data=$data")
+        if (danmu == null) return
+        val emitted = _danmakuMessages.tryEmit(
+            LiveDanmakuMessage(type = LiveDanmakuMessage.Type.LOTTERY_DANMU, content = danmu)
+        )
+        AppLog.d(TAG, "LOTTERY emitted=$emitted")
+    }
+
+    /** 命令名可带冒号后缀（如 DANMU_MSG:4:0:2:2:2:2），按前缀认。 */
+    private fun String.isCmd(name: String): Boolean = this == name || startsWith("$name:")
 
     /** SC 字段形态官方文档未公开，background_color 实测有十进制 int 与 hex 字符串两种，解析全部兜底并打日志供真机校验。 */
     private fun handleSuperChatMessage(data: JSONObject?) {

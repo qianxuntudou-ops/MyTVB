@@ -90,6 +90,8 @@ object PlayerSettingsStore {
     const val KEY_SHOW_LIVE_SUPER_CHAT = "show_live_super_chat"
     // 与 SettingsFragment.KEY_SHOW_CHAPTER_BAR 同键；存储值"开/关"（parseToggle 口径），默认关。
     const val KEY_SHOW_CHAPTER_BAR = "show_chapter_bar"
+    // 与 SettingsFragment.KEY_DM_BLOCK_LOTTERY 同键；存储值"开/关"（parseToggle 口径），默认关。
+    const val KEY_BLOCK_LOTTERY_DANMAKU = "dm_block_lottery"
     private const val KEY_AFTER_PLAY = "after_play"
     private const val KEY_PLAY_FINISH_EXIT_PLAYER = "play_finish_exit_player"
     private const val KEY_SUBTITLE_DEFAULT_MODE = "subtitle_default_mode"
@@ -389,6 +391,12 @@ object PlayerSettingsStore {
     fun saveSoftwareDecoderEnabled(enabled: Boolean) {
         appSettings.putStringAsync(KEY_SOFTWARE_VIDEO_DECODER, if (enabled) "开" else "关")
     }
+
+    /**
+     * 直播「屏蔽抽奖弹幕」开关（实时读内存缓存，弹幕每条都问）。未设置过视为"关"。
+     */
+    fun isLotteryDanmakuBlocked(): Boolean =
+        appSettings.getCachedString(KEY_BLOCK_LOTTERY_DANMAKU) == "开"
 
     private fun parseToggle(value: String?, defaultValue: Boolean): Boolean {
         return when (value?.trim()) {

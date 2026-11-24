@@ -404,7 +404,7 @@ class HgChannelProbeTest {
     @Test
     fun probeLongWatch() {
         val log = java.io.File(
-            java.io.File(System.getProperty("user.dir")).parentFile, ".trae/hg-log-1123/longwatch.txt"
+            java.io.File(System.getProperty("user.dir")!!).parentFile, ".trae/hg-log-1123/longwatch.txt"
         )
         val clock = java.text.SimpleDateFormat("HH:mm:ss")
         val id = register("watch") ?: return
