@@ -691,7 +691,8 @@ class VideoPlayerFragment : Fragment() {
                     requireContext().toast(getString(R.string.player_minor_protection_blocked))
                 } else {
                     playerView.hideController()
-                    viewModel.playEpisode(index)
+                    // 切集后登记当前身份，否则就地切集时评论区等仍停在上一集（issue#137）
+                    sessionCoordinator.updateCurrentEpisode(viewModel.playEpisode(index))
                 }
             },
             onPlayRelatedVideo = { video, playQueue ->
@@ -907,11 +908,11 @@ class VideoPlayerFragment : Fragment() {
         })
         playerView.setOnVideoSettingChangeListener(object : OnVideoSettingChangeListener {
             override fun onPrevious() {
-                viewModel.playPrevious()
+                sessionCoordinator.updateCurrentEpisode(viewModel.playPrevious())
             }
 
             override fun onNext() {
-                viewModel.playNext()
+                sessionCoordinator.updateCurrentEpisode(viewModel.playNext())
             }
 
             override fun onClose() {

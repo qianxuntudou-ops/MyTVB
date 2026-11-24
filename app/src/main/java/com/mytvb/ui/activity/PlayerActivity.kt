@@ -1124,7 +1124,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     toast(getString(R.string.activity_teen_mode_blocked_video))
                 } else {
                     playerView.hideController()
-                    viewModel.playEpisode(index)
+                    // 切集后登记当前身份：就地切集（番剧同季/同稿件分P）不重拉 detail，
+                    // 不登记评论区等会停留在上一集（issue#137）
+                    sessionCoordinator.updateCurrentEpisode(viewModel.playEpisode(index))
                 }
             },
             onPlayRelatedVideo = { video, playQueue ->
@@ -1355,8 +1357,12 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             }
         })
         playerView.setOnVideoSettingChangeListener(object : OnVideoSettingChangeListener {
-            override fun onPrevious() { viewModel.playPrevious() }
-            override fun onNext() { viewModel.playNext() }
+            override fun onPrevious() {
+                sessionCoordinator.updateCurrentEpisode(viewModel.playPrevious())
+            }
+            override fun onNext() {
+                sessionCoordinator.updateCurrentEpisode(viewModel.playNext())
+            }
             override fun onClose() { finish() }
             override fun onChooseEpisode() { showChooseEpisodeDialog() }
             override fun onChapterClick() { showChapterDialog() }

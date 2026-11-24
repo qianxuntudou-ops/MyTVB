@@ -167,4 +167,60 @@ class PlayerSessionCoordinatorPlayQueueTest {
         )
         assertEquals(2L, coordinator.getCurrentVideo()?.aid)
     }
+
+    @Test
+    fun updateCurrentEpisodeSwitchesIdentityAndKeepsPresentationFields() {
+        // 手动切集（上一集/下一集/选集）就地切换不重拉 detail：宿主必须登记新集身份，
+        // 否则评论区/视频信息一直停在上一个视频（issue#137）。登记只换身份字段，
+        // 描述/UP 主等展示字段沿用旧值，不能让视频信息弹窗变空。
+        val coordinator = PlayerSessionCoordinator()
+        coordinator.updateCurrentVideo(
+            VideoModel(
+                aid = 1L,
+                bvid = "BV1",
+                cid = 101L,
+                title = "ep1",
+                desc = "old desc",
+                duration = 600L
+            )
+        )
+
+        coordinator.updateCurrentEpisode(
+            VideoPlayerViewModel.PlayableEpisode(
+                cid = 202L,
+                title = "ep2",
+                cover = "http://pic/ep2.jpg",
+                aid = 2L,
+                bvid = "BV2",
+                epId = 55L,
+                seasonId = 77L,
+                duration = 700L
+            )
+        )
+
+        val current = coordinator.getCurrentVideo()!!
+        assertEquals(2L, current.aid)
+        assertEquals("BV2", current.bvid)
+        assertEquals(202L, current.cid)
+        assertEquals("ep2", current.title)
+        assertEquals("http://pic/ep2.jpg", current.coverUrl)
+        assertEquals(700L, current.duration)
+        assertEquals(55L, current.epid)
+        assertEquals(77L, current.sid)
+        // 展示字段沿用旧值
+        assertEquals("old desc", current.desc)
+    }
+
+    @Test
+    fun updateCurrentEpisodeIgnoresEpisodeWithoutIdentity() {
+        val coordinator = PlayerSessionCoordinator()
+        coordinator.updateCurrentVideo(VideoModel(aid = 1L, bvid = "BV1", title = "ep1", cid = 101L))
+
+        coordinator.updateCurrentEpisode(
+            VideoPlayerViewModel.PlayableEpisode(cid = 0L, title = "", aid = 0L, bvid = "")
+        )
+
+        assertEquals(1L, coordinator.getCurrentVideo()?.aid)
+        assertEquals(101L, coordinator.getCurrentVideo()?.cid)
+    }
 }

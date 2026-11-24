@@ -1211,12 +1211,13 @@ class VideoPlayerViewModel(
         }
     }
 
-    fun playPrevious() {
+    fun playPrevious(): PlayableEpisode? {
         val episodes = _episodes.value
         val targetIndex = _selectedEpisodeIndex.value - 1
         if (targetIndex in episodes.indices) {
-            playEpisode(targetIndex)
+            return playEpisode(targetIndex)
         }
+        return null
     }
 
     fun hasPreviousEpisode(): Boolean {
@@ -1224,12 +1225,13 @@ class VideoPlayerViewModel(
         return previousIndex in _episodes.value.indices
     }
 
-    fun playNext(preferLastPlayTime: Boolean = true) {
+    fun playNext(preferLastPlayTime: Boolean = true): PlayableEpisode? {
         val episodes = _episodes.value
         val targetIndex = _selectedEpisodeIndex.value + 1
         if (targetIndex in episodes.indices) {
-            playEpisode(targetIndex, preferLastPlayTime = preferLastPlayTime)
+            return playEpisode(targetIndex, preferLastPlayTime = preferLastPlayTime)
         }
+        return null
     }
 
     fun hasNextEpisode(): Boolean {
@@ -1243,8 +1245,13 @@ class VideoPlayerViewModel(
         return _episodes.value.getOrNull(nextIndex)
     }
 
-    fun playEpisode(index: Int, preferLastPlayTime: Boolean = true) {
-        val episode = _episodes.value.getOrNull(index) ?: return
+    /**
+     * 播放选集目录里的第 [index] 集。
+     * 返回实际切换目标（供宿主登记 currentVideo，见 PlayerSessionCoordinator.updateCurrentEpisode）；
+     * index 非法或无法切换时返回 null。
+     */
+    fun playEpisode(index: Int, preferLastPlayTime: Boolean = true): PlayableEpisode? {
+        val episode = _episodes.value.getOrNull(index) ?: return null
         // [诊断] issue#112：切集入口快照——记录切集前 pendingSeek/VM 会话身份与 player 实际挂载身份
         AppLog.i(
             TAG,
@@ -1271,7 +1278,7 @@ class VideoPlayerViewModel(
                 epId = targetEpId ?: 0L,
                 preferLastPlayTime = preferLastPlayTime
             )
-            return
+            return episode
         }
         if (
             !isPgcPlayback() &&
@@ -1284,7 +1291,7 @@ class VideoPlayerViewModel(
                 cid = episode.cid,
                 preferLastPlayTime = preferLastPlayTime
             )
-            return
+            return episode
         }
         _selectedEpisodeIndex.value = index
         pendingSeekPositionMs = 0L
@@ -1322,6 +1329,7 @@ class VideoPlayerViewModel(
         _error.value = null
         clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
         loadPlayUrl(preferLastPlayTime = preferLastPlayTime)
+        return episode
     }
 
     fun playRelatedVideo(video: VideoModel, preferLastPlayTime: Boolean = true) {

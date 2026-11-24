@@ -60,6 +60,10 @@ class VideoPlayerOverlayController(
     private val onPanelDismissedFocusIntercept: (() -> Boolean)? = null
 ) {
 
+    private companion object {
+        const val TAG = "PlayerOverlay"
+    }
+
     /** 当前面板打开时控制栏处于隐藏态且未强制拉起（隐藏态 UP 直达），关闭后应保持隐藏。 */
     private var controllerWasHiddenForOverlay: Boolean = false
 
@@ -548,9 +552,11 @@ class VideoPlayerOverlayController(
     fun showCommentPanel() {
         val video = resolveCurrentVideoInfo()
         if (video == null || video.aid <= 0L) {
+            AppLog.w(TAG, "comment panel open failed: no aid (video=${video?.bvid.orEmpty()})")
             AppToast.show(activity, activity.getString(R.string.player_video_info_not_loaded))
             return
         }
+        AppLog.i(TAG, "comment panel open aid=${video.aid} bvid=${video.bvid} cid=${video.cid}")
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.COMMENT_BUTTON)
         keepControllerVisibleForOverlay()
         uiCoordinator.transition(UiEvent.PanelOpened(PanelType.COMMENT))

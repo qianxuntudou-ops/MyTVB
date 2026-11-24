@@ -83,6 +83,43 @@ class PlayerSessionCoordinator {
         currentVideo = video?.takeIf(::isAllowedVideo)
     }
 
+    /**
+     * 切集（选集面板 / 上一集 / 下一集）时登记当前播放身份。
+     *
+     * 就地切集（番剧同季、同稿件分P）不重新拉 detail，若宿主不登记，`currentVideo`
+     * 会一直是入口那一集的 aid/bvid——评论区、视频信息、UP 主入口全串到上一集
+     * （issue#137，021e3ccc 只覆盖了自动连播链）。身份字段取新集，其余展示字段
+     * 沿用旧值，避免详情描述的等信息被清空。
+     */
+    fun updateCurrentEpisode(episode: VideoPlayerViewModel.PlayableEpisode?) {
+        if (episode == null) return
+        val aid = episode.aid.takeIf { it > 0L }
+        val bvid = episode.bvid.takeIf { it.isNotBlank() }
+        // 新集没有任何可辨识身份时不动：否则会把 currentVideo 清成空壳
+        if (aid == null && bvid == null) return
+        val base = getCurrentVideo() ?: VideoModel()
+        val merged = base.copy(
+            aid = aid ?: base.aid,
+            bvid = bvid ?: base.bvid,
+            cid = episode.cid.takeIf { it > 0L } ?: base.cid,
+            title = episode.title.takeIf { it.isNotBlank() } ?: base.title,
+            pic = episode.cover.takeIf { it.isNotBlank() } ?: base.pic,
+            cover = episode.cover.takeIf { it.isNotBlank() } ?: base.cover,
+            duration = episode.duration.takeIf { it > 0L } ?: base.duration,
+            epid = episode.epId.takeIf { it > 0L } ?: base.epid,
+            sid = episode.seasonId.takeIf { it > 0L } ?: base.sid
+        )
+        // 内容门槛（青少年模式）拦截时不登记，也不清空原值
+        if (isAllowedVideo(merged)) {
+            currentVideo = merged
+            AppLog.i(
+                TAG,
+                "current episode registered aid=${merged.aid} bvid=${merged.bvid} cid=${merged.cid} " +
+                    "epId=${merged.epid} title=${merged.title.take(24)}"
+            )
+        }
+    }
+
     fun updateEpisodes(value: List<VideoPlayerViewModel.PlayableEpisode>) {
         episodes = value
     }
@@ -195,7 +232,11 @@ class PlayerSessionCoordinator {
                                 cid = nextEpisode.cid,
                                 title = nextEpisode.title,
                                 pic = nextEpisode.cover,
-                                duration = nextEpisode.duration
+                                duration = nextEpisode.duration,
+                                // 番剧条目可能没有 aid/bvid（老接口只给 ep_id），带上 ep/sid
+                                // 才不会被内容门槛当「无播放身份」过滤掉
+                                epid = nextEpisode.epId,
+                                sid = nextEpisode.seasonId
                             )
                         )
                     )
