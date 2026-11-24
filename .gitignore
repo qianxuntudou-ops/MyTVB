@@ -116,3 +116,7 @@ app/debug/output-metadata.json
 .codebuddy/
 /.zcode
 .zcodeignore
+
+# Python 工具产物
+__pycache__/
+*.pyc
