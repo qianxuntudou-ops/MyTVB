@@ -43,6 +43,11 @@ class CencDecryptDataSource(
     /** 当前流逻辑位置（解密坐标）。 */
     private var pos = -1L
 
+    /** 详细日志去重标志（2026-11-24 排查 Source error）：EOF / 解密异常只在首次打，
+     *  除非换源（open 重置）——read 是每帧热路径，不能刷屏。 */
+    private var loggedEof = false
+    private var decryptFailCount = 0
+
     override fun addTransferListener(transferListener: TransferListener) {
         upstream.addTransferListener(transferListener)
     }
@@ -51,15 +56,67 @@ class CencDecryptDataSource(
         pos = dataSpec.position
         header = null
         headerPos = 0
+        loggedEof = false
         // 防「上一源的区间表残留」错位解密（2026-11-18 真机教训：换源后 ranges 未
         // 重置，旧样本布局解新数据=必错位）：每次 open 清零，解析失败即抛错走整集兜底
         ranges = emptyList()
         val url = dataSpec.uri.toString()
         if (dataSpec.position == 0L && tryOpenWithHead(url, dataSpec)) {
-            return headLen() + tailLen
+            val total = headLen() + tailLen
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo",
+                "soft-decrypt open=0 head=${headLen()}B tail=$tailLen total=$total " +
+                    "ranges=${ranges.size} key=$cacheKey"
+            )
+            return total
         }
+        // position>0：media3 seek / CDN 断流后的 Range 续传走这里（数据源工厂每次 new 实例，
+        // ranges 已清零，tryOpenWithHead 只服务 position==0）——**加密图必须在此重建**
+        // （2026-11-24 修复：此前续传段 ranges 恒空、密文透传，实测在 10.7MB 处连续重开
+        // 7 次后 Mp4Extractor 抛 Invalid NAL length → Source error，position≈119s）。
+        ensureRangesForSeek(dataSpec)
         val len = openUpstream(url, dataSpec)
+        com.mytvb.core.common.log.AppLog.d(
+            "Hongguo",
+            "soft-decrypt open=${dataSpec.position} len=$len ranges=${ranges.size} key=$cacheKey"
+        )
         return len
+    }
+
+    /**
+     * 续传/seek 重开时的加密图重建（2026-11-24）：头部缓存优先（预取与首播已落盘，
+     * 同集同片源数据不变），miss 时按 Range 读一次 ftyp+moov 再关连接；两者都失败
+     * 直接抛 IOException 走整集下载兜底——密文透传给 codec 只会得到无信息量的
+     * "Invalid NAL length"，不如在这里就报出真实原因。
+     */
+    private fun ensureRangesForSeek(dataSpec: DataSpec) {
+        val cached = runCatching { HongguoHeadCache.load(cacheKey) }.getOrNull()
+        if (cached != null && tryParseRanges(cached.bytes)) {
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo", "soft-decrypt seek ranges from cache=${ranges.size} key=$cacheKey"
+            )
+            return
+        }
+        var headError: Throwable? = null
+        val raw = try {
+            upstream.open(dataSpec.buildUpon().setPosition(0L).setLength(-1L).build())
+            readHeadBoxes()
+        } catch (e: Throwable) {
+            headError = e
+            null
+        }
+        runCatching { upstream.close() }
+        if (raw != null && tryParseRanges(raw)) {
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo", "soft-decrypt seek ranges from net=${ranges.size} key=$cacheKey"
+            )
+            return
+        }
+        throw IOException(
+            "soft-decrypt ranges unavailable at ${dataSpec.position} " +
+                "(cache=${cached?.bytes?.size ?: 0}B net=${raw?.size ?: 0}B " +
+                "err=${headError?.javaClass?.simpleName}:${headError?.message})"
+        )
     }
 
     private var tailLen = -1L
@@ -70,7 +127,19 @@ class CencDecryptDataSource(
     private fun openUpstream(url: String, spec: DataSpec): Long = try {
         upstream.open(spec)
     } catch (e: HttpDataSource.InvalidResponseCodeException) {
+        // 地址过期/被拒的现场：位置与 Range 长度是判断「首段就挂」还是「续传挂」的关键
+        com.mytvb.core.common.log.AppLog.w(
+            "Hongguo",
+            "soft-decrypt upstream http=${e.responseCode} pos=${spec.position} len=${spec.length} key=$cacheKey"
+        )
         if (e.responseCode == 403 || e.responseCode == 404) HongguoHeadCache.drop(cacheKey)
+        throw e
+    } catch (e: HttpDataSource.HttpDataSourceException) {
+        com.mytvb.core.common.log.AppLog.w(
+            "Hongguo",
+            "soft-decrypt upstream io type=${e.type} pos=${spec.position} len=${spec.length} " +
+                "msg=${e.message} cause=${e.cause?.javaClass?.simpleName}:${e.cause?.message} key=$cacheKey"
+        )
         throw e
     }
 
@@ -82,14 +151,34 @@ class CencDecryptDataSource(
     private fun tryOpenWithHead(url: String, dataSpec: DataSpec): Boolean {
         val cached = runCatching { HongguoHeadCache.load(cacheKey) }.getOrNull()
         var raw = cached?.bytes
-        if (raw == null) {
+        if (raw != null) {
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo",
+                "soft-decrypt head cache hit ${raw.size}B total=${cached.totalLen} key=$cacheKey"
+            )
+        } else {
             // 网络预读 ftyp+moov（临时连接，读完即关）
-            raw = runCatching {
+            var headError: Throwable? = null
+            raw = try {
                 upstream.open(dataSpec)
                 readHeadBoxes()
-            }.getOrNull()
+            } catch (e: Throwable) {
+                headError = e
+                null
+            }
             runCatching { upstream.close() }
-            if (raw == null) return false
+            if (raw == null) {
+                // 预读失败：不静默（此前 runCatching 吞掉原因，Source error 排查无从下手）
+                com.mytvb.core.common.log.AppLog.w(
+                    "Hongguo",
+                    "soft-decrypt head read fail (net) " +
+                        "${headError?.javaClass?.simpleName}:${headError?.message} → 全网络透传 key=$cacheKey"
+                )
+                return false
+            }
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo", "soft-decrypt head read from net ${raw.size}B key=$cacheKey"
+            )
         }
         // 头部在手但加密图解析失败：形态意外，抛错走整集兜底（密文透传只会喂坏 codec）
         if (!tryParseRanges(raw)) throw IOException("soft-decrypt head parse fail")
@@ -105,6 +194,12 @@ class CencDecryptDataSource(
             tailLen = len2
             header = raw
             if (cached == null && len2 > 0L) saveHead(raw.size.toLong() + len2, raw)
+            // 注意：open 返回 headLen()+tailLen，len2<=0 时 it 会算出「头部长度-1」这种
+            // 假总长（2026-11-24 排查标记，先记录实际取值再决定修法）
+            com.mytvb.core.common.log.AppLog.w(
+                "Hongguo",
+                "soft-decrypt upstream len=$len2 (未知/0)，头部直供 head=${raw.size}B key=$cacheKey"
+            )
             return true
         }
         if (cached != null) {
@@ -139,20 +234,36 @@ class CencDecryptDataSource(
         com.mytvb.core.common.log.AppLog.d(
             "Hongguo", "soft-decrypt ranges=${ranges.size} head=${head.size}B"
         )
-        true
-    }.getOrDefault(false)
+    }.onFailure {
+        // 形态意外（moov 找不到/box 尺寸无效）：记清原因，上一级抛 IOException 走整集兜底
+        com.mytvb.core.common.log.AppLog.w(
+            "Hongguo",
+            "soft-decrypt ranges parse fail ${it.javaClass.simpleName}: ${it.message} head=${head.size}B key=$cacheKey"
+        )
+    }.isSuccess
 
     /** 从 upstream（已 open）顺序读 ftyp..moov 完整链。 */
     private fun readHeadBoxes(): ByteArray? {
         val boxes = ArrayList<ByteArray>(2)
         for (i in 0 until 8) {
-            val box = readBox() ?: return null
+            val box = readBox() ?: run {
+                com.mytvb.core.common.log.AppLog.w(
+                    "Hongguo", "soft-decrypt head box fail at #$i key=$cacheKey"
+                )
+                return null
+            }
             if (box.size >= 4 && String(box, 4, 4, Charsets.US_ASCII) == "moov") {
                 boxes.add(box); break
             }
             boxes.add(box)
         }
-        if (String(boxes.last(), 4, 4, Charsets.US_ASCII) != "moov") return null
+        if (String(boxes.last(), 4, 4, Charsets.US_ASCII) != "moov") {
+            com.mytvb.core.common.log.AppLog.w(
+                "Hongguo",
+                "soft-decrypt head no moov in ${boxes.size} boxes last=${String(boxes.last(), 4, 4, Charsets.US_ASCII)} key=$cacheKey"
+            )
+            return null
+        }
         return ByteArray(boxes.sumOf { it.size }).also { buf ->
             var off = 0
             for (b in boxes) { System.arraycopy(b, 0, buf, off, b.size); off += b.size }
@@ -165,14 +276,24 @@ class CencDecryptDataSource(
         var got = 0
         while (got < 8) {
             val n = upstream.read(hdr, got, 8 - got)
-            if (n < 0) return null
+            if (n < 0) {
+                com.mytvb.core.common.log.AppLog.w(
+                    "Hongguo", "soft-decrypt box header eof got=$got/8 key=$cacheKey"
+                )
+                return null
+            }
             got += n
         }
         val size = ((hdr[0].toInt() and 0xFF).toLong() shl 24) or
             ((hdr[1].toInt() and 0xFF).toLong() shl 16) or
             ((hdr[2].toInt() and 0xFF).toLong() shl 8) or
             (hdr[3].toInt() and 0xFF).toLong()
-        if (size == 1L || size == 0L || size > 16L * 1024 * 1024) return null
+        if (size == 1L || size == 0L || size > 16L * 1024 * 1024) {
+            com.mytvb.core.common.log.AppLog.w(
+                "Hongguo", "soft-decrypt box size invalid size=$size key=$cacheKey"
+            )
+            return null
+        }
         val box = ByteArray(size.toInt())
         System.arraycopy(hdr, 0, box, 0, 8)
         var off = 8
@@ -269,7 +390,7 @@ class CencDecryptDataSource(
             if (headerPos < h.size) {
                 val n = minOf(length, h.size - headerPos)
                 System.arraycopy(h, headerPos, buffer, offset, n)
-                if (pos >= 0) runCatching { decryptRegion(buffer, offset, n, pos) }
+                if (pos >= 0) decryptQuietly(buffer, offset, n, pos)
                 headerPos += n
                 if (headerPos >= h.size) header = null
                 pos += n
@@ -279,10 +400,33 @@ class CencDecryptDataSource(
         }
         val n = upstream.read(buffer, offset, length)
         if (n > 0) {
-            if (pos >= 0) runCatching { decryptRegion(buffer, offset, n, pos) }
+            if (pos >= 0) decryptQuietly(buffer, offset, n, pos)
             pos += n
+        } else if (n < 0 && !loggedEof) {
+            // EOF 现场：位置 vs 总长能直接区分「播完正常结束」和「中途断流被判结束」
+            loggedEof = true
+            com.mytvb.core.common.log.AppLog.d(
+                "Hongguo",
+                "soft-decrypt eof pos=$pos ranges=${ranges.size} tailLen=$tailLen key=$cacheKey"
+            )
         }
         return n
+    }
+
+    /** [decryptRegion] 的守护版：解密抛错记现场（位置/长度/区间数），控制流保持历史行为
+     *  （静默不抛）——失败样本会原样喂给 codec，这条日志是唯一定位线索（2026-11-24）。 */
+    private fun decryptQuietly(buffer: ByteArray, offset: Int, len: Int, start: Long) {
+        try {
+            decryptRegion(buffer, offset, len, start)
+        } catch (e: Throwable) {
+            if (decryptFailCount++ == 0) {
+                com.mytvb.core.common.log.AppLog.w(
+                    "Hongguo",
+                    "soft-decrypt decrypt fail pos=$start len=$len ranges=${ranges.size} " +
+                        "${e.javaClass.simpleName}: ${e.message} key=$cacheKey"
+                )
+            }
+        }
     }
 
     override fun getUri() = upstream.uri

@@ -482,6 +482,42 @@ class HongguoPlayerActivity : AppCompatActivity() {
         return true
     }
 
+    /**
+     * 播放错误详细日志（2026-11-24 排查 "Source error"）：PlaybackException 在 source /
+     * 解码层抛出时 message 是通用文案（"Source error"），根因只藏在 cause 链里——此处逐层
+     * 打类名+message，遇到数据源异常连 dataSpec 的位置/长度、HTTP 响应码、容器解析信息
+     * 一起打：position 能直接区分「首段就挂」和「播到中途续传挂」。
+     * 只走错误路径，不影响正常播放。
+     */
+    private fun logPlaybackError(error: androidx.media3.common.PlaybackException) {
+        AppLog.w(
+            "Hongguo",
+            "player error detail code=0x${Integer.toHexString(error.errorCode)} " +
+                "name=${error.errorCodeName} msg=${error.message} " +
+                "position=${runCatching { player?.currentPosition }.getOrNull() ?: -1} " +
+                "soft=${activeSource?.keyHex != null} cacheKey=${activeSource?.cacheKey.orEmpty()}"
+        )
+        var cause: Throwable? = error.cause
+        var depth = 0
+        while (cause != null && depth < 8) {
+            val c = cause
+            val extra = when (c) {
+                is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException ->
+                    " httpCode=${c.responseCode} pos=${c.dataSpec.position} len=${c.dataSpec.length}"
+                is androidx.media3.datasource.HttpDataSource.HttpDataSourceException ->
+                    " httpType=${c.type} pos=${c.dataSpec.position} len=${c.dataSpec.length}"
+                is androidx.media3.common.ParserException -> " container"
+                else -> ""
+            }
+            AppLog.w(
+                "Hongguo",
+                "player error cause[$depth] ${cause.javaClass.name}: ${cause.message}$extra"
+            )
+            cause = cause.cause
+            depth++
+        }
+    }
+
     /** player 懒加载单例（二轮，2026-11-18）：Activity 生命周期内复用——切集/切画质
      *  只 setMediaSource 换源不重建（对齐 HGTV 播放器常驻架构）。listener 只注册一次。
      *  音频焦点托管 media3：B 站等其它播放器起播抢焦点时红果自动让位暂停。 */
@@ -576,6 +612,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLog.w("Hongguo", "player error code=0x${Integer.toHexString(error.errorCode)}", error)
+                logPlaybackError(error)
                 // 签名地址过期（403/404）：清三层缓存（内存地址/磁盘地址/头部），重进重试即重新解析
                 val respCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                 if (respCode == 403 || respCode == 404) {
