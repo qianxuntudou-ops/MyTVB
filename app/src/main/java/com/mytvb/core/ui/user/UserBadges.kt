@@ -1,6 +1,7 @@
 package com.mytvb.core.ui.user
 
 import android.widget.TextView
+import androidx.collection.LruCache
 import androidx.core.content.ContextCompat
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
@@ -31,15 +32,18 @@ object UserBadgesStore {
 
     private const val TAG = "UserBadgesStore"
 
-    private val cache = ConcurrentHashMap<Long, UserBadges>()
+    // LRU 封顶：此前是无淘汰的 ConcurrentHashMap，看过的用户越多攒得越多。
+    private const val MAX_CACHED_BADGES = 512
+
+    private val cache = LruCache<Long, UserBadges>(MAX_CACHED_BADGES)
     private val inFlight = ConcurrentHashMap<Long, CompletableDeferred<UserBadges?>>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun cached(mid: Long): UserBadges? = cache[mid]
+    fun cached(mid: Long): UserBadges? = cache.get(mid)
 
     suspend fun fetch(mid: Long): UserBadges? {
         if (mid <= 0L) return null
-        cache[mid]?.let { return it }
+        cache.get(mid)?.let { return it }
         inFlight[mid]?.let { return it.await() }
         val deferred = CompletableDeferred<UserBadges?>()
         inFlight[mid] = deferred
@@ -47,7 +51,7 @@ object UserBadgesStore {
             val badges = runCatching { BiliApi.spaceAccInfo(mid) }
                 .onFailure { AppLog.w(TAG, "spaceAccInfo failed mid=$mid", it as? Exception) }
                 .getOrNull()
-            if (badges != null) cache[mid] = badges
+            if (badges != null) cache.put(mid, badges)
             deferred.complete(badges)
             return badges
         } finally {
