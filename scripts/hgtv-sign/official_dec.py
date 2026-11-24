@@ -8,10 +8,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import medusa_dec as M
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # 仓库根
-# 本地材料目录（抓包样本、金标准等含真实设备标识，不入库）；可用环境变量 HGTV_SIGN_DATA 覆盖
-DATA = os.environ.get('HGTV_SIGN_DATA') or os.path.join(ROOT, '.zcode', 'hgtv-sign', 'tools')
 
-CAP = os.path.join(ROOT, '.zcode', 'hongguo-api-capture')
+
+def _first_dir(*cands):
+    """本地材料目录历史上在 .zcode/ 与 .trae/ 之间搬过，按顺序取第一个存在的。"""
+    for c in cands:
+        if os.path.isdir(c):
+            return c
+    return cands[0]
+
+
+# 本地材料目录（抓包样本、金标准等含真实设备标识，不入库）；可用环境变量覆盖
+DATA = os.environ.get('HGTV_SIGN_DATA') or _first_dir(
+    os.path.join(ROOT, '.zcode', 'hgtv-sign', 'tools'),
+    os.path.join(ROOT, '.trae', 'hgtv-sign', 'tools'),
+)
+CAP = os.environ.get('HGTV_CAPTURE') or _first_dir(
+    os.path.join(ROOT, '.trae', 'hongguo-api-capture'),
+    os.path.join(ROOT, '.zcode', 'hongguo-api-capture'),
+)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
