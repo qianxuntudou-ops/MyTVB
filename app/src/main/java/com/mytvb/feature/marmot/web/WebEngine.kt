@@ -122,9 +122,33 @@ class WebEngine(
         else (view as android.webkit.WebView).stopLoading()
     }
 
+    /**
+     * 彻底销毁内部 WebView。
+     *
+     * 只调 `destroy()` 不够：页面渲染树、媒体元素与内核侧缓存会留到 GC 之前
+     * （CCTV 直播 H5 播 HLS 时页面内存可达数十 MB）。另外顺序有讲究——
+     * `stopLoading()` 必须在切空白页之前，否则空白导航自己会被停住、页面不卸载。
+     * 顺序：停加载 → 切空白页让页面卸载 → 清历史与缓存 → 剥离子 View → destroy。
+     */
     fun destroy() {
-        if (usingX5) (view as com.tencent.smtt.sdk.WebView).destroy()
-        else (view as android.webkit.WebView).destroy()
+        when (val v = view) {
+            is com.tencent.smtt.sdk.WebView -> runCatching {
+                v.stopLoading()
+                v.loadUrl("about:blank")
+                v.clearHistory()
+                v.clearCache(true)
+                v.removeAllViews()
+                v.destroy()
+            }
+            is android.webkit.WebView -> runCatching {
+                v.stopLoading()
+                v.loadUrl("about:blank")
+                v.clearHistory()
+                v.clearCache(true)
+                v.removeAllViews()
+                v.destroy()
+            }
+        }
     }
 
     // ==================== 系统 WebView 创建 ====================

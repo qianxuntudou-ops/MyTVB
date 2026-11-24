@@ -106,9 +106,37 @@ class CctvVodWebViewHost(
         runCatching { sysWebView?.removeJavascriptInterface(name) }
     }
 
+    /**
+     * 彻底销毁 WebView（CCTV 影视播放页退出/回退原生时调用）。
+     *
+     * 原实现只做 `loadUrl("about:blank") + destroy()`，漏了停加载、清历史/缓存和
+     * 剥离子 View——播放 H5 视频后页面渲染树与媒体缓冲会留到 GC 前（数十 MB）。
+     * 顺序：`stopLoading()` 必须在切空白页之前，否则空白导航自己被停住、页面不卸载。
+     */
     fun destroy() {
-        runCatching { x5WebView?.let { it.loadUrl("about:blank"); it.destroy() } }
-        runCatching { sysWebView?.let { it.loadUrl("about:blank"); it.destroy() } }
+        x5WebView?.let { wv ->
+            runCatching {
+                wv.stopLoading()
+                wv.loadUrl("about:blank")
+                wv.clearHistory()
+                wv.clearCache(true)
+                wv.removeAllViews()
+                wv.destroy()
+            }
+        }
+        sysWebView?.let { wv ->
+            runCatching {
+                wv.stopLoading()
+                wv.loadUrl("about:blank")
+                wv.clearHistory()
+                wv.clearCache(true)
+                wv.removeAllViews()
+                wv.destroy()
+            }
+        }
+        x5WebView = null
+        sysWebView = null
+        customViewCallback = null
     }
 
     fun setVisible(visible: Boolean) {

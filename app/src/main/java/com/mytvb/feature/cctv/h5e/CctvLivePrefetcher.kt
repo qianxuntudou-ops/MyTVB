@@ -79,13 +79,23 @@ object CctvLivePrefetcher {
                 // 尾段并发下载 + 解密（native 每线程独立 wasm 上下文，与播放线程互不干扰）
                 val decrypted = segments.map { seg ->
                     async {
-                        val body = fetch(seg, referer) ?: return@async null
-                        if (!looksLikeTransportStream(body)) return@async null
                         try {
+                            val body = fetch(seg, referer) ?: return@async null
+                            if (!looksLikeTransportStream(body)) return@async null
                             CctvH5eDecryptor.decryptTransportStream(body)
                         } catch (t: Throwable) {
+                            // 协程取消信号必须重抛（同本文件外层 catch 的口径），
+                            // 否则 prefetchAsync 的 cancel() 停不住在途解密。
+                            if (t is kotlinx.coroutines.CancellationException) throw t
                             AppLog.w(TAG, "预取分片解密异常: ${t.message}")
                             null
+                        } finally {
+                            // 用完即放：预取跑在 Dispatchers.IO 线程池上，线程长期存活、
+                            // 不会触发原生侧的 pthread 退出析构；不在这里放，每次起播/换台
+                            // 都会多留一份 16~96MB 的 wasm 线性内存
+                            // （见 cctv_h5e_decryptor.c 的 __thread 状态说明）。
+                            // 同线程后续若再解密，ensure_module_ready 会重新初始化。
+                            runCatching { CctvH5eDecryptor.releaseThreadContext() }
                         }
                     }
                 }.map { it.await() }

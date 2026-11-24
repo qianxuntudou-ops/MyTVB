@@ -131,14 +131,31 @@ object H5eWebViewDecryptor {
         AppLog.i(TAG, "会话已结束（下次解密重建）")
     }
 
-    /** 释放 WebView（播放器销毁时可选调用；保持常驻可省去下次初始化开销）。 */
+    /**
+     * 释放 WebView（播放器销毁时调用；保持常驻可省去下次初始化开销）。
+     *
+     * 这个离屏 WebView 装着 3MB 的 h5e bundle 和一份 wasm 实例（线性内存 16MB 起），
+     * 只调 `destroy()` 会留下页面上下文与 JS 侧 wasm 内存到 GC 前。补全清理顺序：
+     * 停加载 → 切空白页让页面卸载 → 摘 JS 接口 → 清历史/缓存 → 剥子 View → destroy。
+     * 同时清 [pending]：里面是各调用线程的 latch 闭包，留着会吊住等待方。
+     */
     @Synchronized
     fun release() {
         sessionBegun = false
         val wv = webView
         webView = null
         initFailed = null
-        if (wv != null) mainHandler.post { runCatching { wv.destroy() } }
+        pending.clear()
+        if (wv != null) mainHandler.post {
+            runCatching { wv.stopLoading() }
+            runCatching { wv.loadUrl("about:blank") }
+            runCatching { wv.removeJavascriptInterface("H5eNative") }
+            runCatching { wv.clearHistory() }
+            runCatching { wv.clearCache(true) }
+            runCatching { wv.removeAllViews() }
+            runCatching { wv.destroy() }
+            AppLog.i(TAG, "离屏解密 WebView 已销毁")
+        }
     }
 
     /** WebView 是否可用（车机等无 WebView 环境返回 false，调用方直接走 native/回退）。 */

@@ -36,6 +36,14 @@ object CctvH5eDecryptor {
     /** 切台/停止时取消进行中的解密（解密线程尽快返回）。 */
     external fun cancelPendingDecrypts()
 
-    /** 释放本线程的 wasm 上下文（播放线程退出时调用）。 */
+    /**
+     * 释放**调用线程**的 wasm 上下文。
+     *
+     * 运行时状态是 `__thread`、线性内存是 `calloc`（开播时撑到 96MB 上限），
+     * 所以只有「在这条线程上调用」才有效——在主线程调是空操作。跑解密的线程
+     * （media3 加载线程、预取器的 IO 线程）由各自框架管理，项目里拿不到它们的
+     * 退出时机，因此原生侧另有 pthread key 析构兜底（线程退出时自动释放）；
+     * 预取器则在每个解密任务结束后主动调用本方法，避免常驻线程池留住上下文。
+     */
     external fun releaseThreadContext()
 }

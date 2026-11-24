@@ -805,6 +805,12 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         mainHandler.removeCallbacks(nativeStartupTimeoutRunnable)
         stopNativeStallWatch()
         com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.cancelPendingDecrypts()
+        // 切台/退出：清掉上一轮的预取交接缓存（旧频道分片与已解密数据），
+        // 既防新频道误命中，也立即归还那几 MB 字节数组。
+        com.mytvb.feature.cctv.h5e.CctvLivePrefetcher.cancel()
+        // 分片解密失败计数是静态表（key=分片 URL），此前只有 CCTV 影视页会清；
+        // 直播切台/退出不重置的话，长会话看过的每个失败分片都留一条。
+        com.mytvb.feature.cctv.h5e.CctvH5eDataSource.resetTrapFailures()
         // CMG 会话整体复位（含 forced tag/时钟与 wasm 堆），防旧频道状态泄入下一次解密
         runCatching { com.mytvb.feature.cctv.cmg.CmgNativeBridge.resetSession() }
             .onFailure { AppLog.w(TAG, "CMG resetSession 异常: ${it.message}") }
@@ -1733,11 +1739,15 @@ $scriptTags
         mainHandler.removeCallbacks(hideControllerRunnable)
         com.mytvb.feature.cctv.h5e.CctvLivePrefetcher.cancel()
         stopNativeLivePlayer()
-        com.mytvb.feature.cctv.h5e.CctvH5eDecryptor.releaseThreadContext()
+        // 这里不再调 CctvH5eDecryptor.releaseThreadContext()：wasm 上下文是 __thread、
+        // 线性内存是 calloc，只有「在跑解密的线程上」调用才有效，onDestroy 在主线程调
+        // 是空操作（原注释「wasm 线程上下文随 Loader 线程结束」是错的——线程退出不会
+        // free __thread 指向的堆）。现在由两处覆盖：原生侧 pthread key 析构（加载线程
+        // 真退出时自动放）+ 预取器每个任务结束后显式释放。
         webEngine?.let { engine ->
             engine.removeJavascriptInterface(jsBridge.bridgeName)
-            engine.loadUrl("about:blank")
-            engine.stopLoading()
+            // loadUrl("about:blank") / stopLoading 已收进 WebEngine.destroy()，且顺序
+            // 修正为先停加载再切空白页（反之空白导航会被停住、页面不卸载）。
             engine.destroy()
         }
         webEngine = null

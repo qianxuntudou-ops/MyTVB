@@ -554,7 +554,47 @@ static int reset_module_state(void) {
   return 1;
 }
 
+/* ---- 线程退出兜底释放（2026-11-24）--------------------------------------
+ * 运行时状态全是 __thread，线性内存由 calloc 分配（CMake 里
+ * -DWASM_RT_USE_MMAP=0），begin_session 会一次撑到 MEMORY_MAX_PAGES(96MB)。
+ * Java 侧 releaseThreadContext 只能释放「调用它的那条线程」，而实际跑解密的是
+ * media3 Loader 的加载线程与 CctvLivePrefetcher 的 IO 线程——项目里拿不到它们
+ * 的退出时机，线程一退这块 malloc 内存就永久不可达（每进一次 H5e 频道、每切一次
+ * 台多漏一块）。这里用 pthread key 析构在线程真正退出时自动释放；Java 侧显式
+ * 释放走同一份实现，两条路径幂等。 */
+static pthread_key_t g_thread_ctx_key;
+static pthread_once_t g_thread_ctx_once = PTHREAD_ONCE_INIT;
+static int g_thread_ctx_key_ok;
+
+static void release_thread_context_impl(void);
+
+static void thread_ctx_destructor(void* unused) {
+  (void) unused;
+  release_thread_context_impl();
+}
+
+static void create_thread_ctx_key(void) {
+  /* key 用尽（PTHREAD_KEYS_MAX）时创建会失败；失败就当没有兜底，不能拿
+   * 未初始化的 key 去 getspecific/setspecific。 */
+  g_thread_ctx_key_ok = (pthread_key_create(&g_thread_ctx_key, thread_ctx_destructor) == 0);
+  if (!g_thread_ctx_key_ok) {
+    LOGW("h5e thread ctx key create failed, exit-time release unavailable");
+  }
+}
+
+/** 本线程首次跑解密时登记退出析构（幂等）。 */
+static void ensure_thread_ctx_registered(void) {
+  pthread_once(&g_thread_ctx_once, create_thread_ctx_key);
+  if (!g_thread_ctx_key_ok) {
+    return;
+  }
+  if (pthread_getspecific(g_thread_ctx_key) == NULL) {
+    pthread_setspecific(g_thread_ctx_key, (void*) 1);
+  }
+}
+
 static int ensure_module_ready(void) {
+  ensure_thread_ctx_registered();
   if (!g_runtime_initialized) {
     memset(&g_env, 0, sizeof(g_env));
     wasm_rt_init();
@@ -1210,10 +1250,9 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_cancelPendingDecrypts(JNIEnv* e
   LOGI("CCTV decrypt cancellation generation=%u", generation);
 }
 
-JNIEXPORT void JNICALL
-Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* env, jclass clazz) {
-  (void) env;
-  (void) clazz;
+/* 释放「本线程」的 wasm 上下文。Java 显式调用与 pthread 退出析构共用；
+ * 二次调用安全（g_runtime_initialized 已归零则直接返回）。 */
+static void release_thread_context_impl(void) {
   if (!g_runtime_initialized) {
     return;
   }
@@ -1231,6 +1270,14 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* en
   g_vod_tag_argument = 0;
   g_worker_clock_frozen = 0;
   g_wasm_stage = "idle";
+  LOGI("h5e thread context released");
+}
+
+JNIEXPORT void JNICALL
+Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* env, jclass clazz) {
+  (void) env;
+  (void) clazz;
+  release_thread_context_impl();
 }
 
 /* ---------------------------------------------------------------- 取证入口（命令行，不进 App 链路） */
