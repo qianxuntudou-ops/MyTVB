@@ -23,6 +23,9 @@ private fun settingLabelRes(stored: String): Int = when (stored) {
     "中" -> R.string.setting_value_medium
     "高" -> R.string.setting_value_high
     "自动" -> R.string.setting_value_auto
+    // 更新包保存位置（issue#129）
+    "内部存储" -> R.string.setting_value_internal_storage
+    "U盘" -> R.string.setting_value_usb_storage
     // 红果默认画质（数字档位 1080P 等语言无关串原样返回）
     "默认" -> R.string.setting_value_default
     // 红果推荐受众 / 搜索源（"App" 语言无关串原样返回）

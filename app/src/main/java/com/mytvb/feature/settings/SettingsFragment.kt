@@ -29,6 +29,7 @@ import com.mytvb.BuildConfig
 import com.mytvb.R
 import com.mytvb.core.common.media.VideoCodecSupport
 import com.mytvb.core.common.update.ApkUpdater
+import com.mytvb.core.common.update.UpdateStorage
 import com.mytvb.databinding.FragmentSettingsBinding
 import com.mytvb.feature.cast.NvaCastController
 import com.mytvb.feature.cast.NvaDevice
@@ -210,6 +211,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // 「启动检测更新」开关（issue#133，默认关）：关=启动只捎带红果热更配置，不弹更新提醒。
         // MainActivity.checkUpdateOnStartup 按字面量读，两端改 key 必须同步
         private const val KEY_STARTUP_UPDATE_CHECK = "startup_update_check"
+        // 「更新包保存位置」（issue#129）：内部存储 / U盘。键与读写逻辑在 UpdateStorage，
+        // 更新确认弹窗内也有同一项的快捷切换，两处同源
+        private const val KEY_UPDATE_SAVE_LOCATION = UpdateStorage.KEY_SAVE_LOCATION
         private const val KEY_USAGE_TIPS = "action_usage_tips"
         private const val KEY_X5_CORE = "action_x5_core"
         private const val KEY_LOG_RECORD = "action_log_record"
@@ -305,6 +309,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         super.onResume()
         requestInitialCategoryFocus()
         updateRiskControlStatus()
+        // 更新弹窗内也能切保存位置（issue#129），回设置页时把显示值同步成本次落盘值
+        applyStored(KEY_UPDATE_SAVE_LOCATION)
+        refreshItem(KEY_UPDATE_SAVE_LOCATION)
     }
 
     /** 构造存储型条目：value=稳定存储值，info=本地化显示文案；descRes 可选说明小字。 */
@@ -496,7 +503,13 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_about_app, listOf(
                 plain(KEY_APP_VERSION, R.string.app_version, BuildConfig.VERSION_NAME),
                 plain(KEY_CHECK_UPDATE, R.string.check_update, getString(R.string.update_click_to_check)),
-                stored(KEY_STARTUP_UPDATE_CHECK, R.string.startup_update_check, "关")
+                stored(KEY_STARTUP_UPDATE_CHECK, R.string.startup_update_check, "关"),
+                // 更新包保存位置（issue#129）：/data 被厂商加密或余量不足的电视可改存 U 盘
+                stored(
+                    KEY_UPDATE_SAVE_LOCATION,
+                    R.string.update_save_location,
+                    UpdateStorage.currentChoice(requireContext())
+                )
                 // 使用技巧入口暂时屏蔽,弹窗实现保留(showUsageTipsDialog),放开加回:
                 // plain(KEY_USAGE_TIPS, R.string.usage_tips)
             )),
@@ -922,6 +935,31 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             // —— 关于 ——
             KEY_CHECK_UPDATE -> checkForUpdate()
             KEY_STARTUP_UPDATE_CHECK -> toggle(key)
+            KEY_UPDATE_SAVE_LOCATION -> {
+                val targets = UpdateStorage.listUsbTargets(requireContext())
+                val current = UpdateStorage.currentChoice(requireContext())
+                AppLog.i(
+                    "SettingsFragment",
+                    "update save location clicked: current=$current writableUsb=${targets.size} [" +
+                        targets.joinToString { "dir=${it.dir.absolutePath} vol=${it.volumeId}" } + "]"
+                )
+                // 没有可写 U 盘时只给出提示，不弹只有一个选项的选择框
+                if (targets.isEmpty()) {
+                    AppToast.show(requireContext(), getString(R.string.update_storage_no_usb))
+                } else {
+                    itemOf(key)?.let { item ->
+                        showStoredChoiceDialog(
+                            item.title,
+                            current,
+                            arrayOf(UpdateStorage.CHOICE_INTERNAL, UpdateStorage.CHOICE_USB)
+                        ) { value ->
+                            updateStored(key, value)
+                            appSettings.putStringAsync(key, value)
+                            AppLog.i("SettingsFragment", "update save location selected: $value")
+                        }
+                    }
+                }
+            }
             KEY_USAGE_TIPS -> showUsageTipsDialog()
             KEY_LOG_RECORD -> {
                 val newValue = if (AppLog.isEnabled) "关" else "开"
@@ -1555,6 +1593,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
 
         // —— 关于 ——
         applyStored(KEY_STARTUP_UPDATE_CHECK)
+        applyStored(KEY_UPDATE_SAVE_LOCATION)
 
         // —— 电视直播（X5 状态刷新）——
         updateX5Status()

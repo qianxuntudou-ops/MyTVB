@@ -516,6 +516,8 @@
 
     <!-- ===== 多語言：設定項儲存值顯示映射 ===== -->
     <string name="setting_value_auto">自動</string>
+    <string name="setting_value_internal_storage">內部儲存</string>
+    <string name="setting_value_usb_storage">U盤</string>
     <string name="setting_value_default">預設</string>
     <string name="setting_value_low">低</string>
     <string name="setting_value_medium">中</string>
@@ -621,6 +623,15 @@
     <string name="update_latest_format">已是最新版（%1$s）</string>
     <string name="update_new_version_format">新版本 %1$s</string>
     <string name="update_check_failed">檢查失敗</string>
+    <!-- 更新包儲存位置（issue#129） -->
+    <string name="update_save_location">更新包儲存位置</string>
+    <string name="update_storage_label_internal">位置：內部儲存</string>
+    <string name="update_storage_label_usb">位置：U盤</string>
+    <string name="update_saving_to_format">儲存到：%1$s</string>
+    <string name="update_storage_no_usb">未偵測到可寫入的 U 盤</string>
+    <string name="update_usb_unavailable_fallback">U 盤不可用，已改存到內部儲存</string>
+    <string name="update_error_storage_write">儲存空間不足或無法寫入，請清理空間或改用 U 盤</string>
+    <string name="update_install_saved_to_format">安裝包已儲存到 %1$s，可用檔案管理員手動安裝</string>
     <string name="log_enabled_toast">日誌記錄：%1$s</string>
 
     <!-- ===== 多語言：風控驗證 ===== -->

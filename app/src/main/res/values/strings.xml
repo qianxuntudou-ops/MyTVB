@@ -656,6 +656,8 @@
 
     <!-- ===== 多语言：设置项存储值显示映射（存储值保持中文字面量，仅显示层翻译） ===== -->
     <string name="setting_value_auto">自动</string>
+    <string name="setting_value_internal_storage">内部存储</string>
+    <string name="setting_value_usb_storage">U盘</string>
     <string name="setting_value_default">默认</string>
     <string name="setting_value_low">低</string>
     <string name="setting_value_medium">中</string>
@@ -762,6 +764,15 @@
     <string name="update_latest_format">已是最新版（%1$s）</string>
     <string name="update_new_version_format">新版本 %1$s</string>
     <string name="update_check_failed">检查失败</string>
+    <!-- 更新包保存位置（issue#129）：/data 被厂商加密或余量不足的电视可改存 U 盘 -->
+    <string name="update_save_location">更新包保存位置</string>
+    <string name="update_storage_label_internal">位置：内部存储</string>
+    <string name="update_storage_label_usb">位置：U盘</string>
+    <string name="update_saving_to_format">保存到：%1$s</string>
+    <string name="update_storage_no_usb">未检测到可写入的 U 盘</string>
+    <string name="update_usb_unavailable_fallback">U 盘不可用，已改存到内部存储</string>
+    <string name="update_error_storage_write">存储空间不足或无法写入，请清理空间或改用 U 盘</string>
+    <string name="update_install_saved_to_format">安装包已保存到 %1$s，可用文件管理器手动安装</string>
     <string name="log_enabled_toast">日志记录：%1$s</string>
 
     <!-- ===== 多语言：风控验证 ===== -->

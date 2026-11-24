@@ -125,6 +125,11 @@
         <receiver
             android:name=".feature.player.shortcut.DebugShortcutBinder"
             android:exported="false" />
+
+        <!-- 更新包 Session 安装结果回调（issue#129：U 盘安装包走 PackageInstaller） -->
+        <receiver
+            android:name=".core.common.update.UpdateInstallReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -13,6 +13,7 @@ import com.mytvb.BuildConfig
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.update.ApkUpdater
+import com.mytvb.core.common.update.UpdateStorage
 import com.mytvb.core.ui.base.AppToast
 import com.mytvb.core.ui.base.DialogWindowFit
 import com.mytvb.core.ui.base.ScaledTextView
@@ -25,6 +26,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 更新流程弹窗：发现新版本确认弹窗 + 下载进度弹窗。
@@ -155,6 +157,53 @@ object UpdateFlowDialog {
         }
 
         var cancelButton: ScaledTextView? = null
+        // 保存位置切换（issue#129）：部分电视 /data 被厂商加密/余量不足写不进安装包，
+        // 需要能改下到 U 盘。仅检测到可写 U 盘时才出现，没有 U 盘的机器界面与旧版一致。
+        // OK 键在「内部存储 / U盘」间切换并立即落设置（与设置页同名字段同源）。
+        val usbTargets = UpdateStorage.listUsbTargets(context)
+        AppLog.i(
+            "UpdateFlowDialog",
+            "confirm dialog: choiceBefore=${UpdateStorage.currentChoice(context)} " +
+                "writableUsb=${usbTargets.size} [" +
+                usbTargets.joinToString { "dir=${it.dir.absolutePath} vol=${it.volumeId}" } + "]"
+        )
+        if (usbTargets.isNotEmpty()) {
+            var locationChoice = UpdateStorage.currentChoice(context)
+            val locationButton = ScaledTextView(context).apply {
+                setTextColor(textColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.px30))
+                setPadding(px16, px14, px16, px14)
+                isClickable = true
+                isFocusable = true
+                setBackgroundResource(R.drawable.bg_dialog_button)
+            }
+            fun refreshLocationLabel() {
+                locationButton.text = context.getString(
+                    if (locationChoice == UpdateStorage.CHOICE_USB) {
+                        R.string.update_storage_label_usb
+                    } else {
+                        R.string.update_storage_label_internal
+                    }
+                )
+            }
+            refreshLocationLabel()
+            locationButton.setOnClickListener {
+                locationChoice = if (locationChoice == UpdateStorage.CHOICE_USB) {
+                    UpdateStorage.CHOICE_INTERNAL
+                } else {
+                    UpdateStorage.CHOICE_USB
+                }
+                UpdateStorage.saveChoice(context.applicationContext, locationChoice)
+                refreshLocationLabel()
+                AppLog.i("UpdateFlowDialog", "confirm dialog: location switched to $locationChoice")
+            }
+            actionContainer.addView(locationButton, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            // 按钮组推到右侧，位置项独立在左
+            actionContainer.addView(View(context), LinearLayout.LayoutParams(0, 1).apply { weight = 1f })
+        }
         // 以任何非下载途径关闭（稍后/点卡片空白/BACK）都视为「本次不更新」：
         // 自动检查场景据此记录忽略版本，下次启动不再弹同一版本
         var launchDownload = false
@@ -280,13 +329,8 @@ object UpdateFlowDialog {
         // 避免持有已销毁的宿主 Activity
         val appContext = context.applicationContext
 
-        // 同一会话内已有同版本完整包（如下载完但安装界面被关掉没装）：
-        // 直接复用弹安装界面，不重新下载。放在 isDownloading 守卫之后，
-        // 下载进行中先挡重复入口，不会与后台 job 完成时的安装重叠
-        ApkUpdater.findDownloadedApk(appContext, releaseInfo.versionName)?.let {
-            ApkUpdater.installApk(appContext, it)
-            return
-        }
+        // 目标目录（内部缓存/U 盘）在 IO 线程解析：U 盘可用性要实测写入探针，
+        // 主线程上做会卡一帧；同版本已下载包的复用判断也随之挪进下载协程
         isDownloading = true
 
         // 密度守卫须在取 px 值之前：确认弹窗 dismiss 后 Activity 尚未重获焦点，
@@ -348,6 +392,20 @@ object UpdateFlowDialog {
             layoutParams = lp
         }
         root.addView(progressText)
+
+        // 落地路径（issue#129）：选 U 盘时用户需要知道包写到哪，出问题也能自己找回来
+        val pathText = ScaledTextView(context).apply {
+            text = ""
+            visibility = View.GONE
+            setTextColor(textColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, resources.getDimension(R.dimen.px22))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px40, px10, px40, 0)
+            layoutParams = lp
+        }
+        root.addView(pathText)
 
         var downloadJob: Job? = null
         val actionContainer = LinearLayout(context).apply {
@@ -414,38 +472,80 @@ object UpdateFlowDialog {
         downloadJob = downloadScope.launch {
             try {
                 val apkFile = withContext(Dispatchers.IO) {
-                    ApkUpdater.downloadApkToCache(appContext, releaseInfo.apkUrl) { progress ->
-                        progressText.post {
-                            if (!dialog.isShowing) return@post
-                            when (progress) {
-                                is ApkUpdater.Progress.Connecting -> {
-                                    progressText.text = appContext.getString(R.string.connecting)
-                                    progressBar.isIndeterminate = true
-                                }
-                                is ApkUpdater.Progress.Downloading -> {
-                                    progressBar.isIndeterminate = false
-                                    progress.percent?.let { progressBar.progress = it }
-                                    progressText.text = progress.hint
-                                }
-                                is ApkUpdater.Progress.Done -> {}
-                                is ApkUpdater.Progress.Retrying -> {
-                                    progressText.text = appContext.getString(R.string.retrying_format, progress.attempt, progress.maxAttempts)
-                                    progressBar.isIndeterminate = true
+                    // 目标目录在这里解析：U 盘可用性靠写入探针实测，不能在主线程做。
+                    // 用户选了 U 盘但此刻没插/只读 → resolveDir 静默回退内部缓存，这里补一句提示
+                    val targetDir = UpdateStorage.resolveDir(appContext)
+                    val fellBack = UpdateStorage.currentChoice(appContext) == UpdateStorage.CHOICE_USB &&
+                        UpdateStorage.isInternalDir(appContext, targetDir)
+                    AppLog.i(
+                        "UpdateFlowDialog",
+                        "download target choice=${UpdateStorage.currentChoice(appContext)} " +
+                            "dir=${targetDir.absolutePath} fellBackToInternal=$fellBack " +
+                            "free=${UpdateStorage.usableSpace(targetDir)}B"
+                    )
+                    if (fellBack) {
+                        AppToast.show(
+                            appContext,
+                            appContext.getString(R.string.update_usb_unavailable_fallback),
+                            Toast.LENGTH_LONG
+                        )
+                    }
+                    pathText.post {
+                        pathText.text = appContext.getString(
+                            R.string.update_saving_to_format,
+                            File(targetDir, "update.apk").absolutePath
+                        )
+                        pathText.visibility = View.VISIBLE
+                    }
+                    // 同一会话内已有同版本完整包（如下载完但安装界面被关掉没装）：
+                    // 直接复用弹安装界面，不重新下载
+                    ApkUpdater.findDownloadedApk(appContext, releaseInfo.versionName, targetDir)
+                        ?: ApkUpdater.downloadApk(appContext, releaseInfo.apkUrl, targetDir) { progress ->
+                            progressText.post {
+                                if (!dialog.isShowing) return@post
+                                when (progress) {
+                                    is ApkUpdater.Progress.Connecting -> {
+                                        progressText.text = appContext.getString(R.string.connecting)
+                                        progressBar.isIndeterminate = true
+                                    }
+                                    is ApkUpdater.Progress.Downloading -> {
+                                        progressBar.isIndeterminate = false
+                                        progress.percent?.let { progressBar.progress = it }
+                                        progressText.text = progress.hint
+                                    }
+                                    is ApkUpdater.Progress.Done -> {}
+                                    is ApkUpdater.Progress.Retrying -> {
+                                        progressText.text = appContext.getString(R.string.retrying_format, progress.attempt, progress.maxAttempts)
+                                        progressBar.isIndeterminate = true
+                                    }
                                 }
                             }
                         }
-                    }
                 }
                 dialog.dismiss()
-                ApkUpdater.installApk(appContext, apkFile)
+                val submitted = ApkUpdater.installApk(appContext, apkFile)
+                if (!submitted) {
+                    // Session 提交失败（个别 ROM 的 PackageInstaller 缺陷）：包已在盘上，
+                    // 告知路径让用户用文件管理器手动安装，不当作下载失败
+                    AppToast.show(
+                        appContext,
+                        appContext.getString(R.string.update_install_saved_to_format, apkFile.absolutePath),
+                        Toast.LENGTH_LONG
+                    )
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) return@launch
                 dialog.dismiss()
                 AppLog.e("UpdateFlowDialog", "download apk failed", e)
-                val hint = when (e) {
-                    is java.net.SocketTimeoutException -> appContext.getString(R.string.net_timeout_toast)
-                    is java.net.UnknownHostException -> appContext.getString(R.string.net_unavailable_toast)
-                    is java.io.IOException -> appContext.getString(R.string.net_error_toast)
+                val raw = e.message.orEmpty()
+                val hint = when {
+                    e is java.net.SocketTimeoutException -> appContext.getString(R.string.net_timeout_toast)
+                    e is java.net.UnknownHostException -> appContext.getString(R.string.net_unavailable_toast)
+                    // U 盘写满/只读：ENOSPC、Read-only file system、Permission denied
+                    raw.contains("ENOSPC", true) || raw.contains("No space", true) ||
+                        raw.contains("Read-only", true) || raw.contains("Permission denied", true) ->
+                        appContext.getString(R.string.update_error_storage_write)
+                    e is java.io.IOException -> appContext.getString(R.string.net_error_toast)
                     else -> appContext.getString(R.string.download_failed_toast)
                 }
                 AppToast.show(appContext, hint, Toast.LENGTH_LONG)

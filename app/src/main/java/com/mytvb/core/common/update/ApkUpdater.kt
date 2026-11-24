@@ -3,8 +3,11 @@
 package com.mytvb.core.common.update
 
 import com.mytvb.core.common.format.NumberUtils
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.os.Build
 import androidx.core.content.FileProvider
 import com.mytvb.BuildConfig
 import com.mytvb.core.common.log.AppLog
@@ -55,7 +58,6 @@ object ApkUpdater {
 
     private const val COOLDOWN_MS = 5_000L
     private const val TAG = "ApkUpdater"
-    private const val UPDATE_DIR_NAME = "update"
 
     /**
      * GitHub release 资产下载镜像（国内加速；前缀拼接到原始直链前，如
@@ -333,8 +335,8 @@ object ApkUpdater {
      * 版本比对走 parseVersion 归一化：GitHub tag 带 v 前缀而 APK 内 versionName 不带，
      * 裸字符串比对永远不命中。
      */
-    fun findDownloadedApk(context: Context, versionName: String): File? {
-        val apk = File(File(context.cacheDir, UPDATE_DIR_NAME), "update.apk")
+    fun findDownloadedApk(context: Context, versionName: String, dir: File = UpdateStorage.internalDir(context)): File? {
+        val apk = File(dir, "update.apk")
         if (!apk.isFile || apk.length() == 0L) return null
         val remote = parseVersion(versionName) ?: return null
         val info = runCatching {
@@ -357,16 +359,17 @@ object ApkUpdater {
      */
     fun cleanupStaleDownload(context: Context) {
         Thread {
-            val dir = File(context.applicationContext.cacheDir, UPDATE_DIR_NAME)
+            val dir = UpdateStorage.internalDir(context.applicationContext)
             if (!dir.exists()) return@Thread
             val deleted = dir.deleteRecursively()
             AppLog.i(TAG, "cleanupStaleDownload dir=$dir deleted=$deleted")
         }.apply { isDaemon = true }.start()
     }
 
-    suspend fun downloadApkToCache(
+    suspend fun downloadApk(
         context: Context,
         url: String,
+        targetDir: File,
         onProgress: (Progress) -> Unit,
     ): File {
         // 逐候选换源重试（镜像→…→直连）：国内访问 GitHub 直链经常龟速/失败，
@@ -377,8 +380,8 @@ object ApkUpdater {
             currentCoroutineContext().ensureActive()
             if (index == 0) onProgress(Progress.Connecting)
             try {
-                AppLog.i(TAG, "download attempt ${index + 1}/${candidates.size} via=${candidate.take(64)}")
-                return downloadApkToCacheOnce(context, candidate, onProgress)
+                AppLog.i(TAG, "download attempt ${index + 1}/${candidates.size} via=${candidate.take(64)} dir=${targetDir.absolutePath}")
+                return downloadApkOnce(context, candidate, targetDir, onProgress)
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 lastError = t
@@ -392,12 +395,14 @@ object ApkUpdater {
         throw lastError ?: IllegalStateException("download failed")
     }
 
-    private suspend fun downloadApkToCacheOnce(
+    private suspend fun downloadApkOnce(
         context: Context,
         url: String,
+        targetDir: File,
         onProgress: (Progress) -> Unit,
     ): File {
-        val dir = File(context.cacheDir, UPDATE_DIR_NAME).apply { mkdirs() }
+        val dir = targetDir.apply { mkdirs() }
+        check(dir.isDirectory) { "target dir unavailable: ${dir.absolutePath}" }
         val part = File(dir, "update.apk.part")
         val target = File(dir, "update.apk")
         runCatching { part.delete() }
@@ -460,11 +465,46 @@ object ApkUpdater {
         }
 
         check(part.exists() && part.length() > 0) { "downloaded file is empty" }
-        check(part.renameTo(target)) { "rename failed" }
+        // U 盘（FUSE/部分 ROM）上 renameTo 可能失败；同目录复制再删源，语义等价
+        if (!part.renameTo(target)) {
+            AppLog.w(TAG, "rename failed, fallback copy part=${part.length()}")
+            runCatching { target.delete() }
+            part.inputStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+            }
+            check(target.length() == part.length()) { "copy size mismatch" }
+            part.delete()
+        }
         return target
     }
 
-    fun installApk(context: Context, apkFile: File) {
+    /**
+     * 拉起系统安装界面。
+     *
+     * 内部分缓存走的仍是历史链路（FileProvider + ACTION_VIEW），零改动零风险；
+     * U 盘上的包不在 FileProvider 的映射范围内（`<external-files-path>` 只覆盖主存储的
+     * 应用专属目录，多卷 U 盘不在内），改用 PackageInstaller Session 流式写入安装会话，
+     * 完全绕开文件 Uri 与跨进程读权限，任何卷都可装。
+     *
+     * @return true=已提交安装（含等待用户确认）；false=提交失败，调用方应提示
+     *         「已保存到 <路径>，可用文件管理器手动安装」
+     */
+    suspend fun installApk(context: Context, apkFile: File): Boolean {
+        val appContext = context.applicationContext
+        if (UpdateStorage.isInternalDir(appContext, apkFile.parentFile ?: apkFile)) {
+            AppLog.i(TAG, "install via FileProvider path=${apkFile.absolutePath} size=${apkFile.length()}")
+            return withContext(Dispatchers.Main) {
+                runCatching { launchInstaller(appContext, apkFile) }
+                    .onFailure { AppLog.w(TAG, "install via FileProvider failed: ${it.message}") }
+                    .isSuccess
+            }
+        }
+        val submitted = withContext(Dispatchers.IO) { installViaSession(appContext, apkFile) }
+        AppLog.i(TAG, "install via session path=${apkFile.absolutePath} submitted=$submitted")
+        return submitted
+    }
+
+    private fun launchInstaller(context: Context, apkFile: File) {
         val authority = "${context.packageName}.fileprovider"
         val uri = FileProvider.getUriForFile(context, authority, apkFile)
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -474,6 +514,36 @@ object ApkUpdater {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
+    }
+
+    private fun installViaSession(context: Context, apkFile: File): Boolean {
+        return try {
+            val installer = context.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            params.setSize(apkFile.length())
+            val sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                apkFile.inputStream().use { input ->
+                    session.openWrite("base.apk", 0, apkFile.length()).use { output ->
+                        input.copyTo(output, 64 * 1024)
+                        session.fsync(output)
+                    }
+                }
+                val resultIntent = Intent(context, UpdateInstallReceiver::class.java).apply {
+                    action = UpdateInstallReceiver.ACTION_INSTALL_RESULT
+                    putExtra(UpdateInstallReceiver.EXTRA_APK_PATH, apkFile.absolutePath)
+                }
+                // API 31+ 必须显式声明 mutable：安装器要向该 Intent 里回填用户确认意图
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+                val pending = PendingIntent.getBroadcast(context, sessionId, resultIntent, flags)
+                session.commit(pending.intentSender)
+            }
+            true
+        } catch (t: Throwable) {
+            AppLog.e(TAG, "install via session failed", t)
+            false
+        }
     }
 
     private fun parseVersion(raw: String): List<Int>? {

@@ -513,6 +513,8 @@
 
     <!-- ===== Settings value display mapping (stored values stay Chinese, display layer only) ===== -->
     <string name="setting_value_auto">Auto</string>
+    <string name="setting_value_internal_storage">Internal storage</string>
+    <string name="setting_value_usb_storage">USB drive</string>
     <string name="setting_value_default">Default</string>
     <string name="setting_value_low">Low</string>
     <string name="setting_value_medium">Medium</string>
@@ -619,6 +621,15 @@
     <string name="update_latest_format">Up to date (%1$s)</string>
     <string name="update_new_version_format">New version %1$s</string>
     <string name="update_check_failed">Check failed</string>
+    <!-- Update package save location (issue#129) -->
+    <string name="update_save_location">Update package location</string>
+    <string name="update_storage_label_internal">Location: Internal</string>
+    <string name="update_storage_label_usb">Location: USB</string>
+    <string name="update_saving_to_format">Saving to: %1$s</string>
+    <string name="update_storage_no_usb">No writable USB drive detected</string>
+    <string name="update_usb_unavailable_fallback">USB drive unavailable, saving to internal storage instead</string>
+    <string name="update_error_storage_write">Not enough space or write failed. Free up space or switch to a USB drive</string>
+    <string name="update_install_saved_to_format">Package saved to %1$s. You can install it with a file manager</string>
     <string name="log_enabled_toast">Logging: %1$s</string>
 
     <!-- ===== Risk control verification ===== -->
