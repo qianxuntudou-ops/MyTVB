@@ -163,9 +163,13 @@ internal object HongguoNetProfiles {
         // 与各自注册时上报的真实机型自相矛盾。显式写了但格式非法的值仍然整档丢弃。
         val net = Net(
             playHost = obj.optString("play_host").trim().ifEmpty { BUILTIN.playHost },
-            deviceType = obj.optString("device_type").trim().ifEmpty { BUILTIN.deviceType },
-            deviceBrand = obj.optString("device_brand").trim().ifEmpty { BUILTIN.deviceBrand },
-            osVersion = obj.optString("os_version").trim().ifEmpty { BUILTIN.osVersion },
+            // 画像**不接受远程覆写**：必须与本机注册时上报的真实设备一致。
+            // 2026-11-24 之前 hg_net 里的 Redmi 25053RT47C 让所有设备冒充同一台红米，
+            // 与各自注册/详情请求自相矛盾（Release 附件里的旧档还会把新 APK 一起带歪）。
+            // 远程只能调 host / channel / play_routes；要换设备画像只能改注册链路（HongguoEnv）。
+            deviceType = BUILTIN.deviceType,
+            deviceBrand = BUILTIN.deviceBrand,
+            osVersion = BUILTIN.osVersion,
             channel = obj.optString("channel").trim().ifEmpty { BUILTIN.channel },
             playRoutes = obj.optJSONArray("play_routes")?.let { arr ->
                 (0 until arr.length()).mapNotNull { arr.optString(it).trim() }

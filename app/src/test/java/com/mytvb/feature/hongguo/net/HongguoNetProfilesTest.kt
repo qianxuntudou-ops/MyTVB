@@ -35,7 +35,8 @@ class HongguoNetProfilesTest {
     fun parseValidNet() {
         val n = HongguoNetProfiles.parseNet(net())!!
         assertEquals("https://api5-normal-sinfonlinea.fqnovel.com", n.playHost)
-        assertEquals("25053RT47C", n.deviceType)
+        // 远程档只能改 host/channel/routes；画像永远是本机真实设备
+        assertEquals(HongguoEnv.deviceType, n.deviceType)
         assertEquals("update_64", n.channel)
     }
 
@@ -50,10 +51,17 @@ class HongguoNetProfilesTest {
 
     @Test
     fun parseRejectsBadProfileFields() {
-        // 画像任一非法整档丢弃：型号带特殊字符 / 品牌 brand 带数字 / os 带点 / channel 大写
-        assertNull(HongguoNetProfiles.parseNet(net(type = "25053RT47C;drop")))
-        assertNull(HongguoNetProfiles.parseNet(net(brand = "Redmi2")))
-        assertNull(HongguoNetProfiles.parseNet(net(os = "16.1")))
+        // 画像字段不再接受远程覆写（必须与本机注册一致）：写了非法值也不影响，
+        // 一律用运行设备真实值；channel 仍有格式校验
+        listOf(
+            HongguoNetProfiles.parseNet(net(type = "25053RT47C;drop")),
+            HongguoNetProfiles.parseNet(net(brand = "Redmi2")),
+            HongguoNetProfiles.parseNet(net(os = "16.1")),
+        ).forEach {
+            assertEquals(HongguoEnv.deviceType, it!!.deviceType)
+            assertEquals(HongguoEnv.deviceBrand, it.deviceBrand)
+            assertEquals(HongguoEnv.osVersion, it.osVersion)
+        }
         assertNull(HongguoNetProfiles.parseNet(net(channel = "UPDATE_64")))
     }
 
