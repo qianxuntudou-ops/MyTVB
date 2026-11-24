@@ -95,14 +95,6 @@ class DanmakuMaskHostLayout @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
-    /** 保留调试入口：必要时可强制切软件层对比硬件合成差异。 */
-    fun setHighQualityClipping(enabled: Boolean) {
-        val target = if (enabled) LAYER_TYPE_SOFTWARE else LAYER_TYPE_NONE
-        if (layerType != target) {
-            setLayerType(target, null)
-        }
-    }
-
     override fun dispatchDraw(canvas: Canvas) {
         // 日志关闭时跳过所有性能计数与 key 字符串构建（每帧都会走到，纯浪费）。
         val drawStartedAtMs = if (AppLog.isEnabled) SystemClock.elapsedRealtime() else 0L
