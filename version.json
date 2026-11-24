@@ -16,7 +16,7 @@
     "play_host": "https://api5-normal-sinfonlineb.fqnovel.com",
     "channel": "update_64",
     "play_routes": [
-      "preload"
+      "player"
     ]
   }
 }

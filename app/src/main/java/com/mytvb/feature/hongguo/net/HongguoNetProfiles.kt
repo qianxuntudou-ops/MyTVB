@@ -57,9 +57,10 @@ internal object HongguoNetProfiles {
          * 取源路由：**只取首位，不做自动回退**（2026-11-24 定案——多形态串联只会让服务端
          * 在几十秒内看到同一设备两种请求形态，比单路失败更像异常；11-23 两路一起回空也实证
          * 回退无用）。要切换通道就改首位；列表里其余值仅作记录，不参与自动串联。
-         * 默认 `preload`：官方预取通道，2026-11-24 00:02 真网放行已验证。
+         * 默认 `player`：官方 App 的起播正式通道；2026-11-24 10:53 真网单枪验证放行
+         * （HTTP 200 / 23812B / code=0 / video_model 可取）。失败要退回就改这里或 version.json 首位。
          */
-        val playRoutes: List<String> = listOf(ROUTE_PRELOAD),
+        val playRoutes: List<String> = listOf(ROUTE_PLAYER),
     )
 
     val current: Net get() = overrideNet ?: BUILTIN

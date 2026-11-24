@@ -99,7 +99,7 @@ class HgMedusaVerifyProbeTest {
     }
 
     private companion object {
-        /** 2026-11-23 HGTV 真机请求里实际请求过的分集。 */
-        const val VID = "7709197486916652056"
+        /** 2026-11-24 我方真机日志里刚验证可播的分集（同目录探针复用它，避免用别人视频号）。 */
+        const val VID = "7709069431053241368"
     }
 }

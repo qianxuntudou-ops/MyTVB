@@ -85,8 +85,8 @@ class HongguoNetProfilesTest {
         assertEquals(HongguoEnv.deviceBrand, HongguoNetProfiles.deviceBrand())
         assertEquals(HongguoEnv.osVersion, HongguoNetProfiles.osVersion())
         assertEquals("update_64", HongguoNetProfiles.channel())
-        // 内置档：只有 preload 一条（2026-11-24 起不做自动回退）；列表其余值只作记录
-        assertEquals(listOf("preload"), HongguoNetProfiles.playRoutes())
+        // 内置档：只有 player 一条（官方起播通道，已真网验证；不做自动回退）
+        assertEquals(listOf("player"), HongguoNetProfiles.playRoutes())
     }
 
     // ---- 取源路由（hg_net.play_routes，2026-11-23） ----
@@ -112,11 +112,11 @@ class HongguoNetProfilesTest {
 
     @Test
     fun parsePlayRoutesFallsBackToBuiltin() {
-        // 缺失 / 非数组 / 全非法 → 保持内置默认（preload 单条）
-        assertEquals(listOf("preload"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
-        assertEquals(listOf("preload"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
+        // 缺失 / 非数组 / 全非法 → 保持内置默认（player 单条）
+        assertEquals(listOf("player"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
+        assertEquals(listOf("player"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
         assertEquals(
-            listOf("preload"),
+            listOf("player"),
             HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("bogus"))))!!.playRoutes
         )
     }
