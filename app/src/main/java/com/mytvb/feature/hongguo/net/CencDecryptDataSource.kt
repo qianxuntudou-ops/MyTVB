@@ -48,6 +48,9 @@ class CencDecryptDataSource(
     private var loggedEof = false
     private var decryptFailCount = 0
 
+    /** 200 全量响应待丢弃的上游字节数（头部已由本地直供，上游却从流首开始）。 */
+    private var skipUpstream = 0L
+
     override fun addTransferListener(transferListener: TransferListener) {
         upstream.addTransferListener(transferListener)
     }
@@ -57,15 +60,24 @@ class CencDecryptDataSource(
         header = null
         headerPos = 0
         loggedEof = false
+        skipUpstream = 0L
         // 防「上一源的区间表残留」错位解密（2026-11-18 真机教训：换源后 ranges 未
         // 重置，旧样本布局解新数据=必错位）：每次 open 清零，解析失败即抛错走整集兜底
         ranges = emptyList()
         val url = dataSpec.uri.toString()
         if (dataSpec.position == 0L && tryOpenWithHead(url, dataSpec)) {
-            val total = headLen() + tailLen
+            // tailLen<0 = 上游没给长度：不能拿 headLen()+tailLen 当总长（会算出 head-1
+            // 这种假总长，ProgressiveMediaSource 按它裁剪/判 EOF），按 media3 语义报
+            // LENGTH_UNSET（2026-11-24 修）。
+            val total = if (tailLen < 0L) {
+                androidx.media3.common.C.LENGTH_UNSET.toLong()
+            } else {
+                headLen() + tailLen
+            }
             com.mytvb.core.common.log.AppLog.d(
                 "Hongguo",
-                "soft-decrypt open=0 head=${headLen()}B tail=$tailLen total=$total " +
+                "soft-decrypt open=0 head=${headLen()}B tail=$tailLen " +
+                    "total=${if (total < 0L) "unknown" else total} " +
                     "ranges=${ranges.size} key=$cacheKey"
             )
             return total
@@ -190,12 +202,9 @@ class CencDecryptDataSource(
             throw e
         }
         if (len2 <= 0L) {
-            // 长度未知：无法校验总长，头部直供照给（len2=-1 时调用方拿 -1 走未知长度语义）
+            // 上游长度未知（-1）或 0：无法校验总长，头部直供照给，总长按未知上报（见 open）
             tailLen = len2
             header = raw
-            if (cached == null && len2 > 0L) saveHead(raw.size.toLong() + len2, raw)
-            // 注意：open 返回 headLen()+tailLen，len2<=0 时 it 会算出「头部长度-1」这种
-            // 假总长（2026-11-24 排查标记，先记录实际取值再决定修法）
             com.mytvb.core.common.log.AppLog.w(
                 "Hongguo",
                 "soft-decrypt upstream len=$len2 (未知/0)，头部直供 head=${raw.size}B key=$cacheKey"
@@ -207,8 +216,13 @@ class CencDecryptDataSource(
                 // 正常 206 分段响应
                 com.mytvb.core.common.log.AppLog.d("Hongguo", "head cache hit (206) key=$cacheKey")
             } else if (len2 == cached.totalLen) {
-                // Range 被忽略（200 全量）：upstream 从 0 起给了全流，读偏移修正
-                com.mytvb.core.common.log.AppLog.d("Hongguo", "head cache hit (200-full) key=$cacheKey")
+                // Range 被忽略（200 全量）：上游从流首回了全流，而客户端逻辑位置已到
+                // raw.size（头部是本地直供的）——必须丢弃上游前 raw.size 字节，否则整段
+                // 错位（2026-11-24 修：注释一直写"读偏移修正"，read 里实际没实现）
+                skipUpstream = raw.size.toLong()
+                com.mytvb.core.common.log.AppLog.d(
+                    "Hongguo", "head cache hit (200-full) skip=$skipUpstream key=$cacheKey"
+                )
             } else {
                 // 总长真不符（流变，对齐 HGTV VideoChanged 防御）：弃缓存降级全网络
                 com.mytvb.core.common.log.AppLog.w(
@@ -398,6 +412,7 @@ class CencDecryptDataSource(
             }
             header = null
         }
+        if (skipUpstream > 0L) discardUpstream()
         val n = upstream.read(buffer, offset, length)
         if (n > 0) {
             if (pos >= 0) decryptQuietly(buffer, offset, n, pos)
@@ -411,6 +426,24 @@ class CencDecryptDataSource(
             )
         }
         return n
+    }
+
+    /** 200 全量响应的上游对齐：upstream 从流首开始，而已直供的头部字节不能再算一遍。
+     *  只能顺序排空（响应不可 seek），一次性把 skipUpstream 读尽。 */
+    private fun discardUpstream() {
+        val buf = ByteArray(64 * 1024)
+        try {
+            while (skipUpstream > 0L) {
+                val r = upstream.read(buf, 0, minOf(skipUpstream, buf.size.toLong()).toInt())
+                if (r < 0) throw IOException("soft-decrypt skip eof rem=$skipUpstream")
+                skipUpstream -= r
+            }
+        } catch (e: IOException) {
+            com.mytvb.core.common.log.AppLog.w(
+                "Hongguo", "soft-decrypt skip upstream fail rem=$skipUpstream key=$cacheKey"
+            )
+            throw e
+        }
     }
 
     /** [decryptRegion] 的守护版：解密抛错记现场（位置/长度/区间数），控制流保持历史行为
