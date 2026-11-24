@@ -18,5 +18,12 @@
     "play_routes": [
       "player"
     ]
-  }
+  },
+  "apk_mirrors": [
+    "https://gh-proxy.com/",
+    "https://ghfast.top/",
+    "https://gh.monlor.com/",
+    "https://gh-proxy.cc/",
+    "https://ghproxy.net/"
+  ]
 }

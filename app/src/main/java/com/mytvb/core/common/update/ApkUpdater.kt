@@ -59,25 +59,74 @@ object ApkUpdater {
     private const val COOLDOWN_MS = 5_000L
     private const val TAG = "ApkUpdater"
 
+    /** version.json 热更镜像条数上限：太多只会拉长逐源尝试的总耗时 */
+    private const val MAX_REMOTE_MIRRORS = 8
+
+    /** 慢源看门狗：每 10 秒采样一次平均速度，低于 80KB/s 且远未下完就换下一个候选 */
+    private const val WATCHDOG_WINDOW_MS = 10_000L
+    private const val WATCHDOG_MIN_BYTES_PER_SEC = 80L * 1024L
+
     /**
      * GitHub release 资产下载镜像（国内加速；前缀拼接到原始直链前，如
-     * https://ghfast.top/https://github.com/.../xxx.apk）。GitHub 直连永远作为最后兜底。
-     * 2026-10-29 真实 APK 直连实测三轮：ghfast(~2MB/s 稳)、gh.ddlc.top(~2.7MB/s)为
-     * 第一梯队；ghproxy.net 慢(~300KB/s)但通；boki 抖动剧烈(2.4MB/s↔15KB/s)垫底。
-     * gh-proxy.com 持续 403、akams/dgithub/ygxz/99988866/gitmirror 等直连全灭，均不收。
-     * 镜像属公益服务，快慢随时间漂移，列表需定期复核（地址发布站：ghproxy.link）。
+     * https://gh-proxy.com/https://github.com/.../xxx.apk）。GitHub 直连永远作为最后兜底。
+     * 2026-11-24 真实 APK 实测（Range 2MB × 3 轮，单线程）：
+     * gh-proxy.com ~1.8-2.2MB/s（10-29 曾持续 403，已恢复，现为第一梯队）；
+     * ghfast.top ~380KB/s 稳；gh.monlor.com ~280-470KB/s；gh-proxy.cc ~100-170KB/s 偶发超时；
+     * ghproxy.net 已降到 ~40-100KB/s；gh.ddlc.top 429 限流；github.boki.moe 反复抖动(≈6KB/s)垫底。
+     * 镜像属公益服务，快慢随时间漂移；version.json 的 apk_mirrors 可热更覆盖本列表（见下），
+     * 不发版即可换源。定期复核地址发布站：ghproxy.link。
+     *
+     * 注意：这里的顺序只是「默认优先级」，实际下载还有慢源看门狗
+     * （[WATCHDOG_MIN_BYTES_PER_SEC]）——首个源若龟速会自动切下一个，不必靠列表顺序兜住。
      */
     private val DOWNLOAD_MIRRORS = listOf(
+        "https://gh-proxy.com/",
         "https://ghfast.top/",
-        "https://gh.ddlc.top/",
+        "https://gh.monlor.com/",
+        "https://gh-proxy.cc/",
         "https://ghproxy.net/",
+        "https://gh.ddlc.top/",
         "https://github.boki.moe/",
     )
+
+    /**
+     * version.json 可选 `apk_mirrors` 下发的镜像（热更，2026-11-24 起）。
+     * 与内置列表合并（热更在前、内置兜底、去重）；字段缺失/全非法时回落内置。
+     * 只存内存：每次检查更新都会重新拉 version.json，下次会话自动再生效，无需持久化。
+     */
+    @Volatile
+    private var remoteMirrors: List<String> = emptyList()
+
+    /** 当前生效镜像：热更列表 + 内置列表，按归一化地址去重。 */
+    private fun activeMirrors(): List<String> {
+        val merged = LinkedHashSet<String>()
+        (remoteMirrors + DOWNLOAD_MIRRORS).forEach { merged += it }
+        return merged.toList()
+    }
+
+    /**
+     * 校验 version.json 的 apk_mirrors：必须是 https://host[/path]/ 形态，自动补尾部斜杠；
+     * 去重、最多 [MAX_REMOTE_MIRRORS] 条；非法项剔除。空/全非法返回空列表（= 回落内置）。
+     * 入参为纯字符串列表（调用方从 JSONArray 摊平），便于脱离 org.json 做单测。
+     */
+    internal fun parseMirrorList(items: List<String>): List<String> {
+        val result = LinkedHashSet<String>()
+        for (item in items) {
+            val trimmed = item.trim().trim('"').trim()
+            if (!trimmed.startsWith("https://", ignoreCase = true)) continue
+            val host = trimmed.removePrefix("https://").removePrefix("HTTPS://").trimEnd('/')
+            if (host.isBlank() || host.contains(' ')) continue
+            if (!host.substringBefore('/').contains('.')) continue
+            result += "https://$host/"
+            if (result.size >= MAX_REMOTE_MIRRORS) break
+        }
+        return result.toList()
+    }
 
     /** 下载候选 URL：GitHub 直链时镜像在前、直连兜底；非 GitHub 直链原样单候选。 */
     private fun downloadCandidates(url: String): List<String> =
         if (url.startsWith("https://github.com/")) {
-            DOWNLOAD_MIRRORS.map { it + url } + url
+            activeMirrors().map { it + url } + url
         } else {
             listOf(url)
         }
@@ -238,6 +287,20 @@ object ApkUpdater {
         check(apkName.isNotBlank()) { "version.json apk 为空" }
         // latest/download/<资产名>：version.json 与 APK 同属 latest release，无需感知 tag 名
         val apkUrl = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO/releases/latest/download/$apkName"
+        // 镜像热更（可选）：字段缺失保留上一次下发的值；存在但全非法则回落内置列表
+        json.optJSONArray("apk_mirrors")?.let { rawMirrors ->
+            remoteMirrors = parseMirrorList(
+                (0 until rawMirrors.length()).map { rawMirrors.optString(it, "") }
+            )
+            if (remoteMirrors.isEmpty()) {
+                AppLog.w(TAG, "apk_mirrors invalid, fallback to builtin list")
+            } else {
+                AppLog.i(
+                    TAG,
+                    "mirrors hot-updated count=${remoteMirrors.size} first=${remoteMirrors.first().take(48)}"
+                )
+            }
+        }
         return ReleaseInfo(
             versionName = versionName,
             apkUrl = apkUrl,
@@ -379,9 +442,12 @@ object ApkUpdater {
         for ((index, candidate) in candidates.withIndex()) {
             currentCoroutineContext().ensureActive()
             if (index == 0) onProgress(Progress.Connecting)
+            // 最后一个候选（GitHub 直连）没有「下一个源」可换，慢源看门狗不能打断它，
+            // 否则镜像全灭时连龟速直连也下不完。同理，只剩 1 个候选时全程放行。
+            val allowSlow = index == candidates.lastIndex
             try {
                 AppLog.i(TAG, "download attempt ${index + 1}/${candidates.size} via=${candidate.take(64)} dir=${targetDir.absolutePath}")
-                return downloadApkOnce(context, candidate, targetDir, onProgress)
+                return downloadApkOnce(context, candidate, targetDir, onProgress, allowSlow = allowSlow)
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 lastError = t
@@ -395,11 +461,15 @@ object ApkUpdater {
         throw lastError ?: IllegalStateException("download failed")
     }
 
+    /** 慢源看门狗触发：已下了一部分但速度远低于阈值，换下一个候选重下。 */
+    private class SlowSourceException(message: String) : IOException(message)
+
     private suspend fun downloadApkOnce(
         context: Context,
         url: String,
         targetDir: File,
         onProgress: (Progress) -> Unit,
+        allowSlow: Boolean = false,
     ): File {
         val dir = targetDir.apply { mkdirs() }
         check(dir.isDirectory) { "target dir unavailable: ${dir.absolutePath}" }
@@ -429,6 +499,11 @@ object ApkUpdater {
                         var speedAtMs = System.currentTimeMillis()
                         var speedBytes = 0L
                         var bytesPerSecond = 0L
+                        // 慢源看门狗：10 秒窗口平均速度低于阈值且远未下完 → 判定为龟速源，
+                        // 交给候选链换下一个镜像（此前只有抛异常才换源，"慢"会一路慢到底，
+                        // 用户实测一次更新要 5-10 分钟）。
+                        var watchdogStartMs = System.currentTimeMillis()
+                        var watchdogBytes = 0L
 
                         while (true) {
                             ensureActive()
@@ -436,6 +511,7 @@ object ApkUpdater {
                             if (read <= 0) break
                             output.write(buf, 0, read)
                             downloaded += read
+                            watchdogBytes += read
 
                             speedBytes += read
                             val nowMs = System.currentTimeMillis()
@@ -445,6 +521,22 @@ object ApkUpdater {
                                     (speedBytes * 1_000L / speedElapsedMs.coerceAtLeast(1)).coerceAtLeast(0)
                                 speedBytes = 0L
                                 speedAtMs = nowMs
+                            }
+
+                            if (!allowSlow) {
+                                val windowMs = nowMs - watchdogStartMs
+                                if (windowMs >= WATCHDOG_WINDOW_MS) {
+                                    val windowBps = watchdogBytes * 1_000L / windowMs.coerceAtLeast(1)
+                                    // 已过半就不打断：剩下不多，换源重下反而更慢
+                                    val farFromDone = total?.let { downloaded < it / 2 } ?: (downloaded < 2L * 1024 * 1024)
+                                    if (farFromDone && windowBps < WATCHDOG_MIN_BYTES_PER_SEC) {
+                                        throw SlowSourceException(
+                                            "slow source: ${windowBps / 1024}KB/s at ${downloaded}B/${total ?: -1L}B"
+                                        )
+                                    }
+                                    watchdogStartMs = nowMs
+                                    watchdogBytes = 0L
+                                }
                             }
 
                             if (nowMs - lastEmitAtMs >= 200) {
