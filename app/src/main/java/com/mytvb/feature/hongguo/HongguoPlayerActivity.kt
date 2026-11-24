@@ -524,6 +524,17 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private fun obtainPlayer(): ExoPlayer {
         player?.let { return it }
         val p = ExoPlayer.Builder(this)
+            // 缓冲窗口对齐 BT（BT 反编译 NativePlayerActivity:17089 读设置项
+            // buffer_max_sec，默认 30s，minBufferMs = maxBufferMs / 2 = 15s；
+            // 起播 1.5s / 重缓冲后 2.5s）。此前这里没设 LoadControl，走 media3
+            // 默认 50s~50s——红果是渐进式 MP4 单文件、码率中等，50s 前向窗口纯属
+            // 白占 Java 堆（默认字节上限视频 2000 段≈128MB + 音频≈13MB，窗口越宽
+            // 越容易逼近上限）。30s 在 8Mbps 下约 30MB，仍覆盖常见网络抖动。
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(15_000, 30_000, 2_500, 5_000)
+                    .build()
+            )
             // 统一渲染器工厂（对齐 B 站三处播放器）：decoderFallback 兜底、软解开关、
             // FFmpeg 音频兜底、frameRate 超 codec 声明剥除防御（BT 对拍，issue#113）。
             // 之前裸 Builder 走 media3 默认 DefaultRenderersFactory，这些全没有。

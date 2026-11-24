@@ -1317,6 +1317,14 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
             )
         return ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
+            // 缓冲窗口对齐 BT（反编译 NativePlayerActivity:17089：buffer_max_sec
+            // 默认 30s，minBufferMs = max/2 = 15s）。此前没设 LoadControl，走 media3
+            // 默认 50s~50s；影视点播分片 4s/段，30s 前向约 7 段，足够扛网络抖动。
+            .setLoadControl(
+                androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(15_000, 30_000, 2_500, 5_000)
+                    .build()
+            )
             .build()
     }
 
