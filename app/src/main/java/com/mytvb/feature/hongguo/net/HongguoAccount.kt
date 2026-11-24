@@ -421,20 +421,33 @@ class HongguoAccount(private val session: HongguoSession) {
                 .domain("hongguoduanju.com").path("/").build()
     }
 
+    /**
+     * 给 query 填设备环境：**一律取运行设备真实值**（[HongguoEnv]，与注册/播放同源）。
+     * 2026-11-24 之前这里硬编码 Redmi 25053RT47C / Android 16 / 1280*2772，同一个 device_id
+     * 在注册、登录、播放三个接口上报三种自相矛盾的机型。
+     */
+    private fun applyDeviceEnv(q: MutableMap<String, String>) {
+        q["device_brand"] = HongguoEnv.deviceBrand
+        q["device_platform"] = "android"
+        q["device_type"] = HongguoEnv.deviceType
+        q["dpi"] = HongguoEnv.dpi
+        q["os"] = "android"; q["os_api"] = HongguoEnv.osApi; q["os_version"] = HongguoEnv.osVersion
+        q["resolution"] = HongguoEnv.resolution
+        q["ssmix"] = "a"
+    }
+
     /** 已登录时拉资料（/reading/user/info/v1 带 cookie；未登录返回 null）。 */
     fun fetchProfile(): Profile? {
         val sid = cookieValue("sessionid").ifEmpty { session.accountCookies["sessionid"].orEmpty() }
         if (sid.isEmpty()) return null
         val q = TreeMap<String, String>()
         q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"
-        q["channel"] = "update_64"; q["device_brand"] = "Redmi"
+        q["channel"] = "update_64"
+        applyDeviceEnv(q)
         q["device_id"] = session.deviceId
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["dpi"] = "520"; q["iid"] = session.installId
+        q["iid"] = session.installId
         q["cdid"] = session.cdid
         q["language"] = "zh"; q["manifest_version_code"] = "73532"
-        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
         q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
         q["pv_player"] = "73532"; q["compliance_status"] = "0"
         q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"
@@ -543,15 +556,13 @@ class HongguoAccount(private val session: HongguoSession) {
         }
         val q = TreeMap<String, String>()
         q["ac"] = "wifi"; q["aid"] = "8662"; q["app_name"] = "novelread"
-        q["channel"] = "update_64"; q["device_brand"] = "Redmi"
+        q["channel"] = "update_64"
+        applyDeviceEnv(q)
         q["device_id"] = session.deviceId
-        q["device_platform"] = "android"; q["device_type"] = "25053RT47C"
-        q["dpi"] = "520"; q["iid"] = session.installId
+        q["iid"] = session.installId
         q["cdid"] = session.cdid
         q["openudid"] = session.openUdid
         q["language"] = "zh"; q["manifest_version_code"] = "73532"
-        q["os"] = "android"; q["os_api"] = "36"; q["os_version"] = "16"
-        q["resolution"] = "1280*2772"; q["ssmix"] = "a"
         q["host_abi"] = "arm64-v8a"; q["dragon_device_type"] = "phone"
         q["pv_player"] = "73532"; q["compliance_status"] = "0"
         q["need_personal_recommend"] = "1"; q["player_so_load"] = "1"

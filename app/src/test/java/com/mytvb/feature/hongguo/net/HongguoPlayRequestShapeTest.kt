@@ -152,11 +152,13 @@ class HongguoPlayRequestShapeTest {
             HongguoCrypto.toHex(HongguoCrypto.md5(body)).uppercase(),
             req.header("X-SS-STUB"),
         )
-        // query 的 _rticket 与 X-Khronos 同一秒
+        // _rticket 是毫秒且允许为调谐 selector 偏移（官方抓包里也与 X-Khronos 差近 1s），
+        // 这里只要求两者不脱节：|ticket/1000 - khronos| <= 2
         val query = req.url.encodedQuery ?: ""
         val ticket = HongguoMedusa.queryValue(query, "_rticket")
         assertNotNull(ticket)
-        assertEquals((ticket!!.toLong() / 1000).toString(), req.header("X-Khronos"))
+        val diff = (ticket!!.toLong() / 1000) - req.header("X-Khronos")!!.toLong()
+        assertTrue("ticket/khronos 相差 ${diff}s", diff in -2L..2L)
         // 空参数段确实出现在最终 query 里
         assertTrue(query.contains("&&"))
     }

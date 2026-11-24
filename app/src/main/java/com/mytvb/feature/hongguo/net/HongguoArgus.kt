@@ -120,7 +120,7 @@ internal object HongguoArgus {
         tsSec: Int,
         versionName: String = "7.1.3.32",
         deviceId: String,
-        deviceProfile: Triple<String, String, String> = Triple("25053RT47C", "16", "update_64")
+        deviceProfile: Triple<String, String, String> = HongguoEnv.argusProfile
     ): Pair7 {
         val nonce = ByteArray(11).also { SecureRandom().nextBytes(it) }
         return Pair7(

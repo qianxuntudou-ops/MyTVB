@@ -391,7 +391,7 @@ class HongguoPlay {
 
         /** 播放 host 与画像四元组：改读 HongguoNetProfiles（version.json `hg_net`
          *  热更覆盖，2026-11-21 起；探针实证通过的组合就是其内置档——b 线 host +
-         *  Redmi 25053RT47C / Android 16 / update_64，HGTV F0.n3.f2118b 集群 a/b/c
+         *  运行设备真实画像（HongguoEnv），HGTV F0.n3.f2118b 集群 a/b/c
          *  + lf/lq/hl 共 6 个候选）。 */
 
         /** video_tab 路径（果映形态无尾斜线；带不带尾斜线实测都放行）。 */
