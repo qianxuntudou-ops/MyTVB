@@ -473,7 +473,8 @@ class HongguoPlay {
         val req = buildPlayRequest(baseUrl, q, body, ua)
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
-            AppLog.i(TAG, "play preload resp http=${resp.code} len=${bytes.size}")
+            // 路径带上端点名：player/preload 两路共用本函数，写死 "preload" 会误导排障
+            AppLog.i(TAG, "play ${baseUrl.substringAfterLast("/novel/player/")} resp http=${resp.code} len=${bytes.size}")
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
             return String(bytes, Charsets.UTF_8)
         }
