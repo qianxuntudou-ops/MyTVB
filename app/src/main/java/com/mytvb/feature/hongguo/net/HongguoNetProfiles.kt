@@ -36,12 +36,14 @@ internal object HongguoNetProfiles {
     private const val K_DNS = "net_dns_table"
     private const val K_ROUTES = "net_play_routes"
 
-    /** 取源路由名（`hg_net.play_routes` 的合法取值）：preload=preload/v1 POST + V5 签名全头集
-     *  （对齐 HGTV 实测请求；2026-11-24 服务端收紧 medusa 校验后真网放行）；
-     *  v5tab=V5 签名 GET video_tab（果映TV 形态，严格期放行与否未确认，留作次选）。 */
+    /** 取源路由名（`hg_net.play_routes` 的合法取值）：
+     *  player=player/v1 POST + dr_scene=player（官方 App 起播正式通道，2026-11-24 起首选）；
+     *  preload=preload/v1 POST（官方预取通道，也当起播次选；2026-11-24 服务端收紧 medusa 校验后真网放行）；
+     *  v5tab=V5 签名 GET video_tab（果映TV 形态，严格期放行与否未确认，留作末选）。 */
+    const val ROUTE_PLAYER = "player"
     const val ROUTE_V5TAB = "v5tab"
     const val ROUTE_PRELOAD = "preload"
-    private val KNOWN_ROUTES = setOf(ROUTE_V5TAB, ROUTE_PRELOAD)
+    private val KNOWN_ROUTES = setOf(ROUTE_PLAYER, ROUTE_V5TAB, ROUTE_PRELOAD)
 
     /** 覆写档案值（与内置档案同构，仅内存态）。 */
     data class Net(
@@ -51,7 +53,13 @@ internal object HongguoNetProfiles {
         val osVersion: String,
         val channel: String,
         /** 取源路由顺序：首个返回片源的胜出，其后依次回退（空 body 视为被拒/限流，熔断后不回退）。 */
-        val playRoutes: List<String> = listOf(ROUTE_PRELOAD, ROUTE_V5TAB),
+        /**
+         * 取源路由：**只取首位，不做自动回退**（2026-11-24 定案——多形态串联只会让服务端
+         * 在几十秒内看到同一设备两种请求形态，比单路失败更像异常；11-23 两路一起回空也实证
+         * 回退无用）。要切换通道就改首位；列表里其余值仅作记录，不参与自动串联。
+         * 默认 `preload`：官方预取通道，2026-11-24 00:02 真网放行已验证。
+         */
+        val playRoutes: List<String> = listOf(ROUTE_PRELOAD),
     )
 
     val current: Net get() = overrideNet ?: BUILTIN
@@ -64,6 +72,9 @@ internal object HongguoNetProfiles {
     fun osVersion(): String = current.osVersion
     fun channel(): String = current.channel
     fun playRoutes(): List<String> = current.playRoutes
+
+    /** 当前生效的唯一取源路由（不做回退）。 */
+    fun activeRoute(): String = playRoutes().firstOrNull() ?: ROUTE_PRELOAD
     fun dnsTable(): Map<String, List<String>> = dnsTable
 
     /**
@@ -142,17 +153,20 @@ internal object HongguoNetProfiles {
         }
     }
 
-    /** 整档解析+校验：字段缺失/格式非法返回 null（不部分采用）。纯函数，可单测。
+    /** 整档解析+校验：显式写了但格式非法返回 null（不部分采用）；字段缺失回落内置档。纯函数，可单测。
      *  `play_routes` 可选：缺失或无合法项=保持默认（v5tab），未知路由名与重复项剔除；
      *  它不参与整档校验，配置写错不至于连 host/画像一起回落。 */
     fun parseNet(obj: JSONObject?): Net? {
         if (obj == null) return null
+        // 缺省 = 不覆写，回落内置档（画像即运行设备真实值）。远程档**不该钉死机型**：
+        // 2026-11-24 之前 version.json 写着 Redmi 25053RT47C，等于让所有设备冒充同一台红米，
+        // 与各自注册时上报的真实机型自相矛盾。显式写了但格式非法的值仍然整档丢弃。
         val net = Net(
-            playHost = obj.optString("play_host").trim(),
-            deviceType = obj.optString("device_type").trim(),
-            deviceBrand = obj.optString("device_brand").trim(),
-            osVersion = obj.optString("os_version").trim(),
-            channel = obj.optString("channel").trim(),
+            playHost = obj.optString("play_host").trim().ifEmpty { BUILTIN.playHost },
+            deviceType = obj.optString("device_type").trim().ifEmpty { BUILTIN.deviceType },
+            deviceBrand = obj.optString("device_brand").trim().ifEmpty { BUILTIN.deviceBrand },
+            osVersion = obj.optString("os_version").trim().ifEmpty { BUILTIN.osVersion },
+            channel = obj.optString("channel").trim().ifEmpty { BUILTIN.channel },
             playRoutes = obj.optJSONArray("play_routes")?.let { arr ->
                 (0 until arr.length()).mapNotNull { arr.optString(it).trim() }
                     .filter { it in KNOWN_ROUTES }.distinct()
@@ -194,11 +208,18 @@ internal object HongguoNetProfiles {
         return obj.toString()
     }
 
+    /**
+     * 内置档案：**画像按运行设备如实生成**（[HongguoEnv]，与注册/详情等接口同源），
+     * 不再固定伪装 Redmi 25053RT47C——那份模板会让同一 device_id 在注册（真实机型）
+     * 与播放（红米）之间自相矛盾，而官方 App 在同一台机器上上报的就是真实机型
+     * （2026-11-13 抓包：device_type=2211133C / brand=Xiaomi / os_api=35 / os_version=15 /
+     * resolution=1280*720 / dpi=240）。host 与渠道仍保留原验证值，可用 `hg_net` 热更覆盖。
+     */
     private val BUILTIN = Net(
         playHost = "https://api5-normal-sinfonlineb.fqnovel.com",
-        deviceType = "25053RT47C",
-        deviceBrand = "Redmi",
-        osVersion = "16",
+        deviceType = HongguoEnv.deviceType,
+        deviceBrand = HongguoEnv.deviceBrand,
+        osVersion = HongguoEnv.osVersion,
         channel = "update_64",
     )
 

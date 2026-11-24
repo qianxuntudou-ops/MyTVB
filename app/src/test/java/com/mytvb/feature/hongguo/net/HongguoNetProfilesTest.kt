@@ -60,30 +60,36 @@ class HongguoNetProfilesTest {
     @Test
     fun parseRejectsMissingFields() {
         assertNull(HongguoNetProfiles.parseNet(null))
-        assertNull(HongguoNetProfiles.parseNet(JSONObject()))
-        // 单字段缺失（channel）整档丢弃
-        assertNull(HongguoNetProfiles.parseNet(JSONObject().put("play_host", "https://api5-normal-sinfonlinea.fqnovel.com")))
+        // 空对象 = 全是缺省 → 合法（等价内置档）；显式非法值才整档丢弃
+        assertEquals(HongguoNetProfiles.playHost(), HongguoNetProfiles.parseNet(JSONObject())!!.playHost)
+        // 单字段缺失（channel）不再丢弃：只覆写写了的字段，机型仍用运行设备真实值
+        val partial = HongguoNetProfiles.parseNet(JSONObject().put("play_host", "https://api5-normal-sinfonlinea.fqnovel.com"))!!
+        assertEquals("https://api5-normal-sinfonlinea.fqnovel.com", partial.playHost)
+        assertEquals(HongguoEnv.deviceType, partial.deviceType)
     }
 
     @Test
     fun builtinFallbackWithoutOverride() {
         HongguoNetProfiles.resetForTest()
         assertEquals("https://api5-normal-sinfonlineb.fqnovel.com", HongguoNetProfiles.playHost())
-        assertEquals("25053RT47C", HongguoNetProfiles.deviceType())
-        assertEquals("Redmi", HongguoNetProfiles.deviceBrand())
-        assertEquals("16", HongguoNetProfiles.osVersion())
+        // 2026-11-24 起画像按运行设备如实生成（与注册同源），不再是固定的 Redmi 模板
+        assertEquals(HongguoEnv.deviceType, HongguoNetProfiles.deviceType())
+        assertEquals(HongguoEnv.deviceBrand, HongguoNetProfiles.deviceBrand())
+        assertEquals(HongguoEnv.osVersion, HongguoNetProfiles.osVersion())
         assertEquals("update_64", HongguoNetProfiles.channel())
-        // 内置档：preload 首选（HGTV 实测放行形态）、v5tab 次选
-        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.playRoutes())
+        // 内置档：只有 preload 一条（2026-11-24 起不做自动回退）；列表其余值只作记录
+        assertEquals(listOf("preload"), HongguoNetProfiles.playRoutes())
     }
 
     // ---- 取源路由（hg_net.play_routes，2026-11-23） ----
 
     @Test
     fun parsePlayRoutesInOrder() {
-        val n = HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("preload", "v5tab"))))!!
+        val n = HongguoNetProfiles.parseNet(
+            net().put("play_routes", org.json.JSONArray(listOf("preload", "v5tab", "player")))
+        )!!
         // 顺序即回退顺序，原样保留
-        assertEquals(listOf("preload", "v5tab"), n.playRoutes)
+        assertEquals(listOf("preload", "v5tab", "player"), n.playRoutes)
     }
 
     @Test
@@ -98,11 +104,11 @@ class HongguoNetProfilesTest {
 
     @Test
     fun parsePlayRoutesFallsBackToBuiltin() {
-        // 缺失 / 非数组 / 全非法 → 保持内置默认（preload, v5tab）
-        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
-        assertEquals(listOf("preload", "v5tab"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
+        // 缺失 / 非数组 / 全非法 → 保持内置默认（preload 单条）
+        assertEquals(listOf("preload"), HongguoNetProfiles.parseNet(net())!!.playRoutes)
+        assertEquals(listOf("preload"), HongguoNetProfiles.parseNet(net().put("play_routes", "v5tab"))!!.playRoutes)
         assertEquals(
-            listOf("preload", "v5tab"),
+            listOf("preload"),
             HongguoNetProfiles.parseNet(net().put("play_routes", org.json.JSONArray(listOf("bogus"))))!!.playRoutes
         )
     }

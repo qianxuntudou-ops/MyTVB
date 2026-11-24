@@ -7,7 +7,7 @@ import java.io.File
 
 /**
  * 2026-11-23 medusa 精确移植后的**单枪**真网验证。构造的就是 App `preload` 路由实际要发的请求
- * （同一套 [HongguoPlay.preloadQuery] / [HongguoPlay.preloadBody] / 签名 / 头集 / HTTP 客户端），
+ * （同一套 [HongguoPlay.playQuery] / [HongguoPlay.modelBody] / 签名 / 头集 / HTTP 客户端），
  * 但绕过 `fetchPreloadData` 的「空响应升级 device_level 重发」与熔断——严格只发 1 枪。
  *
  * 两段式，避免探针自身的毛病浪费枪：
@@ -56,10 +56,10 @@ class HgMedusaVerifyProbeTest {
 
         val play = HongguoPlay()
         val ver = HongguoVersionProfiles.default
-        // 与 fetchPreloadData 一致：明文 body 先 gzip，签名与发送用同一份字节
-        val body = play.gzipDeflate(play.preloadBody(listOf(VID), 4))
-        val req = play.buildPreloadRequest(
-            "${HongguoNetProfiles.playHost()}${HongguoPlay.PRELOAD_PATH}", play.preloadQuery(identity), body,
+        // 与 fetchModelData 一致：明文 body 先 gzip，签名与发送用同一份字节
+        val body = play.gzipDeflate(play.modelBody(listOf(VID), 3, HongguoPlay.DR_PLAYER))
+        val req = play.buildPlayRequest(
+            "${HongguoNetProfiles.playHost()}${HongguoPlay.PLAYER_PATH}", play.playQuery(identity), body,
             HongguoPlay.ua(ver.code)
         )
         val record = JSONObject()

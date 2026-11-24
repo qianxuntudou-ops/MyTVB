@@ -92,33 +92,24 @@ class HongguoPlay {
     }
 
     /**
-     * 按路由顺序取源：首个返回片源的 entry 胜出；全部失败抛最后一路的异常
-     * （code 透传给上层恢复链判定）。空 body 即服务端限流，进入熔断后不再回退
-     * 下一路由（同样会空，且续封）。
+     * 取源：**只走一条主路由，失败即失败，不做端点回退**（2026-11-24 定案）。
+     * 理由：11-23 实证 `preload`/`v5tab` 一起回空，回退一次没救回来；而非空失败时
+     * 换端点重发，会让服务端在几十秒内看到同一设备用两种不同形态请求播放接口——
+     * 比单一路由失败更像异常客户端。多形态并存只保留「配置可切换」，不保留「自动串联」。
+     * 换通道改 `hg_net.play_routes` 首位（或直接改这一条），其余路由留作手动切换备选。
      */
     private fun fetchEntry(vid: String, identity: HongguoDeviceRegister.Identity): JSONObject {
         checkCooldown()
-        val routes = HongguoNetProfiles.playRoutes()
-        var lastError: Exception? = null
-        for ((index, route) in routes.withIndex()) {
-            try {
-                val entry = when (route) {
-                    HongguoNetProfiles.ROUTE_V5TAB -> fetchTabEntry(vid, identity)
-                    HongguoNetProfiles.ROUTE_PRELOAD -> fetchPreloadEntry(vid, identity)
-                    // 路由名在 HongguoNetProfiles 解析时已过滤，此处仅防御
-                    else -> throw PlayException("未知取源路由 $route", "UNKNOWN_ROUTE")
-                }
-                noteSuccess()
-                return entry
-            } catch (e: Exception) {
-                if (e is PlayException && e.code == EMPTY_BODY) throw e
-                lastError = e
-                if (index < routes.lastIndex) {
-                    AppLog.w(TAG, "play route=$route failed, fall back to ${routes[index + 1]}: ${e.message}")
-                }
-            }
+        val route = HongguoNetProfiles.activeRoute()
+        val entry = when (route) {
+            HongguoNetProfiles.ROUTE_PLAYER -> fetchModelEntry(PLAYER_PATH, DR_PLAYER, vid, identity)
+            HongguoNetProfiles.ROUTE_PRELOAD -> fetchModelEntry(PRELOAD_PATH, DR_PRELOAD, vid, identity)
+            HongguoNetProfiles.ROUTE_V5TAB -> fetchTabEntry(vid, identity)
+            // 路由名在 HongguoNetProfiles 解析时已过滤，此处仅防御
+            else -> throw PlayException("未知取源路由 $route", "UNKNOWN_ROUTE")
         }
-        throw lastError ?: PlayException("没有可用的取源路由", "NO_ROUTE")
+        noteSuccess()
+        return entry
     }
 
     /** 收到空 body：记连续次数、按 [backoffMs] 进入冷却，并以 [EMPTY_BODY] 抛出。 */
@@ -193,10 +184,10 @@ class HongguoPlay {
     }
 
     /**
-     * 后续剧集地址预取：逐集走与 [playUrl] 相同的路由（video_tab 是单集接口），集间限速。
-     * 任一集**取址**失败即止——服务端回空 body 时继续打只会多制造空响应；单集**解析**
-     * 失败（如片源不兼容）只跳过该集。返回成功解析的 vid→PlayUrl（保持入参顺序），
-     * 未命中的集切到时实时解析兜底。
+     * 后续剧集地址预取：官方预取通道是 preload/v1（`dr_scene=preload`）**一次请求带一批 id**
+     * （抓包 20 条样本：1004 数组 1~6 个 id，3~4 个最常见），所以这里也合并成单次请求——
+     * 比逐集发更省枪，也贴合官方行为。取址失败静默放弃（切集时实时解析兜底）；
+     * 单集解析失败（片源不兼容）只跳过该集。返回成功解析的 vid→PlayUrl（保持入参顺序）。
      */
     fun playUrlBatch(
         vids: List<String>,
@@ -205,103 +196,136 @@ class HongguoPlay {
     ): Map<String, PlayUrl> {
         require(vids.isNotEmpty()) { "预取集数为空" }
         require(vids.all { it.matches(Regex("\\d{1,30}")) }) { "分集编号无效" }
-        val out = LinkedHashMap<String, PlayUrl>()
-        for ((index, vid) in vids.withIndex()) {
-            val entry = try {
-                fetchEntry(vid, identity)
-            } catch (e: Exception) {
-                if (e is PlayException && e.code == COOLDOWN) {
-                    // 冷却期内预取静默放弃（不发网络；前台起播时会给出限流提示）
-                    AppLog.d(TAG, "prefetch skip: cooldown")
-                } else {
-                    AppLog.w(TAG, "prefetch stop at vid=$vid: ${e.message}")
-                }
-                break
+        val data = try {
+            fetchModelData(PRELOAD_PATH, vids, DR_PRELOAD, identity)
+        } catch (e: Exception) {
+            if (e is PlayException && e.code == COOLDOWN) {
+                // 冷却期内预取静默放弃（不发网络；前台起播时会给出限流提示）
+                AppLog.d(TAG, "prefetch skip: cooldown")
+            } else {
+                AppLog.w(TAG, "prefetch failed vids=${vids.size}: ${e.message}")
             }
+            return emptyMap()
+        }
+        val out = LinkedHashMap<String, PlayUrl>()
+        for (vid in vids) {
+            val entry = data.optJSONObject(vid) ?: continue
             runCatching { out[vid] = parseEntry(vid, entry, preferredPixels) }
-            if (index < vids.lastIndex) Thread.sleep(PREFETCH_GAP_MS)
         }
         return out
     }
 
     /**
-     * `preload` 路由（首选）：对齐 HGTV 1.3.8.x 的播放主通道（POST preload/v1 + V5 签名全头集）。
-     * 要点：
-     * - body：`mixed_video_id_map` 单集形态 + `dr_scene="preload"`、gzip；device_level
-     *   空响应 4→5 升级重发、video_platform=1024、use_server_dns=true（对齐 HGTV 1.3.8.6 o0）；
-     * - 传输：[v5SignedPost]——query 经 V5 签名把 medusa selector 调谐到 12，头集与 HGTV 的
-     *   V5 分支同名同序（21 个）。2026-11-24 00:02 真网放行（HGTV 真机请求原样重放、我方
-     *   新实现各验证过一次）；此前这里用 Argus 通道的 query 再补 medusa，selector 没调谐；
-     * - 画像三处同源：query device_type/brand + UA 一律 Redmi 25053RT47C / Android 16 /
-     *   update_64（探针通过组合，勿用运行设备真实型号——模拟器型号未验证）；
-     * - 版本走 [HongguoVersionProfiles.default]（74532 探针实证通过；73932 亦过，
-     *   保持热更档案能力）；
-     * - 响应 data 按 vid 分 key（1004 分组兜底），entry.video_model 字符串二跳
-     *   由 [parseEntry] 解开。
+     * `player`/`preload` 两条同构路由：官方起播是 `player/v1` + `dr_scene=player`，预取是
+     * `preload/v1` + `dr_scene=preload`（2026-11-13 抓包：9 条 player、20 条 preload）。
+     * 请求形态 2026-11-24 起整体照抄官方 7.4.5.32：
+     * - query 35 个参数位同序 + 官方那个空参数段（[playQuery]）；
+     * - body `biz_param` 键序一致、`device_level=3`、`use_server_dns=false`（[modelBody]）；
+     * - gzip level 9、X-SS-STUB = MD5(gzip body)（[gzipDeflate]）；
+     * - 14 个头同名同序（[buildPlayRequest]）。
+     * 签名层（x-medusa）与此前的 HGTV 精确移植相同，query 的 selector 由 [v5SignedPost] 调谐到 12。
+     *
+     * 本函数取两路共同的 data 结构里本集的 entry（`data.1004[vid]` 分组兜底）。
      */
-    private fun fetchPreloadEntry(
+    private fun fetchModelEntry(
+        path: String,
+        scene: String,
         vid: String,
         identity: HongguoDeviceRegister.Identity
     ): JSONObject {
-        val data = fetchPreloadData(listOf(vid), identity)
+        val data = fetchModelData(path, listOf(vid), scene, identity)
         return data.optJSONObject(vid)
             ?: data.optJSONObject("video_model")
             ?: runCatching { data.optJSONObject(data.keys().next()) }.getOrNull()
             ?: throw PlayException("播放接口未返回本集片源", "MISSING_MODEL")
     }
 
-    /** preload/v1 的 query（画像与 UA、签名同源：device_type/brand/os_version 取自 [HongguoNetProfiles]）。 */
-    internal fun preloadQuery(identity: HongguoDeviceRegister.Identity): java.util.LinkedHashMap<String, String> {
+    /**
+     * 播放接口 query，**键集与顺序照抄官方 App 抓包**（2026-11-13 com.phoenix.read 7.4.5.32，
+     * `/novel/player/` 系列全 35 个参数位，含官方自己发出来的一个空参数段 `&&`）。
+     * 取值保持我方已验证的设备画像（[HongguoNetProfiles] + UA Build/V417IR），只补官方有、
+     * 我方此前缺的键：`cdid`、`is_64_runtime`、`is_64_device`、`is_x86_device`、
+     * `rom_version`、`klink_egdi`；官方没有的 `device_token` 已去掉。
+     *
+     * `_rticket` 这里只占位，[HongguoPlaybackV5.sign] 会在原位调谐到 medusa selector==12。
+     */
+    internal fun playQuery(identity: HongguoDeviceRegister.Identity): List<Pair<String, String>> {
         val ver = HongguoVersionProfiles.default
-        val q = java.util.LinkedHashMap<String, String>()
-        q["device_id"] = identity.deviceId
-        q["iid"] = identity.installId
-        if (identity.deviceToken.isNotEmpty()) q["device_token"] = identity.deviceToken
-        q["ac"] = "wifi"; q["channel"] = HongguoNetProfiles.channel(); q["aid"] = "8662"
-        q["app_name"] = "novelread"
-        q["version_code"] = ver.code; q["version_name"] = ver.versionName
-        q["device_platform"] = "android"; q["os"] = "android"; q["ssmix"] = "a"
-        q["device_type"] = HongguoNetProfiles.deviceType()
-        q["device_brand"] = HongguoNetProfiles.deviceBrand(); q["language"] = "zh"
-        q["os_api"] = "36"; q["os_version"] = HongguoNetProfiles.osVersion()
-        q["manifest_version_code"] = ver.code
-        q["resolution"] = "1280*2772"; q["dpi"] = "520"
-        q["update_version_code"] = ver.code; q["host_abi"] = "arm64-v8a"
-        q["dragon_device_type"] = "phone"; q["pv_player"] = ver.code
-        q["compliance_status"] = "0"; q["need_personal_recommend"] = "1"
-        q["player_so_load"] = "1"; q["is_android_pad_screen"] = "0"
-        return q
+        return listOf(
+            "device_platform" to "android",
+            "os" to "android",
+            "ssmix" to "a",
+            "_rticket" to "",
+            "cdid" to identity.cdid,
+            "channel" to HongguoNetProfiles.channel(),
+            "aid" to "8662",
+            "app_name" to "novelread",
+            "version_code" to ver.code,
+            "version_name" to ver.versionName,
+            "manifest_version_code" to ver.code,
+            "update_version_code" to ver.code,
+            // 设备环境全部如实取运行设备（[HongguoEnv]），与注册/详情同源；官方抓包同款字段
+            "resolution" to HongguoEnv.resolution,
+            "dpi" to HongguoEnv.dpi,
+            "device_type" to HongguoNetProfiles.deviceType(),
+            "device_brand" to HongguoNetProfiles.deviceBrand(),
+            "language" to "zh",
+            "os_api" to HongguoEnv.osApi,
+            "os_version" to HongguoNetProfiles.osVersion(),
+            "ac" to "wifi",
+            "is_64_runtime" to HongguoEnv.is64Runtime,
+            "is_64_device" to HongguoEnv.is64Device,
+            // 官方抓包里就有的空参数段（`...is_64_device=true&&host_abi=...`），照抄
+            "" to "",
+            "host_abi" to HongguoEnv.HOST_ABI,
+            "dragon_device_type" to "phone",
+            "pv_player" to ver.code,
+            "is_x86_device" to HongguoEnv.isX86Device,
+            "compliance_status" to "0",
+            "need_personal_recommend" to "1",
+            "player_so_load" to "1",
+            "is_android_pad_screen" to "0",
+            "rom_version" to HongguoEnv.romVersionQuery,
+            "iid" to identity.installId,
+            "device_id" to identity.deviceId,
+            "klink_egdi" to identity.klinkEgdi,
+        )
     }
 
-    /** preload/v1 数据获取（单集/批量共用主体），返回 vid→entry 的 data 对象。
-     *  空 body 自动重试对齐 HGTV o0：device_level 4→5 升级立即重发一次（会话级
-     *  单调不降，[deviceLevel]），到顶仍空才判失败——这是它唯一的自动重试策略。 */
-    private fun fetchPreloadData(
+    /**
+     * `player`/`preload` 的数据获取（单集/批量共用主体），返回 vid→entry 的 data 对象。
+     * 空 body 自动重试对齐 HGTV：device_level 升档立即重发一次（会话级单调不降，
+     * [deviceLevel]），到 5 仍空才判失败——这是它唯一的自动重试策略。
+     */
+    private fun fetchModelData(
+        path: String,
         vids: List<String>,
+        scene: String,
         identity: HongguoDeviceRegister.Identity
     ): JSONObject {
-        AppLog.d(TAG, "play preload/v1 vids=${vids.size} first=${vids.first()} level=$deviceLevel device=${identity.deviceId}")
+        AppLog.d(TAG, "play $path vids=${vids.size} first=${vids.first()} scene=$scene level=$deviceLevel device=${identity.deviceId}")
         val ver = HongguoVersionProfiles.default
-        val q = preloadQuery(identity)
+        val q = playQuery(identity)
         // 诊断期：响应摘要塞进异常 message（android_logs 只回传异常行，message 可观测；
         // 真机验证稳定后 resp 探针可缩短或移除）
         var respProbe = ""
         return runCatching {
             var text: String
             while (true) {
-                // gzip body 同字节签名发送（对齐 HGTV o0：GZIPOutputStream + Content-Encoding）
+                // gzip body 同字节签名发送（官方 7.4.5.32 实测同样是 zlib level 9 的 gzip：
+                // X-SS-STUB == MD5(gzip(body))，2026-11-24 抓包核对）
                 text = v5SignedPost(
-                    "${HongguoNetProfiles.playHost()}$PRELOAD_PATH",
-                    q, gzipDeflate(preloadBody(vids, deviceLevel)), ua(ver.code)
+                    "${HongguoNetProfiles.playHost()}$path",
+                    q, gzipDeflate(modelBody(vids, deviceLevel, scene)), ua(ver.code)
                 )
                 respProbe = text.take(1200)
                 if (text.isNotEmpty()) break
                 if (deviceLevel < 5) {
-                    AppLog.w(TAG, "play preload empty body, escalate device_level $deviceLevel->${deviceLevel + 1}")
+                    AppLog.w(TAG, "play $path empty body, escalate device_level $deviceLevel->${deviceLevel + 1}")
                     deviceLevel += 1
                     continue
                 }
-                onEmptyBody(PRELOAD_PATH)
+                onEmptyBody(path)
             }
             val payload = JSONObject(text)
             val code = payload.optInt("Code", payload.optInt("code", 0))
@@ -317,41 +341,49 @@ class HongguoPlay {
         }
     }
 
+    /** 播放接口 body，**照抄官方 App 抓包形态**（`biz_param` 键序一致）：device_level 3 起
+     *  （官方 9 条 player/20 条 preload 样本全是 3）、use_server_dns=false（官方 14/15）、
+     *  video_platform=1024、dr_scene=player|preload、mixed_video_id_map.1004。 */
+
     /** preload/v1 批量 body（对齐 HGTV 1.3.8.6 o0 形态：device_level 4~5 /
      *  use_server_dns=true + cold_start_stage / video_platform=1024 /
      *  dr_scene=preload / mixed_video_id_map；1.3.8.6 对响应无 server_dns
      *  特殊解析，结构与 false 相同）。 */
-    internal fun preloadBody(vids: List<String>, deviceLevel: Int): ByteArray {
-        val arr = org.json.JSONArray()
-        vids.forEach { arr.put(it) }
-        return JSONObject()
-            .put(
-                "biz_param", JSONObject()
-                    .put("detail_page_version", 0)
-                    .put("device_level", deviceLevel)
-                    .put("disable_digg_stat", false)
-                    .put("disable_video_relate_book", false)
-                    .put("need_all_video_definition", true)
-                    .put("need_mp4_align", false)
-                    .put("use_os_player", false)
-                    .put("use_server_dns", true)
-                    .put("use_server_dns_scene", "cold_start_stage")
-                    .put("video_platform", 1024)
-            )
-            .put("dr_scene", "preload")
-            .put("mixed_video_id_map", JSONObject().put("1004", arr))
-            .toString().toByteArray(Charsets.UTF_8)
+    internal fun modelBody(vids: List<String>, deviceLevel: Int, scene: String): ByteArray {
+        // 手写字符串而不是 JSONObject：官方抓包的 body 是固定键序的紧凑 JSON，org.json 的键序
+        // 在单测环境（HashMap 实现）不保证，手写才能与之逐字节一致。vid 已由上层校验为纯数字。
+        val ids = vids.joinToString(",") { "\"$it\"" }
+        val json = "{\"biz_param\":{\"detail_page_version\":0,\"device_level\":$deviceLevel," +
+            "\"disable_digg_stat\":false,\"disable_video_relate_book\":false," +
+            "\"need_all_video_definition\":true,\"need_mp4_align\":false," +
+            "\"use_os_player\":false,\"use_server_dns\":false,\"video_platform\":1024}," +
+            "\"dr_scene\":\"$scene\",\"mixed_video_id_map\":{\"1004\":[$ids]}}"
+        return json.toByteArray(Charsets.UTF_8)
     }
 
-    /** 设备能力档（对齐 HGTV c0176k0.f2393w0：初始 4，空响应升 5 重发，会话级
-     *  单调不降——成功后停留在成功档，下次起播免再撞空）。 */
-    @Volatile private var deviceLevel = 4
+    /** 设备能力档：官方 App 实测恒为 3；空响应按 HGTV 习惯升 4→5 重发，会话级单调不降
+     *  （成功后停留在成功档，下次起播免再撞空）。 */
+    @Volatile private var deviceLevel = 3
 
-    /** 标准 gzip（HGTV G0/o0 用 GZIPOutputStream；同一份字节既签名又发送）。 */
+    /** gzip（官方 7.4.5.32 实测 zlib level 9、OS 字节 0xFF：把抓包 body 按这个参数压出的
+     *  字节，其 MD5 与官方实际发出的 X-SS-STUB 完全相等，2026-11-24 抓包核对）。
+     *  爪哇 GZIPOutputStream 固定 level 6 且 `def` 字段 protected 改不了，故手写 gzip 头/尾。
+     *  同一份字节既签名又发送。 */
     internal fun gzipDeflate(data: ByteArray): ByteArray {
-        val bos = java.io.ByteArrayOutputStream()
-        java.util.zip.GZIPOutputStream(bos).use { it.write(data) }
-        return bos.toByteArray()
+        val out = java.io.ByteArrayOutputStream()
+        out.write(byteArrayOf(0x1f, 0x8b.toByte(), 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff.toByte()))
+        val def = java.util.zip.Deflater(java.util.zip.Deflater.BEST_COMPRESSION, true)
+        java.util.zip.DeflaterOutputStream(out, def).use { it.write(data) }
+        val crc = java.util.zip.CRC32().apply { update(data) }.value
+        out.write(
+            byteArrayOf(
+                (crc and 0xff).toByte(), ((crc shr 8) and 0xff).toByte(),
+                ((crc shr 16) and 0xff).toByte(), ((crc shr 24) and 0xff).toByte(),
+                (data.size and 0xff).toByte(), ((data.size shr 8) and 0xff).toByte(),
+                ((data.size shr 16) and 0xff).toByte(), ((data.size shr 24) and 0xff).toByte()
+            )
+        )
+        return out.toByteArray()
     }
 
     companion object {
@@ -364,7 +396,12 @@ class HongguoPlay {
 
         /** video_tab 路径（果映形态无尾斜线；带不带尾斜线实测都放行）。 */
         private const val TAB_PATH = "/reading/bookapi/video_tab/multi_video_model/v1"
+        internal const val PLAYER_PATH = "/novel/player/multi_video_model/player/v1"
         internal const val PRELOAD_PATH = "/novel/player/multi_video_model/preload/v1"
+
+        /** `dr_scene`：官方起播用 player、预取用 preload（2026-11-13 抓包 9/20 条样本一致）。 */
+        internal const val DR_PLAYER = "player"
+        internal const val DR_PRELOAD = "preload"
 
         /** 播放接口 200 空 body 的异常 code：服务端限流特征，与设备身份无关（换注册方式
          *  同样空），不触发上层重注册，只触发熔断。 */
@@ -379,8 +416,8 @@ class HongguoPlay {
         private const val V5_DEVICE_TYPE = "PGT-AN10"
         private const val V5_OS_VERSION = "12"
 
-        /** 批量预取集间限速：密集请求会让服务端把后续请求一并回空（2026-11-23 探针实证）。 */
-        private const val PREFETCH_GAP_MS = 800L
+        // 批量预取已合并成单次 preload/v1 请求（官方同款，一次 body 带多个 id），
+        // 不再需要集间限速；原先的 PREFETCH_GAP_MS(250→800) 随逐集请求一起删掉。
 
         // ---- 空响应熔断（2026-11-23 探针实证）----
         // 服务端对短时密集的播放接口请求回 200 空 body，封禁期内继续请求不提前解除，
@@ -417,12 +454,9 @@ class HongguoPlay {
 
         internal fun resetCooldownForTest() = noteSuccess()
 
-        /** 播放 UA（X3.d 形态，与 query 画像同源；勿用 HongguoEnv 运行设备型号——
-         *  模拟器型号未验证，探针通过的是本硬编码形态）。 */
-        internal fun ua(versionCode: String): String =
-            "com.phoenix.read/$versionCode (Linux; U; Android ${HongguoNetProfiles.osVersion()}; zh_CN; " +
-                "${HongguoNetProfiles.deviceType()}; Build/BP2A.250605.031.A3; " +
-                "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
+        /** 播放 UA：照抄官方 App 抓包格式（`zh_CN_#Hans` + `;tt-ok/…`），机型/系统版本取
+         *  [HongguoEnv]（与 query 画像同源）。 */
+        internal fun ua(versionCode: String): String = HongguoEnv.uaPlayback(versionCode)
     }
 
     /**
@@ -434,9 +468,9 @@ class HongguoPlay {
      * 15/16 的概率与只实现了 12 号分支的 medusa 不自洽。[body] 为 gzip 后的字节，签名与发送同一份。
      */
     private fun v5SignedPost(
-        baseUrl: String, q: java.util.LinkedHashMap<String, String>, body: ByteArray, ua: String
+        baseUrl: String, q: List<Pair<String, String>>, body: ByteArray, ua: String
     ): String {
-        val req = buildPreloadRequest(baseUrl, q, body, ua)
+        val req = buildPlayRequest(baseUrl, q, body, ua)
         http.newCall(req).execute().use { resp ->
             val bytes = resp.body?.bytes() ?: ByteArray(0)
             AppLog.i(TAG, "play preload resp http=${resp.code} len=${bytes.size}")
@@ -445,44 +479,48 @@ class HongguoPlay {
         }
     }
 
-    /** 构造 preload 路由的请求（不发送）：V5 签名 + 头集组装都在这里，签名与 body 为同一份字节。 */
-    internal fun buildPreloadRequest(
-        baseUrl: String, q: java.util.LinkedHashMap<String, String>, body: ByteArray, ua: String
+    /**
+     * 构造 `player`/`preload` 路由的请求（不发送）：V5 签名 + 头集组装都在这里，
+     * 签名与 body 为同一份字节。
+     *
+     * 头集**照抄官方 App 7.4.5.32 的 14 个头、同序**（2026-11-13 抓包，9 条 player/v1 完全一致）：
+     * X-SS-STUB / X-Xs-From-Web / X-SS-REQ-TICKET / x-reading-request / x-vc-bdturing-sdk-version /
+     * x-tt-store-region / x-tt-store-region-src / User-Agent / X-Ladon / X-Khronos / X-Argus /
+     * X-Gorgon / X-Helios / X-Medusa。此前沿用 HGTV 的 21 头集（多 Accept、sdk-version、
+     * passport-sdk-version、lc、x-ss-dp），官方起播请求里没有这些，已去掉。
+     */
+    internal fun buildPlayRequest(
+        baseUrl: String, q: List<Pair<String, String>>, body: ByteArray, ua: String
     ): Request {
-        val signed = HongguoPlaybackV5.sign(q.entries.map { it.key to it.value }, System.currentTimeMillis(), body)
+        val signed = HongguoPlaybackV5.sign(q, System.currentTimeMillis(), body)
         val signedHeaders = signed.headers.toMap()
         val nowSec = requireNotNull(signedHeaders["x-khronos"]).toInt()
         val ticket = HongguoMedusa.queryValue(signed.query, "_rticket") ?: ""
         val random = java.security.SecureRandom()
-        // argus/ladon 对齐 HGTV V5 分支的 8 字符装饰头（b64(le32(ts)) / b64(rand4)）——
-        // 播放接口真正的内容签名是 gorgon + helios + medusa
+        // argus/ladon 装饰头（b64(le32(ts)) / b64(rand4)）：播放接口真正的内容签名是
+        // gorgon + helios + medusa，这两个只需形状合法
         fun b64le32(v: Int) = java.util.Base64.getEncoder().encodeToString(
             java.nio.ByteBuffer.allocate(4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(v).array()
         )
         val fakeLadon = java.util.Base64.getEncoder().encodeToString(ByteArray(4).also { random.nextBytes(it) })
         val headers = listOf(
-            "User-Agent" to ua,
-            "Accept" to "application/json; charset=utf-8,application/x-protobuf",
-            "x-ss-req-ticket" to ticket,
-            "sdk-version" to "2",
-            "passport-sdk-version" to "5051452",
-            "lc" to "101",
-            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
-            "x-xs-from-web" to "0",
-            "x-ss-dp" to "8662",
-            "x-tt-store-region" to "cn-gd",
-            "x-tt-store-region-src" to "did",
-            "x-khronos" to nowSec.toString(),
-            "x-ladon" to fakeLadon,
-            "x-argus" to b64le32(nowSec),
-            "x-gorgon" to HongguoCrypto.gorgon(signed.query, body, nowSec, random.nextInt(65536)),
-            "x-helios" to requireNotNull(signedHeaders["x-helios"]),
-            "x-medusa" to requireNotNull(signedHeaders["x-medusa"]),
-            "Content-Type" to "application/json; charset=utf-8",
-            // gzip body 声明（对齐 HGTV o0：签名与发送同一份 gzip 字节）
-            "Content-Encoding" to "gzip",
+            "X-SS-STUB" to requireNotNull(signedHeaders["x-ss-stub"]),
+            "X-Xs-From-Web" to "0",
+            "X-SS-REQ-TICKET" to ticket,
             "x-reading-request" to "$ticket-${random.nextLong() and 0xffffffffL}",
-            "x-ss-stub" to requireNotNull(signedHeaders["x-ss-stub"])
+            "x-vc-bdturing-sdk-version" to "4.0.3.cn",
+            "x-tt-store-region" to "cn-sc",
+            "x-tt-store-region-src" to "did",
+            "User-Agent" to ua,
+            "X-Ladon" to fakeLadon,
+            "X-Khronos" to nowSec.toString(),
+            "X-Argus" to b64le32(nowSec),
+            "X-Gorgon" to HongguoCrypto.gorgon(signed.query, body, nowSec, random.nextInt(65536)),
+            "X-Helios" to requireNotNull(signedHeaders["x-helios"]),
+            "X-Medusa" to requireNotNull(signedHeaders["x-medusa"]),
+            // 传输层（抓包 hook 没记这两个，但 body 确实是 gzip：X-SS-STUB == MD5(gzip body)）
+            "Content-Type" to "application/json; charset=utf-8",
+            "Content-Encoding" to "gzip",
         )
         return Request.Builder()
             .url("$baseUrl?${signed.query}")

@@ -38,6 +38,25 @@ internal object HongguoEnv {
     /** `V417IR release-keys`（Build.ID + release-keys，实测 UA `Build/V417IR` 同源）。 */
     val romVersion: String by lazy { "${Build.ID ?: "V417IR"} release-keys" }
 
+    /** 播放 query 的 `rom_version`：官方抓包是 `V417IR+release-keys`（加号，不是空格）。 */
+    val romVersionQuery: String by lazy { "${Build.ID ?: "V417IR"}+release-keys" }
+
+    /** 64 位设备 / 64 位进程 / x86 设备：官方抓包（x86 模拟器）是 true/false/true，如实报。 */
+    val is64Device: String by lazy {
+        runCatching { if (Build.SUPPORTED_64_BIT_ABIS?.isNotEmpty() == true) "true" else "false" }
+            .getOrDefault("true")
+    }
+
+    val is64Runtime: String by lazy {
+        runCatching { if (android.os.Process.is64Bit()) "true" else "false" }.getOrDefault("false")
+    }
+
+    val isX86Device: String by lazy {
+        runCatching {
+            if (Build.SUPPORTED_ABIS?.any { it.startsWith("x86") } == true) "true" else "false"
+        }.getOrDefault("false")
+    }
+
     /** fingerprint 增量段（注册 payload 的 `rom` 字段，MuMu=1171）。 */
     val romIncremental: String get() = Build.VERSION.INCREMENTAL?.takeIf { it.isNotBlank() } ?: "1171"
 
@@ -56,4 +75,13 @@ internal object HongguoEnv {
         "com.phoenix.read/$versionCode (Linux; U; Android $osVersion; zh_CN; $deviceType; " +
             "Build/${Build.ID ?: "V417IR"}; " +
             "Cronet/TTNetVersion:8d40f833 2026-03-03 QuicVersion:21ac1950 2025-11-18)"
+
+    /**
+     * 播放接口 UA：**照抄官方 App 7.4.5.32 抓包格式**
+     * `com.phoenix.read/74532 (Linux; U; Android 15; zh_CN_#Hans; 2211133C; Build/V417IR;tt-ok/3.12.13.20)`。
+     * 与注册 UA 的区别：语言段是 `zh_CN_#Hans`、尾部是 `;tt-ok/3.12.13.20`（没有 Cronet 尾串）。
+     */
+    fun uaPlayback(versionCode: String): String =
+        "com.phoenix.read/$versionCode (Linux; U; Android $osVersion; zh_CN_#Hans; $deviceType; " +
+            "Build/${Build.ID ?: "V417IR"};tt-ok/3.12.13.20)"
 }

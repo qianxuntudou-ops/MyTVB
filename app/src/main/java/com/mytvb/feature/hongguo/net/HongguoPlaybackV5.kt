@@ -84,9 +84,13 @@ internal object HongguoPlaybackV5 {
     fun medusaHeaderFor(query: String, body: ByteArray?, tsSec: Int): String =
         HongguoMedusa.medusaFor(query, body, tsSec)
 
-    /** 保序拼接（V5 模板顺序参与签名），unreserved=-_.!~*'()，其余 %XX 大写。 */
+    /** 保序拼接（V5 模板顺序参与签名），unreserved=-_.!~*'()，其余 %XX 大写。
+     *  空键空值渲染成空段（官方抓包里有 `...is_64_device=true&&host_abi=...` 这样的空参数，
+     *  签名要覆盖同一串，所以这里照原样输出）。 */
     internal fun encodeQuery(pairs: List<Pair<String, String>>): String =
-        pairs.joinToString("&") { (k, v) -> "${escapeV5(k)}=${escapeV5(v)}" }
+        pairs.joinToString("&") { (k, v) ->
+            if (k.isEmpty() && v.isEmpty()) "" else "${escapeV5(k)}=${escapeV5(v)}"
+        }
 
     private fun escapeV5(s: String): String {
         val sb = StringBuilder(s.length)
