@@ -333,6 +333,7 @@ internal class DanmakuPlayer(
         playWhenReady: Boolean,
         playbackSpeed: Float,
         config: DanmakuConfig,
+        frameTimeNanos: Long = 0L,
     ) {
         if (released) return
         latestPlaybackSpeed = playbackSpeed
@@ -367,7 +368,9 @@ internal class DanmakuPlayer(
 
         val frameId = uiFrameId.incrementAndGet()
         engineMain.drainReleasedBitmaps(frameId)
-        val nowNanos = System.nanoTime()
+        // 显示帧时间戳优先（见 DanmakuView.pendingFrameTimeNanos）；本次绘制不是自续帧
+        // 触发（恢复首帧/数据变更）时没有时间戳，退回当前时间，只影响这一帧的步进。
+        val nowNanos = frameTimeNanos.takeIf { it > 0L } ?: System.nanoTime()
         val smoothPos =
             timer.step(
                 nowNanos = nowNanos,
@@ -397,8 +400,10 @@ internal class DanmakuPlayer(
         // Choreographer 上续帧后请求与 vsync 同线程无竞态；弹幕 x 坐标本就在主线程
         // draw 现算（DanmakuEngine.draw），续帧画到的永远是最新位置。action 线程的
         // invalidate 仍保留，用于数据变更/空闲唤醒等需要立即刷新的场景。
+        // 续帧经显示帧的帧回调（scheduleDanmakuFrame）：回调先登记该帧的时间戳再请求
+        // 重绘，下一次 draw 用它推进位置，不按 draw 时刻的当前时间。
         if (started && frameLoopAnimating) {
-            view.invalidateDanmakuAreaOnAnimation()
+            view.scheduleDanmakuFrame()
         }
     }
 

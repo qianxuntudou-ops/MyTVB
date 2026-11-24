@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.View
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.player.danmaku.common.BiliDanmakuStyle
@@ -46,6 +47,7 @@ class DanmakuView @JvmOverloads constructor(
     // 两类探针把"颤动"二分为渲染拥塞 vs 时钟跳变；日志关闭时零开销。
     private var perfFrameLastAtUpMs: Long = 0L
     private var perfFrameLastSmoothMs: Long = 0L
+    private var perfFrameLastVsyncMs: Long = 0L
     private var perfFrameGapCount: Int = 0
     private var perfFrameGapMaxMs: Long = 0L
     private var perfSmoothJitCount: Int = 0
@@ -291,6 +293,8 @@ class DanmakuView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         // detach 后引擎被永久 release；若之后同实例重新 attach 而弹幕不再显示，此日志即为现场。
         AppLog.w(DIAG_TAG, "view DETACH ${width}x${height} → player.release() (irreversible)")
+        Choreographer.getInstance().removeFrameCallback(nextFrameCallback)
+        pendingFrameTimeNanos = 0L
         stopPerfLogging()
         player.release()
         debugStats.reset()
@@ -380,6 +384,7 @@ class DanmakuView @JvmOverloads constructor(
                 ?.takeIf { it.isFinite() && it > 0f }
                 ?: 1f
 
+        val frameTimeNanos = takeFrameTimeNanos()
         player.draw(
             canvas = canvas,
             rawPositionMs = rawPos,
@@ -387,9 +392,10 @@ class DanmakuView @JvmOverloads constructor(
             playWhenReady = playWhenReady,
             playbackSpeed = speed,
             config = cfg,
+            frameTimeNanos = frameTimeNanos,
         )
         if (AppLog.isEnabled) {
-            recordFrameJitterProbe(isPlaying = isPlaying)
+            recordFrameJitterProbe(isPlaying = isPlaying, frameTimeNanos = frameTimeNanos)
         }
         finishDrawSample()
     }
@@ -397,21 +403,30 @@ class DanmakuView @JvmOverloads constructor(
     /**
      * 帧级颤动探针（主线程 onDraw 末尾调用，仅在日志开启时工作）：
      * 对比"相邻两次绘制的真实间隔"与"平滑时钟的实际步进"。
-     * gap≥25ms 记一次单帧拥塞；|smoothDelta − frameDt|≥8ms 记一次时钟跳变。
+     * gap≥25ms 记一次单帧拥塞；|smoothDelta − 帧时间戳间隔|≥8ms 记一次时钟跳变。
+     *
+     * 跳变的基准是相邻显示帧时间戳的间隔，不是绘制间隔：位置按显示帧时间戳推进，
+     * 拥塞帧里"画得晚但只走一帧"是预期行为，拿绘制间隔当基准会把每次掉帧都记成跳变。
+     * 本帧没有显示帧时间戳（非自续帧触发的绘制）时不统计跳变，只更新基准。
      */
-    private fun recordFrameJitterProbe(isPlaying: Boolean) {
+    private fun recordFrameJitterProbe(isPlaying: Boolean, frameTimeNanos: Long) {
         val nowUpMs = SystemClock.uptimeMillis()
         val smoothNowMs = player.currentDanmakuPositionMs()
+        val vsyncNowMs = if (frameTimeNanos > 0L) frameTimeNanos / 1_000_000L else 0L
         val lastAt = perfFrameLastAtUpMs
         if (lastAt != 0L && isPlaying) {
             val frameDtMs = nowUpMs - lastAt
             if (frameDtMs > perfFrameGapMaxMs) perfFrameGapMaxMs = frameDtMs
             if (frameDtMs >= 25L) perfFrameGapCount++
-            val smoothDtMs = smoothNowMs - perfFrameLastSmoothMs
-            if (kotlin.math.abs(smoothDtMs - frameDtMs) >= 8L) perfSmoothJitCount++
+            if (vsyncNowMs != 0L && perfFrameLastVsyncMs != 0L) {
+                val smoothDtMs = smoothNowMs - perfFrameLastSmoothMs
+                val vsyncDtMs = vsyncNowMs - perfFrameLastVsyncMs
+                if (kotlin.math.abs(smoothDtMs - vsyncDtMs) >= 8L) perfSmoothJitCount++
+            }
         }
         perfFrameLastAtUpMs = nowUpMs
         perfFrameLastSmoothMs = smoothNowMs
+        perfFrameLastVsyncMs = vsyncNowMs
     }
 
     private fun startPerfLoggingIfNeeded() {
@@ -539,6 +554,7 @@ class DanmakuView @JvmOverloads constructor(
         perfFrameGapCount = 0
         perfFrameGapMaxMs = 0L
         perfSmoothJitCount = 0
+        perfFrameLastVsyncMs = 0L
     }
 
     /** 自适应帧率评估（主线程，onDraw 驱动每 3s 一窗）。规则见字段注释。 */
@@ -600,6 +616,40 @@ class DanmakuView @JvmOverloads constructor(
                 adaptiveGoodWindows = 0
             }
         }
+    }
+
+    /**
+     * 本帧的显示帧时间戳：主线程自续帧回调写入，onDraw 取走一次即清零。
+     *
+     * 弹幕位置按它推进，而不是按 onDraw 执行时刻的当前时间。当前时间会把"这一帧
+     * 花了多久才开始画"算进位移：帧率不稳的设备上相邻两次绘制的间隔忽大忽小，
+     * 弹幕就跟着忽快忽慢，看上去就是一顿一顿。显示帧时间戳只取决于这是第几个
+     * 显示帧，这一帧画得慢也只走一帧的位移，掉帧时表现为少一帧而不是变速。
+     * BT 的弹幕 View 即是此做法（IB.doFrame 用 frameTimeNanos 推进内部时钟）。
+     */
+    private var pendingFrameTimeNanos: Long = 0L
+
+    private val nextFrameCallback = Choreographer.FrameCallback { frameTimeNanos ->
+        pendingFrameTimeNanos = frameTimeNanos
+        invalidateDanmakuAreaOnAnimation()
+    }
+
+    /**
+     * 主线程自续帧：在下一个显示帧的动画阶段登记该帧的时间戳并请求重绘。
+     * 动画阶段先于同帧的界面遍历，所以登记的时间戳正是本次重绘所用显示帧的。
+     * 只能在主线程调用。
+     */
+    internal fun scheduleDanmakuFrame() {
+        val choreographer = Choreographer.getInstance()
+        choreographer.removeFrameCallback(nextFrameCallback)
+        choreographer.postFrameCallback(nextFrameCallback)
+    }
+
+    /** 取走本帧的显示帧时间戳（没有则返回 0，调用方退回当前时间）。 */
+    private fun takeFrameTimeNanos(): Long {
+        val value = pendingFrameTimeNanos
+        pendingFrameTimeNanos = 0L
+        return value
     }
 
     internal fun invalidateDanmakuAreaOnAnimation() {
