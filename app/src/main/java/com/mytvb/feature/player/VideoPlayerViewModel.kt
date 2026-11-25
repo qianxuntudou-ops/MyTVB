@@ -1120,6 +1120,10 @@ class VideoPlayerViewModel(
         currentSeasonType = 0
         pendingSeekPositionMs = seekPositionMs.coerceAtLeast(0L)
         pendingPlayWhenReady = true
+        // 新会话入口立刻清展示进度：换源完成前池里的 player 还挂着上个视频的源，
+        // 常驻细进度条/章节条若继续用旧 position+duration 会先闪一帧上个视频的进度，
+        // 直到新源挂载才跳正。宿主 UI 由 currentPosition/duration collector 同步刷新。
+        resetPlaybackProgress()
         launchStartEpisodeIndex = startEpisodeIndex
         activeRequestSession = com.mytvb.network.session.RequestSessionScope.capture()
         val loadGeneration = ++videoLoadGeneration
@@ -1296,6 +1300,9 @@ class VideoPlayerViewModel(
         _selectedEpisodeIndex.value = index
         pendingSeekPositionMs = 0L
         pendingPlayWhenReady = true
+        // 就地切集同一套：新集换源前 player 仍挂旧集，常驻进度条先用旧集 position 画比例
+        // 会「先显示上一集进度再跳正」，入口处先清零。
+        resetPlaybackProgress()
         didApplyLastPlayPosition = false
         currentCid = episode.cid
         currentAid = episode.aid.takeIf { it > 0 } ?: currentAid
@@ -1367,6 +1374,8 @@ class VideoPlayerViewModel(
         currentCid = cid
         pendingSeekPositionMs = 0L
         pendingPlayWhenReady = true
+        // 换剧情节点等同换源：旧节点进度不能在常驻条上先画一帧。
+        resetPlaybackProgress()
         didApplyLastPlayPosition = false
         currentSeasonId = null
         currentEpId = null
@@ -1545,18 +1554,34 @@ class VideoPlayerViewModel(
 
 
 
+    /**
+     * 写入播放进度。
+     *
+     * @return true 表示进度属于当前会话并已写入；false 表示被播放器挂载源归属校验丢弃
+     *         （换源完成前旧源还在播，这条位置属于上一个视频）。宿主据此决定是否刷新
+     *         常驻进度条，否则新视频打开瞬间会先画出上个视频的进度。
+     */
     fun updatePlaybackPosition(
         positionMs: Long,
         durationMs: Long,
         publishProgressState: Boolean = true
-    ) {
+    ): Boolean {
         // 跨视频进度隔离：复用的 player 实例在换源前可能还挂着上一个视频的源与位置
         // （softDetach 只 stop 不清 position）。VM 会话 cid 与 player 实际挂载 cid 不
         // 一致时，这里的 positionMs 属于上一个视频——写入会污染 pendingSeekPositionMs
         // （新视频起播被续播到上个视频的退出位置）与 _currentPosition（心跳把假进度
         // 错报给新视频，污染服务端历史）。cid 尚未确定（detail 未返回）时同样丢弃。
         if (!PlayerInstancePool.isAttachedCid(currentCid)) {
-            return
+            // 排障锚点：常驻进度条排查「先显示上个视频进度」时看这条——只要换源窗口内
+            // 出现 stale_source，就说明 player 还挂着旧源，UI 不应采纳该 position。
+            if (publishProgressState) {
+                AppLog.d(
+                    TAG,
+                    "playback_progress_dropped stale_source cid=$currentCid pos=${positionMs}ms " +
+                        "dur=${durationMs}ms attached=${PlayerInstancePool.attachedSourceKeyDescription()}"
+                )
+            }
+            return false
         }
         val sanitizedPositionMs = positionMs.coerceAtLeast(0L)
         val sanitizedDurationMs = durationMs.takeIf { it > 0L } ?: 0L
@@ -1576,6 +1601,7 @@ class VideoPlayerViewModel(
         // 弹幕分段同步：检测 seek 跳变并补齐目标位置弹幕，同时更新 lastSync 和加载分段。
         // 整体由 controller 封装，pendingSeekPositionMs 已在上方写入。
         danmakuController.onPositionChanged(sanitizedPositionMs)
+        return true
     }
 
     fun setLoading(loading: Boolean) {

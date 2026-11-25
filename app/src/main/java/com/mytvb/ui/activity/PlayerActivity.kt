@@ -498,13 +498,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             bottomProgressBar.isVisible || (::chapterSegmentBar.isInitialized && chapterSegmentBar.isVisible)
         },
         onProgressPublished = { positionMs, durationMs, publishProgressState ->
-            viewModel.updatePlaybackPosition(positionMs, durationMs, publishProgressState)
+            val progressAccepted =
+                viewModel.updatePlaybackPosition(positionMs, durationMs, publishProgressState)
             // 空降静音片段到点恢复（独立于 publish 节奏，每轮 500ms 检查）
             val restoreAt = sponsorMuteRestoreAtMs
             if (restoreAt != null && positionMs >= restoreAt) {
                 restoreSponsorMuteVolumeIfNeeded()
             }
-            if (publishProgressState) {
+            // 归属校验不通过（换源完成前 player 仍挂上个视频的源）时不刷新常驻进度条：
+            // VM 已丢弃这条进度，UI 必须用同一条判据，否则新视频打开会先画出上个视频的
+            // 进度，等新源挂载后才跳正。细条与章节条共用 latest，这里一次收口。
+            if (publishProgressState && progressAccepted) {
                 latestPlaybackPositionMs = positionMs.coerceAtLeast(0L)
                 latestPlaybackDurationMs = durationMs.coerceAtLeast(0L)
                 renderBottomProgressBar()

@@ -207,13 +207,16 @@ class VideoPlayerFragment : Fragment() {
         playerProvider = { player },
         publishProgressStateProvider = { _binding != null },
         onProgressPublished = { positionMs, durationMs, publishProgressState ->
-            viewModel.updatePlaybackPosition(positionMs, durationMs, publishProgressState)
+            val progressAccepted =
+                viewModel.updatePlaybackPosition(positionMs, durationMs, publishProgressState)
             // 空降静音片段到点恢复（独立于 publish 节奏，每轮 500ms 检查）
             val restoreAt = sponsorMuteRestoreAtMs
             if (restoreAt != null && positionMs >= restoreAt) {
                 restoreSponsorMuteVolumeIfNeeded()
             }
-            if (publishProgressState && _binding != null) {
+            // 与 PlayerActivity 同款收口：换源完成前旧源的 position 不属于当前会话，
+            // VM 已丢弃，UI 也不能拿它刷新常驻细条（会先显示上个视频的进度）。
+            if (publishProgressState && progressAccepted && _binding != null) {
                 latestPlaybackPositionMs = positionMs.coerceAtLeast(0L)
                 latestPlaybackDurationMs = durationMs.coerceAtLeast(0L)
                 renderBottomProgressBar()
