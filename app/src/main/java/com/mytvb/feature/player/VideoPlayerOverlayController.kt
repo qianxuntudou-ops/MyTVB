@@ -62,10 +62,18 @@ class VideoPlayerOverlayController(
 
     private companion object {
         const val TAG = "PlayerOverlay"
+
+        /** 面板关闭后控制栏多停留的时长：让「焦点已回到打开前的按钮」看得见 */
+        const val CONTROLLER_HOLD_AFTER_OVERLAY_MS = 5_000L
     }
 
     /** 当前面板打开时控制栏处于隐藏态且未强制拉起（隐藏态 UP 直达），关闭后应保持隐藏。 */
     private var controllerWasHiddenForOverlay: Boolean = false
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** 面板关闭后延迟解除控制栏自动隐藏挂起的定时任务（新面板打开或再次关闭时取消重排）。 */
+    private var releaseHideCallbacksRunnable: Runnable? = null
 
     fun showChooseEpisodeDialog(fromHiddenDpad: Boolean = false) {
         val episodes = sessionCoordinator.getEpisodes()
@@ -588,6 +596,9 @@ class VideoPlayerOverlayController(
      * 直达选集/合集）：不强制拉起控制栏，面板关闭后也保持隐藏（v2.1.14 反馈）。
      */
     private fun keepControllerVisibleForOverlay(forceShowController: Boolean = true) {
+        // 新面板打开：取消上一个面板关闭时安排的「延迟解除挂起」
+        releaseHideCallbacksRunnable?.let { handler.removeCallbacks(it) }
+        releaseHideCallbacksRunnable = null
         controllerWasHiddenForOverlay =
             !forceShowController && !playerView.isControllerFullyVisible()
         if (forceShowController && !playerView.isControllerFullyVisible()) {
@@ -611,8 +622,26 @@ class VideoPlayerOverlayController(
         playerView.post {
             overlayCoordinator.restoreFocus(playerView)
         }
-        // 解除挂起并立即按当前可见状态恢复一次自动隐藏调度
-        playerView.setControllerHideCallbacksSuspended(false)
+        if (keepHidden) {
+            // 隐藏态直达面板：关闭后维持隐藏（v2.1.14），立即恢复自动隐藏
+            playerView.setControllerHideCallbacksSuspended(false)
+            return
+        }
+        // 关面板后让控制栏多留一会儿：直接解除挂起会在 3 秒后缩回，焦点虽然已回到
+        // 打开前的按钮上，但屏上没有焦点高亮，用户会以为「焦点消失」（issue#137：
+        // 开评论区播完返回后十秒焦点消失，实际是回到了播放器按钮）。
+        releaseHideCallbacksAfterOverlay()
+    }
+
+    /** 关面板后控制栏可见保持时长；到期后才恢复自动隐藏调度。 */
+    private fun releaseHideCallbacksAfterOverlay() {
+        releaseHideCallbacksRunnable?.let { handler.removeCallbacks(it) }
+        val runnable = Runnable {
+            releaseHideCallbacksRunnable = null
+            playerView.setControllerHideCallbacksSuspended(false)
+        }
+        releaseHideCallbacksRunnable = runnable
+        handler.postDelayed(runnable, CONTROLLER_HOLD_AFTER_OVERLAY_MS)
     }
 
     private fun restoreControllerAfterRelatedPanel() {
