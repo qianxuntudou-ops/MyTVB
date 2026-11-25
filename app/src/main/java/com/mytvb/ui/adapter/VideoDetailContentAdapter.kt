@@ -68,7 +68,11 @@ internal class VideoDetailContentAdapter(
             val tags: List<Tag>,
             val isLiked: Boolean,
             val isCoined: Boolean,
-            val isFavorited: Boolean
+            val isFavorited: Boolean,
+            // 本页内的互动增量（issue#142）：操作成功后在接口值上叠加，避免数字不跟随按钮状态
+            val likeDelta: Int = 0,
+            val coinDelta: Int = 0,
+            val favoriteDelta: Int = 0
         ) : Row
 
         data class Pages(val items: List<VideoModel>) : Row
@@ -204,7 +208,10 @@ internal class VideoDetailContentAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val row = getItem(position)) {
-            is Row.Header -> (holder as VideoDetailHeadViewHolder).bind(row.view, row.tags, row.isLiked, row.isCoined, row.isFavorited)
+            is Row.Header -> (holder as VideoDetailHeadViewHolder).bind(
+                row.view, row.tags, row.isLiked, row.isCoined, row.isFavorited,
+                row.likeDelta, row.coinDelta, row.favoriteDelta
+            )
             is Row.Pages -> (holder as PagesLaneViewHolder).bind(row.items)
             is Row.UgcSeason -> (holder as UgcSeasonLaneViewHolder).bind(row.title, row.items, row.isReverse, row.currentAid)
             is Row.Related -> (holder as RelatedLaneViewHolder).bind(row.items)
@@ -242,6 +249,7 @@ internal class VideoDetailContentAdapter(
         private var currentTags: List<Tag> = emptyList()
         private var currentDescription: CharSequence = ""
         private var relationAttribute = 0
+        private var boundStat: com.mytvb.model.video.Stat? = null
 
         private var tripleActionTriggered = false
         private val tripleStartRunnable = Runnable {
@@ -388,7 +396,16 @@ internal class VideoDetailContentAdapter(
                 onBackFocus()
         }
 
-        fun bind(view: VideoView, tags: List<Tag>, isLiked: Boolean, isCoined: Boolean, isFavorited: Boolean) {
+        fun bind(
+            view: VideoView,
+            tags: List<Tag>,
+            isLiked: Boolean,
+            isCoined: Boolean,
+            isFavorited: Boolean,
+            likeDelta: Int = 0,
+            coinDelta: Int = 0,
+            favoriteDelta: Int = 0
+        ) {
             ImageLoader.loadVideoCover(
                 imageView = binding.imageCover,
                 url = view.pic,
@@ -410,6 +427,10 @@ internal class VideoDetailContentAdapter(
             }
             binding.ivStatOnline.visibility = View.GONE
             binding.textStatOnline.visibility = View.GONE
+
+            // 互动数（issue#142）：点赞/投币/收藏，显示在对应操作图标下方；无 stat 时留空
+            boundStat = stat
+            updateStatCounts(likeDelta, coinDelta, favoriteDelta)
 
             val owner = view.owner
             if (owner != null) {
@@ -540,6 +561,19 @@ internal class VideoDetailContentAdapter(
             binding.buttonLike.imageTintList = if (isLiked) pink else default
             binding.buttonCoin.imageTintList = if (isCoined) pink else default
             binding.buttonFavorite.imageTintList = if (isFavorited) pink else default
+        }
+
+        /** 互动数（issue#142）：按接口值 + 本页增量刷新图标下方数字，不触发整表重建。 */
+        fun updateStatCounts(likeDelta: Int = 0, coinDelta: Int = 0, favoriteDelta: Int = 0) {
+            val stat = boundStat ?: run {
+                binding.textLikeCount.text = ""
+                binding.textCoinCount.text = ""
+                binding.textFavoriteCount.text = ""
+                return
+            }
+            binding.textLikeCount.text = formatCount((stat.like + likeDelta).coerceAtLeast(0))
+            binding.textCoinCount.text = formatCount((stat.coin + coinDelta).coerceAtLeast(0))
+            binding.textFavoriteCount.text = formatCount((stat.favorite + favoriteDelta).coerceAtLeast(0))
         }
 
         fun updateFollowState(attribute: Int) {

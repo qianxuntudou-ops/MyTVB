@@ -117,6 +117,11 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
     private var isCoined = false
     private var isFavorited = false
 
+    // 互动数增量（issue#142）：点赞/投币/收藏成功后叠加到接口值上，重新拉取详情时归零
+    private var likeCountDelta = 0
+    private var coinCountDelta = 0
+    private var favoriteCountDelta = 0
+
     private var ugcEpisodes: List<UgcEpisode> = emptyList()
     private var ugcReverseOrder = false
 
@@ -452,6 +457,10 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         AppLog.d(TAG, "updateUI: title=${view.title}, tags=${detail.tags?.size}, pages=${view.pages?.size}, related=${detail.related?.size}")
         videoView = view
         currentDetail = detail
+        // 新详情落地即新的计数基线，清空本页互动增量（issue#142）
+        likeCountDelta = 0
+        coinCountDelta = 0
+        favoriteCountDelta = 0
 
         if (videoModel == null) {
             videoModel = VideoModel(
@@ -501,7 +510,10 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         val headerHolder = binding.recyclerView.findViewHolderForAdapterPosition(0)
             as? VideoDetailContentAdapter.VideoDetailHeadViewHolder
         if (headerHolder != null) {
-            headerHolder.bind(view, detail.tags ?: emptyList(), isLiked, isCoined, isFavorited)
+            headerHolder.bind(
+                view, detail.tags ?: emptyList(), isLiked, isCoined, isFavorited,
+                likeCountDelta, coinCountDelta, favoriteCountDelta
+            )
         }
 
         val ugcRowIndex = contentAdapter.currentList.indexOfFirst {
@@ -539,7 +551,10 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 tags = detail.tags ?: emptyList(),
                 isLiked = isLiked,
                 isCoined = isCoined,
-                isFavorited = isFavorited
+                isFavorited = isFavorited,
+                likeDelta = likeCountDelta,
+                coinDelta = coinCountDelta,
+                favoriteDelta = favoriteCountDelta
             )
         )
 
@@ -651,7 +666,14 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         if (headerIndex >= 0) {
             val newList = contentAdapter.currentList.toMutableList()
             val oldHeader = newList[headerIndex] as VideoDetailContentAdapter.Row.Header
-            newList[headerIndex] = oldHeader.copy(isLiked = isLiked, isCoined = isCoined, isFavorited = isFavorited)
+            newList[headerIndex] = oldHeader.copy(
+                isLiked = isLiked,
+                isCoined = isCoined,
+                isFavorited = isFavorited,
+                likeDelta = likeCountDelta,
+                coinDelta = coinCountDelta,
+                favoriteDelta = favoriteCountDelta
+            )
             contentAdapter.submitList(newList)
         }
     }
@@ -1140,6 +1162,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             }.onSuccess { response ->
                 if (response.isSuccess) {
                     isLiked = !isLiked
+                    likeCountDelta += if (isLiked) 1 else -1
                     updateActionButtonsDirectly()
                     toast(if (isLiked) getString(R.string.liked_) else getString(R.string.like))
                 } else {
@@ -1176,7 +1199,11 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             }.onSuccess { response ->
                 if (response.isSuccess) {
                     isCoined = true
-                    if (alsoLike) isLiked = true
+                    coinCountDelta += coinCount
+                    if (alsoLike) {
+                        isLiked = true
+                        likeCountDelta += 1
+                    }
                     updateActionButtonsDirectly()
                     toast(getString(R.string.toast_coin_success))
                 } else {
@@ -1217,6 +1244,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             result.onSuccess { response ->
                 if (response.isSuccess) {
                     isFavorited = !isFavorited
+                    favoriteCountDelta += if (isFavorited) 1 else -1
                     updateActionButtonsDirectly()
                     toast(
                         if (isFavorited) getString(R.string.collection_)
@@ -1240,6 +1268,10 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             runCatching { videoRepository.tripleAction(currentAid, currentBvid) }
                 .onSuccess { response ->
                     if (response.isSuccess) {
+                        // 互动数增量（issue#142）：只对本次由未操作变为已操作的项 +1，三连接口固定投 2 币
+                        if (!isLiked) likeCountDelta += 1
+                        if (!isCoined) coinCountDelta += 2
+                        if (!isFavorited) favoriteCountDelta += 1
                         isLiked = true
                         isCoined = true
                         isFavorited = true
@@ -1259,8 +1291,14 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
     private fun updateActionButtonsDirectly() {
         val binding = _binding ?: return
         val holder = binding.recyclerView.findViewHolderForAdapterPosition(0)
-            as? VideoDetailContentAdapter.VideoDetailHeadViewHolder ?: return
+            as? VideoDetailContentAdapter.VideoDetailHeadViewHolder
+        if (holder == null) {
+            // 头部已滚出屏幕被回收：把状态+增量写回 Row，等重新绑定由 bind 落地（issue#142）
+            updateActionStateAndRefresh()
+            return
+        }
         holder.updateActionButtons(isLiked, isCoined, isFavorited)
+        holder.updateStatCounts(likeCountDelta, coinCountDelta, favoriteCountDelta)
     }
 
     private fun canTouchView(): Boolean {

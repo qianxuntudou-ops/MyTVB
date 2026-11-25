@@ -117,6 +117,46 @@
         app:srcCompat="@drawable/ic_favorite"
         app:tint="?android:attr/textColorPrimary" />
 
+    <!-- 互动数：点赞/投币/收藏数量，显示在操作图标正下方（issue#142） -->
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_like_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px10"
+        android:gravity="center"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="@dimen/px22"
+        app:layout_constraintEnd_toEndOf="@+id/button_like"
+        app:layout_constraintStart_toStartOf="@+id/button_like"
+        app:layout_constraintTop_toBottomOf="@+id/button_like" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_coin_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px10"
+        android:gravity="center"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="@dimen/px22"
+        app:layout_constraintEnd_toEndOf="@+id/button_coin"
+        app:layout_constraintStart_toStartOf="@+id/button_coin"
+        app:layout_constraintTop_toBottomOf="@+id/button_coin" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_favorite_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px10"
+        android:gravity="center"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="@dimen/px22"
+        app:layout_constraintEnd_toEndOf="@+id/button_favorite"
+        app:layout_constraintStart_toStartOf="@+id/button_favorite"
+        app:layout_constraintTop_toBottomOf="@+id/button_favorite" />
+
     <com.mytvb.ui.widget.TripleActionProgressView
         android:id="@+id/view_triple_progress"
         android:layout_width="0dp"
@@ -174,7 +214,7 @@
                 android:layout_marginTop="@dimen/px5"
                 android:text="@string/cell_fans_placeholder"
                 android:textColor="?android:attr/textColorSecondary"
-                android:textSize="@dimen/px24" />
+                android:textSize="@dimen/px22" />
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>
 
