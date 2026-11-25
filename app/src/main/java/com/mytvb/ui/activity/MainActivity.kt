@@ -399,6 +399,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     private fun attachInitialContentAfterShellDraw() {
         if (startupInitialContentAttached) return
+        // 本方法挂在「壳层首帧之后」的 post 上，排队期间 Activity 可能已被销毁
+        // （force-stop 后立刻重启 + 配置变化重建）。已销毁就不要再往下走，
+        // 否则会往死掉的 FragmentManager 提交事务（实测崩过）。
+        if (isFinishing || isDestroyed) return
         startupInitialContentAttached = true
         val startMs = SystemClock.elapsedRealtime()
         AppLog.i(
@@ -543,6 +547,35 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         return fragments[index] ?: fragmentFactories[index]().also { fragments[index] = it }
     }
 
+    /**
+     * Fragment 事务的安全提交入口，替代裸的 `supportFragmentManager.commit {}`。
+     *
+     * 启动链会把「挂首个内容页」推迟到壳层首帧之后的 post 上（见 [attachInitialContentAfterShellDraw]），
+     * 这段延迟里 Activity 可能已经被销毁：force-stop 后立刻重启 + 配置变化重建时实测抛过
+     * `IllegalStateException: FragmentManager has been destroyed`（崩在 Handler 回调里的 commit）。
+     * 已销毁时直接丢弃事务；状态已保存（onSaveInstanceState 之后）时改走允许状态丢失的提交。
+     */
+    private fun commitIfAlive(block: FragmentTransaction.() -> Unit) {
+        if (isFinishing || isDestroyed) return
+        val fragmentManager = supportFragmentManager
+        if (fragmentManager.isDestroyed) return
+        runCatching {
+            val transaction = fragmentManager.beginTransaction()
+            transaction.block()
+            if (fragmentManager.isStateSaved) {
+                transaction.commitAllowingStateLoss()
+            } else {
+                transaction.commit()
+            }
+        }.onFailure {
+            AppLog.w(
+                STARTUP_TAG,
+                "fragment commit skipped destroyed=${fragmentManager.isDestroyed} stateSaved=${fragmentManager.isStateSaved}",
+                it
+            )
+        }
+    }
+
     private fun showFragment(index: Int) {
         if (index < 0 || index >= fragments.size) return
         if (index == 1 && !binding.myTabView.isCategoryButtonVisible()) return
@@ -560,7 +593,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val targetFragment = supportFragmentManager.findFragmentByTag(fragmentTag)
             ?: getOrCreateFragment(index)
 
-        supportFragmentManager.commit {
+        commitIfAlive {
             setReorderingAllowed(true)
 
             if (currentFragment != null) {
@@ -930,7 +963,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (supportFragmentManager.backStackEntryCount > 0) {
             pendingFocusRestoreDelayMs =
                 if (isSettingsOverlayVisible()) SETTINGS_OVERLAY_EXIT_ANIM_MS else 0L
-            supportFragmentManager.popBackStack()
+            // 与 commitIfAlive 同源防护：Activity 正在销毁时回退事务同样会抛
+            // IllegalStateException: FragmentManager has been destroyed。
+            if (!isFinishing && !isDestroyed && !supportFragmentManager.isDestroyed) {
+                supportFragmentManager.popBackStack()
+            }
             return
         }
 
@@ -997,7 +1034,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (supportFragmentManager.backStackEntryCount > 0) {
             pendingFocusRestoreDelayMs =
                 if (isSettingsOverlayVisible()) SETTINGS_OVERLAY_EXIT_ANIM_MS else 0L
-            supportFragmentManager.popBackStack()
+            // 与 commitIfAlive 同源防护：Activity 正在销毁时回退事务同样会抛
+            // IllegalStateException: FragmentManager has been destroyed。
+            if (!isFinishing && !isDestroyed && !supportFragmentManager.isDestroyed) {
+                supportFragmentManager.popBackStack()
+            }
             return
         }
         handleBackPressed()
@@ -1058,7 +1099,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 ?.clearFocus()
         }
 
-        supportFragmentManager.commit {
+        commitIfAlive {
             if (isSettingsOverlay) {
                 setCustomAnimations(
                     R.anim.m3_side_sheet_enter_from_right,
