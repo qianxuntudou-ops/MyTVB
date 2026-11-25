@@ -76,6 +76,19 @@ class TvListFocusController(
         if (!oldFocusInsideList || newFocusInsideList) {
             return@OnGlobalFocusChangeListener
         }
+        // 焦点移到列表外的可见、可聚焦控件（典型：正/反序排序按钮）是用户主动导航
+        // 的合法落点，导航窗口内也不得抢回（快速按方向键后 UP 到排序按钮被弹回）；
+        // 仅列表外隐藏/不可聚焦持焦者（异常态）才在窗口内恢复
+        if (newFocus != null && !TvFocusOutsideFocusPolicy.shouldRestoreOnGlobalFocusChange(
+                newFocusVisibleFocusable = TvFocusOutsideFocusPolicy.isLegitOutsideFocusHolder(
+                    attached = newFocus.isAttachedToWindow,
+                    shown = newFocus.isShown,
+                    focusable = newFocus.isFocusable
+                )
+            )
+        ) {
+            return@OnGlobalFocusChangeListener
+        }
         val token = userNavigationToken
         recyclerView.post {
             if (token != userNavigationToken || SystemClock.uptimeMillis() > restoreOutsideFocusUntilMs) {
@@ -103,7 +116,17 @@ class TvListFocusController(
                     "focusInsideDetached=$focusInsideDetached focusOutsideList=$focusOutsideList " +
                     "anchor=${currentAnchor?.adapterPosition}"
             )
-            if (!focusInsideDetached && !focusOutsideList) {
+            if (!TvFocusOutsideFocusPolicy.shouldRestoreOnChildDetached(
+                    focusInsideDetached = focusInsideDetached,
+                    focusOutsideList = focusOutsideList,
+                    outsideFocusVisibleFocusable = focused != null &&
+                        TvFocusOutsideFocusPolicy.isLegitOutsideFocusHolder(
+                            attached = focused.isAttachedToWindow,
+                            shown = focused.isShown,
+                            focusable = focused.isFocusable
+                        )
+                )
+            ) {
                 return
             }
             recyclerView.post {
@@ -1060,6 +1083,48 @@ internal object TvFocusParkingPolicy {
         focusIsOutsideList: Boolean
     ): Boolean {
         return !hasAttachedFocusableTarget && !focusIsOutsideList
+    }
+}
+
+/**
+ * 「焦点在列表外」时的恢复判据，纯函数以便单元测试。
+ *
+ * 背景（番剧页排序按钮抢焦）：restoreFocusOnFocusedDetach 的 child-detach 恢复
+ * 原本只要「焦点在列表外 + 有 child detach」就无条件把焦点拉回列表锚点。但排序
+ * 按钮点 OK 反转列表走全量 diff 重绑，可见 child 必然 detach，焦点被从按钮拽回
+ * 卡片。列表外的可见、可聚焦控件（正/反序排序按钮、侧边栏 tab）是用户主动导航
+ * 的合法落点，恢复流程不得抢焦；只有列表外隐藏/不可聚焦持焦者（异常态）才恢复。
+ */
+internal object TvFocusOutsideFocusPolicy {
+
+    /** 列表外持焦者是否为用户主动导航的合法落点（可见 + 可聚焦 + 已 attach）。 */
+    fun isLegitOutsideFocusHolder(attached: Boolean, shown: Boolean, focusable: Boolean): Boolean {
+        return attached && shown && focusable
+    }
+
+    /**
+     * child detach 时是否允许把焦点拉回列表：
+     * - 焦点在被 detach 的 view 内（滚动回收丢焦）→ 必须恢复；
+     * - 焦点不在列表外、也不在被 detach 的 view 内 → 无事可做；
+     * - 焦点在列表外 → 仅异常态（非可见可聚焦持焦者）恢复。
+     */
+    fun shouldRestoreOnChildDetached(
+        focusInsideDetached: Boolean,
+        focusOutsideList: Boolean,
+        outsideFocusVisibleFocusable: Boolean
+    ): Boolean {
+        if (focusInsideDetached) return true
+        if (!focusOutsideList) return false
+        return !outsideFocusVisibleFocusable
+    }
+
+    /**
+     * 导航窗口内 globalFocus 变化时是否允许抢回（调用方已保证 newFocus 在列表外）：
+     * newFocus 是可见、可聚焦控件（用户主动导航落点）→ 不抢；其余（隐藏/不可聚焦
+     * 持焦者）→ 抢回。
+     */
+    fun shouldRestoreOnGlobalFocusChange(newFocusVisibleFocusable: Boolean): Boolean {
+        return !newFocusVisibleFocusable
     }
 }
 

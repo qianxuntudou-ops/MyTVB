@@ -402,6 +402,9 @@ class SeriesDetailContentAdapter(
                 LinearLayoutManager(binding.root.context, RecyclerView.HORIZONTAL, false)
             binding.recyclerView.adapter = adapter
             binding.recyclerView.isNestedScrollingEnabled = false
+            // 切换正/倒序是整表 move，DefaultItemAnimator 的移动动画会与
+            // scrollToPosition 定位竞态（锚点被动画带偏），与外层详情列表一致关掉
+            binding.recyclerView.itemAnimator = null
             // 高频左右键下系统 focusSearch 会与平滑滚动动画竞态导致焦点回跳/跨行
             // （实测 38 话列表连发右键出现 32→30 回跳并跳进预告行），
             // 交给 TvListFocusController 按 position 步进（UGC 详情页合集列表同款）
@@ -419,7 +422,9 @@ class SeriesDetailContentAdapter(
             binding.textOrder.setText(R.string.positive_sequence)
             binding.buttonOrder.setOnClickListener {
                 inReverseOrder = !inReverseOrder
-                submitOrderedItems(locateCurrent = false)
+                // 切换排序同样把正在看的集顶到最前（用户要求「永远第一」）：
+                // 正序/倒序都定位当前集，不再回列表开头
+                submitOrderedItems(locateCurrent = true)
                 binding.textOrder.setText(
                     if (inReverseOrder) R.string.negative_sequence else R.string.positive_sequence
                 )
@@ -477,15 +482,14 @@ class SeriesDetailContentAdapter(
                 if (locateCurrent) {
                     scrollToCurrentEpisode(ordered)
                 } else {
-                    // 手动切换排序：回列表开头（正序=第 1 集，倒序=最新一集）
                     binding.recyclerView.scrollToPosition(0)
                 }
             }
         }
 
         // 看过→把上次看的那集顶到列表可视区第一个位置（用户要求：当前正在看的集
-        // 永远尽量排在最前）；当前集之后剩余集数不足一屏时 RecyclerView 会自动
-        // clamp 到末尾对齐，此时它就是「尽量往前」的位置，右侧不会留白。
+        // 永远尽量排在最前）；当前集之后剩余集数不足一屏时改为末尾对齐，即
+        // 「尽量往前」的位置，右侧不会留白。
         // 没看过/进度集不在列表→回到首位（正序=第 1 集，倒序=最新一集）
         private fun scrollToCurrentEpisode(ordered: List<EpisodeModel>) {
             val index = if (currentEpId > 0L) {
@@ -493,12 +497,7 @@ class SeriesDetailContentAdapter(
             } else {
                 -1
             }
-            val llm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
-            if (index > 0) {
-                llm.scrollToPositionWithOffset(index, 0)
-            } else {
-                llm.scrollToPosition(0)
-            }
+            scrollItemToStart(binding.recyclerView, index, ordered.size)
         }
 
         fun requestStoredFocus(): Boolean {
@@ -579,8 +578,7 @@ class SeriesDetailContentAdapter(
             if (currentEpId <= 0L) return
             val index = items.indexOfFirst { it.epid == currentEpId }
             if (index <= 0) return
-            val llm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
-            llm.scrollToPositionWithOffset(index, 0)
+            scrollItemToStart(binding.recyclerView, index, items.size)
         }
 
         fun requestStoredFocus(): Boolean {
@@ -923,7 +921,7 @@ class SeriesDetailContentAdapter(
 
             private fun applyDetailCardWidth(view: View) {
                 val layoutParams = view.layoutParams ?: return
-                val targetWidth = ScreenUtils.getScreenWidth(view.context) / 5
+                val targetWidth = ScreenUtils.getScreenWidth(view.context) / DETAIL_CARDS_PER_SCREEN
                 if (layoutParams.width != targetWidth) {
                     layoutParams.width = targetWidth
                     view.layoutParams = layoutParams
@@ -1051,6 +1049,42 @@ private data class LastWatchLabel(
     val text: String,
     val isSection: Boolean
 )
+
+/**
+ * 把 [index] 条目顶到横向选集列表可视区最左（「当前正在看的集排第一个」）。
+ *
+ * [index] 之后剩余条目不足以填满一屏时，`scrollToPositionWithOffset(index, 0)` 会
+ * 允许过度滚动、在右侧留下空白；此时改为 `scrollToPosition(lastIndex)` 末尾对齐，
+ * 当前集自然落在「尽量靠前」的位置且不留白（用户明确要求的兜底：集数不够就尽量往前挪）。
+ */
+private fun scrollItemToStart(rv: RecyclerView, index: Int, itemCount: Int) {
+    val llm = rv.layoutManager as? LinearLayoutManager ?: return
+    if (index <= 0 || itemCount <= 1) {
+        llm.scrollToPosition(0)
+        return
+    }
+    // 卡片 pitch = 卡宽 + 卡片左边距（cell_episode_list.xml 的 marginStart）；
+    // 布局未就绪时按 屏宽/DETAIL_CARDS_PER_SCREEN 兜底，与 applyDetailCardWidth 同源
+    val childPitch = rv.getChildAt(0)?.let { child ->
+        val marginStart = (child.layoutParams as? ViewGroup.MarginLayoutParams)?.marginStart ?: 0
+        (child.width + marginStart).takeIf { it > 0 }
+    }
+    val pitch = childPitch ?: (
+        ScreenUtils.getScreenWidth(rv.context) / DETAIL_CARDS_PER_SCREEN +
+            rv.resources.getDimensionPixelSize(R.dimen.px15)
+        )
+    val viewport = rv.width.takeIf { it > 0 } ?: ScreenUtils.getScreenWidth(rv.context)
+    val perScreen = (viewport / pitch).coerceAtLeast(1)
+    val lastStart = (itemCount - perScreen).coerceAtLeast(0)
+    if (index > lastStart) {
+        llm.scrollToPosition(itemCount - 1)
+    } else {
+        llm.scrollToPositionWithOffset(index, 0)
+    }
+}
+
+/** 选集行一屏可见卡片数（applyDetailCardWidth 按 屏宽/该值 定卡宽）。 */
+private const val DETAIL_CARDS_PER_SCREEN = 5
 
 /** 花絮/预告条目回填「继续观看」按钮：id 用 epid，播放队列由 Fragment 侧按 id 分流到 section 队列 */
 private fun VideoModel.toEpisodeModel(): EpisodeModel = EpisodeModel(
