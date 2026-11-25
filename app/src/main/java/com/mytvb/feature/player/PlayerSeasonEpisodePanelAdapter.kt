@@ -6,6 +6,11 @@ import android.view.ViewGroup
 import android.view.KeyEvent
 import android.view.ViewOutlineProvider
 import android.graphics.Outline
+import android.graphics.drawable.Drawable
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ImageSpan
+import pl.droidsonroids.gif.GifDrawable
 import androidx.recyclerview.widget.RecyclerView
 import androidx.media3.common.util.UnstableApi
 import com.mytvb.core.ui.image.ImageLoader
@@ -79,6 +84,17 @@ class PlayerSeasonEpisodePanelAdapter(
         private val binding: CellSeasonEpisodeItemBinding,
         private val onBackToTab: () -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        private var playingDrawable: GifDrawable? = null
+        private val playingAnimCallback = object : Drawable.Callback {
+            override fun invalidateDrawable(d: Drawable) {
+                // GIF 每推进一帧回调这里，驱动 TextView 重绘下一帧
+                binding.textTitle.invalidate()
+            }
+
+            override fun scheduleDrawable(d: Drawable, what: Runnable, t: Long) {}
+            override fun unscheduleDrawable(d: Drawable, what: Runnable) {}
+        }
 
         init {
             // 封面圆角与首页卡片一致（px15）。圆角裁剪必须挂在外层封面容器
@@ -154,6 +170,39 @@ class PlayerSeasonEpisodePanelAdapter(
             }
         }
 
+        /** [GIF占位] + "N. " + 标题：播放中条目前置播放动图（正片 lane 同款） */
+        private fun buildTitleSpannable(number: Int, title: CharSequence, isSelected: Boolean): CharSequence {
+            val prefix = "$number. "
+            if (!isSelected) {
+                playingDrawable?.stop()
+                return SpannableStringBuilder(prefix).append(title)
+            }
+            val drawable = ensurePlayingDrawable() ?: return prefix + title
+            val iconSize = binding.root.resources.getDimensionPixelSize(R.dimen.px30)
+            drawable.setBounds(0, 0, iconSize, iconSize)
+            drawable.stop()
+            drawable.start()
+            // 首字符占位画动图，第二个空格做图标与序号的间距
+            return SpannableStringBuilder("  ").apply {
+                setSpan(
+                    ImageSpan(drawable, ImageSpan.ALIGN_CENTER),
+                    0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                append(prefix)
+                append(title)
+            }
+        }
+
+        private fun ensurePlayingDrawable(): GifDrawable? {
+            playingDrawable?.let { return it }
+            val drawable = runCatching {
+                GifDrawable(binding.root.resources, R.drawable.playing)
+            }.getOrNull() ?: return null
+            drawable.callback = playingAnimCallback
+            playingDrawable = drawable
+            return drawable
+        }
+
         fun bind(
             item: VideoPlayerViewModel.PlayableEpisode,
             number: Int,
@@ -161,10 +210,12 @@ class PlayerSeasonEpisodePanelAdapter(
             isSelected: Boolean,
             onClick: () -> Unit
         ) {
-            binding.textIndex.text = "$number."
-            binding.textTitle.text = item.title.ifBlank {
+            // 序号与播放GIF并入标题文本流（[GIF]165. 标题）：独立列会把标题区
+            // 挤窄（issue#140 验收反馈），标题双行+滚动的可读空间最大化
+            val title = item.title.ifBlank {
                 binding.root.context.getString(R.string.choose_episode)
             }
+            binding.textTitle.text = buildTitleSpannable(number, title, isSelected)
             binding.textPubDate.text = TimeUtils.formatPubDate(item.pubDate)
             binding.textPubDate.visibility =
                 if (item.pubDate > 0L) View.VISIBLE else View.INVISIBLE
@@ -190,13 +241,6 @@ class PlayerSeasonEpisodePanelAdapter(
                 binding.textDuration.text = NumberUtils.formatDuration(item.duration)
             } else {
                 binding.textDuration.visibility = View.GONE
-            }
-            if (isSelected) {
-                binding.iconPlaying.visibility = View.VISIBLE
-                ImageLoader.loadDrawableRes(binding.iconPlaying, R.drawable.playing)
-            } else {
-                binding.iconPlaying.visibility = View.GONE
-                ImageLoader.clear(binding.iconPlaying)
             }
             binding.clickView.isSelected = isSelected
             binding.root.isSelected = isSelected

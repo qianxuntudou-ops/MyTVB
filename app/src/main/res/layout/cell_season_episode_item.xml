@@ -4,14 +4,14 @@
     android:orientation="horizontal"
     android:id="@+id/click_view"
     android:background="@drawable/cell_background"
-    android:padding="@dimen/px20"
+    android:padding="@dimen/px10"
     android:focusable="true"
     android:clickable="true"
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
     <FrameLayout
-        android:layout_width="@dimen/px200"
-        android:layout_height="@dimen/px120">
+        android:layout_width="@dimen/px240"
+        android:layout_height="@dimen/px147">
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/image_cover"
             android:layout_width="match_parent"
@@ -27,8 +27,8 @@
             android:orientation="horizontal"
             android:background="@drawable/bg_cover_meta_gradient"
             android:paddingStart="@dimen/px6"
-            android:paddingTop="@dimen/px35"
-            android:paddingBottom="@dimen/px8"
+            android:paddingTop="@dimen/px44"
+            android:paddingBottom="@dimen/px10"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom">
@@ -89,7 +89,6 @@
         </LinearLayout>
     </FrameLayout>
     <androidx.appcompat.widget.LinearLayoutCompat
-        android:gravity="center_vertical"
         android:orientation="vertical"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
@@ -100,33 +99,21 @@
             android:orientation="horizontal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-            <androidx.appcompat.widget.AppCompatTextView
-                android:textSize="@dimen/px26"
-                android:textStyle="bold"
+            <!-- 双行标题+焦点滚动（issue#140）：序号与播放GIF并入标题文本流
+                 （[GIF]165. 标题），标题区吃满整行不再被序号/图标列挤压 -->
+            <com.mytvb.core.ui.view.TwoLineScrollTextView
+                android:textSize="@dimen/px30"
                 android:textColor="@color/textColor"
-                android:id="@+id/text_index"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"/>
-            <androidx.appcompat.widget.AppCompatImageView
-                android:id="@+id/icon_playing"
-                android:layout_width="@dimen/px30"
-                android:layout_height="@dimen/px30"
-                android:layout_marginStart="@dimen/px10"
-                android:visibility="gone"/>
-            <androidx.appcompat.widget.AppCompatTextView
-                android:textSize="@dimen/px26"
-                android:textColor="@color/textColor"
-                android:ellipsize="marquee"
+                android:ellipsize="end"
                 android:id="@+id/text_title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="@dimen/px10"
-                android:singleLine="true"
-                android:marqueeRepeatLimit="marquee_forever"/>
+                android:maxLines="2"/>
         </androidx.appcompat.widget.LinearLayoutCompat>
         <androidx.appcompat.widget.AppCompatTextView
-            android:textSize="@dimen/px22"
+            android:textSize="@dimen/px26"
             android:textColor="@color/subTextColor"
             android:id="@+id/text_pub_date"
             android:layout_width="wrap_content"

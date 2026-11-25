@@ -16,17 +16,17 @@
         android:layout_height="@dimen/px30"
         android:layout_marginStart="@dimen/px15"
         android:visibility="gone"/>
-    <androidx.appcompat.widget.AppCompatTextView
+    <!-- 双行标题+焦点滚动（issue#140）：对齐主页视频卡阅读体验，字号不变 -->
+    <com.mytvb.core.ui.view.TwoLineScrollTextView
         android:textSize="@dimen/px30"
         android:textColor="@color/textColor"
-        android:ellipsize="marquee"
+        android:ellipsize="end"
         android:id="@+id/text_title"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Title"
-        android:singleLine="true"
+        android:maxLines="2"
         android:layout_weight="1"
-        android:marqueeRepeatLimit="marquee_forever"
         android:paddingStart="@dimen/px20"
         android:paddingEnd="@dimen/px20"/>
 </androidx.appcompat.widget.LinearLayoutCompat>
