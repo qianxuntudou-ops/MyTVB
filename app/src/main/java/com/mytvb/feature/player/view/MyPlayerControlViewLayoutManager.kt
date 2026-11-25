@@ -146,8 +146,10 @@ class MyPlayerControlViewLayoutManager(
         playerControlView.post {
             if (fromSeekProgress && !focusPlayPause) {
                 playerControlView.requestTimeBarFocus()
-            } else if (!timeBar.hasFocus()) {
-                // 焦点已在进度条上时不要抢给播放按钮（timebar 快进后恢复控制栏的场景）
+            } else if (focusPlayPause && !timeBar.hasFocus()) {
+                // 焦点已在进度条上时不要抢给播放按钮（timebar 快进后恢复控制栏的场景）。
+                // focusPlayPause=false 的显示路径（设置面板关闭）不抢焦：焦点已由
+                // 面板关闭回调恢复到打开前的按钮（issue#140 两段跳变修复）
                 playerControlView.requestPlayPauseFocus()
             }
         }

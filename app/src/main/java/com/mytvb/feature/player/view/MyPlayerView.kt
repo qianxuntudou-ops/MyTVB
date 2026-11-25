@@ -740,9 +740,23 @@ class MyPlayerView @JvmOverloads constructor(
             if (isShowing) {
                 controller?.removeHideCallbacks()
             } else if (controller?.isFullyVisible() == true) {
+                // 主恢复在 onHideAnimationStart（GONE 前焦点已就位）；这里幂等
+                // 补一次 + 复位自动隐藏计时（issue#140 两段跳变修复）
+                val before = findViewById<View>(android.R.id.content)?.findFocus()
                 controller?.restoreRememberedFocus()
+                val after = findViewById<View>(android.R.id.content)?.findFocus()
+                AppLog.d("SettingFocus", "goneCb: before=${before?.javaClass?.simpleName}#${before?.id?.let { resources.getResourceEntryName(it) }} after=${after?.javaClass?.simpleName}#${after?.id?.let { resources.getResourceEntryName(it) }}")
                 controller?.resetHideCallbacks()
             }
+        }
+        settingView?.setOnHideAnimationStartListener {
+            val before = findViewById<View>(android.R.id.content)?.findFocus()
+            AppLog.d("SettingFocus", "hideStart: focused=${before?.javaClass?.simpleName}#${before?.id?.let { resources.getResourceEntryName(it) }}")
+            if (controller?.isFullyVisible() != false) {
+                controller?.restoreRememberedFocus()
+            }
+            val after = findViewById<View>(android.R.id.content)?.findFocus()
+            AppLog.d("SettingFocus", "hideStart restored: focused=${after?.javaClass?.simpleName}#${after?.id?.let { resources.getResourceEntryName(it) }}")
         }
         settingView?.setOnPlayerSettingInnerChange(object : OnPlayerSettingInnerChange {
             override fun onAspectRatioChange(ratio: Int) {
@@ -1111,7 +1125,7 @@ class MyPlayerView @JvmOverloads constructor(
         return false
     }
 
-    private fun showController(indefinitely: Boolean) {
+    private fun showController(indefinitely: Boolean, focusPlayPause: Boolean = true) {
         if (!useController()) return
         if (suppressControllerShowUntilFirstFrame && !hasRenderedFirstFrame) {
             AppLog.i("PlayerViewPerf", "controller show suppressed before first frame")
@@ -1120,7 +1134,7 @@ class MyPlayerView @JvmOverloads constructor(
 
         val controller = controller ?: ensureController("show") ?: return
         controller.setShowTimeoutMs(if (indefinitely) 0 else controllerShowTimeoutMs)
-        controller.show(focusPlayPause = true)
+        controller.show(focusPlayPause = focusPlayPause)
     }
 
     fun hideController() {
@@ -2625,6 +2639,15 @@ class MyPlayerView @JvmOverloads constructor(
             settingView?.setCurrentSpeed(player?.playbackParameters?.speed ?: 1f)
             controller?.rememberCurrentFocusTarget()
         }
+        if (!show) {
+            // 必须先恢复控制条显示再关面板：焦点恢复（面板 onHideAnimationStart）
+            // 要求控制条可见可落焦。且不能走 restoreControllerAfterGesture——其
+            // show(focusPlayPause=true) 会 post 把焦点抢给播放按钮，覆盖面板关闭
+            // 前刚恢复到原按钮的焦点（issue#140 两段跳变的真正机制），这里显示
+            // 时 focusPlayPause=false，焦点交给 hideStart 回调一次性恢复。
+            showController(indefinitely = true, focusPlayPause = false)
+            controller?.resetHideCallbacks()
+        }
         settingView?.showHide(show)
         if (!show) {
             // 关闭设置面板不是 seek：此处没有 player.seekTo()，不能按 forceSeek 通知引擎重建场景。
@@ -2632,7 +2655,6 @@ class MyPlayerView @JvmOverloads constructor(
             // 会被引擎误判为"位置回退"→ 清空防重放历史 → 最近一个滚动窗口的弹幕整体重放
             // （用户视角："弹幕滚完又出现一遍"）。设置变更由 updateConfig 路径自行处理，
             // 位置同步由 positionProvider 自动跟随，这里无需任何弹幕同步。
-            restoreControllerAfterGesture(showIndefinitely = true)
         }
     }
 

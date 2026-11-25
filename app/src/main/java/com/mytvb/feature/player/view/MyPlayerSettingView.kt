@@ -116,6 +116,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
     private val iconBack: ImageView
     private val adapter: PlayerSettingListAdapter
     private var onVisibilityStateChanged: ((Boolean) -> Unit)? = null
+    private var onHideAnimationStart: (() -> Unit)? = null
 
     private var menuLevel: Int = LEVEL_MAIN
     private var onPlayerSettingChange: OnPlayerSettingChange? = null
@@ -165,6 +166,11 @@ class MyPlayerSettingView @JvmOverloads constructor(
         if (!show) {
             speedMenuEnteredFromController = false
             subtitleMenuEnteredFromController = false
+            // 面板 GONE 瞬间系统会把焦点甩给窗口第一个可聚焦控件（播放按钮），
+            // 之后恢复回调再把焦点移回记忆按钮，形成「先跳播放再跑回来」的两段
+            // 跳变（issue#140）。动画开始前先把焦点放回记忆目标（控制条此刻
+            // 可见可落焦），GONE 时面板已不是焦点持有者，系统回落不再发生。
+            onHideAnimationStart?.invoke()
             animate()
                 .translationX(panelWidthPx.toFloat())
                 .alpha(0f)
@@ -566,6 +572,11 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
     fun setOnVisibilityStateChangedListener(listener: ((Boolean) -> Unit)?) {
         onVisibilityStateChanged = listener
+    }
+
+    /** 隐藏动画开始前回调：宿主此刻抢先恢复控制条焦点，避免 GONE 后系统回落两段跳变 */
+    fun setOnHideAnimationStartListener(listener: (() -> Unit)?) {
+        onHideAnimationStart = listener
     }
 
     private fun onItemClicked(item: PlayerSettingRow.Item) {
