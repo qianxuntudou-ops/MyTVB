@@ -46,4 +46,14 @@ object CctvH5eDecryptor {
      * 预取器则在每个解密任务结束后主动调用本方法，避免常驻线程池留住上下文。
      */
     external fun releaseThreadContext()
+
+    /**
+     * 最近一次解密返回 null 的原生侧原因（trap 阶段 / 未加密拒收 / init 失败点）。
+     *
+     * 原因是 `__thread` 的：只在**同一条线程**上、紧接着那次失败的调用后读取才有
+     * 意义（[CctvH5eDataSource.open] 的调用链正好满足）；成功或本线程未解密过则
+     * 返回 null。native 的 LOGE/LOGW 只进 logcat，release 用户导出的 AppLog 快照
+     * 拿不到，issue#132 二次反馈的三连「解密返回空」因此无法区分具体路径。
+     */
+    external fun lastDecryptFailureReason(): String?
 }

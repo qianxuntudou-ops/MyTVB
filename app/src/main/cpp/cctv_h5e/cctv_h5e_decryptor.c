@@ -32,6 +32,14 @@
 #define EMBIND_STORAGE 6332000u
 #define DYNAMIC_TOP_AFTER_SHELL_ALLOCATIONS 7053264u
 #define MEMORY_EXTEND 2048u
+/* 每个 NAL 在 wasm 侧的分配 = NAL 数据 + host 字符串 + 尾巴。直播与 VOD 取值不同：
+ * - 直播（jsdecLive 系列）：2MiB。上游 cjs 直播与 VOD 共用 2MiB，其注释原文是
+ *   「输出函数把分配尾巴当 transform scratch，有效 slice 可能需要接近 2MiB；
+ *   2 KiB 尾巴在起播后确定性越界 trap」。61e89c1a 按 VOD 的观测把两者一并收到
+ *   2KiB 后，直播同样出现「特定 NAL 确定性越界 trap → 同段三连 → 回退 WebView」
+ *   （issue#132）；同一分片实测：2KiB trap，换回 2MiB 即成功。
+ * - VOD（jsdecVOD 系列）：2KiB，见下段。 */
+#define NAL_MEMORY_EXTEND_LIVE (2u * 1024u * 1024u)
 /* The wasm VOD output function does NOT use the allocation tail as scratch.
  * Node-side instrumentation of the reference implementation showed a fixed
  * 16 MiB heap with the NAL block ending around 7 MiB and no growth — the
@@ -42,7 +50,7 @@
  * with its block ending 38 KiB below the 74.45 MiB ceiling).
  * Fix: keep the node-identical 2 KiB tail and pre-grow the VOD heap to the
  * 96 MiB page ceiling once per session so free space always exists. */
-#define NAL_MEMORY_EXTEND (2u * 1024u)
+#define NAL_MEMORY_EXTEND_VOD (2u * 1024u)
 /* This must match the video element id used by the current CCTV live player.
  * It is part of the H5E key state, not merely a diagnostic label. */
 #define PLAYER_TAG "h5player_player"
@@ -129,6 +137,11 @@ static __thread u32 g_player_argument;
  * (cctv-h5e-decrypt's GUID flow), 0 = live tag flow. */
 static __thread int g_vod_mode;
 static __thread u32 g_vod_tag_argument;
+/* 最近一次解密失败的原因（trap 阶段/未加密拒收/init 失败点），随失败返回写给
+ * Java 侧读走。__thread：与解密本身同线程写、同线程读（DataSource.open 调用链），
+ * 无竞态；logcat 只在 debug 包可见，release 用户导出的 AppLog 快照拿不到 native
+ * 侧细节（issue#132 二次反馈：三连「解密返回空」无法区分是哪条路径拒收）。 */
+static __thread char g_last_fail_reason[256];
 
 static int decrypt_was_cancelled(void) {
   u32 generation = __sync_add_and_fetch(&g_cancel_generation, 0);
@@ -556,7 +569,7 @@ static int reset_module_state(void) {
 
 /* ---- 线程退出兜底释放（2026-11-24）--------------------------------------
  * 运行时状态全是 __thread，线性内存由 calloc 分配（CMake 里
- * -DWASM_RT_USE_MMAP=0），begin_session 会一次撑到 MEMORY_MAX_PAGES(96MB)。
+ * -DWASM_RT_USE_MMAP=0），VOD 的 begin_session 会一次撑到 MEMORY_MAX_PAGES(96MB)。
  * Java 侧 releaseThreadContext 只能释放「调用它的那条线程」，而实际跑解密的是
  * media3 Loader 的加载线程与 CctvLivePrefetcher 的 IO 线程——项目里拿不到它们
  * 的退出时机，线程一退这块 malloc 内存就永久不可达（每进一次 H5e 频道、每切一次
@@ -610,6 +623,9 @@ static int ensure_module_ready(void) {
    * performs its controlled five-segment refresh before calling this helper. */
   if (!g_ready) {
     g_ready = reset_module_state();
+    if (!g_ready) {
+      snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "module-reset-failed");
+    }
   }
   return g_ready;
 }
@@ -639,17 +655,18 @@ static int begin_session(void) {
   if (g_session_started) {
     return 1;
   }
-  /* wasm 输出函数把 malloc 块上方的堆自由区当 transform scratch（node 参考
-   * 实现 heap 恒 16MB、块尾 7MB、块后 ~9MB 自由区从不越界）。wasm2c 的惰性
-   * grow 只按 malloc 需求精确扩，块会贴着内存顶、scratch 无处可写（实测
-   * 65699B NAL 块尾距内存顶仅 38KB 时 trap）。会话开始时一次撑到页上限，
-   * 保证块后自由区恒有 ~89MB。
-   * 直播同样预扩（issue#132）：worker2011 生成物下直播输出函数同语义，
-   * 61e89c1a 起直播 NAL 尾巴收窄到 2KiB 又无预扩，首个触发惰性扩容的分片
-   * 贴顶后 deterministic trap → fatal 三连 → 回退 WebView（用户表现为加载/
-   * 换台极慢 + 官方页「暂时不支持播放」）。预扩是 wasm 线性内存（宿主按触页
-   * 计 RSS），直播会话实际只写几十 KB 级，低内存盒子无压力。 */
-  if (g_env.memory.pages < MEMORY_MAX_PAGES) {
+  /* 预扩到页上限只给 VOD。VOD 输出函数（jsdecVOD8）把 malloc 块上方的堆自由区
+   * 当 transform scratch（node 参考：heap 恒 16MB、块尾 7MB、块后 ~9MB 自由区
+   * 从不越界）。wasm2c 的惰性 grow 只按 malloc 精确扩，块会贴着内存顶（实测
+   * 65699B NAL 块尾距内存顶仅 38KB 时 trap），会话开始一次撑到页上限后块后
+   * 恒有 ~89MB。
+   * 直播不预扩（2026-11-25，issue#132）：与上游 cjs 一致，直播靠 2MiB 分配尾巴
+   * （见 NAL_MEMORY_EXTEND_LIVE）。fadbe474 曾把预扩扩到直播，但 v2.1.33 实测
+   * （预扩 + 2KiB 尾巴）仍然 trap——块上方的自由区替代不了分配尾巴。预扩的
+   * 代价是实打实的：USE_MMAP=0 下 grow 是 realloc + memset，新增页全部触页
+   * （每线程 96MB RSS），且直播每分片 reset_module_state 还要把这 96MB 再
+   * 清零一遍。 */
+  if (g_vod_mode && g_env.memory.pages < MEMORY_MAX_PAGES) {
     wasm_rt_grow_memory(&g_env.memory, MEMORY_MAX_PAGES - g_env.memory.pages);
     LOGI("wasm heap pre-grown to %u pages (%llu bytes)",
         (unsigned) g_env.memory.pages,
@@ -657,6 +674,7 @@ static int begin_session(void) {
   }
   g_player_argument = allocate_player_argument();
   if (g_player_argument == 0) {
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "player-tag-alloc-failed");
     return 0;
   }
   if (g_vod_mode) {
@@ -666,6 +684,7 @@ static int begin_session(void) {
     g_vod_tag_argument = allocate_tag_argument(
         VOD_PLAYER_TAG "##1000000##0");
     if (g_vod_tag_argument == 0) {
+      snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "vod-tag-alloc-failed");
       w2c_cctv__h5e_Ca(&g_module, g_player_argument);
       g_player_argument = 0;
       return 0;
@@ -675,6 +694,8 @@ static int begin_session(void) {
   w2c_cctv__h5e_aa(&g_module, g_player_argument);
   g_wasm_stage = "init-player-fetch";
   if (!complete_pending_fetch()) {
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason),
+             "h5player-config-callback-failed");
     g_wasm_stage = "idle";
     return 0;
   }
@@ -765,9 +786,10 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
       return 0;
     }
   }
+  const size_t tail = g_vod_mode ? NAL_MEMORY_EXTEND_VOD : NAL_MEMORY_EXTEND_LIVE;
   g_wasm_stage = "nal-malloc";
   u32 data_address = w2c_cctv__h5e_Da(&g_module,
-      (u32) (nal_length + host_length + NAL_MEMORY_EXTEND));
+      (u32) (nal_length + host_length + tail));
   g_wasm_stage = "idle";
   if (data_address == 0) {
     /* wasm malloc returning NULL (grow rejected at the page ceiling) would
@@ -778,7 +800,7 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
     return 0;
   }
   uint8_t* data = env_pointer(&g_env, data_address,
-      nal_length + host_length + NAL_MEMORY_EXTEND);
+      nal_length + host_length + tail);
   if (data == NULL) {
     return 0;
   }
@@ -796,7 +818,7 @@ static int decrypt_nal(const uint8_t* nal, size_t nal_length,
   output_length = functions[8](&g_module, tag_argument, data_address,
       (u32) nal_length, (u32) host_length);
   g_wasm_stage = "idle";
-  if (output_length > nal_length + host_length + NAL_MEMORY_EXTEND) {
+  if (output_length > nal_length + host_length + tail) {
     g_wasm_stage = "nal-free";
     w2c_cctv__h5e_Ca(&g_module, data_address);
     g_wasm_stage = "idle";
@@ -1165,7 +1187,9 @@ static jbyteArray decrypt_stream_common(
   jbyte* input;
   int trapped = 0;
   int decrypted = 0;
+  g_last_fail_reason[0] = '\0';
   if (transport_stream == NULL) {
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "null-input");
     return NULL;
   }
   g_vod_mode = vod_mode;
@@ -1174,6 +1198,7 @@ static jbyteArray decrypt_stream_common(
   length = (*env)->GetArrayLength(env, transport_stream);
   input = (*env)->GetByteArrayElements(env, transport_stream, NULL);
   if (input == NULL) {
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "jni-array-null");
     return NULL;
   }
   wasm_rt_trap_t trap = (wasm_rt_trap_t) wasm_rt_try(g_wasm_rt_jmp_buf);
@@ -1187,6 +1212,10 @@ static jbyteArray decrypt_stream_common(
     LOGE("wasm trap during %s: %s nalType=%d nalLen=%u updateTag=%s",
         g_wasm_stage, wasm_rt_strerror(trap), g_current_nal_type,
         (unsigned int) g_current_nal_length, g_current_update_tag);
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason),
+             "trap@%s %s nalType=%d nalLen=%u tag=%s",
+             g_wasm_stage, wasm_rt_strerror(trap), g_current_nal_type,
+             (unsigned int) g_current_nal_length, g_current_update_tag);
     trapped = 1;
     g_ready = 0;
     g_session_started = 0;
@@ -1200,6 +1229,7 @@ static jbyteArray decrypt_stream_common(
   if (g_decrypt_cancelled) {
     (*env)->ReleaseByteArrayElements(env, transport_stream, input, JNI_ABORT);
     LOGI("CCTV decrypt cancelled for channel switch");
+    snprintf(g_last_fail_reason, sizeof(g_last_fail_reason), "cancelled");
     return NULL;
   }
   if (!decrypted) {
@@ -1212,6 +1242,11 @@ static jbyteArray decrypt_stream_common(
     }
     (*env)->ReleaseByteArrayElements(env, transport_stream, input, JNI_ABORT);
     LOGW("Rejecting transport stream because no encrypted video NAL was decoded");
+    /* init 失败（module-reset/player-tag/fetch 回调）已写更早的原因，别覆盖 */
+    if (g_last_fail_reason[0] == '\0') {
+      snprintf(g_last_fail_reason, sizeof(g_last_fail_reason),
+               "no-encrypted-NAL (no accepted encrypted video NAL)");
+    }
     return NULL;
   }
   (*env)->ReleaseByteArrayElements(env, transport_stream, input, 0);
@@ -1278,6 +1313,18 @@ Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_releaseThreadContext(JNIEnv* en
   (void) env;
   (void) clazz;
   release_thread_context_impl();
+}
+
+/* 最近一次 decryptTransportStream/decryptVodTransportStream 返回 null 的原因。
+ * 只对「同线程紧接着的那次失败」有意义（__thread）；成功或未跑过则返回 null。 */
+JNIEXPORT jstring JNICALL
+Java_com_mytvb_feature_cctv_h5e_CctvH5eDecryptor_lastDecryptFailureReason(
+    JNIEnv* env, jclass clazz) {
+  (void) clazz;
+  if (g_last_fail_reason[0] == '\0') {
+    return NULL;
+  }
+  return (*env)->NewStringUTF(env, g_last_fail_reason);
 }
 
 /* ---------------------------------------------------------------- 取证入口（命令行，不进 App 链路） */

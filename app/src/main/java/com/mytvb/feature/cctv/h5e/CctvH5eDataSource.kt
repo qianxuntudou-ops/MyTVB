@@ -42,9 +42,15 @@ class CctvH5eDataSource(
         private const val TRAP_FAIL_LIMIT = 3
         private val trapFailCounts = HashMap<String, Int>()
 
+        /** 本会话累计解密成功分片数，随失败日志一起打出：用来区分「一进来就
+         *  解不开」和「播了一阵才解不开」（issue#132 二次反馈是后者：约 20 个
+         *  分片之后开始三连空）。换台/换集时随 [resetTrapFailures] 清零。 */
+        private val decryptOkCount = java.util.concurrent.atomic.AtomicInteger()
+
         /** 换集/换会话时清零（由播放器调用）。 */
         fun resetTrapFailures() {
             synchronized(trapFailCounts) { trapFailCounts.clear() }
+            decryptOkCount.set(0)
         }
     }
 
@@ -113,7 +119,11 @@ class CctvH5eDataSource(
             if (decrypted == null) {
                 val key = dataSpec.uri.toString()
                 val fails = synchronized(trapFailCounts) { trapFailCounts.merge(key, 1, Int::plus)!! }
-                AppLog.e(TAG, "H5e 解密返回空（trap/会话未就绪）uri=${dataSpec.uri.lastPathSegment} fail#$fails")
+                // native 四条拒收路径（trap/未加密/init 失败/取消）在 logcat 各有
+                // 日志，但 release 用户只能导 AppLog——把原因带回同线程的这里打出来
+                val reason = runCatching { CctvH5eDecryptor.lastDecryptFailureReason() }.getOrNull()
+                AppLog.e(TAG, "H5e 解密返回空（trap/会话未就绪）uri=${dataSpec.uri.lastPathSegment} " +
+                    "fail#$fails ok=${decryptOkCount.get()} native=${reason ?: "unknown"}")
                 if (fails >= TRAP_FAIL_LIMIT) {
                     // 确定性失败：直接通知宿主回退（media3 对 source error 的内部
                     // 恢复/重试链要拖几十秒，等不起），同时抛非 IOException 让
@@ -124,7 +134,8 @@ class CctvH5eDataSource(
                 throw H5eDecryptException("H5e decrypt rejected segment")
             }
             val cost = android.os.SystemClock.elapsedRealtime() - started
-            AppLog.i(TAG, "H5e 分片解密 ok size=${decrypted.size} costMs=$cost vod=$vodMode")
+            AppLog.i(TAG, "H5e 分片解密 ok#${decryptOkCount.incrementAndGet()} " +
+                "size=${decrypted.size} costMs=$cost vod=$vodMode")
             bytes = decrypted
         }
         decryptedBuffer = bytes
