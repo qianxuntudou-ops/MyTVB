@@ -193,6 +193,7 @@
     <string name="default_audio_track">預設音質</string>
     <string name="default_play_speed">預設播放速度</string>
     <string name="default_start_page">預設首頁</string>
+    <string name="dynamic_up_sort">動態頁UP主排序</string>
     <string name="home_feed_source">首頁推薦來源</string>
     <string name="hot_feed_source">熱門來源</string>
     <string name="setting_value_source_app">APP端</string>
@@ -522,6 +523,7 @@
     <string name="setting_value_internal_storage">內部儲存</string>
     <string name="setting_value_usb_storage">U盤</string>
     <string name="setting_value_default">預設</string>
+    <string name="setting_value_most_visited">最常造訪</string>
     <string name="setting_value_low">低</string>
     <string name="setting_value_medium">中</string>
     <string name="setting_value_high">高</string>

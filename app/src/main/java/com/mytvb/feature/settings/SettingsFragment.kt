@@ -107,6 +107,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_CACHE_LIMIT = "cache_limit"
         private const val KEY_MEDIA_CACHE_WRITE = "media_cache_write"
         private const val KEY_DEFAULT_START_PAGE = "default_start_page"
+        // 动态页 UP 主列表排序（issue#142）：存储值「默认」=关注顺序，「最常访问」=order_type=attention
+        // 与 DynamicViewModel.KEY_DYNAMIC_UP_SORT 同键
+        private const val KEY_DYNAMIC_UP_SORT = "dynamic_up_sort"
         // 与 FeedSourceSetting 同键（存储值「APP端/网页端」），首页推荐/热门数据来源
         private const val KEY_HOME_FEED_SOURCE = FeedSourceSetting.KEY_HOME_FEED_SOURCE
         private const val KEY_HOT_FEED_SOURCE = FeedSourceSetting.KEY_HOT_FEED_SOURCE
@@ -261,6 +264,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
     private lateinit var aboutGroups: List<SettingGroup>
     private val appSettings: AppSettingsDataStore by inject()
     private val cookieManager: CookieManager by inject()
+    private val appEventHub: com.mytvb.event.AppEventHub by inject()
 
     private val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
@@ -375,6 +379,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             // 页面级显示开关（原通用·浏览与入口组迁入：除来源/投屏外均属「显示什么」）
             SettingGroup(R.string.setting_group_pages, listOf(
                 stored(KEY_DEFAULT_START_PAGE, R.string.default_start_page, "热门"),
+                // 动态页左栏 UP 主排序（issue#142）：默认=关注顺序，最常访问=按访问频次
+                stored(KEY_DYNAMIC_UP_SORT, R.string.dynamic_up_sort, "默认"),
                 stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
                 // 打开方式：点卡片直接播放 / 先进详情页
                 stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
@@ -821,6 +827,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         when (key) {
             // —— 通用·浏览与投屏（页面显示类条目已迁「显示」tab）——
             KEY_DEFAULT_START_PAGE -> showCommonChoiceDialog(key, HOME_START_PAGE_OPTIONS)
+            // 动态页 UP 主排序（issue#142）
+            KEY_DYNAMIC_UP_SORT -> showCommonChoiceDialog(key, arrayOf("默认", "最常访问"))
             KEY_HOME_FEED_SOURCE, KEY_HOT_FEED_SOURCE -> showCommonChoiceDialog(key, FeedSourceSetting.OPTIONS)
             KEY_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringAsync(key, it)
@@ -1488,6 +1496,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             }
         }
         applyStored(KEY_LIVE_ENTRY)
+        // 动态页 UP 主排序（issue#142）：恢复显示已存值（默认/最常访问）
+        applyStored(KEY_DYNAMIC_UP_SORT)
         applyStored(KEY_HOME_PERSONAL_TABS)
         applyStored(KEY_EDGE_TAB_SWITCH)
         applyStored(KEY_EXIT_DOUBLE_CONFIRM)
@@ -1697,6 +1707,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                     appSettings.putIntAsync("theme", value.toLegacyTheme())
                     activity?.recreate()
                 }
+                // 动态页排序变更（issue#142）：设置页覆盖动态页时不触发底层 onResume，主动通知即时重拉
+                KEY_DYNAMIC_UP_SORT -> appEventHub.dispatch(com.mytvb.event.AppEventHub.Event.DynamicUpSortChanged)
             }
         }
     }

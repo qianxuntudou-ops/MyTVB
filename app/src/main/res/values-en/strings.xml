@@ -193,6 +193,7 @@
     <string name="default_audio_track">Default audio quality</string>
     <string name="default_play_speed">Default playback speed</string>
     <string name="default_start_page">Default home tab</string>
+    <string name="dynamic_up_sort">UP order on dynamic</string>
     <string name="home_feed_source">Home feed source</string>
     <string name="hot_feed_source">Popular source</string>
     <string name="setting_value_source_app">App</string>
@@ -519,6 +520,7 @@
     <string name="setting_value_internal_storage">Internal storage</string>
     <string name="setting_value_usb_storage">USB drive</string>
     <string name="setting_value_default">Default</string>
+    <string name="setting_value_most_visited">Most visited</string>
     <string name="setting_value_low">Low</string>
     <string name="setting_value_medium">Medium</string>
     <string name="setting_value_high">High</string>

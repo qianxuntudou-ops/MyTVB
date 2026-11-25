@@ -28,6 +28,8 @@ private fun settingLabelRes(stored: String): Int = when (stored) {
     "U盘" -> R.string.setting_value_usb_storage
     // 红果默认画质（数字档位 1080P 等语言无关串原样返回）
     "默认" -> R.string.setting_value_default
+    // 动态页 UP 主排序（issue#142）
+    "最常访问" -> R.string.setting_value_most_visited
     // 红果推荐受众 / 搜索源（"App" 语言无关串原样返回）
     "不限" -> R.string.setting_value_no_limit
     "男频" -> R.string.setting_value_male

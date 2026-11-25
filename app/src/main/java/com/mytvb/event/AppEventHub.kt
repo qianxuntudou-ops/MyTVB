@@ -11,6 +11,9 @@ class AppEventHub {
 
         data object NetworkRecovered : Event
 
+        /** 动态页 UP 主排序设置变更（issue#142）：设置页覆盖在动态页上方时底层 Fragment 收不到 onResume，靠事件即时刷新。 */
+        data object DynamicUpSortChanged : Event
+
         data class PlaybackProgressUpdated(
             val aid: Long,
             val cid: Long,

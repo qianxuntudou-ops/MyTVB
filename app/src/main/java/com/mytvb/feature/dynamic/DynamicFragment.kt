@@ -240,6 +240,13 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         if (sessionGateway.isLoggedIn() != wasLoggedInOnPause) {
             currentUpId = 0L
             loadData()
+            return
+        }
+        // 设置里切换了 UP 主排序（issue#142）：回到动态页按新顺序整体重拉并回到「全部动态」
+        if (viewModel.hasUpSortChanged()) {
+            AppLog.i(TAG, "DYN D9 up sort changed, reload following")
+            currentUpId = 0L
+            loadData()
         }
     }
 
@@ -484,9 +491,19 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
-                    if (event == AppEventHub.Event.UserSessionChanged) {
-                        currentUpId = 0L
-                        loadData()
+                    when (event) {
+                        AppEventHub.Event.UserSessionChanged -> {
+                            currentUpId = 0L
+                            loadData()
+                        }
+                        // 设置页改了 UP 主排序（issue#142）：设置页覆盖在动态页上方时不触发底层 onResume，
+                        // 直接按新顺序重拉关注列表（绕过 loadData 的 1s 去重）
+                        AppEventHub.Event.DynamicUpSortChanged -> {
+                            AppLog.i(TAG, "DYN D9 up sort changed(event), reload following")
+                            currentUpId = 0L
+                            viewModel.loadFollowingList()
+                        }
+                        else -> Unit
                     }
                 }
             }

@@ -80,7 +80,9 @@ interface ApiService {
     suspend fun getFollowing(
         @Query("vmid") vmid: Long,
         @Query("pn") page: Int,
-        @Query("ps") pageSize: Int
+        @Query("ps") pageSize: Int,
+        // 排序（issue#142）：null=关注顺序，attention=最常访问（仅 vmid=自己时生效）；Retrofit 对 null 不拼参数
+        @Query("order_type") orderType: String? = null
     ): BaseResponse<GetFollowUserWrapper>
 
     @GET("x/relation/followers")

@@ -3,6 +3,7 @@ package com.mytvb.feature.dynamic
 import android.util.LruCache
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.model.user.FollowingModel
 import com.mytvb.model.video.VideoModel
 import com.mytvb.repository.UserRepository
@@ -15,7 +16,8 @@ import android.os.SystemClock
 import com.mytvb.core.common.log.AppLog
 
 class DynamicViewModel(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val appSettings: AppSettingsDataStore
 ) : ViewModel() {
     private var lastLoadedAt = 0L
 
@@ -38,6 +40,11 @@ class DynamicViewModel(
         private const val TAG = "DynamicVM"
         private const val ALL_DYNAMIC_ID = "0"
         private const val FOLLOWING_PAGE_SIZE = 50
+        // 动态页 UP 主排序设置（issue#142），与 SettingsFragment.KEY_DYNAMIC_UP_SORT 同键
+        private const val KEY_DYNAMIC_UP_SORT = "dynamic_up_sort"
+        private const val UP_SORT_MOST_VISITED = "最常访问"
+        // x/relation/followings 的 order_type=attention 即「最常访问」，留空/缺省为关注顺序
+        private const val ORDER_TYPE_ATTENTION = "attention"
     }
 
     private val _followingList = MutableStateFlow<List<FollowingModel>>(emptyList())
@@ -88,9 +95,27 @@ class DynamicViewModel(
     private var followingLoadJob: Job? = null
     private var lastPageSize = 20
     private var loadGeneration = 0
+    // 当前关注列表实际使用的排序参数（null=关注顺序）；设置变更后据此判断是否要整体重拉
+    private var appliedOrderType: String? = null
+
+    private fun desiredOrderType(): String? =
+        if (appSettings.getCachedString(KEY_DYNAMIC_UP_SORT) == UP_SORT_MOST_VISITED) {
+            ORDER_TYPE_ATTENTION
+        } else {
+            null
+        }
+
+    /** 设置页改了排序后由宿主在 onResume 调用，返回 true 表示需要重载关注列表（issue#142）。 */
+    fun hasUpSortChanged(): Boolean = desiredOrderType() != appliedOrderType
 
     fun loadFollowingList() {
-        if (followingLoadJob?.isActive == true) return
+        val orderType = desiredOrderType()
+        if (followingLoadJob?.isActive == true) {
+            // 排序未变则沿用现有任务；排序刚被改掉则作废旧任务按新顺序重拉
+            if (orderType == appliedOrderType) return
+            followingLoadJob?.cancel()
+        }
+        appliedOrderType = orderType
         if (!userRepository.isLoggedIn()) {
             _loading.value = false
             _error.value = null
@@ -138,7 +163,7 @@ class DynamicViewModel(
                 .onSuccess { mid ->
                     currentUserMid = mid
                     AppLog.i(TAG, "DYN D1 resolveMid end elapsed=${SystemClock.elapsedRealtime() - midStartMs}ms mid=$mid")
-                    launch { loadFollowingPage(mid, 1, defaultItems) }
+                    launch { loadFollowingPage(mid, 1, defaultItems, orderType) }
                     launch { selectUp(ALL_DYNAMIC_ID, lastPageSize) }
                 }
                 .onFailure { exception ->
@@ -157,11 +182,12 @@ class DynamicViewModel(
     private suspend fun loadFollowingPage(
         mid: Long,
         page: Int,
-        defaultItems: List<FollowingModel>
+        defaultItems: List<FollowingModel>,
+        orderType: String?
     ) {
         val startMs = SystemClock.elapsedRealtime()
-        AppLog.i(TAG, "DYN D2 getFollowing start mid=$mid page=$page")
-        userRepository.getFollowing(mid, page, FOLLOWING_PAGE_SIZE)
+        AppLog.i(TAG, "DYN D2 getFollowing start mid=$mid page=$page order=${orderType ?: "default"}")
+        userRepository.getFollowing(mid, page, FOLLOWING_PAGE_SIZE, orderType)
             .onSuccess { followingResponse ->
                 AppLog.i(TAG, "DYN D3 getFollowing end elapsed=${SystemClock.elapsedRealtime() - startMs}ms success=${followingResponse.isSuccess}")
                 _loading.value = false
@@ -212,7 +238,7 @@ class DynamicViewModel(
         followingLoading = true
 
         viewModelScope.launch {
-            userRepository.getFollowing(currentUserMid, nextPage, FOLLOWING_PAGE_SIZE)
+            userRepository.getFollowing(currentUserMid, nextPage, FOLLOWING_PAGE_SIZE, appliedOrderType)
                 .onSuccess { response ->
                     if (response.isSuccess) {
                         val wrapper = response.data

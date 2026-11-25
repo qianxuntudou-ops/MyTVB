@@ -195,15 +195,17 @@ class UserRepository(
     suspend fun getFollowing(
         mid: Long,
         page: Int = 1,
-        pageSize: Int = 50
+        pageSize: Int = 50,
+        // null=关注顺序；"attention"=最常访问（issue#142，仅自己有效）
+        orderType: String? = null
     ): Result<BaseResponse<GetFollowUserWrapper>> =
         runCatching {
             sessionGateway.executeWithRiskControlRetry(
-                key = "following_$mid",
+                key = "following_${mid}_${orderType ?: "default"}",
                 source = "getFollowing"
             ) {
                 sessionGateway.syncAuthState(
-                    apiService.getFollowing(mid, page, pageSize),
+                    apiService.getFollowing(mid, page, pageSize, orderType),
                     source = "getFollowing"
                 )
             }

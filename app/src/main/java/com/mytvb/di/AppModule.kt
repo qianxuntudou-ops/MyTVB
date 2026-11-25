@@ -102,7 +102,7 @@ val viewModelModule = module {
     viewModel { MainNavigationViewModel(get()) }
     viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), get(), get(named("noCookie")), get(), androidContext(), get()) }
     viewModel { CategoryViewModel(get()) }
-    viewModel { DynamicViewModel(get()) }
+    viewModel { DynamicViewModel(get(), get()) }
     viewModel { LiveViewModel(get(), androidContext()) }
     viewModel { LiveListViewModel(get()) }
     viewModel { LiveRecommendViewModel(get()) }

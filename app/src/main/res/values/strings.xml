@@ -221,6 +221,7 @@
     <string name="default_audio_track">默认音质</string>
     <string name="default_play_speed">默认播放速度</string>
     <string name="default_start_page">默认首页</string>
+    <string name="dynamic_up_sort">动态页UP主排序</string>
     <string name="home_feed_source">首页推荐来源</string>
     <string name="hot_feed_source">热门来源</string>
     <string name="setting_value_source_app">APP端</string>
@@ -662,6 +663,7 @@
     <string name="setting_value_internal_storage">内部存储</string>
     <string name="setting_value_usb_storage">U盘</string>
     <string name="setting_value_default">默认</string>
+    <string name="setting_value_most_visited">最常访问</string>
     <string name="setting_value_low">低</string>
     <string name="setting_value_medium">中</string>
     <string name="setting_value_high">高</string>
