@@ -265,6 +265,7 @@
     <string name="give_coin">投幣</string>
     <string name="give_coin_">已投幣</string>
     <string name="give_coin_number">預設投幣數</string>
+    <string name="coin_also_like">投幣同時點讚</string>
     <string name="update_release_notes_format">\n\n更新內容：\n%1$s</string>
     <string name="update_confirm_message_format">目前版本：%1$s\n最新版本：%2$s%3$s\n\n是否立即下載更新？</string>
     <string name="history">歷史</string>
@@ -275,6 +276,7 @@
     <string name="kichiku">鬼畜</string>
     <string name="knowledge">知識</string>
     <string name="last_watch_" formatted="false">上次觀看到第%s集 %s</string>
+    <string name="last_watch_section_" formatted="false">上次看到 %s %s</string>
     <string name="later_watch">稍後觀看</string>
     <string name="later_watch_added">已加入稍後觀看</string>
     <string name="later_watch_removed">已移出稍後觀看</string>

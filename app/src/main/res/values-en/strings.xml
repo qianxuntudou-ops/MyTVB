@@ -265,6 +265,7 @@
     <string name="give_coin">Coin</string>
     <string name="give_coin_">Coined</string>
     <string name="give_coin_number">Default coins</string>
+    <string name="coin_also_like">Like when coining</string>
     <string name="update_release_notes_format">\n\nWhat\'s new:\n%1$s</string>
     <string name="update_confirm_message_format">Current version: %1$s\nLatest version: %2$s%3$s\n\nDownload the update now?</string>
     <string name="history">History</string>
@@ -275,6 +276,7 @@
     <string name="kichiku">Kichiku</string>
     <string name="knowledge">Knowledge</string>
     <string name="last_watch_" formatted="false">Last watched EP%s %s</string>
+    <string name="last_watch_section_" formatted="false">Last watched %s %s</string>
     <string name="later_watch">Watch later</string>
     <string name="later_watch_added">Added to Watch later</string>
     <string name="later_watch_removed">Removed from Watch later</string>

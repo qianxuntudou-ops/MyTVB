@@ -55,13 +55,45 @@ class SeriesRepository(
                         seasonEpisodes = detail.episodes.orEmpty(),
                         isFinished = detail.publish?.isFinish == 1
                     ),
-                    section = sectionResult?.section.orEmpty(),
+                    section = mergeSectionEpIds(detail.section.orEmpty(), sectionResult?.section.orEmpty()),
                     mainSectionTitle = sectionResult?.mainSection?.title.orEmpty()
                 )
                 mergedDetail
             } else {
                 throw IllegalStateException(response.errorMessage)
             }
+        }
+    }
+
+    /**
+     * 单独 section 接口（pgc/web/season/section）不下发 ep_id（issue#135 实证），
+     * 一体接口（pgc/view/web/season）自带的 section 带 ep_id——按 aid/cid 交叉
+     * 回填给 section 接口条目。没有 ep id 详情页就无法用 progress.last_ep_id
+     * 匹配花絮/预告：定位高亮、「上次看到」文案、继续观看全失效（issue#140）。
+     * 一体接口没有的条目（如预约栏目）保持 epid=0，走既有 UGC/站外引用分支。
+     */
+    private fun mergeSectionEpIds(
+        seasonSections: List<com.mytvb.model.series.SectionModel>,
+        apiSections: List<com.mytvb.model.series.SectionModel>
+    ): List<com.mytvb.model.series.SectionModel> {
+        if (apiSections.isEmpty()) return apiSections
+        val epIdByKey = buildMap {
+            seasonSections.forEach { sec ->
+                sec.episodes.forEach { video ->
+                    if (video.epid > 0L) {
+                        if (video.aid > 0L) put("a${video.aid}", video.epid)
+                        if (video.cid > 0L) put("c${video.cid}", video.epid)
+                    }
+                }
+            }
+        }
+        if (epIdByKey.isEmpty()) return apiSections
+        return apiSections.map { sec ->
+            sec.copy(episodes = sec.episodes.map { video ->
+                if (video.epid > 0L) return@map video
+                val epId = epIdByKey["a${video.aid}"] ?: epIdByKey["c${video.cid}"] ?: 0L
+                if (epId > 0L) video.copy(epid = epId) else video
+            })
         }
     }
 

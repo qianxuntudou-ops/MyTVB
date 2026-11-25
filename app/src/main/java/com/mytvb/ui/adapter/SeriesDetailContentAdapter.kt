@@ -2,11 +2,16 @@ package com.mytvb.ui.adapter
 
 import android.graphics.Color
 import android.graphics.Outline
+import android.graphics.drawable.Drawable
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.ImageSpan
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -28,6 +33,7 @@ import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.common.format.NumberUtils
 import com.mytvb.core.ui.system.ScreenUtils
 import com.mytvb.core.common.time.TimeUtils
+import pl.droidsonroids.gif.GifDrawable
 
 class SeriesDetailContentAdapter(
     private val onToggleFollow: () -> Unit,
@@ -51,7 +57,8 @@ class SeriesDetailContentAdapter(
         ) : Row
 
         data class Section(
-            val section: SectionModel
+            val section: SectionModel,
+            val currentEpId: Long = 0L
         ) : Row
 
         data class Seasons(
@@ -153,7 +160,7 @@ class SeriesDetailContentAdapter(
         when (val row = getItem(position)) {
             is Row.Header -> (holder as HeaderViewHolder).bind(row.detail, row.followed)
             is Row.Episodes -> (holder as EpisodeLaneViewHolder).bind(row.items, row.currentEpId)
-            is Row.Section -> (holder as SectionLaneViewHolder).bind(row.section)
+            is Row.Section -> (holder as SectionLaneViewHolder).bind(row.section, row.currentEpId)
             is Row.Seasons -> (holder as SeasonLaneViewHolder).bind(row.title, row.items)
             is Row.Recommend -> (holder as RecommendLaneViewHolder).bind(row.items)
         }
@@ -202,7 +209,14 @@ class SeriesDetailContentAdapter(
             val progress = detail.userStatus?.progress
             currentContinueEpisode = detail.episodes.orEmpty().firstOrNull {
                 it.id == progress?.lastEpId
-            } ?: detail.episodes.orEmpty().firstOrNull()
+            }
+                // 进度落在花絮/预告（issue#140）：继续观看必须回到花絮本身，
+                // 不能回落正片第 1 集；Fragment 侧按 id 命中 section 时走 section 队列
+                ?: detail.section.orEmpty().asSequence()
+                    .flatMap { it.episodes.asSequence() }
+                    .firstOrNull { it.epid == progress?.lastEpId }
+                    ?.toEpisodeModel()
+                ?: detail.episodes.orEmpty().firstOrNull()
             currentContinueSeekPositionMs = progress?.lastTime
                 ?.coerceAtLeast(0L)
                 ?.times(1000L)
@@ -219,9 +233,11 @@ class SeriesDetailContentAdapter(
                 } else {
                     NumberUtils.formatDuration(lastTime)
                 }
+                val label = resolveLastWatchLabel(detail, progress)
                 binding.root.context.getString(
-                    R.string.last_watch_,
-                    resolveLastWatchEpisodeLabel(detail, progress),
+                    // 进度在花絮/预告时不能套「第X集」句式（会拼出「第PV集」）
+                    if (label.isSection) R.string.last_watch_section_ else R.string.last_watch_,
+                    label.text,
                     progressLabel
                 )
             } else {
@@ -252,24 +268,35 @@ class SeriesDetailContentAdapter(
         /**
          * 还原「上次观看到第 N 集」的集数：last_ep_index 对部分剧集下发的是集标题
          * （如「寻参」）而非序号，直接填会显示「第寻参集」。优先用 last_ep_id 匹配
-         * 分集列表取集标题（纯数字即序号），匹配不到再退回正片列表位置，最后兜底原文。
+         * 分集列表取集标题（纯数字即序号），匹配不到再退回正片列表位置。
+         * 进度落在花絮/预告栏目（不在正片列表）时改用「栏目名 · 集标题」标签，
+         * 调用方按 isSection 换句式，避免拼出「第PV集」（issue#140）。兜底原文。
          */
-        private fun resolveLastWatchEpisodeLabel(
+        private fun resolveLastWatchLabel(
             detail: EpisodesDetailModel,
             progress: com.mytvb.model.series.EpisodeProgressModel?
-        ): String {
+        ): LastWatchLabel {
             val fallbackIndex = progress?.lastEpIndex.orEmpty()
-            val lastEpId = progress?.lastEpId?.takeIf { it > 0L } ?: return fallbackIndex
+            val lastEpId = progress?.lastEpId?.takeIf { it > 0L }
+                ?: return LastWatchLabel(fallbackIndex, isSection = false)
             val episodes = detail.episodes.orEmpty()
             val matched = episodes.firstOrNull { it.id == lastEpId }
-            matched?.title?.toIntOrNull()?.let { return it.toString() }
+            matched?.title?.toIntOrNull()?.let { return LastWatchLabel(it.toString(), false) }
             if (matched != null) {
                 // 集标题非数字（如「寻参」）：用正片列表位置还原「第 15 集」
                 val position = episodes.filter { it.sectionType == 0 }
                     .indexOfFirst { it.id == lastEpId }
-                if (position >= 0) return (position + 1).toString()
+                if (position >= 0) return LastWatchLabel((position + 1).toString(), false)
             }
-            return fallbackIndex
+            detail.section.orEmpty().forEach { section ->
+                section.episodes.firstOrNull { it.epid == lastEpId }?.let { episode ->
+                    val sectionTitle = section.resolveDisplayTitle(binding.root)
+                    val episodeTitle = episode.bangumi?.longTitle?.takeIf { it.isNotBlank() }
+                        ?: episode.title
+                    return LastWatchLabel("$sectionTitle · $episodeTitle", isSection = true)
+                }
+            }
+            return LastWatchLabel(fallbackIndex, isSection = false)
         }
 
         private fun buildSubtitle(detail: EpisodesDetailModel): String {
@@ -456,7 +483,9 @@ class SeriesDetailContentAdapter(
             }
         }
 
-        // 看过→定位上次看的那集（居中偏左，UGC 详情页合集列表同款）；
+        // 看过→把上次看的那集顶到列表可视区第一个位置（用户要求：当前正在看的集
+        // 永远尽量排在最前）；当前集之后剩余集数不足一屏时 RecyclerView 会自动
+        // clamp 到末尾对齐，此时它就是「尽量往前」的位置，右侧不会留白。
         // 没看过/进度集不在列表→回到首位（正序=第 1 集，倒序=最新一集）
         private fun scrollToCurrentEpisode(ordered: List<EpisodeModel>) {
             val index = if (currentEpId > 0L) {
@@ -466,8 +495,7 @@ class SeriesDetailContentAdapter(
             }
             val llm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
             if (index > 0) {
-                val halfItemWidth = (ScreenUtils.getScreenWidth(binding.root.context) / 5) / 3
-                llm.scrollToPositionWithOffset(index - 1, -halfItemWidth)
+                llm.scrollToPositionWithOffset(index, 0)
             } else {
                 llm.scrollToPosition(0)
             }
@@ -535,9 +563,24 @@ class SeriesDetailContentAdapter(
             binding.buttonOrder.visibility = View.GONE
         }
 
-        fun bind(section: SectionModel) {
+        fun bind(section: SectionModel, currentEpId: Long) {
             binding.topTitle.text = section.resolveDisplayTitle(binding.root)
-            adapter.setItems(section.episodes)
+            adapter.currentEpId = currentEpId
+            // 滚动必须等 diff 提交后再执行（正片 lane 同款）：submitList 异步，
+            // 提前滚会被布局锚点保持带偏
+            adapter.setItems(section.episodes) {
+                scrollToCurrentSectionEpisode(section.episodes, currentEpId)
+            }
+        }
+
+        // 上次看到的花絮/预告落在本栏目→顶到可视区最左（正片 lane 同款）；
+        // 不在本栏目→保持首位
+        private fun scrollToCurrentSectionEpisode(items: List<VideoModel>, currentEpId: Long) {
+            if (currentEpId <= 0L) return
+            val index = items.indexOfFirst { it.epid == currentEpId }
+            if (index <= 0) return
+            val llm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return
+            llm.scrollToPositionWithOffset(index, 0)
         }
 
         fun requestStoredFocus(): Boolean {
@@ -681,6 +724,9 @@ class SeriesDetailContentAdapter(
         private var focusedPosition = RecyclerView.NO_POSITION
         private val itemFocusedWithView = onItemFocusedWithView
 
+        /** 上次看到的花絮/预告：标题 accent 高亮 + 播放动图（正片 lane 同款） */
+        var currentEpId: Long = 0L
+
         override fun focusableItemCount(): Int = itemCount
 
         override fun stableKeyAt(position: Int): String? {
@@ -717,14 +763,16 @@ class SeriesDetailContentAdapter(
             }.takeIf { it >= 0 } ?: RecyclerView.NO_POSITION
         }
 
-        fun setItems(data: List<VideoModel>) {
-            if (currentList == data) {
-                return
-            }
+        fun setItems(data: List<VideoModel>, onCommitted: (() -> Unit)? = null) {
             focusedPosition = focusedPosition
                 .takeIf { it != RecyclerView.NO_POSITION && it < data.size }
                 ?: RecyclerView.NO_POSITION
-            submitList(data)
+            if (currentList == data) {
+                // 内容没变不重提交，但定位回调仍要执行（rebind 场景）
+                onCommitted?.invoke()
+                return
+            }
+            submitList(data) { onCommitted?.invoke() }
         }
 
         fun requestStoredItemFocus(recyclerView: RecyclerView): Boolean {
@@ -755,7 +803,7 @@ class SeriesDetailContentAdapter(
         }
 
         override fun onBindViewHolder(holder: SectionEpisodeViewHolder, position: Int) {
-            holder.bind(getItem(position))
+            holder.bind(getItem(position), getItem(position).epid == currentEpId)
         }
 
         class SectionEpisodeViewHolder(
@@ -768,6 +816,19 @@ class SeriesDetailContentAdapter(
             var onVerticalKey: ((View, Int) -> Boolean)? = null
             var onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null
             var onFocusedViewChanged: ((View) -> Unit)? = null
+
+            // 布局默认文字色（含 state），退出「当前集」态时还原（正片 lane 同款）
+            private val defaultTitleColors = binding.textTitle.textColors
+            private var playingDrawable: GifDrawable? = null
+            private val playingAnimCallback = object : Drawable.Callback {
+                override fun invalidateDrawable(d: Drawable) {
+                    // GIF 每推进一帧回调这里，驱动 TextView 重绘下一帧
+                    binding.textTitle.invalidate()
+                }
+
+                override fun scheduleDrawable(d: Drawable, what: Runnable, t: Long) {}
+                override fun unscheduleDrawable(d: Drawable, what: Runnable) {}
+            }
 
             fun requestFocus(): Boolean = binding.clickView.requestFocus()
 
@@ -784,7 +845,7 @@ class SeriesDetailContentAdapter(
                 }
             }
 
-            fun bind(item: VideoModel) {
+            fun bind(item: VideoModel, isCurrent: Boolean) {
                 currentItem = item
                 applyDetailCardWidth(binding.clickView)
                 binding.clickView.nextFocusUpId = View.NO_ID
@@ -809,14 +870,55 @@ class SeriesDetailContentAdapter(
                 binding.textBadge.visibility = View.GONE
                 binding.textPosition.visibility = View.GONE
                 binding.textTitle.visibility = View.VISIBLE
-                binding.textTitle.text =
-                    item.title.ifBlank { item.bangumi?.longTitle.orEmpty() }
+                bindTitle(item, isCurrent)
                 binding.clickView.setOnFocusChangeListener { view, hasFocus ->
                     if (hasFocus) {
                         onFocusedViewChanged?.invoke(view)
                         onFocused(view)
                     }
                 }
+            }
+
+            // 上次看到的那条：accent 高亮 + 播放动图（正片 lane EpisodeAdapter 同款）
+            private fun bindTitle(item: VideoModel, isCurrent: Boolean) {
+                val title = item.title.ifBlank { item.bangumi?.longTitle.orEmpty() }
+                if (!isCurrent) {
+                    playingDrawable?.stop()
+                    binding.textTitle.setTextColor(defaultTitleColors)
+                    binding.textTitle.text = title
+                    return
+                }
+                binding.textTitle.setTextColor(
+                    ContextCompat.getColor(binding.root.context, R.color.colorAccent)
+                )
+                val drawable = ensurePlayingDrawable()
+                if (drawable == null) {
+                    // GIF 解码失败退化成纯高亮文字
+                    binding.textTitle.text = title
+                    return
+                }
+                val iconSize = binding.root.resources.getDimensionPixelSize(R.dimen.px26)
+                drawable.setBounds(0, 0, iconSize, iconSize)
+                drawable.stop()
+                drawable.start()
+                // 首字符占位画动图，第二个空格做图标与文字的间距
+                val spannable = SpannableStringBuilder("  ")
+                spannable.setSpan(
+                    ImageSpan(drawable, ImageSpan.ALIGN_CENTER),
+                    0, 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                spannable.append(title)
+                binding.textTitle.text = spannable
+            }
+
+            private fun ensurePlayingDrawable(): GifDrawable? {
+                playingDrawable?.let { return it }
+                val drawable = runCatching {
+                    GifDrawable(binding.root.resources, R.drawable.playing)
+                }.getOrNull() ?: return null
+                drawable.callback = playingAnimCallback
+                playingDrawable = drawable
+                return drawable
             }
 
             private fun applyDetailCardWidth(view: View) {
@@ -901,7 +1003,7 @@ class SeriesDetailContentAdapter(
             detail.section.orEmpty()
                 .filter { it.episodes.isNotEmpty() }
                 .forEach { section ->
-                    add(Row.Section(section))
+                    add(Row.Section(section, detail.userStatus?.progress?.lastEpId ?: 0L))
                 }
 
             detail.seasons.orEmpty()
@@ -943,3 +1045,21 @@ private fun RecyclerView.visibleFocusableChildren(): List<View> {
         }
     }
 }
+
+/** 「上次看到」显示标签：isSection=true 时调用方换「上次看到 %s」句式，不套「第X集」 */
+private data class LastWatchLabel(
+    val text: String,
+    val isSection: Boolean
+)
+
+/** 花絮/预告条目回填「继续观看」按钮：id 用 epid，播放队列由 Fragment 侧按 id 分流到 section 队列 */
+private fun VideoModel.toEpisodeModel(): EpisodeModel = EpisodeModel(
+    id = epid,
+    aid = aid,
+    bvid = bvid,
+    cid = cid,
+    title = title,
+    longTitle = bangumi?.longTitle.orEmpty(),
+    cover = cover.ifEmpty { pic },
+    sectionType = 1
+)

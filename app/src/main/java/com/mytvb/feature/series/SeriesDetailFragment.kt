@@ -254,6 +254,15 @@ class SeriesDetailFragment : Fragment() {
     }
 
     private fun continueWatchEpisode(episode: EpisodeModel, seekPositionMs: Long) {
+        // 进度落在花絮/预告（issue#140）：按 ep id 回查 section，命中则走 section
+        // 播放队列（连播同伴是花絮而不是正片），不能按正片集播（队列会错乱）
+        val sectionVideo = currentDetail?.section.orEmpty().asSequence()
+            .flatMap { it.episodes.asSequence() }
+            .firstOrNull { it.epid == episode.id }
+        if (sectionVideo != null) {
+            playSectionVideo(sectionVideo, seekPositionMs)
+            return
+        }
         playEpisode(episode, seekPositionMs)
     }
 
@@ -274,12 +283,13 @@ class SeriesDetailFragment : Fragment() {
         }
     }
 
-    private fun playSectionVideo(video: VideoModel) {
+    private fun playSectionVideo(video: VideoModel, seekPositionMs: Long = 0L) {
         if ((video.bvid.isNotBlank() || video.epid > 0L) && video.cid > 0) {
             VideoRouteNavigator.openVideo(
                 context = requireContext(),
                 video = video,
                 playQueue = buildSectionPlayQueue(video),
+                seekPositionMs = seekPositionMs,
                 forcePlayer = true
             )
             return
@@ -291,6 +301,7 @@ class SeriesDetailFragment : Fragment() {
                 context = requireContext(),
                 video = video.copy(epid = 0L, sid = 0L),
                 playQueue = buildSectionPlayQueue(video),
+                seekPositionMs = seekPositionMs,
                 forcePlayer = true
             )
         }
