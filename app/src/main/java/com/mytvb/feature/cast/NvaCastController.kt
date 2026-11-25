@@ -86,13 +86,21 @@ internal class NvaCastController private constructor() {
         // socket 绑定放到后台线程，避免拖慢冷启动；日志会记录成功或失败。
         val appContext = this.context
         thread(name = "nva-boot", isDaemon = true) {
-            // 与 shutdown 共用一把锁：否则"退出"刚好发生在绑定过程中时，
-            // 监听会被重新拉起来，退出后手机仍然能搜到这台设备。
-            synchronized(stateLock) {
-                if (!started.get()) return@thread
-                ssdp = NvaSsdpServer(appContext).also { it.start() }
-                server = NvaServer(this@NvaCastController).also { it.start() }
-            }
+            // 投屏是旁路能力，线程内任何 Throwable 都不许冒泡成未捕获异常：
+            // Android 上任意线程抛未捕获异常都会直接杀进程，表现为「启动即闪退、首页都看不到」。
+            // 实测（Fengmi Xiaomi Peppa Series Projector / Android 9 / R8 release 包）该线程
+            // 类加载失败抛 NoClassDefFoundError: Invalid descriptor: .，App 每次冷启动必死；
+            // 父层 install 的 runCatching 只包住"创建线程"，包不住线程体，必须在这里兜。
+            // 失败代价仅为「手机搜不到本设备」，不影响 App 使用。
+            runCatching {
+                // 与 shutdown 共用一把锁：否则"退出"刚好发生在绑定过程中时，
+                // 监听会被重新拉起来，退出后手机仍然能搜到这台设备。
+                synchronized(stateLock) {
+                    if (!started.get()) return@runCatching
+                    ssdp = NvaSsdpServer(appContext).also { it.start() }
+                    server = NvaServer(this@NvaCastController).also { it.start() }
+                }
+            }.onFailure { AppLog.w(tag, "投屏接收端启动失败（降级为不可投屏，App 不受影响）", it) }
         }
         scheduleTick()
         AppLog.i(tag, "哔哩必连接收端已启动 device=${NvaDevice.displayName(this.context)} usn=${NvaDevice.usn(this.context)}")
@@ -201,6 +209,8 @@ internal class NvaCastController private constructor() {
     fun onSessionOpened(session: NvaSession) {
         sessions.add(session)
         AppLog.i(tag, "手机端已连接 client=${session.clientUuid} session=${session.sessionId}")
+        // 空闲期 tick 是 5s 一档，连上后立刻切回 1s 节奏，避免控制条进度出现空窗。
+        rescheduleTickNow()
         // 新连接立刻同步一次当前状态，便于手机端恢复控制条。
         mainHandler.post {
             if (bridge == null) {
@@ -350,16 +360,31 @@ internal class NvaCastController private constructor() {
                         return
                     }
                     runCatching { pushStateToAll() }
-                    // 每 15 秒顺手体检一次广播线程，bind 失败也能自己恢复。
+                    // 每 15 个 tick 顺手体检一次广播线程，bind 失败也能自己恢复。
                     if (++healthTickCounter >= HEALTH_CHECK_TICKS) {
                         healthTickCounter = 0
                         runCatching { ensureSsdpHealthy() }
                     }
-                    mainHandler.postDelayed(this, STATE_TICK_MS)
+                    mainHandler.postDelayed(this, currentTickIntervalMs())
                 }
             }
         tickRunnable = runnable
-        mainHandler.postDelayed(runnable, STATE_TICK_MS)
+        mainHandler.postDelayed(runnable, currentTickIntervalMs())
+    }
+
+    /** 有无手机连接决定轮询节奏：有连接 1s（控制条要跟手），无连接 5s。 */
+    private fun currentTickIntervalMs(): Long =
+        if (sessions.isEmpty()) IDLE_STATE_TICK_MS else STATE_TICK_MS
+
+    /**
+     * 会话变化的瞬间按新节奏重排下一次 tick。
+     * 不重排的话，从空闲切到有会话时最长要等 5s 才会恢复 1Hz，
+     * 手机端控制条会出现一段"位置不动"的空窗。
+     */
+    private fun rescheduleTickNow() {
+        val runnable = tickRunnable ?: return
+        mainHandler.removeCallbacks(runnable)
+        mainHandler.postDelayed(runnable, 0L)
     }
 
     private fun stopTick() {
@@ -517,7 +542,14 @@ internal class NvaCastController private constructor() {
     }
 
     companion object {
+        /** 有手机连接时：1s 刷新一次状态快照，供手机端控制条使用。 */
         private const val STATE_TICK_MS = 1_000L
+
+        /**
+         * 无连接时降到 5s。投屏绝大多数时间没人用，1Hz 的主线程唤醒纯属空转；
+         * 会话建立时 [onSessionOpened] 会立即重排，不会出现"刚连上要等 5s"的空窗。
+         */
+        private const val IDLE_STATE_TICK_MS = 5_000L
 
         /** 同一视频重复 Play 的去重窗口。 */
         private const val PLAY_DEDUPE_WINDOW_MS = 800L

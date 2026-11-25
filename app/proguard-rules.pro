@@ -50,6 +50,13 @@
     <init>(...);
 }
 
+# 投屏（NVA）：整体保留，不混淆不优化。
+# 实测 Fengmi 小明投影（Android 9, API 28）装 R8 release 包后，nva-boot 线程加载投屏类抛
+# NoClassDefFoundError: Invalid descriptor: .（ART 解析混淆产物的描述符判非法），该线程
+# 未捕获异常直接杀进程 → 每次冷启动秒退、首页看不到；覆盖安装可临时恢复但会复发。
+# 与 core.common/network 同级整体 keep，规避 R8 产物在该 ART 版本上的兼容问题。
+-keep class com.mytvb.feature.cast.** { *; }
+
 # Koin DI
 -keep class com.mytvb.di.** { *; }
 -keep class com.mytvb.repository.** { *; }

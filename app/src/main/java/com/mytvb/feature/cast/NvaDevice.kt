@@ -57,9 +57,20 @@ internal object NvaDevice {
 
     // region 投屏接收开关（与设备身份同库存储，冷启动即可同步读取，不依赖 DataStore 缓存）
 
-    /** 投屏接收是否开启（默认开）。 */
+    /**
+     * 投屏接收是否开启，**默认关**（原为默认开）。
+     *
+     * 接收端要在 Application.onCreate 里起常驻线程（SSDP 组播 + socket 监听）才能被手机搜到，
+     * 而 2026-11-25 实测：Fengmi 小明投影（Android 9 / API 28）装 R8 release 包后，该线程类加载
+     * 失败抛 NoClassDefFoundError: Invalid descriptor: .，未捕获异常直接把进程带走，表现为每次
+     * 冷启动秒退、首页都看不到（覆盖安装可临时恢复但会复发）。
+     *
+     * 投屏是低频功能，默认关还有两个好处：省掉 1Hz 主线程轮询与周期 SSDP 组播；
+     * 把这条常驻路径整体移出冷启动。需要在 设置→浏览与投屏 里手动打开。
+     * 老用户此前显式开过（存储里已有 true）不受影响。
+     */
     fun isReceiveEnabled(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_RECEIVE_ENABLED, true)
+        prefs(context).getBoolean(KEY_RECEIVE_ENABLED, false)
 
     /** 设置投屏接收开关，返回新值。 */
     fun setReceiveEnabled(context: Context, enabled: Boolean) {

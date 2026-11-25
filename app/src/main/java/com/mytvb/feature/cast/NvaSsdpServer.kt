@@ -140,7 +140,7 @@ internal class NvaSsdpServer(
      * 立刻重播一轮 NOTIFY，**不重建 socket**。
      *
      * 改名只需要让控制点重新拉取设备描述：BOOTID 已经递增、LOCATION 随之变化，
-     * 而 NOTIFY 每 3 秒就会带上新 LOCATION，本来就不需要动端口。
+     * 周期 NOTIFY 自然会带上新 LOCATION，本方法再即时补播一轮，不需要动端口。
      * 以前改名走 [restart]（关端口再绑），一旦 1900 没及时释放就 bind 失败，
      * 反而把这台设备的广播搞死——改名和"重启广播"是两件不该绑定的事。
      */
@@ -250,11 +250,28 @@ internal class NvaSsdpServer(
     }
 
     private fun notifyLoop(socket: MulticastSocket, generation: Int) {
-        // 首次立即广播，之后每 3 秒一轮；同时刷新本机 IP 以适配网络切换。
+        // 首次立即广播（开机即可被发现），之后每 NOTIFY_INTERVAL_MS 一轮；
+        // 每轮都会重算 locationUrl()，顺带适配网络切换。改名走 announceNow() 即时补播。
         while (isActive(generation)) {
             runCatching { sendNotify(socket) }
                 .onFailure { AppLog.w(tag, "SSDP NOTIFY 失败", it) }
-            runCatching { Thread.sleep(NOTIFY_INTERVAL_MS) }
+            sleepWhileActive(NOTIFY_INTERVAL_MS, generation)
+        }
+    }
+
+    /**
+     * 可中断休眠：分段检查存活，停止后最多 [SLEEP_STEP_MS] 就退出线程。
+     *
+     * [stop] 只置标志、不 join 线程，若在 [notifyLoop] 里整段 `Thread.sleep(30s)`，
+     * 关掉投屏开关后旧线程要睡满 30 秒才醒（30s 之前是 3s，问题不可见）；
+     * 反复开关会让多个 `nva-ssdp-tx` 叠加残留（实测切换 4 次出现 2 个 tx 线程）。
+     */
+    private fun sleepWhileActive(totalMs: Long, generation: Int) {
+        var remaining = totalMs
+        while (remaining > 0 && isActive(generation)) {
+            val step = minOf(remaining, SLEEP_STEP_MS)
+            if (runCatching { Thread.sleep(step) }.isFailure) return
+            remaining -= step
         }
     }
 
@@ -320,7 +337,18 @@ internal class NvaSsdpServer(
         SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US).format(Date())
 
     companion object {
-        private const val NOTIFY_INTERVAL_MS = 3_000L
+        /**
+         * 周期性 NOTIFY（ssdp:alive）间隔。
+         *
+         * 原值 3s 是"改名后手机能马上看到新名字"的权宜做法，代价是常年每 3 秒一轮组播、
+         * 持续唤醒 WiFi 网络栈。改名场景已由 [announceNow] 立即重播覆盖，无需高频兜底；
+         * 而 NOTIFY 只负责"我还活着 + LOCATION 指向"，发现设备仍靠手机 M-SEARCH 的即时回复
+         * （见 receiveLoop）。max-age 声明 1800s，30s 间隔远小于该值，符合 UPnP 惯例。
+         */
+        private const val NOTIFY_INTERVAL_MS = 30_000L
+
+        /** 可中断休眠的检查粒度：stop 后最多这么久线程就会退出。 */
+        private const val SLEEP_STEP_MS = 1_000L
 
         /** 重启时等端口释放的间隔。200ms 实测偏紧，容易 bind 失败。 */
         private const val RESTART_GAP_MS = 600L
