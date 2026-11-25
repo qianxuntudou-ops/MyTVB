@@ -351,6 +351,16 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.
                         // 屏蔽焦点（tab 上按 DOWN 无反应）。BLOCK 的生命周期收敛为
                         // 加载窗口，此处所有路径必经，统一解锁。
                         binding.recyclerView.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                        // 历史翻页开关同款兜底：loadData() 对首页刷新先置 false，正常
+                        // 由首帧/落地回调恢复，但 ViewModel 签名去重跳过时 StateFlow 不
+                        // 重发、UI 收不到补偿点（如 2 秒内两次刷新、第二次 payload 全同），
+                        // 开关永久锁死、触底加载全被守卫挡死——列表卡在 20 个。loading
+                        // 回落是所有分支（正常/跳过/失败）必经之路，在此统一恢复。
+                        if (type == TYPE_HISTORY && currentPage <= 1 &&
+                            (historyAdapter?.contentCount() ?: 0) > 0
+                        ) {
+                            allowHistoryLoadMore = true
+                        }
                     }
                     val hasData = hasContentItems()
                     binding.progressBar.visibility = if (loading && !hasData) View.VISIBLE else View.GONE
