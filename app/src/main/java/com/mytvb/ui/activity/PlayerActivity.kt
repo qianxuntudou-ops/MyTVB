@@ -1611,8 +1611,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val (aid, bvid) = shortcutVideoIds() ?: return
         val safeBvid = bvid.takeIf { it.isNotBlank() }
         val multiply = appSettings.getCachedString("give_coin_number")?.toIntOrNull()?.coerceIn(1, 2) ?: 2
+        // 投币同时点赞（issue#140）：与详情页同款开关，走接口原生 select_like
+        val alsoLike = appSettings.getCachedString("coin_also_like") != "关"
         lifecycleScope.launch {
-            runCatching { videoRepository.giveCoin(aid, safeBvid, multiply = multiply, selectLike = 0) }
+            runCatching { videoRepository.giveCoin(aid, safeBvid, multiply = multiply, selectLike = if (alsoLike) 1 else 0) }
                 .onSuccess { AppToast.show(this@PlayerActivity, R.string.give_coin_) }
                 .onFailure { AppToast.show(this@PlayerActivity, it.message ?: getString(R.string.dialog_action_failed)) }
         }

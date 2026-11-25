@@ -170,6 +170,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_SHOW_VIDEO_DETAIL = "show_video_detail"
         private const val KEY_SHOW_BOTTOM_PROGRESS_BAR = "show_bottom_progress_bar"
         private const val KEY_GIVE_COIN_NUMBER = "give_coin_number"
+        private const val KEY_COIN_ALSO_LIKE = "coin_also_like"
         private const val KEY_SHOW_NEXT_PREVIOUS = "show_next_previous"
         private const val KEY_SHOW_DM_SWITCH = "show_dm_switch"
         private const val KEY_SHOW_PLAY_SPEED_BUTTON = "show_play_speed_button"
@@ -348,6 +349,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 // 退出二次确认（issue#118）：开=双击 BACK 才退出播放页/应用（默认）；关=单次直接退
                 stored(KEY_EXIT_DOUBLE_CONFIRM, R.string.exit_double_confirm, "开"),
                 stored(KEY_GIVE_COIN_NUMBER, R.string.give_coin_number, "2"),
+                // 投币同时点赞（issue#140）：开=投币成功且未点赞时顺手点赞（官方默认行为）
+                stored(KEY_COIN_ALSO_LIKE, R.string.coin_also_like, "开"),
                 // 自定义播放快捷键（issue#116）：数字键等绑定点赞/三连/各类开关，点击管理绑定
                 plain(KEY_PLAYER_SHORTCUTS, R.string.shortcut_setting, shortcutCountLabel())
             )),
@@ -861,6 +864,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_CATEGORY_TABS -> showCategoryTabsDialog()
             KEY_DOUYIN_MODE -> toggle(key)
             KEY_GIVE_COIN_NUMBER -> showCommonChoiceDialog(key, arrayOf("1", "2"))
+            KEY_COIN_ALSO_LIKE -> toggle(key)
             // —— 通用·网络与账号 ——
             KEY_IPV4_ONLY -> toggle(key)
             KEY_CDN_HEALTH_ROUTING -> toggle(key)
@@ -1508,6 +1512,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_SHOW_VIDEO_DETAIL)
         applyStored(KEY_DOUYIN_MODE)
         applyStored(KEY_GIVE_COIN_NUMBER)
+        applyStored(KEY_COIN_ALSO_LIKE)
         applyStored(KEY_IPV4_ONLY)
         applyStored(KEY_CDN_HEALTH_ROUTING)
 

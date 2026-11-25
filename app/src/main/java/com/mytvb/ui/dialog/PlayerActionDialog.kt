@@ -101,7 +101,13 @@ class PlayerActionDialog(
             }
             scope.launch {
                 runCatching {
-                    videoRepository.giveCoin(aid, safeBvid, multiply = selectedCoinMultiply, selectLike = 0)
+                    // 投币同时点赞（issue#140）：与详情页同款开关，走接口原生 select_like
+                    val alsoLike = !isLiked && appSettings.getCachedString("coin_also_like") != "关"
+                    videoRepository.giveCoin(
+                        aid, safeBvid,
+                        multiply = selectedCoinMultiply,
+                        selectLike = if (alsoLike) 1 else 0
+                    )
                 }.onSuccess { response ->
                     if (response.isSuccess) {
                         isCoined = true

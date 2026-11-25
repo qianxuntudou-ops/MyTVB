@@ -1163,12 +1163,20 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         val currentAid = videoView?.aid ?: videoModel?.aid ?: return
         val currentBvid = videoView?.bvid ?: videoModel?.bvid
         val coinCount = appSettings.getCachedString("give_coin_number")?.toIntOrNull()?.coerceIn(1, 2) ?: 2
+        // 投币同时点赞（issue#140，官方默认行为）：走投币接口原生 select_like，
+        // 一次请求同时完成，无需二次补赞；已点赞时不重复传
+        val alsoLike = !isLiked && appSettings.getCachedString("coin_also_like") != "关"
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching {
-                videoRepository.giveCoin(currentAid, currentBvid, multiply = coinCount)
+                videoRepository.giveCoin(
+                    currentAid, currentBvid,
+                    multiply = coinCount,
+                    selectLike = if (alsoLike) 1 else 0
+                )
             }.onSuccess { response ->
                 if (response.isSuccess) {
                     isCoined = true
+                    if (alsoLike) isLiked = true
                     updateActionButtonsDirectly()
                     toast(getString(R.string.toast_coin_success))
                 } else {
