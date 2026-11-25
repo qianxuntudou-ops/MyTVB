@@ -37,10 +37,6 @@ class HongguoRepository private constructor(context: Context) {
     val account = HongguoAccount(session)
 
     init {
-        // 恢复上次远程下发的版本档案与网络画像（红果首请求前；
-        // 见 HongguoVersionProfiles / HongguoNetProfiles——含 TNC httpDns 直连表）
-        HongguoVersionProfiles.restore(appContext)
-        HongguoNetProfiles.restore(appContext)
         // 已注册设备立即补 applog 激活埋点（哑巴设备嫌疑对策）——不等到首次
         // 播放：纯浏览会话也应带足迹（identity() 出口挂载只覆盖播放链）
         session.takeIf { it.registered && it.cdid.isNotEmpty() }?.let { s ->

@@ -878,12 +878,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (UpdateFlowDialog.isBusy) return
         try {
             val releaseInfo = ApkUpdater.fetchLatestRelease()
-            // 红果签名版本档案热更：随 version.json 捎带，与有无新版本无关（没新版也生效）
-            HongguoVersionProfiles.applyFrom(applicationContext, releaseInfo.hongguoVersions)
-            // 红果播放 host/画像热更：同捎带语义（被封后不发版切换，2026-11-21 起）
-            HongguoNetProfiles.applyFrom(applicationContext, releaseInfo.hongguoNet)
-            // 「启动检测更新」开关（issue#133，默认关）：关闭时只捎带上面的红果热更配置，
-            // 不弹更新提醒；设置页手动「检查更新」不受此开关影响
+            // 红果的版本档案 / host / 取源路由 / DNS 表 2026-11-25 起全部内置（取消云端热更），
+            // 不再随 version.json 下发；红果改版直接发版。见 HongguoNetProfiles 类注释。
+            // 「启动检测更新」开关（issue#133，默认关）：关闭时不弹更新提醒；
+            // 设置页手动「检查更新」不受此开关影响
             if (appSettings.getCachedString("startup_update_check", "关") != "开") return
             if (!ApkUpdater.isRemoteNewer(releaseInfo.versionName)) return
             if (appSettings.getCachedString(ApkUpdater.KEY_IGNORED_VERSION) == releaseInfo.versionName) return

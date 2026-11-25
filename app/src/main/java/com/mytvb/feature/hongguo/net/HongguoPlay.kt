@@ -12,14 +12,15 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * 红果播放地址解析。取源路由按 [HongguoNetProfiles.playRoutes] 顺序回退（version.json
- * `hg_net.play_routes` 热更，内置默认 preload 首选、v5tab 次选）。两条路由的签名都是
- * [HongguoMedusa]（HGTV 精确移植，selector 调谐到 12）：
- * - `preload`（首选）：`POST /novel/player/multi_video_model/preload/v1` + V5 签名全头集，
- *   对齐 HGTV 1.3.8.x 实测请求。2026-11-24 00:02 我方新实现以这一形态真网放行
- *   （`HgMedusaVerifyProbeTest`：HTTP 200 / 26.8KB / code=0 / 带片源）；
- * - `v5tab`（次选）：V5 签名 `GET /reading/bookapi/video_tab/multi_video_model/v1`（果映TV 形态，
- *   只有三个签名头）。11-23 上午宽松期放行过 31 次，严格期未确认。
+ * 红果播放地址解析。取源路由内置为 [HongguoNetProfiles.ROUTE_VIDEO_MODEL]（2026-11-25
+ * 起取消云端热更），四路形态的签名都是 [HongguoMedusa]（HGTV 精确移植，selector 调谐到 12）：
+ * - `video_model`（**默认，2026-11-25 真网验证**）：`POST https://reading.snssdk.com/
+ *   novel/player/video_model/v1/`，官方 7.4.5.32 当前客户端的单集直取形态——21 键精简
+ *   query + Redmi 25053RT47C/Android 16 手机画像 + 系统 UA + `device_level=2` + 无 Cookie；
+ * - `player`：`POST /novel/player/multi_video_model/player/v1`（官方抓包 35 键全形态）。
+ *   11-24 放行，11-24 21:32 服务端配置切换后对旧形态一律回 200 空 body；
+ * - `preload`：`POST /novel/player/multi_video_model/preload/v1`（同日起同样空）；
+ * - `v5tab`：V5 签名 `GET /reading/bookapi/video_tab/multi_video_model/v1`（果映TV 形态）。
  *
  * 拿到 entry 后 → video_model 内联/fallback 二跳 → video_list 编码过滤 → spade_a 密钥派生 →
  * URL 解密 + CDN 域名白名单（[parseEntry]，对照 Node 版 app-source.js parseEntryPlayInfo）。
@@ -104,6 +105,7 @@ class HongguoPlay {
         val entry = when (route) {
             HongguoNetProfiles.ROUTE_PLAYER -> fetchModelEntry(PLAYER_PATH, DR_PLAYER, vid, identity)
             HongguoNetProfiles.ROUTE_PRELOAD -> fetchModelEntry(PRELOAD_PATH, DR_PRELOAD, vid, identity)
+            HongguoNetProfiles.ROUTE_VIDEO_MODEL -> fetchVideoModelEntry(vid, identity)
             HongguoNetProfiles.ROUTE_V5TAB -> fetchTabEntry(vid, identity)
             // 路由名在 HongguoNetProfiles 解析时已过滤，此处仅防御
             else -> throw PlayException("未知取源路由 $route", "UNKNOWN_ROUTE")
@@ -112,8 +114,14 @@ class HongguoPlay {
         return entry
     }
 
-    /** 收到空 body：记连续次数、按 [backoffMs] 进入冷却，并以 [EMPTY_BODY] 抛出。 */
-    private fun onEmptyBody(path: String): Nothing {
+    /** 收到空 body：记连续次数、按 [backoffMs] 进入冷却，并以 [EMPTY_BODY] 抛出。
+     *  [countBackoff]=false 用于后台预取：预取失败不该把前台起播打进熔断
+     *  （2026-11-25 实测：起播成功后预取连打 3 个空响应，直接把下一次起播拦了 3 分钟）。 */
+    private fun onEmptyBody(path: String, countBackoff: Boolean = true): Nothing {
+        if (!countBackoff) {
+            AppLog.w(TAG, "play empty body (background) path=$path")
+            throw PlayException("empty body path=$path", EMPTY_BODY)
+        }
         val backoff = noteEmptyBody()
         AppLog.w(TAG, "play empty body path=$path cooldown=${backoff / 1000}s")
         throw PlayException("empty body path=$path", EMPTY_BODY)
@@ -166,6 +174,87 @@ class HongguoPlay {
     }
 
     /**
+     * `video_model/v1` 单集直取（2026-11-25 接入，参照 tsukiyo-zero/hongguoTV 0.1.40 的
+     * 线上验证形态）：host=`reading.snssdk.com` + 21 键精简 query（官方当前公共参数集 +
+     * Redmi 25053RT47C / Android 16 / os_api 36 手机画像）+ 系统默认 UA + `video_id` +
+     * `biz_param(device_level=2)` 的 gzip body + 无 Cookie。签名仍是 V5（medusa field21=312，
+     * 与官方 7.4.5.32 客户端一致；377 才会被判无效）。
+     * 背景：2026-11-24 21:32 服务端配置切换后，`fqnovel` 域的 player/preload 两路对旧形态
+     * 一律回 200 空 body（同一时刻 feed/详情正常），本路由用于验证「官方当前客户端形态」。
+     */
+    private fun fetchVideoModelEntry(
+        vid: String, identity: HongguoDeviceRegister.Identity, countBackoff: Boolean = true
+    ): JSONObject {
+        val ver = HongguoVersionProfiles.default
+        val pairs = listOf(
+            "aid" to "8662", "app_name" to "novelread",
+            "version_code" to ver.code, "version_name" to ver.versionName,
+            "update_version_code" to ver.code, "manifest_version_code" to ver.code,
+            "os" to "android", "ssmix" to "a", "channel" to CURRENT_CHANNEL,
+            "device_platform" to "android", "device_type" to CURRENT_DEVICE_TYPE,
+            "device_brand" to CURRENT_DEVICE_BRAND, "os_version" to CURRENT_OS_VERSION,
+            "os_api" to CURRENT_OS_API, "ac" to "wifi", "language" to "zh",
+            "host_abi" to "arm64-v8a",
+            "iid" to identity.installId, "cdid" to identity.cdid,
+            "device_id" to identity.deviceId,
+        )
+        val body = gzipDeflate(videoModelBody(vid, 2))
+        AppLog.d(
+            TAG,
+            "play video_model first=$vid level=2 device=${identity.deviceId} " +
+                "host=$VIDEO_MODEL_HOST type=$CURRENT_DEVICE_TYPE ua=system"
+        )
+        val req = buildVideoModelRequest(VIDEO_MODEL_HOST + VIDEO_MODEL_PATH, pairs, body)
+        return http.newCall(req).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: ByteArray(0)
+            AppLog.i(TAG, "play video_model resp http=${resp.code} len=${bytes.size}")
+            if (bytes.isEmpty()) {
+                val hdrs = (0 until resp.headers.size).joinToString(" | ") { i ->
+                    val name = resp.headers.name(i)
+                    val value = if (name.equals("Set-Cookie", true)) "<omitted>" else resp.headers.value(i).take(160)
+                    "$name=$value"
+                }
+                AppLog.w(TAG, "play empty body headers [$hdrs]")
+                onEmptyBody(VIDEO_MODEL_PATH, countBackoff)
+            }
+            if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
+            val payload = JSONObject(String(bytes, Charsets.UTF_8))
+            val code = payload.optInt("code", payload.optInt("Code", 0))
+            if (code != 0) throw PlayException("播放接口 code=$code", "BIZ_$code")
+            val data = payload.optJSONObject("data")
+                ?: throw PlayException("播放信息为空", "MISSING_MODEL")
+            // 单集直取：data.video_model；兼容批量形态 data.video_model_data[vid]
+            if (data.opt("video_model") != null) return data
+            val rows = data.optJSONObject("video_model_data") ?: data
+            return rows.optJSONObject(vid) ?: data
+        }
+    }
+
+    /** `video_model/v1` 请求体（手写键序，gzip 后与 SS-STUB 同字节）。 */
+    internal fun videoModelBody(vid: String, deviceLevel: Int): ByteArray =
+        ("{\"video_id\":\"$vid\",\"biz_param\":{\"detail_page_version\":0,\"device_level\":$deviceLevel," +
+            "\"disable_digg_stat\":false,\"disable_video_relate_book\":false," +
+            "\"need_all_video_definition\":true,\"need_mp4_align\":false," +
+            "\"use_os_player\":false,\"use_server_dns\":false,\"video_platform\":1024}}")
+            .toByteArray(Charsets.UTF_8)
+
+    /** `video_model/v1` 请求构造：V5 签名 + 系统 UA + Accept/Content-Encoding（无 Cookie）。 */
+    private fun buildVideoModelRequest(
+        baseUrl: String, pairs: List<Pair<String, String>>, body: ByteArray
+    ): Request {
+        val signed = HongguoPlaybackV5.sign(pairs, System.currentTimeMillis(), body)
+        return Request.Builder()
+            .url("$baseUrl?${signed.query}")
+            // 官方当前客户端这一路的 UA 是系统默认（Dalvik/…Build/…），不是 App UA
+            .header("User-Agent", System.getProperty("http.agent") ?: "okhttp/4.12.0")
+            .header("Accept", "application/json")
+            .header("Content-Encoding", "gzip")
+            .apply { signed.headers.forEach { (k, v) -> header(k, v) } }
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+    }
+
+    /**
      * video_tab 响应 → 本集 entry（含 `video_model` 键，交 [parseEntry] 二跳）。
      * 行在 `data.video_model_data[vid]`，少数形态直接 `data[vid]`；都没有则取首行兜底。
      * 纯函数，可单测。
@@ -184,10 +273,10 @@ class HongguoPlay {
     }
 
     /**
-     * 后续剧集地址预取：官方预取通道是 preload/v1（`dr_scene=preload`）**一次请求带一批 id**
-     * （抓包 20 条样本：1004 数组 1~6 个 id，3~4 个最常见），所以这里也合并成单次请求——
-     * 比逐集发更省枪，也贴合官方行为。取址失败静默放弃（切集时实时解析兜底）；
-     * 单集解析失败（片源不兼容）只跳过该集。返回成功解析的 vid→PlayUrl（保持入参顺序）。
+     * 后续剧集地址预取。2026-11-25 起改走 `video_model/v1` **逐集**请求：
+     * 旧的 `preload/v1`（fqnovel 域 + 官方抓包形态）已被服务端 11-24 21:32 的配置切换关掉，
+     * 再打只会空 body 并把前台起播打进熔断；`video_model/v1` 是单集接口，所以逐集发。
+     * 失败静默（切集时实时解析兜底，同路由），单集解析失败只跳过该集。
      */
     fun playUrlBatch(
         vids: List<String>,
@@ -196,20 +285,18 @@ class HongguoPlay {
     ): Map<String, PlayUrl> {
         require(vids.isNotEmpty()) { "预取集数为空" }
         require(vids.all { it.matches(Regex("\\d{1,30}")) }) { "分集编号无效" }
-        val data = try {
-            fetchModelData(PRELOAD_PATH, vids, DR_PRELOAD, identity)
-        } catch (e: Exception) {
-            if (e is PlayException && e.code == COOLDOWN) {
-                // 冷却期内预取静默放弃（不发网络；前台起播时会给出限流提示）
-                AppLog.d(TAG, "prefetch skip: cooldown")
-            } else {
-                AppLog.w(TAG, "prefetch failed vids=${vids.size}: ${e.message}")
-            }
-            return emptyMap()
-        }
         val out = LinkedHashMap<String, PlayUrl>()
         for (vid in vids) {
-            val entry = data.optJSONObject(vid) ?: continue
+            val entry = try {
+                fetchVideoModelEntry(vid, identity, countBackoff = false)
+            } catch (e: Exception) {
+                if (e is PlayException && e.code == COOLDOWN) {
+                    AppLog.d(TAG, "prefetch skip: cooldown")
+                    break
+                }
+                AppLog.w(TAG, "prefetch failed vid=$vid: ${e.message}")
+                continue
+            }
             runCatching { out[vid] = parseEntry(vid, entry, preferredPixels) }
         }
         return out
@@ -399,6 +486,19 @@ class HongguoPlay {
         internal const val PLAYER_PATH = "/novel/player/multi_video_model/player/v1"
         internal const val PRELOAD_PATH = "/novel/player/multi_video_model/preload/v1"
 
+        /** `video_model/v1` 单集直取（官方当前客户端形态，2026-11-25 接入）：
+         *  域名是 `reading.snssdk.com`（不是 fqnovel 域），路径带尾斜线。 */
+        internal const val VIDEO_MODEL_HOST = "https://reading.snssdk.com"
+        internal const val VIDEO_MODEL_PATH = "/novel/player/video_model/v1/"
+
+        /** 官方当前客户端公共参数集里的固定画像（官方 7.4.5.32 常见机型；这一路要求
+         *  「像官方手机客户端」，与注册身份的真实机型刻意分离）。 */
+        private const val CURRENT_CHANNEL = "update_64"
+        private const val CURRENT_DEVICE_TYPE = "25053RT47C"
+        private const val CURRENT_DEVICE_BRAND = "Redmi"
+        private const val CURRENT_OS_VERSION = "16"
+        private const val CURRENT_OS_API = "36"
+
         /** `dr_scene`：官方起播用 player、预取用 preload（2026-11-13 抓包 9/20 条样本一致）。 */
         internal const val DR_PLAYER = "player"
         internal const val DR_PRELOAD = "preload"
@@ -416,7 +516,7 @@ class HongguoPlay {
         private const val V5_DEVICE_TYPE = "PGT-AN10"
         private const val V5_OS_VERSION = "12"
 
-        // 批量预取已合并成单次 preload/v1 请求（官方同款，一次 body 带多个 id），
+        // 预取 2026-11-25 起改走 video_model 逐集（旧的批量 preload/v1 已失效且会污染熔断），
         // 不再需要集间限速；原先的 PREFETCH_GAP_MS(250→800) 随逐集请求一起删掉。
 
         // ---- 空响应熔断（2026-11-23 探针实证）----
@@ -475,6 +575,16 @@ class HongguoPlay {
             val bytes = resp.body?.bytes() ?: ByteArray(0)
             // 路径带上端点名：player/preload 两路共用本函数，写死 "preload" 会误导排障
             AppLog.i(TAG, "play ${baseUrl.substringAfterLast("/novel/player/")} resp http=${resp.code} len=${bytes.size}")
+            // 空 body 诊断（2026-11-25）：被拒时唯一线索只能在响应头（logid / Retry-After /
+            // Server / Set-Cookie / Content-Length）。Set-Cookie 只留名字不打值，避免票据入日志。
+            if (bytes.isEmpty()) {
+                val hdrs = (0 until resp.headers.size).joinToString(" | ") { i ->
+                    val name = resp.headers.name(i)
+                    val value = if (name.equals("Set-Cookie", true)) "<omitted>" else resp.headers.value(i).take(160)
+                    "$name=$value"
+                }
+                AppLog.w(TAG, "play empty body headers [$hdrs]")
+            }
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
             return String(bytes, Charsets.UTF_8)
         }

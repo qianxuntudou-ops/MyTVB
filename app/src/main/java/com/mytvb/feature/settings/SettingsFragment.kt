@@ -1327,14 +1327,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         updateScope.launch {
             try {
                 val releaseInfo = ApkUpdater.fetchLatestRelease()
-                // 红果签名版本档案热更：随 version.json 捎带，与有无新版本无关（没新版也生效）
-                HongguoVersionProfiles.applyFrom(
-                    requireContext().applicationContext, releaseInfo.hongguoVersions
-                )
-                // 红果播放 host/画像热更：同捎带语义（被封后不发版切换，2026-11-21 起）
-                HongguoNetProfiles.applyFrom(
-                    requireContext().applicationContext, releaseInfo.hongguoNet
-                )
+                // 红果配置 2026-11-25 起全部内置（取消云端热更），检查更新只做版本比较
                 if (ApkUpdater.isRemoteNewer(releaseInfo.versionName)) {
                     updateCheckState.value = UpdateCheckState.UpdateAvailable(releaseInfo.versionName)
                     updateUpdateEntry()

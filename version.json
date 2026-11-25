@@ -2,23 +2,6 @@
   "version": "2.1.33",
   "apk": "MyTVB-v2.1.33-release.apk",
   "notes": "更新包可保存到 U 盘，并支持直接从 U 盘安装\n更新下载太慢时自动切换下载源，改善国内下载速度\n设置里新增「启动时检测更新」开关\n修复切换集数后评论区仍显示上一集内容\n修复部分 CCTV 直播频道加载慢或提示「暂时不支持播放」\n修复番剧花絮、预告片无法播放\n优化 CCTV 播放与网页退出后的内存占用\n优化弹幕滚动平滑度，减少忽快忽慢\n修复历史记录翻页、顶部页签栏偏移、番剧详情页上键跳回顶部后焦点丢失\n直播弹幕支持屏蔽抽奖口令",
-  "hg_versions": {
-    "default": {
-      "code": "74532",
-      "name": "7.4.5.32"
-    },
-    "plan": {
-      "code": "72232",
-      "name": "7.2.2.32"
-    }
-  },
-  "hg_net": {
-    "play_host": "https://api5-normal-sinfonlineb.fqnovel.com",
-    "channel": "update_64",
-    "play_routes": [
-      "player"
-    ]
-  },
   "apk_mirrors": [
     "https://gh-proxy.com/",
     "https://ghfast.top/",

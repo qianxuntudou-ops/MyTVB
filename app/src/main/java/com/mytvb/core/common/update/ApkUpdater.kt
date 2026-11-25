@@ -180,18 +180,6 @@ object ApkUpdater {
         val versionName: String,
         val apkUrl: String,
         val releaseNotes: String,
-        /**
-         * version.json 可选 `hg_versions` 字段原始对象（红果签名版本档案热更，
-         * 见 HongguoVersionProfiles）。由检查更新的调用方喂给红果模块；
-         * API 兜底链拿不到此字段，为 null（不冲掉已下发的档案）。
-         */
-        val hongguoVersions: JSONObject? = null,
-
-        /**
-         * version.json 可选 `hg_net` 字段原始对象（红果播放 host/画像热更，
-         * 见 HongguoNetProfiles；2026-11-21 起）。同 hongguoVersions 的捎带语义。
-         */
-        val hongguoNet: JSONObject? = null,
     )
 
     sealed class Progress {
@@ -305,10 +293,6 @@ object ApkUpdater {
             versionName = versionName,
             apkUrl = apkUrl,
             releaseNotes = json.optString("notes", "").trim(),
-            // 可选字段：红果签名版本档案热更（缺失/非法由红果侧校验回落）
-            hongguoVersions = json.optJSONObject("hg_versions"),
-            // 可选字段：红果播放 host/画像热更（同上，红果侧校验回落）
-            hongguoNet = json.optJSONObject("hg_net"),
         )
     }
 
