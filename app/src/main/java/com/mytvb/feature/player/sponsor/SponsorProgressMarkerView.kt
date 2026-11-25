@@ -68,11 +68,14 @@ class SponsorProgressMarkerView @JvmOverloads constructor(
             canvas.drawRect(0f, 0f, progressEnd, h, playedPaint)
         }
 
-        // 空降分段色块（在进度之上，始终可见）
+        // 空降分段色块：左界裁到已播放末端之后——半透明绿叠在已播放色上会混合
+        // 变脏（issue#140），高亮只落在未播放区间（与 DefaultTimeBar 同款修法）
         if (segments.isNotEmpty() && sponsorDurationMs > 0L) {
             for (segment in segments) {
-                val left = (segment.startTimeMs.toFloat() / sponsorDurationMs) * w
+                val left = ((segment.startTimeMs.toFloat() / sponsorDurationMs) * w)
+                    .coerceAtLeast(progressEnd)
                 val right = (segment.endTimeMs.toFloat() / sponsorDurationMs) * w
+                if (right <= left) continue
                 segmentPaint.color = (segment.categoryColor() and 0x00FFFFFFL).toInt() or 0x99000000.toInt()
                 canvas.drawRect(left, 0f, right, h, segmentPaint)
             }

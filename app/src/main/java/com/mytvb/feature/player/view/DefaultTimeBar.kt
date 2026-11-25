@@ -346,13 +346,17 @@ class DefaultTimeBar @JvmOverloads constructor(
             canvas.drawRect(drawnPosition, playedPaint)
         }
 
-        // 空降助手标记：在进度之上、进度条头之下绘制
+        // 空降助手标记：在进度之上、进度条头之下绘制。
+        // 左界裁到播放头之后：半透明绿叠在已播放粉色上会混合成草绿色（issue#140），
+        // 已播放区域保持纯粉，高亮只落在未播放区间（对齐官方）
         if (sponsorSegments.isNotEmpty() && sponsorDurationMs > 0L) {
             for (segment in sponsorSegments) {
                 val startRatio = segment.startTimeMs.toFloat() / sponsorDurationMs
                 val endRatio = segment.endTimeMs.toFloat() / sponsorDurationMs
-                val left = barLeft + (barWidth * startRatio)
+                val left = (barLeft + (barWidth * startRatio))
+                    .coerceAtLeast(drawnPosition.right.toFloat())
                 val right = barLeft + (barWidth * endRatio)
+                if (right <= left) continue
                 sponsorPaint.color = (segment.categoryColor() and 0x00FFFFFFL).toInt() or 0x99000000.toInt()
                 canvas.drawRect(left, drawnBarTop.toFloat(), right, drawnBarBottom.toFloat(), sponsorPaint)
             }
