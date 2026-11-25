@@ -28,34 +28,27 @@ class HongguoAccount(private val session: HongguoSession) {
 
     class AccountException(message: String, val code: String = "ACCOUNT_ERROR") : IllegalStateException(message)
 
-    private val cookieStore = ConcurrentHashMap<String, MutableMap<String, Cookie>>()
+    /**
+     * 账号 cookie 存储，扫码域（hongguoduanju.com）与 passport 域
+     * （api5-normal-lq.fqnovel.com）共用同一个 jar。
+     *
+     * 2026-11-25 issue#139：passport 的 sms_login 用独立 OkHttpClient 且未挂 CookieJar，
+     * 服务端 Set-Cookie 下发的 sessionid 全被丢弃，收口从 cookie 存储取值必空 →
+     * 输入正确验证码也永远报「会话票据」失败。官方（HGTV C0163h2/Y.java）正是逐段解析
+     * 响应 Set-Cookie 收会话，此处对齐。
+     */
+    private val cookieJar = HongguoCookieJar()
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .followRedirects(false)
-            .cookieJar(object : CookieJar {
-                override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                    val map = cookieStore[url.host] ?: ConcurrentHashMap<String, Cookie>().also {
-                        cookieStore[url.host] = it
-                    }
-                    for (c in cookies) {
-                        if (c.expiresAt == 0L || (c.expiresAt in 1 until System.currentTimeMillis())) map.remove(c.name) else map[c.name] = c
-                    }
-                }
-
-                override fun loadForRequest(url: HttpUrl): List<Cookie> =
-                    cookieStore[url.host]?.values?.toList() ?: emptyList()
-            })
+            .cookieJar(cookieJar)
             .build()
     }
 
-    private fun cookieHeader(url: HttpUrl): String =
-        cookieStore[url.host]?.entries?.joinToString("; ") { "${it.key}=${it.value.value}" } ?: ""
-
-    private fun cookieValue(name: String): String =
-        cookieStore.values.firstNotNullOfOrNull { it[name]?.value } ?: ""
+    private fun cookieValue(name: String): String = cookieJar.value(name)
 
     // ---- 扫码登录（hongguoduanju.com 网页通道，无签名） ----
 
@@ -164,8 +157,8 @@ class HongguoAccount(private val session: HongguoSession) {
             url = location
         }
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
-        Log.d("Hongguo", "qr finish sidGot=${sid.isNotEmpty()} name=${cookieValue("sessionid_ss").isNotEmpty()}")
-        if (sid.isEmpty()) throw AccountException("扫码未取得会话票据")
+        Log.d("Hongguo", "qr finish sidGot=${sid.isNotEmpty()} name=${cookieValue("sessionid_ss").isNotEmpty()} host=${cookieJar.loginHost}")
+        if (sid.isEmpty()) throw AccountException("扫码未取得会话票据", "NO_SESSION")
         // 昵称权威来源 = 网页 SSR（passport info/v2 的账号级资料常是未初始化默认值「用户+数字」）
         var ssrName = ""
         var ssrAvatar = ""
@@ -286,16 +279,54 @@ class HongguoAccount(private val session: HongguoSession) {
         return finishSmsLogin(payload, mobile, code)
     }
 
-    /** sms_login 响应收口：MFA 挑战识别（O1.j 同款字段链）或完成登录。 */
+    /**
+     * sms_login 响应收口：MFA 挑战识别（O1.j 同款字段链）或完成登录。
+     * 错误文案对齐官方 C0163h2.d：优先 description（error_code）；data 整个缺失时只回 message。
+     * 会话票据缺失单独成句——服务端已受理但没下发 cookie，与「验证码错误」是两回事，
+     * 用户按提示才能判断是重试还是换通道。
+     */
     private fun finishSmsLogin(payload: JSONObject, mobile: String, code: String): Profile {
         val data = payload.optJSONObject("data")
-            ?: throw AccountException(payload.optString("message").ifEmpty { "登录失败" })
+        val errCode = data?.optString("error_code").orEmpty().ifEmpty { payload.optString("error_code") }
+        val description = data?.optString("description").orEmpty().ifEmpty { payload.optString("description") }
+        if (data == null) {
+            val message = payload.optString("message")
+            throw AccountException(
+                if (message.isEmpty() || message == "success") "账号服务返回的内容不完整，请稍后重试" else message,
+                "NO_DATA"
+            )
+        }
         parseMfaChallenge(payload, data)?.let { throw MfaRequiredException(it) }
-        val uid = data.optString("user_id_str").ifEmpty { data.optString("user_id") }
-        val name = data.optString("screen_name").ifEmpty { data.optString("name") }.ifEmpty { "红果用户" }
-        val avatar = data.optString("avatar_url")
+        if (errCode.isNotEmpty() && errCode != "0") {
+            throw AccountException(
+                description.ifEmpty { "验证失败，请检查验证码或稍后重试" } + "（$errCode）",
+                "LOGIN_REJECTED:$errCode"
+            )
+        }
+        val message = payload.optString("message")
+        if (message.isNotEmpty() && message != "success") {
+            throw AccountException(
+                description.ifEmpty { "验证失败，请检查验证码或稍后重试" },
+                "VERIFY_FAILED"
+            )
+        }
+        var uid = data.optString("user_id_str").ifEmpty { data.optString("user_id") }
+        var name = data.optString("screen_name").ifEmpty { data.optString("name") }.ifEmpty { "红果用户" }
+        var avatar = data.optString("avatar_url")
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
-        if (sid.isEmpty()) throw AccountException("登录未取得会话票据")
+        if (sid.isEmpty()) {
+            Log.w("Hongguo", "sms login no session cookie dataKeys=${data.keys().asSequence().joinToString(",")}")
+            throw AccountException("会话建立失败：服务端未下发登录票据，请重试或改用扫码登录", "NO_SESSION")
+        }
+        // sms_login 的 data 未必带资料（部分账号只回会话）：登录成立后补拉一次权威资料，
+        // 失败不影响登录本身
+        if (uid.isEmpty() || name == "红果用户") {
+            runCatching { fetchProfile() }.getOrNull()?.let {
+                uid = it.uid.ifEmpty { uid }
+                name = it.name.ifEmpty { name }
+                avatar = it.avatar.ifEmpty { avatar }
+            }
+        }
         return saveAccount(uid, name, avatar, "phone")
     }
 
@@ -416,9 +447,7 @@ class HongguoAccount(private val session: HongguoSession) {
     }
 
     private fun putAccountCookie(name: String, value: String) {
-        cookieStore.getOrPut("hongguoduanju.com") { ConcurrentHashMap() }[name] =
-            Cookie.Builder().name(name).value(value)
-                .domain("hongguoduanju.com").path("/").build()
+        cookieJar.put(QR_HOST, name, value)
     }
 
     /**
@@ -492,10 +521,9 @@ class HongguoAccount(private val session: HongguoSession) {
     // ---- 票据存取 ----
 
     private fun saveAccount(uid: String, name: String, avatar: String, method: String): Profile {
-        val cookies = HashMap<String, String>()
-        for (hostMap in cookieStore.values) {
-            for ((k, c) in hostMap) if (!cookies.containsKey(k)) cookies[k] = c.value
-        }
+        // 登录域优先（snapshot 内已按 cookieJar.loginHost 排序）：跨域同名 cookie
+        // 取本次登录写入的那份，避免先扫码再短信登录时读到旧票据
+        val cookies = HashMap(cookieJar.snapshot())
         session.accountCookies = cookies
         session.loginMethod = method
         // x-tt-token 第二票据（passport Set-Cookie 下发；请求 header 随带+响应滚动续期，对照 HGTV H0/b.java）
@@ -537,15 +565,21 @@ class HongguoAccount(private val session: HongguoSession) {
         session.accountToken = ""
         session.accountExpires = 0L
         session.lastBeatAt = 0L
-        cookieStore.clear()
+        cookieJar.clear()
     }
 
     // ---- passport form POST（签名 + passport 头） ----
 
+    /**
+     * passport 通道专用 client：与 [http] 共用同一个 [cookieJar]。
+     * sms_login 的成功会话走 Set-Cookie 下发（HGTV C0163h2/Y.java 实证），
+     * 没有 jar 时服务端票据全丢，收口必然读不到 sessionid（issue#139）。
+     */
     private val http2: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
+            .cookieJar(cookieJar)
             .build()
     }
 
@@ -576,7 +610,7 @@ class HongguoAccount(private val session: HongguoSession) {
         )
         val text = http2.newCall(
             Request.Builder()
-                .url("https://api5-normal-lq.fqnovel.com$path?${signed.query}")
+                .url("https://$PASSPORT_HOST$path?${signed.query}")
                 .post(raw.toRequestBody("application/x-www-form-urlencoded; charset=UTF-8".toMediaType()))
                 .header("User-Agent", HongguoDeviceRegister.USER_AGENT)
                 .header("Accept", "application/json")
@@ -587,8 +621,25 @@ class HongguoAccount(private val session: HongguoSession) {
                 .header("Sdk-Version", "2")
                 .header("X-SS-DP", "8662")
                 .build()
-        ).execute().use { it.body?.string().orEmpty() }
-        if (text.isBlank()) throw AccountException("登录接口无响应")
+        ).execute().use { resp ->
+            // x-tt-token 第二票据（HGTV H0/Y.java case2 同款：响应头 >=99 字符直接收，
+            // 每次 passport 响应滚动续期；saveAccount 里只处理 cookie 形态的兜底）
+            resp.headers.values("X-Tt-Token").firstOrNull()?.takeIf { it.length >= 99 }?.let {
+                session.accountToken = it
+                Log.d("Hongguo", "passport X-Tt-Token len=${it.length}")
+            }
+            val body = resp.body?.string().orEmpty()
+            Log.d(
+                "Hongguo",
+                "passport resp path=$path http=${resp.code} len=${body.length} " +
+                    "sidGot=${cookieValue("sessionid").isNotEmpty() || cookieValue("sessionid_ss").isNotEmpty()}"
+            )
+            if (body.isBlank() && !resp.isSuccessful) {
+                throw AccountException("登录接口无响应（HTTP ${resp.code}）", "HTTP_${resp.code}")
+            }
+            body
+        }
+        if (text.isBlank()) throw AccountException("登录接口无响应（空响应体）", "EMPTY_BODY")
         return JSONObject(text)
     }
 
@@ -615,6 +666,12 @@ class HongguoAccount(private val session: HongguoSession) {
     }
 
     private companion object {
+        /** passport 域：短信登录接口 host，也是短信通道的 cookie 落盘域。 */
+        const val PASSPORT_HOST = "api5-normal-lq.fqnovel.com"
+
+        /** 网页扫码/导入通道的 cookie 域。 */
+        const val QR_HOST = "hongguoduanju.com"
+
         const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     }
@@ -680,5 +737,68 @@ internal object HongguoCookieStoreParser {
         } catch (_: Exception) {
             null
         }
+    }
+}
+
+/**
+ * 账号 cookie 容器（OkHttp CookieJar）：按请求 host 分桶保存 Set-Cookie，扫码域与
+ * passport 域共用。
+ *
+ * [loginHost] 记录最近一次写入会话票据的 host。两个域可能各有一份同名 `sessionid`
+ * （同一进程里先扫码再短信登录），取值与落盘都优先它，否则 ConcurrentHashMap 的遍历
+ * 顺序会让收口读到上一条登录的旧票据。纯 JVM 实现（不依赖 android.util.Log），可直接单测。
+ */
+internal class HongguoCookieJar : CookieJar {
+
+    private val store = ConcurrentHashMap<String, MutableMap<String, Cookie>>()
+
+    @Volatile
+    var loginHost: String = ""
+        private set
+
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        if (cookies.isEmpty()) return
+        val map = store[url.host] ?: ConcurrentHashMap<String, Cookie>().also { store[url.host] = it }
+        val now = System.currentTimeMillis()
+        for (c in cookies) {
+            if (c.expiresAt == 0L || (c.expiresAt in 1 until now)) map.remove(c.name) else map[c.name] = c
+        }
+        // 会话票据落到哪个 host，该 host 即为本次登录域
+        if (cookies.any { (it.name == "sessionid" || it.name == "sessionid_ss") && it.expiresAt > now }) {
+            loginHost = url.host
+        }
+    }
+
+    override fun loadForRequest(url: HttpUrl): List<Cookie> =
+        store[url.host]?.values?.toList() ?: emptyList()
+
+    /** 取 cookie 值：登录域优先，其它域兜底。 */
+    fun value(name: String): String {
+        store[loginHost]?.get(name)?.value?.takeIf { it.isNotEmpty() }?.let { return it }
+        return store.values.firstNotNullOfOrNull { it[name]?.value } ?: ""
+    }
+
+    /** 落盘快照：登录域先入，其它域只补缺失的 name（跨域同名以本次登录为准）。 */
+    fun snapshot(): Map<String, String> {
+        val out = LinkedHashMap<String, String>()
+        val maps = ArrayList<MutableMap<String, Cookie>>()
+        store[loginHost]?.let { maps.add(it) }
+        for ((host, map) in store) if (host != loginHost) maps.add(map)
+        for (map in maps) {
+            for ((name, cookie) in map) if (!out.containsKey(name)) out[name] = cookie.value
+        }
+        return out
+    }
+
+    /** 导入通道直接写入（没有响应头可解析）；sessionid 即视为本次登录域。 */
+    fun put(host: String, name: String, value: String) {
+        val map = store[host] ?: ConcurrentHashMap<String, Cookie>().also { store[host] = it }
+        map[name] = Cookie.Builder().name(name).value(value).domain(host).path("/").build()
+        if (name == "sessionid" || name == "sessionid_ss") loginHost = host
+    }
+
+    fun clear() {
+        store.clear()
+        loginHost = ""
     }
 }
