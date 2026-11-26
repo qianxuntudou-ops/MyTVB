@@ -556,7 +556,10 @@ class HomeLaneAdapter(
                 GridLayoutManager(binding.root.context, binding.root.resources.adaptiveSpanCount(base = 6, wide = 8))
             binding.recyclerView.adapter = adapter
             binding.recyclerView.itemAnimator = null
-            binding.recyclerView.setHasFixedSize(true)
+            // 高度 wrap_content 随内容条数变化，setHasFixedSize(true) 会吞掉异步 diff commit 的
+            // requestLayout：切天走「有数据->空->有数据」后 GONE->VISIBLE 的首帧读到旧 itemCount=0，
+            // 之后 notifyDataSetChanged 不再触发布局，列表永远塌陷在 0 高度（切天数据消失的根因）
+            binding.recyclerView.setHasFixedSize(false)
             val timelineHeaderKeyListener = View.OnKeyListener { view, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) {
                     return@OnKeyListener false
