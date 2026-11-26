@@ -405,13 +405,16 @@ class HomeLaneRepository(
             return null
         }
 
-        val subtitle = progress.ifBlank { seasonTitle }
+        // 追番卡进度换百分比形态（issue#145，与我的追番列表卡同款规则）；
+        // 已看完/解析失败/无时长时为 null，保持服务端原文
+        val followProgress = progressWithPercent()
+        val subtitle = followProgress ?: progress.ifBlank { seasonTitle }
         return LaneItemModel(
             seasonId = seasonId,
             oid = firstEp.takeIf { it > 0 } ?: newEp?.id ?: firstEpInfo?.id ?: 0L,
             title = resolvedTitle,
             cover = resolvedCover,
-            desc = progress.ifBlank { evaluate.ifBlank { summary } },
+            desc = followProgress ?: progress.ifBlank { evaluate.ifBlank { summary } },
             subTitle = subtitle,
             link = url,
             newEp = newEp ?: firstEpInfo,

@@ -276,8 +276,8 @@
     <string name="image_quality">圖片品質</string>
     <string name="kichiku">鬼畜</string>
     <string name="knowledge">知識</string>
-    <string name="last_watch_" formatted="false">上次觀看到第%s集 %s</string>
-    <string name="last_watch_section_" formatted="false">上次看到 %s %s</string>
+    <!-- 進度標籤整體作槽位（第X集/第X集預告/欄目·標題），句式統一（issue#145） -->
+    <string name="last_watch_" formatted="false">上次觀看到%s %s</string>
     <string name="later_watch">稍後觀看</string>
     <string name="later_watch_added">已加入稍後觀看</string>
     <string name="later_watch_removed">已移出稍後觀看</string>

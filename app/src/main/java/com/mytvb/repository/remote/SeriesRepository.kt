@@ -51,7 +51,8 @@ class SeriesRepository(
                     // 接在最新正片后面（看剧进度也经常停在这集），episodes 只留它；
                     // 已完结的历史预告仍走下面的预告分区，不混进正片行。
                     episodes = EpisodeListMerge.mergeOngoingNextPreview(
-                        mainEpisodes = sectionResult?.mainSection?.episodes.orEmpty(),
+                        mainEpisodes = sectionResult?.mainSection?.episodes.orEmpty()
+                            .enrichDurationFrom(detail.episodes.orEmpty()),
                         seasonEpisodes = detail.episodes.orEmpty(),
                         isFinished = detail.publish?.isFinish == 1
                     ),
@@ -66,10 +67,29 @@ class SeriesRepository(
     }
 
     /**
+     * 独立 section 接口（pgc/web/season/section）的正片条目不下发 duration（ep_id
+     * 同理，见 [mergeSectionEpIds]），一体接口 episodes 每集有 duration（毫秒）——
+     * 按集 id 交叉回填，供详情页「上次观看」拼「当前/总时长」（issue#145）。
+     */
+    private fun List<com.mytvb.model.episode.EpisodeModel>.enrichDurationFrom(
+        seasonEpisodes: List<com.mytvb.model.episode.EpisodeModel>
+    ): List<com.mytvb.model.episode.EpisodeModel> {
+        if (isEmpty() || seasonEpisodes.isEmpty()) return this
+        val durationById = seasonEpisodes.filter { it.duration > 0L }
+            .associate { it.id to it.duration }
+        if (durationById.isEmpty()) return this
+        return map { episode ->
+            if (episode.duration > 0L) episode
+            else durationById[episode.id]?.let { episode.copy(duration = it) } ?: episode
+        }
+    }
+
+    /**
      * 单独 section 接口（pgc/web/season/section）不下发 ep_id（issue#135 实证），
      * 一体接口（pgc/view/web/season）自带的 section 带 ep_id——按 aid/cid 交叉
      * 回填给 section 接口条目。没有 ep id 详情页就无法用 progress.last_ep_id
      * 匹配花絮/预告：定位高亮、「上次看到」文案、继续观看全失效（issue#140）。
+     * duration 同理不下发，一并回填，供「上次观看」拼总时长（issue#145）。
      * 一体接口没有的条目（如预约栏目）保持 epid=0，走既有 UGC/站外引用分支。
      */
     private fun mergeSectionEpIds(
@@ -77,22 +97,26 @@ class SeriesRepository(
         apiSections: List<com.mytvb.model.series.SectionModel>
     ): List<com.mytvb.model.series.SectionModel> {
         if (apiSections.isEmpty()) return apiSections
-        val epIdByKey = buildMap {
+        val metaByKey = buildMap {
             seasonSections.forEach { sec ->
                 sec.episodes.forEach { video ->
                     if (video.epid > 0L) {
-                        if (video.aid > 0L) put("a${video.aid}", video.epid)
-                        if (video.cid > 0L) put("c${video.cid}", video.epid)
+                        val meta = video.epid to video.duration
+                        if (video.aid > 0L) put("a${video.aid}", meta)
+                        if (video.cid > 0L) put("c${video.cid}", meta)
                     }
                 }
             }
         }
-        if (epIdByKey.isEmpty()) return apiSections
+        if (metaByKey.isEmpty()) return apiSections
         return apiSections.map { sec ->
             sec.copy(episodes = sec.episodes.map { video ->
-                if (video.epid > 0L) return@map video
-                val epId = epIdByKey["a${video.aid}"] ?: epIdByKey["c${video.cid}"] ?: 0L
-                if (epId > 0L) video.copy(epid = epId) else video
+                val meta = metaByKey["a${video.aid}"] ?: metaByKey["c${video.cid}"]
+                    ?: return@map video
+                video.copy(
+                    epid = if (video.epid > 0L) video.epid else meta.first,
+                    duration = if (video.duration > 0L) video.duration else meta.second
+                )
             })
         }
     }

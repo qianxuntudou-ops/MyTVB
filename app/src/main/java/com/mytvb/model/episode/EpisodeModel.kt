@@ -33,6 +33,12 @@ data class EpisodeModel(
     val subtitle: String = "",
     @SerializedName("vid")
     val vid: String = "",
+    /**
+     * 本集总时长，毫秒。pgc/view/web/season 的 episodes 每集下发
+     * （实测 1451000 形态），详情页「上次观看」拼 当前/总 时长用。
+     */
+    @SerializedName("duration")
+    val duration: Long = 0,
     @SerializedName("pub_time")
     val pubTime: Long = 0,
     /**

@@ -228,16 +228,21 @@ class SeriesDetailContentAdapter(
                 val lastTime = progress?.lastTime ?: 0L
                 // 官方语义：看完上报 last_time=-1（与播放端心跳 played_time=-1 同源），
                 // 直接 formatDuration 会拼出「00:-1」，对齐列表卡显示「已看完」。
+                val label = resolveLastWatchLabel(detail, progress)
                 val progressLabel = if (lastTime < 0L) {
                     binding.root.context.getString(R.string.adapter_watched_complete)
                 } else {
-                    NumberUtils.formatDuration(lastTime)
+                    val totalSec = label.totalSec
+                    // 统一「当前/总」形态（issue#145）；接口未下发时长时退回仅当前时长
+                    if (totalSec > 0L) {
+                        "${NumberUtils.formatDuration(lastTime)}/${NumberUtils.formatDuration(totalSec)}"
+                    } else {
+                        NumberUtils.formatDuration(lastTime)
+                    }
                 }
-                val label = resolveLastWatchLabel(detail, progress)
                 binding.root.context.getString(
-                    // 进度在花絮/预告时不能套「第X集」句式（会拼出「第PV集」）
-                    if (label.isSection) R.string.last_watch_section_ else R.string.last_watch_,
-                    label.text,
+                    R.string.last_watch_,
+                    label.display,
                     progressLabel
                 )
             } else {
@@ -266,11 +271,12 @@ class SeriesDetailContentAdapter(
         }
 
         /**
-         * 还原「上次观看到第 N 集」的集数：last_ep_index 对部分剧集下发的是集标题
-         * （如「寻参」）而非序号，直接填会显示「第寻参集」。优先用 last_ep_id 匹配
-         * 分集列表取集标题（纯数字即序号），匹配不到再退回正片列表位置。
-         * 进度落在花絮/预告栏目（不在正片列表）时改用「栏目名 · 集标题」标签，
-         * 调用方按 isSection 换句式，避免拼出「第PV集」（issue#140）。兜底原文。
+         * 还原「上次观看到 …」的标签：last_ep_index 对部分剧集下发的是集标题
+         * （如「寻参」）而非序号，优先用 last_ep_id 匹配分集列表还原。
+         * 正片 →「第 N 集」；预告（正片 lane 的 section_type=1 条目或预告栏目）→
+         * 「第 N 集预告」（集号取条目标题里的数字，提取不到退回标题原文，不硬套
+         * 「第X集」句式）；花絮等栏目 →「栏目名 · 集标题」（issue#140/145）。
+         * 同时带出该集总时长（秒），供「当前/总时长」拼接；接口未下发时为 0。
          */
         private fun resolveLastWatchLabel(
             detail: EpisodesDetailModel,
@@ -278,25 +284,50 @@ class SeriesDetailContentAdapter(
         ): LastWatchLabel {
             val fallbackIndex = progress?.lastEpIndex.orEmpty()
             val lastEpId = progress?.lastEpId?.takeIf { it > 0L }
-                ?: return LastWatchLabel(fallbackIndex, isSection = false)
+                ?: return LastWatchLabel(previewAwareFallback(fallbackIndex), 0L)
             val episodes = detail.episodes.orEmpty()
             val matched = episodes.firstOrNull { it.id == lastEpId }
-            matched?.title?.toIntOrNull()?.let { return LastWatchLabel(it.toString(), false) }
             if (matched != null) {
+                matched.title.toIntOrNull()?.let {
+                    return LastWatchLabel(
+                        display = if (matched.sectionType == 1) "第${it}集预告" else "第${it}集",
+                        totalSec = matched.durationSec()
+                    )
+                }
+                if (matched.sectionType == 1) {
+                    // 预告条目但标题非数字（如「第202话 预告」）：提取数字拼「第N集预告」，
+                    // 提取不到退回标题原文
+                    val number = extractEpisodeNumber(matched.title, matched.longTitle)
+                    val display = number?.let { "第${it}集预告" }
+                        ?: matched.longTitle.ifBlank { matched.title }
+                    return LastWatchLabel(display, matched.durationSec())
+                }
                 // 集标题非数字（如「寻参」）：用正片列表位置还原「第 15 集」
                 val position = episodes.filter { it.sectionType == 0 }
                     .indexOfFirst { it.id == lastEpId }
-                if (position >= 0) return LastWatchLabel((position + 1).toString(), false)
+                if (position >= 0) {
+                    return LastWatchLabel("第${position + 1}集", matched.durationSec())
+                }
             }
             detail.section.orEmpty().forEach { section ->
                 section.episodes.firstOrNull { it.epid == lastEpId }?.let { episode ->
                     val sectionTitle = section.resolveDisplayTitle(binding.root)
+                    if (sectionTitle.contains("预告")) {
+                        val number = extractEpisodeNumber(
+                            episode.title,
+                            episode.bangumi?.longTitle ?: episode.title
+                        )
+                        val display = number?.let { "第${it}集预告" }
+                            ?: episode.bangumi?.longTitle?.takeIf { it.isNotBlank() }
+                            ?: episode.title
+                        return LastWatchLabel(display, episode.durationSec())
+                    }
                     val episodeTitle = episode.bangumi?.longTitle?.takeIf { it.isNotBlank() }
                         ?: episode.title
-                    return LastWatchLabel("$sectionTitle · $episodeTitle", isSection = true)
+                    return LastWatchLabel("$sectionTitle · $episodeTitle", episode.durationSec())
                 }
             }
-            return LastWatchLabel(fallbackIndex, isSection = false)
+            return LastWatchLabel(previewAwareFallback(fallbackIndex), 0L)
         }
 
         private fun buildSubtitle(detail: EpisodesDetailModel): String {
@@ -1044,11 +1075,47 @@ private fun RecyclerView.visibleFocusableChildren(): List<View> {
     }
 }
 
-/** 「上次看到」显示标签：isSection=true 时调用方换「上次看到 %s」句式，不套「第X集」 */
+/**
+ * 「上次观看到 …」显示标签：[display] 为整体槽位（第X集/第X集预告/栏目·标题），
+ * [totalSec] 为该集总时长（秒，接口未下发时 0），供「当前/总时长」拼接。
+ */
 private data class LastWatchLabel(
-    val text: String,
-    val isSection: Boolean
+    val display: String,
+    val totalSec: Long
 )
+
+/** last_ep_index 兜底：纯数字（序号）才包「第X集」壳；下发集标题/完整文案时保持原文 */
+internal fun previewAwareFallback(rawIndex: String): String {
+    val trimmed = rawIndex.trim()
+    return if (trimmed.toIntOrNull() != null) {
+        "第${trimmed}集"
+    } else {
+        trimmed
+    }
+}
+
+/**
+ * 从预告条目标题提取对应正片集号：标题纯数字（实测预告条目 title=集号，如「202」）
+ * 优先，其次「第N集/话」形态。提取不到返回 null（调用方退回标题原文）。
+ */
+internal fun extractEpisodeNumber(vararg texts: String): Int? {
+    for (text in texts) {
+        val trimmed = text.trim()
+        trimmed.toIntOrNull()?.let { return it }
+    }
+    for (text in texts) {
+        val match = Regex("第(\\d+)[集话]").find(text) ?: continue
+        match.groupValues[1].toIntOrNull()?.let { return it }
+    }
+    return null
+}
+
+/** 正片分集总时长（秒）：pgc/view/web/season 的 episodes 下发 duration 毫秒 */
+internal fun EpisodeModel.durationSec(): Long = duration.takeIf { it > 0L }?.div(1000L) ?: 0L
+
+/** 花絮/预告栏目条目总时长（秒）：season/section 接口下发 duration 毫秒（实测） */
+internal fun com.mytvb.model.video.VideoModel.durationSec(): Long =
+    duration.takeIf { it > 0L }?.div(1000L) ?: 0L
 
 /**
  * 把 [index] 条目顶到横向选集列表可视区最左（「当前正在看的集排第一个」）。

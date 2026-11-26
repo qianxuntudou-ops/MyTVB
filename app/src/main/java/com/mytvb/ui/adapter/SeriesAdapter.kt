@@ -213,8 +213,12 @@ class SeriesAdapter(
         }
 
         private fun buildSubtitle(item: SeriesModel): String {
-            return item.progress.takeIf { it.isNotBlank() }
-                ?: item.newEp?.indexShow?.takeIf { it.isNotBlank() }
+            // progress 有值时以它为准（已看完/解析失败原样展示），只有无进度才落 indexShow 等兜底
+            val progress = item.progress
+            if (progress.isNotBlank()) {
+                return item.progressWithPercent() ?: progress
+            }
+            return item.newEp?.indexShow?.takeIf { it.isNotBlank() }
                 ?: item.firstEpInfo?.indexShow?.takeIf { it.isNotBlank() }
                 ?: item.summary.takeIf { it.isNotBlank() }
                 ?: item.evaluate.takeIf { it.isNotBlank() }

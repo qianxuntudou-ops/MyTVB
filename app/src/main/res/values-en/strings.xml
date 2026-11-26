@@ -276,8 +276,8 @@
     <string name="image_quality">Image quality</string>
     <string name="kichiku">Kichiku</string>
     <string name="knowledge">Knowledge</string>
-    <string name="last_watch_" formatted="false">Last watched EP%s %s</string>
-    <string name="last_watch_section_" formatted="false">Last watched %s %s</string>
+    <!-- Progress label fills the whole slot (EPx / EPx preview / section·title), unified wording (issue#145) -->
+    <string name="last_watch_" formatted="false">Last watched %s %s</string>
     <string name="later_watch">Watch later</string>
     <string name="later_watch_added">Added to Watch later</string>
     <string name="later_watch_removed">Removed from Watch later</string>
