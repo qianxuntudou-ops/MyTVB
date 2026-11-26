@@ -294,6 +294,10 @@
     <string name="cctv_native_live">直播極速模式</string>
     <string name="cctv_native_vod">影視極速模式</string>
     <string name="cctv_quality_auto">自動</string>
+    <string name="cctv_quality_best">超高畫質</string>
+    <string name="cctv_quality_high">高畫質</string>
+    <string name="cctv_quality_medium">標準畫質</string>
+    <string name="cctv_quality_low">流暢</string>
     <string name="cast_receive">手機投屏</string>
     <string name="cast_device_name">投屏裝置名稱</string>
     <string name="cast_device_name_hint">手機B站App投屏清單裡顯示為「我的小電視」+你填的區分名</string>

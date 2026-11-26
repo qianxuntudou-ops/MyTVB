@@ -138,8 +138,11 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
     private var videoQualityData: String? = null
     /** 已自动应用最高画质的频道 URL（避免重复执行）。 */
     private var lastQualityAppliedUrl: String? = null
-    /** CCTV 画质 Provider（写死 4 档，createLivePlayer 的 br 参数来源）。 */
-    private val cctvQualityProvider = CctvQualityProvider { playCurrent() }
+    /**
+     * CCTV 画质 Provider（4 档，createLivePlayer 的 br 参数/原生 vdn 的 b= 窗口来源）。
+     * by lazy：Activity 字段初始化器在 attach() 之前执行，此时 resources 尚不可用。
+     */
+    private val cctvQualityProvider by lazy { CctvQualityProvider(resources) { playCurrent() } }
     /** 两次返回退出计时（对标 PlayerActivity.setupBackHandler）。 */
     private var exitTime: Long = 0
     private val exitInterval = 2000L
@@ -382,6 +385,10 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
             stallWatchChannelUrl = vod.url
             stallRecoveryCount = 0
             nativeErrorCount = 0
+            // 自动降档只作用于发生卡顿的那个频道：换台回到用户手选档（未手选=最高档），
+            // 否则某个台卡顿降档后，后续切到的所有频道都会被拖在低档（issue#132）
+            cctvQualityProvider.restoreUserChoiceOnChannelSwitch()
+            AppLog.i(TAG, "playCurrent: 换台恢复画质档 ${cctvQualityProvider.current.label}")
         }
         // CCTV 直播频道（tv.cctv.com/live/）：优先原生直拉流（vdn 解析 + H5e 原生解密 +
         // ExoPlayer 播放，issue#106 阶段二——WebView 内 JS 解密跟不上是盒子卡顿/先声后画的根因）；
@@ -715,6 +722,21 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
             initializationDurationMs: Long
         ) {
             AppLog.i(TAG, "nativePlayer 解码器=$decoderName")
+        }
+
+        /**
+         * 实际解码尺寸（issue#132 画质核对）：频道间变体表存在"高码率档=低清流别名"的假档，
+         * master 声明的 RESOLUTION 不可信，只有解码器拿到的尺寸才是真实画质。
+         */
+        override fun onVideoSizeChanged(
+            eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+            videoSize: androidx.media3.common.VideoSize
+        ) {
+            AppLog.i(
+                TAG,
+                "nativePlayer 视频尺寸 ${videoSize.width}x${videoSize.height} " +
+                    "par=${videoSize.pixelWidthHeightRatio}"
+            )
         }
     }
 
@@ -1255,9 +1277,12 @@ $scriptTags
         ) { index ->
             val item = items.getOrNull(index) ?: return@show
             val switched = provider.switchTo(item) { AppLog.i(TAG, "画质切换：${item.name}") }
-            if (switched && provider === cctvQualityProvider && item.name != null) {
-                // CCTV 档位持久化：下次进直播（任意频道）沿用用户手选档
-                appSettings.putStringBlocking(KEY_CCTV_LIVE_QUALITY, item.name!!)
+            if (provider === cctvQualityProvider) {
+                // CCTV 档位持久化：下次进直播（任意频道）沿用用户手选档；
+                // 存稳定 key（label）而非显示文案，避免切换语言后 restore 失配（issue#132）
+                cctvQualityProvider.storageKeyOf(item)?.let {
+                    appSettings.putStringBlocking(KEY_CCTV_LIVE_QUALITY, it)
+                }
             }
             if (!switched) {
                 AppLog.w(TAG, "画质切换：${item.name} 无效或与当前相同")

@@ -1,31 +1,42 @@
 package com.mytvb.feature.cctv
 
+import androidx.annotation.StringRes
+import com.mytvb.R
+
 /**
  * CCTV 直播画质档。
  *
  * 官方新版 liveplayer.js 已忽略 createLivePlayer 的 br 参数（2026-10 MuMu 实测：br=1080 与
  * br=360 拉到的都是同一条 720p 流）。真实机制：vdn 接口只下发一条 master 清单 URL（形如
  * `.../index.m3u8?b=200-2100`），CDN 按该 `b=` 码率窗口(kbps)过滤 master 里的变体
- * （BANDWIDTH 落窗才保留；窗口为空时顶格返回最高档，不会失败）。因此切画质 = 改写 master
+ * （BANDWIDTH 落窗才保留；窗口为空时返回全量变体）。因此切画质 = 改写 master
  * 请求的 `b=` 窗口，让清单只含目标档变体，MSE 播放器自然锁档。
  *
- * 各档窗口经 cctv1/cctv13 实测标定（CDN 变体为 1800k(720p)/1350k(576p)/900k(480p)/600k(360p)；
- * master 里另有声明 1920x1080/3200k 的 `_pd` 变体，但 ffmpeg 实测三分片（cctv1×2 时刻、
- * cctvchild）全部 640x360——**假 1080P 占位轨**，1080P 档窗口不得命中它，须顶格锁 1800k=720p，
- * 这也是当前 vdn 源可得的最高真实画质）。
- * 全部变体均为 H.264（分片 SPS type7 实测）——vdn 源无 HEVC/AV1 可选。
+ * 各档窗口经 cctv1/cctv13 实测标定（CDN 变体为 1800k/1350k/900k/600k）。
+ *
+ * 2026-11-26 实测补充（issue#132）：**不同频道的变体真实分辨率并不一致**，且存在假档——
+ * - 央3/央6/央8 的 vdn 原始窗口只有 `b=200-1200`（服务端只配两档），其 `td(1800k/1280x720)`
+ *   与 `hd(900k/854x480)` 返回的同一分片字节数完全相同，即 720P 只是 480P 流的别名；
+ * - 央1/央2/央4/央7/央9-17 的 `pd(3200k/1920x1080)` 分片与 600k 分片等长（实为 360P），
+ *   只有 CCTV-5 的 pd 是真 1080P（分片 1.5MB vs 720P 0.8MB），但 3200k 不在 P1080 窗口内
+ *   会被过滤。
+ * 因此档位文案（[displayNameRes]）统一改为相对档位「超清/高清/标清/流畅」，
+ * 不再对具体分辨率作承诺；[label] 仅作日志与持久化稳定键（沿用历史值，兼容旧存储）。
  */
 enum class CctvLiveQuality(
+    /** 稳定键：日志与持久化（跨语言/跨版本不变，沿用历史值"1080P"等以兼容旧存储）。 */
     val label: String,
+    /** 菜单显示文案（本地化、相对档位；源端分辨率逐频道变化，不对具体分辨率作承诺）。 */
+    @StringRes val displayNameRes: Int,
     /** master 清单请求的 `b=` 码率窗口（kbps 低-高），窗口内恰含本档唯一变体。 */
     val bRange: String,
-    /** [com.mytvb.feature.marmot.domain.HzItem.level] 显示排序用数值。 */
+    /** [com.mytvb.feature.marmot.domain.HzItem.level] 档位匹配与显示排序用数值。 */
     val level: Int
 ) {
-    P1080("1080P", "1800-3000", 1080),
-    P720("720P", "1400-2100", 720),
-    P540("540P", "1200-1400", 540),
-    P360("360P", "200-600", 360);
+    P1080("1080P", R.string.cctv_quality_best, "1800-3000", 1080),
+    P720("720P", R.string.cctv_quality_high, "1400-2100", 720),
+    P540("540P", R.string.cctv_quality_medium, "1200-1400", 540),
+    P360("360P", R.string.cctv_quality_low, "200-600", 360);
 
     fun nextLower(): CctvLiveQuality? = entries.getOrNull(entries.indexOf(this) + 1)
 }

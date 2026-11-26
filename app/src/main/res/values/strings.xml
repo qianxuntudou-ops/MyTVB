@@ -361,6 +361,12 @@
     <string name="cctv_vod">CCTV影视</string>
     <string name="hongguo">红果短剧</string>
     <string name="cctv_quality_auto">自动</string>
+    <!-- CCTV 直播画质档：源端各频道/各 CDN 的真实分辨率不同（部分频道最高只有 480P），
+         档位按相对高低展示，不对具体分辨率作承诺（issue#132） -->
+    <string name="cctv_quality_best">超清</string>
+    <string name="cctv_quality_high">高清</string>
+    <string name="cctv_quality_medium">标清</string>
+    <string name="cctv_quality_low">流畅</string>
     <string name="cast_receive">手机投屏</string>
     <string name="cast_device_name">投屏设备名称</string>
     <string name="cast_device_name_hint">手机B站App投屏列表里显示为「我的小电视」+你填的区分名</string>

@@ -294,6 +294,10 @@
     <string name="cctv_native_live">Live turbo mode</string>
     <string name="cctv_native_vod">VOD turbo mode</string>
     <string name="cctv_quality_auto">Auto</string>
+    <string name="cctv_quality_best">Super HD</string>
+    <string name="cctv_quality_high">High</string>
+    <string name="cctv_quality_medium">Standard</string>
+    <string name="cctv_quality_low">Smooth</string>
     <string name="cast_receive">Phone casting</string>
     <string name="cast_device_name">Cast device name</string>
     <string name="cast_device_name_hint">Shown in the bilibili app as 我的小电视 plus your suffix</string>
