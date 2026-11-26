@@ -287,7 +287,13 @@
     <string name="liked_">Liked</string>
     <string name="live">Live</string>
     <string name="live_entry">Bilibili Live</string>
-    <string name="home_personal_tabs">History, watch later and favorites on home</string>
+    <string name="home_tabs_display">Home tabs</string>
+    <string name="home_tabs_dialog_title">Home tabs</string>
+    <string name="home_tabs_dialog_hint">Up/Down to select · OK toggles visibility · long-press then Up/Down to reorder (touch: long-press to drag)</string>
+    <string name="home_tabs_drag_hint">Reordering: Up/Down to move · OK to drop</string>
+    <string name="home_tabs_state_hidden">Hidden</string>
+    <string name="home_tabs_keep_one">Keep at least one tab</string>
+    <string name="home_tabs_summary">%1$d of %2$d shown</string>
     <string name="edge_tab_switch">Switch tabs at card edge</string>
     <string name="exit_double_confirm">Press back twice to exit</string>
     <string name="cctv_live">CCTV Live</string>
@@ -694,7 +700,7 @@
     <string name="triple_action_success">Triple done!</string>
     <!-- Control bar button order (issue#144 suggestion) -->
     <string name="control_bar_order_title">Control bar button order</string>
-    <string name="control_bar_order_hint_normal">D-pad up/down to select, OK to start moving; long-press and drag on touch screen</string>
+    <string name="control_bar_order_hint_normal">D-pad up/down to select, long-press OK to move; long-press and drag on touch screen</string>
     <string name="control_bar_order_hint_moving">D-pad up/down to move, press OK or Back to finish</string>
     <string name="control_bar_order_arrow">↕</string>
     <string name="control_bar_order_reset">Reset to default order</string>

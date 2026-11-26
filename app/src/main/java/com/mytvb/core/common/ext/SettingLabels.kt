@@ -45,11 +45,15 @@ private fun settingLabelRes(stored: String): Int = when (stored) {
     "蓝色" -> R.string.setting_value_blue
     "紫色" -> R.string.setting_value_purple
     "红色" -> R.string.setting_value_red
-    // 默认启动页面
+    // 默认启动页面（与首页页签可选项一致）
     "推荐" -> R.string.recommend
     "热门" -> R.string.hot
+    "历史" -> R.string.history
+    "稍后观看" -> R.string.later_watch
     "番剧" -> R.string.animation
     "影视" -> R.string.film_and_television
+    "收藏" -> R.string.collection
+    // 历史遗留值（旧版「动态」选项，已不是首页页签）
     "动态" -> R.string.dynamic
     // 数据来源（首页推荐/热门）
     "APP端" -> R.string.setting_value_source_app

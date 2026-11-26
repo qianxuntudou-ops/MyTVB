@@ -73,12 +73,8 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler, Secon
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val t0 = SystemClock.elapsedRealtime()
         super.onViewCreated(view, savedInstanceState)
-        // 「首页个人页签」开关（默认开）：开启时历史/稍后观看/收藏并入首页 tab
-        val initialSpecs = if (HomeFragmentStateAdapter.personalTabsEnabled(appSettings)) {
-            HomeFragmentStateAdapter.PERSONAL_SPECS
-        } else {
-            HomeFragmentStateAdapter.DEFAULT_SPECS
-        }
+        // 首页页签按用户配置（显示/隐藏 + 排序）构建，见 HomeTabPrefs
+        val initialSpecs = HomeTabPrefs.loadSpecs()
         adapter = HomeFragmentStateAdapter(childFragmentManager, viewLifecycleOwner.lifecycle, initialSpecs)
         binding.viewPager.adapter = adapter
         // 冷启动先按需创建（只建当前页，不拖慢首帧），首帧后再保留全部 tab 页：
@@ -138,7 +134,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler, Secon
 
         // 会话跳变（登录/登出）同步刷新并入首页的个人页（历史/稍后观看/收藏）：
         // ViewPager 内非当前页 isVisible=false 收不到子页自身订阅，宿主遍历兜底
-        // （同 MeFragment 的会话刷新逻辑）；开关关闭时没有 MeTabPage 子页，转型自然空跑
+        // （同 MeFragment 的会话刷新逻辑）；个人页被「首页页签」隐藏时没有 MeTabPage 子页，转型自然空跑
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
@@ -176,26 +172,37 @@ class HomeFragment : Fragment(), MainTabFocusTarget, OnBackPressedHandler, Secon
         return getHomeDefaultStartPageIndex(
             maxIndex = adapter.itemCount - 1,
             defaultIndex = 0,
-            // 番剧/影视的实际位置随「首页个人页签」开关变化，按当前 tab 配置取
-            animationIndex = specPositionOf(R.string.animation, fallback = 2),
-            cinemaIndex = specPositionOf(R.string.film_and_television, fallback = 3)
+            positionOfLabel = ::homeTabPositionOfLabel
         )
     }
 
-    private fun specPositionOf(titleRes: Int, fallback: Int): Int {
-        val index = adapter.specs.indexOfFirst { it.titleRes == titleRes }
-        return if (index >= 0) index else fallback
+    /**
+     * 「默认首页」存储的中文标签 → 当前页签配置里的位置。
+     * 返回 -1 表示该页签被用户在「首页页签」里隐藏（或历史遗留值），由调用方回退首个可见页签。
+     */
+    private fun homeTabPositionOfLabel(label: String): Int {
+        val titleRes = when (label) {
+            "推荐" -> R.string.recommend
+            "热门" -> R.string.hot
+            "历史" -> R.string.history
+            "稍后观看" -> R.string.later_watch
+            "番剧" -> R.string.animation
+            "影视" -> R.string.film_and_television
+            "收藏" -> R.string.collection
+            else -> return -1
+        }
+        return adapter.specs.indexOfFirst { it.titleRes == titleRes }
     }
 
     /**
-     * 设置「首页个人页签」开关切换时由 MainActivity 调用（立即生效）：
-     * 换 tab 配置并把当前停留页重定位到同 itemId 的新位置（配置里找不到则回推荐）。
-     * view 尚未创建时跳过——下次 onViewCreated 会按开关读初始配置。
+     * 设置「首页页签」确认后由 MainActivity 调用（立即生效）：
+     * 重读配置、换 tab 表，并把当前停留页重定位到同 itemId 的新位置（被隐藏则回首个可见页）。
+     * view 尚未创建时跳过——下次 onViewCreated 会按配置读初始页签。
      */
-    fun applyPersonalTabsEnabled(enabled: Boolean) {
+    fun applyHomeTabsConfig() {
         val currentBinding = _binding ?: return
-        val target = if (enabled) HomeFragmentStateAdapter.PERSONAL_SPECS else HomeFragmentStateAdapter.DEFAULT_SPECS
-        if (adapter.specs == target) return
+        val target = HomeTabPrefs.loadSpecs()
+        if (target.isEmpty() || adapter.specs == target) return
         val currentItemId = adapter.getItemId(currentBinding.viewPager.currentItem)
         adapter.updateSpecs(target)
         val newPosition = target.indexOfFirst { it.itemId == currentItemId }

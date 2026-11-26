@@ -60,33 +60,25 @@ fun isVipColorfulDanmakuAllowed(): Boolean {
     return getToggleSetting("dm_allow_vip_colorful_dm", true)
 }
 
+/**
+ * 「默认首页」设置 → 首页 ViewPager 起始索引。
+ *
+ * 存储值仍是中文标签（"推荐"/"热门"/"历史"/"稍后观看"/"番剧"/"影视"/"收藏"，与设置项
+ * 落盘格式一致），实际位置由 [positionOfLabel] 按当前「首页页签」配置解析——
+ * 页签顺序可由用户调整、页签也可能被隐藏，不能再按固定索引映射。
+ * 标签无法解析（历史遗留值/页签已隐藏）时回退第一个可见页签（索引 0）。
+ */
 fun getHomeDefaultStartPageIndex(
     maxIndex: Int,
-    defaultIndex: Int = 1,
-    animationIndex: Int = 2,
-    cinemaIndex: Int = 3
+    defaultIndex: Int = 0,
+    positionOfLabel: (String) -> Int = { -1 }
 ): Int {
     val safeMaxIndex = maxIndex.coerceAtLeast(0)
-    val clampedDefault = defaultIndex.coerceIn(0, safeMaxIndex)
-    val mappedFromLabel = when (appSettings.getCachedString("default_start_page")?.trim()) {
-        "推荐" -> 0
-        "热门" -> 1
-        // 番剧/影视的实际位置随「首页个人页签」开关变化（默认 2/3，开启时 4/5），
-        // 由调用方按当前 tab 配置传入
-        "番剧" -> animationIndex
-        "影视" -> cinemaIndex
-        "动态" -> clampedDefault
-        else -> null
-    }
-    if (mappedFromLabel != null) {
-        val normalized = mappedFromLabel.coerceIn(0, safeMaxIndex)
-        if (appSettings.getCachedInt("defaultStartPage", Int.MIN_VALUE) != normalized) {
-            appSettings.putIntBlocking("defaultStartPage", normalized)
-        }
-        return normalized
-    }
-    return appSettings.getCachedInt("defaultStartPage", clampedDefault)
-        .coerceIn(0, safeMaxIndex)
+    val fallback = defaultIndex.coerceIn(0, safeMaxIndex)
+    val label = appSettings.getCachedString("default_start_page")?.trim()
+    if (label.isNullOrEmpty()) return fallback
+    val position = positionOfLabel(label)
+    return if (position >= 0) position.coerceIn(0, safeMaxIndex) else fallback
 }
 
 private fun getToggleSetting(key: String, defaultValue: Boolean): Boolean {

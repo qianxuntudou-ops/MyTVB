@@ -80,8 +80,16 @@ object CategoryTabsDialog {
             onConfirmed()
         }
 
+        // 注册为 Toast 高层宿主（同 HomeTabsDialog）：「至少保留一个分区」提示才不会被弹窗压住
+        var toastHost: ViewGroup? = null
         dialog.setOnShowListener {
+            toastHost = dialog.window?.decorView as? ViewGroup
+            AppToast.attachHost(toastHost)
             binding.recyclerView.post { adapter.requestInitialFocus(binding.recyclerView) }
+        }
+        dialog.setOnDismissListener {
+            AppToast.detachHost(toastHost)
+            toastHost = null
         }
         // 上下键显式接管：列表内移行；底行 DOWN 落到「全选」；按钮 UP 回列表
         dialog.setOnKeyListener { _, keyCode, event ->

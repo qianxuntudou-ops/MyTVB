@@ -352,7 +352,13 @@
     <string name="liked_">已点赞</string>
     <string name="live">直播</string>
     <string name="live_entry">B站直播入口</string>
-    <string name="home_personal_tabs">首页显示历史、稍后观看、收藏</string>
+    <string name="home_tabs_display">首页页签</string>
+    <string name="home_tabs_dialog_title">首页页签</string>
+    <string name="home_tabs_dialog_hint">上下键选择 · 单击切换显示 · 长按后上下键调整顺序（触屏可长按拖动）</string>
+    <string name="home_tabs_drag_hint">调整中：上下键移动 · 单击放下</string>
+    <string name="home_tabs_state_hidden">已隐藏</string>
+    <string name="home_tabs_keep_one">至少保留一个页签</string>
+    <string name="home_tabs_summary">显示 %1$d/%2$d</string>
     <string name="edge_tab_switch">卡片边缘切换标签</string>
     <string name="exit_double_confirm">退出二次确认</string>
     <string name="cctv_live">CCTV直播</string>
@@ -839,7 +845,7 @@
     <string name="triple_action_success">三连成功</string>
     <!-- 控制条按钮排序（issue#144 建议） -->
     <string name="control_bar_order_title">控制条按钮排序</string>
-    <string name="control_bar_order_hint_normal">上下键选择按钮，按 OK 进入移动；触屏长按可拖动排序</string>
+    <string name="control_bar_order_hint_normal">上下键选择按钮，长按 OK 进入移动；触屏长按可拖动排序</string>
     <string name="control_bar_order_hint_moving">上下键移动位置，按 OK 或返回键完成</string>
     <string name="control_bar_order_arrow">↕</string>
     <string name="control_bar_order_reset">恢复默认排序</string>

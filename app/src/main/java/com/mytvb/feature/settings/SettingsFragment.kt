@@ -36,7 +36,8 @@ import com.mytvb.feature.cast.NvaDevice
 import com.mytvb.feature.category.CategoryTabPrefs
 import com.mytvb.feature.category.CategoryTabsDialog
 import com.mytvb.feature.home.FeedSourceSetting
-import com.mytvb.feature.home.HomeFragmentStateAdapter
+import com.mytvb.feature.home.HomeTabPrefs
+import com.mytvb.feature.home.HomeTabsDialog
 import com.mytvb.feature.hongguo.net.HongguoNetProfiles
 import com.mytvb.feature.hongguo.net.HongguoVersionProfiles
 import com.mytvb.model.SettingModel
@@ -118,9 +119,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_IMAGE_QUALITY = "image_quality"
         private const val KEY_THEME = "theme"
         private const val KEY_LIVE_ENTRY = "live_entry"
-        // 首页个人页签开关（与 HomeFragmentStateAdapter.PERSONAL_TABS_KEY 同键，存储值"开/关"），
-        // 默认开：历史/稍后观看/收藏并入首页 tab，隐藏侧栏「我的」入口
-        private const val KEY_HOME_PERSONAL_TABS = HomeFragmentStateAdapter.PERSONAL_TABS_KEY
+        // 首页页签（动作型条目）：弹窗里调整显示/隐藏与顺序，落 HomeTabPrefs.KEY
+        private const val KEY_HOME_TABS = "action_home_tabs"
         // 与 EdgeTabSwitch 同键（存储值"开/关"），默认开：卡片左右移到列表边缘切换顶部 tab
         private const val KEY_EDGE_TAB_SWITCH = EdgeTabSwitch.KEY
         // 与 ExitDoubleConfirm.KEY 同键（存储值"开/关"），默认开：双击 BACK 才退出播放/应用。
@@ -251,7 +251,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
          */
         private val TEEN_TIME_OPTIONS = arrayOf("0", "1") + (10..120 step 10).map { it.toString() }
 
-        private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视", "动态")
+        // 默认首页：与「首页页签」可选项一致（位置按用户当前页签顺序动态解析，
+        // 在本页签被隐藏时回退第一个可见页签）。原「动态」不是首页页签，已移除。
+        private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "历史", "稍后观看", "番剧", "影视", "收藏")
 
         /** 界面语言选项：tag 空串=跟随系统；语言名固定显示各自语言原文（业界惯例，不随 UI 语言翻译）。 */
         private val UI_LANGUAGE_TAGS = arrayOf("", "zh-CN", "zh-TW", "en")
@@ -385,7 +387,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_DEFAULT_START_PAGE, R.string.default_start_page, "热门"),
                 // 动态页左栏 UP 主排序（issue#142）：默认=关注顺序，最常访问=按访问频次
                 stored(KEY_DYNAMIC_UP_SORT, R.string.dynamic_up_sort, "默认"),
-                stored(KEY_HOME_PERSONAL_TABS, R.string.home_personal_tabs, "开"),
+                // 首页页签：显示哪些、什么顺序（历史/稍后观看/收藏固定为候选页签）
+                plain(
+                    KEY_HOME_TABS,
+                    R.string.home_tabs_display,
+                    HomeTabPrefs.summaryText(requireContext())
+                ),
                 // 打开方式：点卡片直接播放 / 先进详情页
                 stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
                 // 分类页顶部分区 tab 按需显示（issue#117），默认全部
@@ -840,10 +847,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyLiveEntryVisibility()
             }
-            KEY_HOME_PERSONAL_TABS -> toggle(key) {
-                appSettings.putStringBlocking(key, it)
-                (activity as? MainActivity)?.applyMeEntryVisibility()
-            }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
             KEY_EXIT_DOUBLE_CONFIRM -> toggle(key)
             KEY_PLAYER_SHORTCUTS -> ShortcutManageDialog(requireContext()) {
@@ -879,6 +882,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_CAST_DEVICE_NAME -> showCastDeviceNameDialog()
             KEY_SHOW_VIDEO_DETAIL -> toggle(key)
             KEY_CATEGORY_TABS -> showCategoryTabsDialog()
+            KEY_HOME_TABS -> showHomeTabsDialog()
             KEY_DOUYIN_MODE -> toggle(key)
             KEY_GIVE_COIN_NUMBER -> showCommonChoiceDialog(key, arrayOf("1", "2"))
             KEY_COIN_ALSO_LIKE -> toggle(key)
@@ -1507,7 +1511,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_LIVE_ENTRY)
         // 动态页 UP 主排序（issue#142）：恢复显示已存值（默认/最常访问）
         applyStored(KEY_DYNAMIC_UP_SORT)
-        applyStored(KEY_HOME_PERSONAL_TABS)
         applyStored(KEY_EDGE_TAB_SWITCH)
         applyStored(KEY_EXIT_DOUBLE_CONFIRM)
         applyStored(KEY_CCTV_LIVE_ENTRY)
@@ -1700,9 +1703,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             updateStored(key, value)
             appSettings.putStringBlocking(key, value)
             when (key) {
-                KEY_DEFAULT_START_PAGE -> {
-                    appSettings.putIntBlocking("defaultStartPage", HOME_START_PAGE_OPTIONS.indexOf(value).coerceAtLeast(0))
-                }
+                // 默认首页只存标签（键 default_start_page），位置由首页按当前页签配置解析，
+                // 不再缓存索引（页签可排序/隐藏，索引会错位）
                 KEY_IMAGE_QUALITY -> {
                     val qualityLevel = when (value) {
                         "低尺寸" -> 0
@@ -2251,6 +2253,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 CategoryTabPrefs.summaryText(requireContext(), CategoryTabPrefs.allCategories(requireContext()))
             )
         }
+    }
+
+    /** 首页页签弹窗：确认后落盘，刷新条目 info 并即时应用到首页 tab。 */
+    private fun showHomeTabsDialog() {
+        HomeTabsDialog(requireContext()) {
+            updateInfo(KEY_HOME_TABS, HomeTabPrefs.summaryText(requireContext()))
+            (activity as? MainActivity)?.applyHomeTabsConfig()
+        }.show()
     }
 
     /** 投屏设备名输入弹窗：保存后立即重播 SSDP 通知，手机投屏列表无需重启即更新。 */
