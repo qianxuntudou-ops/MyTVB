@@ -35,6 +35,12 @@ fun ViewPager2.retainAllPagesAfterFirstLayout() {
                 viewTreeObserver.removeOnPreDrawListener(this)
             }
             offscreenPageLimit = retainedPageLimit()
+            // 动态放大 offscreenPageLimit 会让 ViewPager2 重排页面容器：冷启动直接落在
+            // 非首项页时（如「默认首页」= 热门/历史），当前页内容可能停在未布局状态、
+            // 整页空白，切走再切回才恢复。补一次无动画重选，强制当前页重新 bind/布局。
+            if (currentItem != 0) {
+                post { setCurrentItem(currentItem, false) }
+            }
             return true
         }
     })
