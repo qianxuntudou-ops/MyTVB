@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import com.mytvb.core.common.log.AppLog
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -107,12 +108,12 @@ class HongguoAccount(private val session: HongguoSession) {
         val data = JSONObject(text).optJSONObject("data") ?: return
         val newStatus = parseQrStatus(data)
         if (newStatus != ticket.status) {
-            Log.d("Hongguo", "qr poll status ${ticket.status}->$newStatus raw=${data.opt("status")} keys=${data.keys().asSequence().joinToString(",")}")
+            diag("qr poll status ${ticket.status}->$newStatus raw=${data.opt("status")} keys=${data.keys().asSequence().joinToString(",")}")
         }
         if (newStatus == 3) {
             ticket.redirectUrl = data.optString("redirect_url")
             if (ticket.redirectUrl.isEmpty()) {
-                Log.w("Hongguo", "qr confirmed but redirect_url empty, resp=${text.take(300)}")
+                diagWarn("qr confirmed but redirect_url empty, resp=${text.take(300)}")
             }
         }
         ticket.status = newStatus
@@ -128,7 +129,7 @@ class HongguoAccount(private val session: HongguoSession) {
                 "confirmed", "confirm" -> 3
                 "canceled", "cancelled" -> 4
                 "expired" -> 5
-                else -> 1.also { Log.w("Hongguo", "qr status unknown raw=$raw") }
+                else -> 1.also { diagWarn("qr status unknown raw=$raw") }
             }
             else -> 1
         }
@@ -138,7 +139,7 @@ class HongguoAccount(private val session: HongguoSession) {
     fun finishQrLogin(ticket: QrTicket): Profile {
         var url = ticket.redirectUrl
         if (url.isEmpty()) throw AccountException("缺少确认跳转地址")
-        Log.d("Hongguo", "qr finish start host=${url.toHttpUrlOrNull()?.host}")
+        diag("qr finish start host=${url.toHttpUrlOrNull()?.host}")
         for (hop in 0 until 5) {
             val parsed = url.toHttpUrlOrNull() ?: throw AccountException("跳转地址无效")
             if (!parsed.isHttps || !(parsed.host == "hongguoduanju.com" || parsed.host.endsWith(".hongguoduanju.com"))) {
@@ -153,11 +154,11 @@ class HongguoAccount(private val session: HongguoSession) {
             val location = resp.header("Location")
             resp.close()
             if (location.isNullOrEmpty()) break
-            Log.d("Hongguo", "qr finish hop=$hop -> ${location.toHttpUrlOrNull()?.host}${location.toHttpUrlOrNull()?.encodedPath}")
+            diag("qr finish hop=$hop -> ${location.toHttpUrlOrNull()?.host}${location.toHttpUrlOrNull()?.encodedPath}")
             url = location
         }
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
-        Log.d("Hongguo", "qr finish sidGot=${sid.isNotEmpty()} name=${cookieValue("sessionid_ss").isNotEmpty()} host=${cookieJar.loginHost}")
+        diag("qr finish sidGot=${sid.isNotEmpty()} name=${cookieValue("sessionid_ss").isNotEmpty()} host=${cookieJar.loginHost}")
         if (sid.isEmpty()) throw AccountException("扫码未取得会话票据", "NO_SESSION")
         // 昵称权威来源 = 网页 SSR（passport info/v2 的账号级资料常是未初始化默认值「用户+数字」）
         var ssrName = ""
@@ -173,7 +174,7 @@ class HongguoAccount(private val session: HongguoSession) {
             ssrAvatar = Regex("pc-profile__avatar-[A-Za-z0-9_]+\"><img src=\"([^\"]+)").find(home)?.groupValues?.get(1).orEmpty()
                 .replace("&amp;", "&")   // HTML 实体还原，否则 query 签名参数对不上
                 .replace("http://", "https://")
-            Log.d("Hongguo", "qr profile ssr name=$ssrName avatar=${ssrAvatar.isNotEmpty()} homeLen=${home.length}")
+            diag("qr profile ssr name=$ssrName avatar=${ssrAvatar.isNotEmpty()} homeLen=${home.length}")
         }
         // passport 账号资料：uid 权威；头像仅在真实设置过时采用（mosaic-legacy 是未设置占位）
         val info = http.newCall(
@@ -182,7 +183,7 @@ class HongguoAccount(private val session: HongguoSession) {
                 .header("Referer", "https://hongguoduanju.com/")
                 .build()
         ).execute().use { it.body?.string().orEmpty() }
-        Log.d("Hongguo", "qr finish info len=${info.length}")
+        diag("qr finish info len=${info.length}")
         var uid = ""
         var passportName = ""
         var avatar = ""
@@ -217,6 +218,7 @@ class HongguoAccount(private val session: HongguoSession) {
         val errCode = payload.optJSONObject("data")?.optString("error_code").orEmpty()
         if (message != "success" || (errCode.isNotEmpty() && errCode != "0")) {
             val retry = payload.optJSONObject("data")?.optInt("retry_time", 0) ?: 0
+            diagWarn("send_code rejected message=$message err=$errCode retry=$retry")
             throw AccountException(
                 if (retry > 0) "发送太频繁，${retry}秒后重试" else "验证码发送失败：$message"
             )
@@ -291,6 +293,7 @@ class HongguoAccount(private val session: HongguoSession) {
         val description = data?.optString("description").orEmpty().ifEmpty { payload.optString("description") }
         if (data == null) {
             val message = payload.optString("message")
+            diagWarn("sms_login no data topKeys=${payload.keys().asSequence().joinToString(",")} message=$message")
             throw AccountException(
                 if (message.isEmpty() || message == "success") "账号服务返回的内容不完整，请稍后重试" else message,
                 "NO_DATA"
@@ -298,6 +301,9 @@ class HongguoAccount(private val session: HongguoSession) {
         }
         parseMfaChallenge(payload, data)?.let { throw MfaRequiredException(it) }
         if (errCode.isNotEmpty() && errCode != "0") {
+            // 打 data 键名（不打值）：若服务端实际下发的是安全验证挑战而我们没识别成 MFA，
+            // keys 里会出现 risk_info/verify 相关键名，这是「账号安全问题」假说的直接证据
+            diagWarn("sms_login rejected err=$errCode desc=$description dataKeys=${data.keys().asSequence().joinToString(",")}")
             throw AccountException(
                 description.ifEmpty { "验证失败，请检查验证码或稍后重试" } + "（$errCode）",
                 "LOGIN_REJECTED:$errCode"
@@ -305,6 +311,7 @@ class HongguoAccount(private val session: HongguoSession) {
         }
         val message = payload.optString("message")
         if (message.isNotEmpty() && message != "success") {
+            diagWarn("sms_login verify failed desc=$description dataKeys=${data.keys().asSequence().joinToString(",")}")
             throw AccountException(
                 description.ifEmpty { "验证失败，请检查验证码或稍后重试" },
                 "VERIFY_FAILED"
@@ -315,8 +322,18 @@ class HongguoAccount(private val session: HongguoSession) {
         var avatar = data.optString("avatar_url")
         val sid = cookieValue("sessionid").ifEmpty { cookieValue("sessionid_ss") }
         if (sid.isEmpty()) {
-            Log.w("Hongguo", "sms login no session cookie dataKeys=${data.keys().asSequence().joinToString(",")}")
-            throw AccountException("会话建立失败：服务端未下发登录票据，请重试或改用扫码登录", "NO_SESSION")
+            // 官方 h() 的成功判定是「sessionid cookie 或 X-Tt-Token 二选一」；我们只认 cookie。
+            // 若这里 token 有值而 cookie 没有（token-only 下发形态），日志能一眼辨出，届时再对齐放行链路
+            // （不能简单把 token 并进 loggedIn 判据：passportPost 在被拒响应上也会滚收 token，会造成假登录）
+            diagWarn("sms login no session cookie dataKeys=${data.keys().asSequence().joinToString(",")} tokenLen=${session.accountToken.length}")
+            throw AccountException(
+                if (session.accountToken.isNotEmpty()) {
+                    "服务端仅下发了令牌票据（未发会话 Cookie），暂不支持该形态，请改用扫码登录"
+                } else {
+                    "会话建立失败：服务端未下发登录票据，请重试或改用扫码登录"
+                },
+                "NO_SESSION"
+            )
         }
         // sms_login 的 data 未必带资料（部分账号只回会话）：登录成立后补拉一次权威资料，
         // 失败不影响登录本身
@@ -350,8 +367,10 @@ class HongguoAccount(private val session: HongguoSession) {
         IllegalStateException("该账号需要短信上行二次验证")
 
     /**
-     * 从 sms_login 响应解析 MFA 挑战（对照 O1.j：verify_center_secondary_decision_conf
-     * 对象/字符串双形态 + verify_ways 数组里 verify_way=mobile_up_sms_verify 兜底）。
+     * 从 sms_login 响应解析 MFA 挑战（对照 HGTV 1.3.8.4 C0163h2.j 全链：
+     * verify_center_secondary_decision_conf 对象/字符串双形态（根级/data/verify_center）→
+     * [findDecisionConfDeeply] 兜底递归扫描（键名含 decision_conf 或 risk_info，深度≤3）→
+     * verify_ways 数组里 verify_way=mobile_up_sms_verify（conf 命中但 subtype 不匹配时也扫，官方同款）。
      * 非 MFA 响应返回 null。
      */
     private fun parseMfaChallenge(payload: JSONObject, data: JSONObject): MfaChallenge? {
@@ -369,6 +388,11 @@ class HongguoAccount(private val session: HongguoSession) {
         }
 
         var conf = confOf(payload) ?: confOf(data) ?: confOf(payload.optJSONObject("verify_center"))
+            ?: findDecisionConfDeeply(data)
+        if (conf != null && conf.optString("subtype") != "mobile_up_sms_verify") {
+            // 官方 j() 同款：conf 命中但不是上行验证形态（如纯 risk_info 指纹）时，仍尝试 verify_ways
+            conf = null
+        }
         if (conf == null) {
             // 兜底：verify_ways 数组
             val ways = data.optJSONArray("verify_ways") ?: payload.optJSONArray("verify_ways")
@@ -386,16 +410,19 @@ class HongguoAccount(private val session: HongguoSession) {
             }
         }
         if (conf == null) return null
-        if (conf.optString("subtype") != "mobile_up_sms_verify") return null
         val channelMobile = conf.optString("channel_mobile")
         val smsContent = conf.optString("sms_content")
         if (channelMobile.isEmpty() || smsContent.isEmpty()) return null
         val logId = conf.optString("log_id").ifEmpty {
             conf.optJSONObject("event_params")?.optString("log_id").orEmpty()
+        }.ifEmpty {
+            conf.optJSONObject("extra_params")?.optString("log_id").orEmpty()
         }
         return MfaChallenge(
             encryptUid = conf.optString("encrypt_uid"),
-            smsCodeKey = conf.optString("sms_code_key"),
+            smsCodeKey = conf.optString("sms_code_key").ifEmpty {
+                conf.optJSONObject("biz_params")?.optString("sms_code_key").orEmpty()
+            },
             logId = logId,
             channelMobile = channelMobile,
             smsContent = smsContent,
@@ -620,17 +647,22 @@ class HongguoAccount(private val session: HongguoSession) {
                 .header("Lc", "101")
                 .header("Sdk-Version", "2")
                 .header("X-SS-DP", "8662")
+                .header("X-XS-From-Web", "0")
+                .apply {
+                    // store-region 回传（官方 l() 同款：收到的 Set-Cookie 原样随头回去，服务端就近路由）
+                    cookieJar.value("store-region").takeIf { it.isNotEmpty() }?.let { header("X-Tt-Store-Region", it) }
+                    cookieJar.value("store-region-src").takeIf { it.isNotEmpty() }?.let { header("X-Tt-Store-Region-Src", it) }
+                }
                 .build()
         ).execute().use { resp ->
             // x-tt-token 第二票据（HGTV H0/Y.java case2 同款：响应头 >=99 字符直接收，
             // 每次 passport 响应滚动续期；saveAccount 里只处理 cookie 形态的兜底）
             resp.headers.values("X-Tt-Token").firstOrNull()?.takeIf { it.length >= 99 }?.let {
                 session.accountToken = it
-                Log.d("Hongguo", "passport X-Tt-Token len=${it.length}")
+                diag("passport X-Tt-Token len=${it.length}")
             }
             val body = resp.body?.string().orEmpty()
-            Log.d(
-                "Hongguo",
+            diag(
                 "passport resp path=$path http=${resp.code} len=${body.length} " +
                     "sidGot=${cookieValue("sessionid").isNotEmpty() || cookieValue("sessionid_ss").isNotEmpty()}"
             )
@@ -644,6 +676,22 @@ class HongguoAccount(private val session: HongguoSession) {
     }
 
     // ---- 工具 ----
+
+    /**
+     * 诊断双通道：[Log.d] 在 debug 包 logcat 恒可见（release 被 R8 `-assumenosideeffects`
+     * 连字符串常量一起剥除，issue#139 排查时报告人因此误判「修复没进包」）；[AppLog.d] 在
+     * release 开「日志记录」后进内存缓冲，局域网导出可读。passport/扫码登录的诊断锚点一律走这里。
+     */
+    private fun diag(message: String) {
+        Log.d("Hongguo", message)
+        AppLog.d("Hongguo", message)
+    }
+
+    /** [diag] 的告警级：登录被拒 / 票据缺失等失败分支必打。 */
+    private fun diagWarn(message: String) {
+        Log.w("Hongguo", message)
+        AppLog.w("Hongguo", message)
+    }
 
     /** E.164 或 11 位号 → +86XXXXXXXXXXX。 */
     private fun normalizePhone(phone: String): String {
@@ -675,6 +723,31 @@ class HongguoAccount(private val session: HongguoSession) {
         const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
     }
+}
+
+/**
+ * sms_login 兜底挑战扫描（对照 HGTV 1.3.8.4 C0163h2.e：深度 ≤3 递归找键名含 `decision_conf`
+ * 或等于 `risk_info` 的值，对象/字符串 JSON 双形态）。
+ * 服务端的风控/验证挑战载荷位置不固定（data 直接放、嵌在子对象里、或换 decision_conf 前缀键名），
+ * 只认 verify_center_secondary_decision_conf 单键会漏接，漏接会把挑战当错误显示给用户
+ * （issue#139「账号安全问题」假说的对齐修复）。返回 null = 没扫到。
+ */
+internal fun findDecisionConfDeeply(data: JSONObject, depth: Int = 0): JSONObject? {
+    if (depth > 3) return null
+    for (key in data.keys().asSequence()) {
+        if (key.contains("decision_conf") || key == "risk_info") {
+            data.optJSONObject(key)?.let { return it }
+            val raw = data.optString(key)
+            if (raw.isNotEmpty()) {
+                runCatching { JSONObject(raw) }.getOrNull()?.let { return it }
+            }
+        }
+    }
+    for (key in data.keys().asSequence()) {
+        val child = data.optJSONObject(key) ?: continue
+        findDecisionConfDeeply(child, depth + 1)?.let { return it }
+    }
+    return null
 }
 
 /**
