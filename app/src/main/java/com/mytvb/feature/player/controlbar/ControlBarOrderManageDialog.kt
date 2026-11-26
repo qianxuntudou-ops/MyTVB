@@ -46,6 +46,9 @@ class ControlBarOrderManageDialog(
     /** 触摸拖动中的行位（仅视觉标记，落盘在 clearView）。 */
     private var dragPosition = -1
 
+    /** 短按 OK 的 DOWN 登记位：UP 未进移动态才执行动作（否则长按会先误触发）。 */
+    private var pendingConfirmDownTime = -1L
+
     init {
         DialogWindowFit.overlay(
             this,
@@ -78,21 +81,73 @@ class ControlBarOrderManageDialog(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
-        when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> {
-                moveSelection(-1)
-                return true
+        val isConfirmKey = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+            event.keyCode == KeyEvent.KEYCODE_ENTER ||
+            event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+
+        // 移动态：上下键换位；短按 OK / BACK 放下。UP 全部吞掉——长按松手那次若流入
+        // 行 View 会触发行 tap（选中跳到别处）。
+        if (movingPosition >= 0) {
+            if (event.action == KeyEvent.ACTION_UP) return true
+            if (event.action != KeyEvent.ACTION_DOWN) return false
+            return when {
+                event.keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
+                    moveRow(movingPosition, -1)
+                    true
+                }
+                event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    moveRow(movingPosition, 1)
+                    true
+                }
+                isConfirmKey && event.repeatCount == 0 -> {
+                    exitMoving()
+                    true
+                }
+                event.keyCode == KeyEvent.KEYCODE_BACK -> {
+                    exitMoving()
+                    true
+                }
+                else -> true
             }
-            KeyEvent.KEYCODE_DPAD_DOWN -> {
-                moveSelection(+1)
-                return true
-            }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+        }
+
+        // 短按动作必须落在 UP：DOWN 时就执行的话，长按会先误触发一次（恢复默认确认框）。
+        // DOWN 仅登记，长按（repeat>0 / FLAG_LONG_PRESS）转移动态时作废。
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (isConfirmKey && pendingConfirmDownTime != -1L &&
+                event.downTime == pendingConfirmDownTime
+            ) {
+                pendingConfirmDownTime = -1L
                 confirmSelection()
                 return true
             }
-            KeyEvent.KEYCODE_BACK -> {
+            return super.dispatchKeyEvent(event)
+        }
+        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+        // 长按 OK = 进入移动（与「首页页签」弹窗统一）：短按不再进入，长按由系统 repeat
+        // 事件驱动（View.onLongClick 不响应遥控器长按）。
+        if (isConfirmKey) {
+            if (event.repeatCount > 0 || event.isLongPress) {
+                pendingConfirmDownTime = -1L
+                if (selectedPosition >= 0) {
+                    enterMoving()
+                    return true
+                }
+                return false
+            }
+            pendingConfirmDownTime = event.downTime
+            return true
+        }
+        when {
+            event.keyCode == KeyEvent.KEYCODE_DPAD_UP -> {
+                moveSelection(-1)
+                return true
+            }
+            event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {
+                moveSelection(+1)
+                return true
+            }
+            event.keyCode == KeyEvent.KEYCODE_BACK -> {
                 if (movingPosition >= 0) {
                     exitMoving()
                     return true
@@ -116,7 +171,7 @@ class ControlBarOrderManageDialog(
         scrollToSelection()
     }
 
-    /** OK 键：移动态=结束移动；正常态=「恢复默认排序」钮或进入该行移动态。 */
+    /** OK 短按：「恢复默认排序」钮=确认重置；选中行不再进入移动（改为长按，见 dispatchKeyEvent）。 */
     private fun confirmSelection() {
         if (movingPosition >= 0) {
             exitMoving()
@@ -124,8 +179,13 @@ class ControlBarOrderManageDialog(
         }
         if (selectedPosition < 0) {
             confirmReset()
-            return
         }
+    }
+
+    /** 长按 OK：把当前选中行拿起来（移动态），上下键换位、短按 OK/BACK 放下。 */
+    private fun enterMoving() {
+        if (movingPosition >= 0) return
+        if (selectedPosition !in rows.indices) return
         movingPosition = selectedPosition
         refreshVisual()
         updateHint()
