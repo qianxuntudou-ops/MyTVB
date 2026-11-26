@@ -692,6 +692,9 @@ class DefaultTimeBar @JvmOverloads constructor(
         }
     }
 
+    /** 诊断用：当前自绘播放头位置（未渲染过时为初值 0）。 */
+    internal fun currentPositionMs(): Long = position
+
     fun showScrubber() {
         scrubberAnimator.cancel()
         scrubberAnimator.interpolator = null

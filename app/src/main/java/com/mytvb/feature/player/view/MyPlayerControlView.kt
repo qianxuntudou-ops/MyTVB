@@ -463,6 +463,17 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun enterSeekProgressOnly() {
         controlViewLayoutManager.enterSeekProgressOnly()
+        // 控制栏隐藏期间 progressRunnable 已停（NONE_VISIBLE 会 stopProgressUpdates），
+        // timeBar 位置冻结在收起瞬间：直接显形会先画一帧旧值——本会话一次都没显示过是
+        // 片头(0)，上次快进过则是上次落点，表现为「进度条的头第一帧不在真实进度」。
+        // 显形后立刻按实时进度对齐；renderPosition 有 lastRenderedPositionMs 去重，
+        // 位置本就正确时是 no-op，不会与随后的 seek tick 打架。
+        val frozenMs = if (::timeBar.isInitialized) timeBar.currentPositionMs() else -1L
+        updateProgress()
+        AppLog.d(
+            "SeekHead",
+            "align frozen=${frozenMs}ms aligned=${timeBar.currentPositionMs()}ms real=${player?.currentPosition}ms"
+        )
     }
 
     fun exitSeekProgressOnly() {

@@ -9,6 +9,7 @@ import android.widget.FrameLayout
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.collection.LruCache
 import com.mytvb.R
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.image.ImageLoader
 import com.mytvb.core.ui.image.SimpleDisposable
 import com.mytvb.model.player.VideoSnapshotData
@@ -68,8 +69,22 @@ class TimelineThumbPreviewView @JvmOverloads constructor(
         }
         latestPositionMs = positionMs
         positionToTrack(trackBounds, positionMs, durationMs)
-        // 帧未就绪时先保持 INVISIBLE（黑底空窗不露脸），帧到达后再转 VISIBLE
-        visibility = if (previewImage.drawable != null) View.VISIBLE else View.INVISIBLE
+        // 旧帧可能是上一次快进落点的画面（hideAfter 500ms 内连按不会清），不能先露脸：
+        // 只有当前已显示的帧就是目标帧才保持可见，否则先转 INVISIBLE（黑底空窗不露脸），
+        // 由 requestFrame 的同步裁剪命中、或下载回调里的 applyLatestFrame 再转 VISIBLE。
+        val targetFrameKey = data.resolveFrame(positionMs)?.cacheKey
+        val frameMatches = targetFrameKey != null && targetFrameKey == currentFrameKey
+        visibility = if (frameMatches) {
+            View.VISIBLE
+        } else {
+            View.INVISIBLE
+        }
+        if (!frameMatches) {
+            AppLog.d(
+                "SeekHead",
+                "thumb_hold pos=${positionMs}ms target=$targetFrameKey current=$currentFrameKey"
+            )
+        }
         requestFrame(data, positionMs)
     }
 
@@ -131,6 +146,7 @@ class TimelineThumbPreviewView @JvmOverloads constructor(
         currentFrameKey = frame.cacheKey
         previewImage.setImageBitmap(cropFrameBitmap(sprite, frame))
         if (visibility != View.VISIBLE) visibility = View.VISIBLE
+        AppLog.d("SeekHead", "thumb_show pos=$latestPositionMs key=${frame.cacheKey}")
         return true
     }
 
