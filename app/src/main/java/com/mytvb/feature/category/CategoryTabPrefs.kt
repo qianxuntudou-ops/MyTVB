@@ -105,7 +105,7 @@ object CategoryTabPrefs {
         }.toSet()
         legacyMigrationDone = true
         if (migrated != stored) {
-            appSettings.putStringSetAsync(KEY, migrated)
+            appSettings.putStringSetBlocking(KEY, migrated)
             return migrated
         }
         return stored
@@ -119,7 +119,7 @@ object CategoryTabPrefs {
     }
 
     fun saveSelectedIds(ids: Set<String>) {
-        appSettings.putStringSetAsync(KEY, ids)
+        appSettings.putStringSetBlocking(KEY, ids)
     }
 
     /** 设置页条目 info：未设置=「全部」，否则「已选数/总数」。 */

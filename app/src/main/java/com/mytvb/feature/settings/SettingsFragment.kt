@@ -63,6 +63,8 @@ import com.mytvb.core.ui.system.ScreenUtils
 import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
+import com.mytvb.feature.player.controlbar.ControlBarOrderManageDialog
+import com.mytvb.feature.player.controlbar.ControlBarOrderStore
 import com.mytvb.feature.player.settings.AudioBalanceSettings
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.player.shortcut.PlayerShortcutStore
@@ -125,6 +127,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_EXIT_DOUBLE_CONFIRM = ExitDoubleConfirm.KEY
         // 自定义播放快捷键（issue#116）：动作型条目（非 DataStore 开关），显示值=已绑定数
         private const val KEY_PLAYER_SHORTCUTS = "action_player_shortcuts"
+        // 控制条按钮排序（issue#144 建议）：动作型条目，显示值=默认/自定义
+        private const val KEY_CONTROL_BAR_ORDER = "action_control_bar_order"
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
@@ -446,7 +450,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             SettingGroup(R.string.setting_group_controls, listOf(
                 stored(KEY_SHOW_NEXT_PREVIOUS, R.string.show_next_previous, "关"),
                 stored(KEY_SHOW_PLAY_SPEED_BUTTON, R.string.show_play_speed_button, "关"),
-                stored(KEY_SHOW_PLAYBACK_RATE, R.string.show_playback_rate, "关")
+                stored(KEY_SHOW_PLAYBACK_RATE, R.string.show_playback_rate, "关"),
+                // 控制条按钮排序（issue#144 建议）：点击进管理弹窗调整按钮相对顺序
+                plain(KEY_CONTROL_BAR_ORDER, R.string.control_bar_order_title, controlBarOrderLabel())
             ))
         )
 
@@ -654,7 +660,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
 
     private fun toggle(
         key: String,
-        persist: (String) -> Unit = { appSettings.putStringAsync(key, it) }
+        persist: (String) -> Unit = { appSettings.putStringBlocking(key, it) }
     ) {
         val setting = itemOf(key) ?: return
         val newValue = if (setting.value == "开") "关" else "开"
@@ -831,11 +837,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_DYNAMIC_UP_SORT -> showCommonChoiceDialog(key, arrayOf("默认", "最常访问"))
             KEY_HOME_FEED_SOURCE, KEY_HOT_FEED_SOURCE -> showCommonChoiceDialog(key, FeedSourceSetting.OPTIONS)
             KEY_LIVE_ENTRY -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyLiveEntryVisibility()
             }
             KEY_HOME_PERSONAL_TABS -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyMeEntryVisibility()
             }
             KEY_EDGE_TAB_SWITCH -> toggle(key)
@@ -843,20 +849,23 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_PLAYER_SHORTCUTS -> ShortcutManageDialog(requireContext()) {
                 updateInfo(KEY_PLAYER_SHORTCUTS, shortcutCountLabel())
             }.show()
+            KEY_CONTROL_BAR_ORDER -> ControlBarOrderManageDialog(requireContext()) {
+                updateInfo(KEY_CONTROL_BAR_ORDER, controlBarOrderLabel())
+            }.show()
             // —— 电视直播 ——
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyCctvLiveEntryVisibility()
             }
             KEY_CCTV_NATIVE_LIVE -> toggle(key)
             KEY_CCTV_VOD_ENTRY -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyCctvVodEntryVisibility()
             }
             KEY_CCTV_NATIVE_VOD -> toggle(key)
             // —— 红果短剧 ——
             KEY_HONGGUO_ENTRY -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyHongguoEntryVisibility()
             }
             KEY_HONGGUO_RECOMMEND_GENDER -> showCommonChoiceDialog(key, arrayOf("不限", "男频", "女频"))
@@ -940,14 +949,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_DM_BLOCK_LOTTERY -> toggle(key)
             // —— 青少年·时间限制 ——
             KEY_MINOR_PROTECTION -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 (activity as? MainActivity)?.applyCategoryEntryVisibility()
             }
             KEY_WATCH_TIME_LIMIT -> showTeenTimeChoiceDialog(key)
             KEY_REST_TIME_LIMIT -> showTeenTimeChoiceDialog(key)
             // —— 青少年·公益广告 ——
             KEY_PSAS_ENABLED -> toggle(key) {
-                appSettings.putStringAsync(key, it)
+                appSettings.putStringBlocking(key, it)
                 com.mytvb.core.common.content.TeenModeTimer.resetForLimitChange()
             }
             KEY_PSAS_INTERVAL -> showPsasIntervalChoiceDialog()
@@ -973,7 +982,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                             arrayOf(UpdateStorage.CHOICE_INTERNAL, UpdateStorage.CHOICE_USB)
                         ) { value ->
                             updateStored(key, value)
-                            appSettings.putStringAsync(key, value)
+                            appSettings.putStringBlocking(key, value)
                             AppLog.i("SettingsFragment", "update save location selected: $value")
                         }
                     }
@@ -1272,7 +1281,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             item.value = rawValue
             item.info = selected
             refreshItem(KEY_PSAS_INTERVAL)
-            appSettings.putStringAsync(KEY_PSAS_INTERVAL, rawValue)
+            appSettings.putStringBlocking(KEY_PSAS_INTERVAL, rawValue)
             com.mytvb.core.common.content.TeenModeTimer.resetForLimitChange()
             AppToast.show(requireContext(), getString(R.string.toast_setting_value_format, item.title, selected))
         }
@@ -1292,7 +1301,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             item.value = rawValue
             item.info = selected
             refreshItem(key)
-            appSettings.putStringAsync(key, rawValue)
+            appSettings.putStringBlocking(key, rawValue)
             // 改时长设置：清掉累计观看时长与休息戳，避免脏状态
             com.mytvb.core.common.content.TeenModeTimer.resetForLimitChange()
             AppToast.show(requireContext(), getString(R.string.toast_setting_value_format, item.title, selected))
@@ -1413,7 +1422,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val item = itemOf(KEY_MEDIA_CACHE_WRITE) ?: return
         val newValue = if (item.value == "开") "关" else "开"
         updateStored(KEY_MEDIA_CACHE_WRITE, newValue)
-        appSettings.putStringAsync(KEY_MEDIA_CACHE_WRITE, newValue)
+        appSettings.putStringBlocking(KEY_MEDIA_CACHE_WRITE, newValue)
         if (newValue == "关") {
             // 关：数据源工厂下次起播直接走纯直连（无需 reset，但统一释放避免悬挂引用）
             PlayerMediaCache.reset(requireContext())
@@ -1429,7 +1438,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             storedOptions = arrayOf("不限制", "200 MB", "500 MB", "1 GB")
         ) { value ->
             updateStored(KEY_CACHE_LIMIT, value)
-            appSettings.putStringAsync(KEY_CACHE_LIMIT, value)
+            appSettings.putStringBlocking(KEY_CACHE_LIMIT, value)
             FileCacheManager.trimToLimit()
             // SimpleCache 创建后上限不可改，必须释放对象让下次播放按新上限重建。
             // 同步失效暖复用快照与挂载源，否则 2 分钟内重播同视频会撞已 release 的 cache。
@@ -1689,10 +1698,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val item = itemOf(key) ?: return
         showStoredChoiceDialog(item.title, item.value, options) { value ->
             updateStored(key, value)
-            appSettings.putStringAsync(key, value)
+            appSettings.putStringBlocking(key, value)
             when (key) {
                 KEY_DEFAULT_START_PAGE -> {
-                    appSettings.putIntAsync("defaultStartPage", HOME_START_PAGE_OPTIONS.indexOf(value).coerceAtLeast(0))
+                    appSettings.putIntBlocking("defaultStartPage", HOME_START_PAGE_OPTIONS.indexOf(value).coerceAtLeast(0))
                 }
                 KEY_IMAGE_QUALITY -> {
                     val qualityLevel = when (value) {
@@ -1700,11 +1709,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                         "高尺寸" -> 2
                         else -> 1
                     }
-                    appSettings.putIntAsync("imageQualityLevel", qualityLevel)
+                    appSettings.putIntBlocking("imageQualityLevel", qualityLevel)
                     ImageLoader.invalidateImageQualityCache()
                 }
                 KEY_THEME -> {
-                    appSettings.putIntAsync("theme", value.toLegacyTheme())
+                    appSettings.putIntBlocking("theme", value.toLegacyTheme())
                     activity?.recreate()
                 }
                 // 动态页排序变更（issue#142）：设置页覆盖动态页时不触发底层 onResume，主动通知即时重拉
@@ -1735,7 +1744,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val item = itemOf(key) ?: return
         showStoredChoiceDialog(item.title, item.value, options) { value ->
             updateStored(key, value)
-            appSettings.putStringAsync(key, value)
+            appSettings.putStringBlocking(key, value)
         }
     }
 
@@ -1743,7 +1752,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val item = itemOf(KEY_AUDIO_BALANCE) ?: return
         showStoredChoiceDialog(item.title, item.value, AUDIO_BALANCE_OPTIONS) { value ->
             updateStored(KEY_AUDIO_BALANCE, value)
-            appSettings.putStringAsync(KEY_AUDIO_BALANCE, value)
+            appSettings.putStringBlocking(KEY_AUDIO_BALANCE, value)
             // 刷新全局档位：正在播放的 player 下一个音频块即生效，无需重建播放器。
             AudioBalanceSettings.applySettingValue(value)
         }
@@ -1758,7 +1767,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             UiScale.PERCENTS.map { it.toString() }.toTypedArray()
         ) { value ->
             updateStored(UiScale.KEY_UI_SCALE, value)
-            appSettings.putStringAsync(UiScale.KEY_UI_SCALE, value)
+            appSettings.putStringBlocking(UiScale.KEY_UI_SCALE, value)
             activity?.recreate()
         }
     }
@@ -1805,7 +1814,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         ) { index ->
             val percent = percents[index]
             updateInfo(UiTextScale.KEY_UI_TEXT_SCALE, options[index])
-            appSettings.putStringAsync(UiTextScale.KEY_UI_TEXT_SCALE, percent.toString())
+            appSettings.putStringBlocking(UiTextScale.KEY_UI_TEXT_SCALE, percent.toString())
             activity?.recreate()
             dialog.dismiss()
         }
@@ -1847,7 +1856,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             val offset = UiCardSize.offsetAt(index)
             item.value = UiCardSize.NAMES.getOrNull(index) ?: "标准"
             updateInfo(UiCardSize.KEY_UI_CARD_SIZE, selected)
-            appSettings.putStringAsync(UiCardSize.KEY_UI_CARD_SIZE, offset.toString())
+            appSettings.putStringBlocking(UiCardSize.KEY_UI_CARD_SIZE, offset.toString())
             activity?.recreate()
         }
     }
@@ -1896,6 +1905,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             getString(R.string.shortcut_count_format, count)
         }
     }
+
+    // ================= 控制条按钮排序（issue#144 建议） =================
+
+    private fun controlBarOrderLabel(): String =
+        if (ControlBarOrderStore.isCustomized()) {
+            getString(R.string.control_bar_order_custom)
+        } else {
+            getString(R.string.setting_value_default)
+        }
 
 
     private fun showChoiceDialog(
@@ -2015,7 +2033,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         } else {
             value
         }
-        appSettings.putStringAsync(key, persistedValue)
+        appSettings.putStringBlocking(key, persistedValue)
     }
 
     private fun requestInitialCategoryFocus() {
@@ -2035,7 +2053,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val setting = itemOf(KEY_SPONSOR_BLOCK_ENABLED) ?: return
         val newValue = if (setting.value == "开") "关" else "开"
         updateStored(KEY_SPONSOR_BLOCK_ENABLED, newValue)
-        appSettings.putStringAsync(KEY_SPONSOR_BLOCK_ENABLED, newValue)
+        appSettings.putStringBlocking(KEY_SPONSOR_BLOCK_ENABLED, newValue)
         val title = getString(R.string.sponsor_block)
 
         if (newValue == "关") {
@@ -2084,8 +2102,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 "x-bili-gaia-vtoken=$gaiaVtoken; domain=bilibili.com; path=/; secure; expires=$expiresAt"
             )
         )
-        appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
-        appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
+        appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER, null)
+        appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
         updateRiskControlStatus()
         AppToast.show(requireContext(), getString(R.string.verify_success))
     }
@@ -2455,8 +2473,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         }
 
         fun clearVoucher() {
-            appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
-            appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
+            appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER, null)
+            appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
             updateRiskControlStatus()
             AppToast.show(requireContext(), getString(R.string.voucher_cleared))
         }
@@ -2464,8 +2482,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         fun saveVoucher() {
             val v = editText.text?.toString()?.trim().orEmpty()
             if (v.isNotBlank()) {
-                appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, v)
-                appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, System.currentTimeMillis().toString())
+                appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER, v)
+                appSettings.putStringBlocking(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, System.currentTimeMillis().toString())
                 updateRiskControlStatus()
                 AppToast.show(requireContext(), getString(R.string.voucher_saved_toast))
             } else {

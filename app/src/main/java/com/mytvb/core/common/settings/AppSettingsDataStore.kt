@@ -173,9 +173,16 @@ class AppSettingsDataStore(private val context: Context) {
         }
     }
 
-    fun putStringAsync(key: String, value: String?) {
+    // —— 同步落盘写入（issue#144 验收发现）——
+    // 原 putXxxAsync 为「更新内存缓存 + scope.launch 异步写盘」，进程被强杀（force-stop）
+    // 时协程未执行完的写会随进程蒸发，磁盘留旧值，重启后设置回退（实测切主题后立刻
+    // 强杀一次保住一次丢失）。全量调用点（94 处）均为低频用户动作（设置点击、播放器
+    // 画质记忆、青少年模式 15s tick 等），改为同步落盘：主线程单次阻塞 ~1-30ms 可接受，
+    // 换取「写函数返回即已落盘」，彻底消除丢写窗口。
+
+    fun putStringBlocking(key: String, value: String?) {
         if (value != null) cache[key] = value else cache.remove(key)
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             dataStore.edit { prefs ->
                 if (value != null) prefs[stringPreferencesKey(key)] = value
                 else prefs.remove(stringPreferencesKey(key))
@@ -183,27 +190,27 @@ class AppSettingsDataStore(private val context: Context) {
         }
     }
 
-    fun putIntAsync(key: String, value: Int) {
+    fun putIntBlocking(key: String, value: Int) {
         cache[key] = value
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             dataStore.edit { prefs ->
                 prefs[intPreferencesKey(key)] = value
             }
         }
     }
 
-    fun putLongAsync(key: String, value: Long) {
+    fun putLongBlocking(key: String, value: Long) {
         cache[key] = value
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             dataStore.edit { prefs ->
                 prefs[longPreferencesKey(key)] = value
             }
         }
     }
 
-    fun removeAsync(key: String) {
+    fun removeBlocking(key: String) {
         cache.remove(key)
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             dataStore.edit { prefs ->
                 prefs.remove(stringPreferencesKey(key))
                 prefs.remove(intPreferencesKey(key))
@@ -214,20 +221,11 @@ class AppSettingsDataStore(private val context: Context) {
         }
     }
 
-    fun putBooleanAsync(key: String, value: Boolean) {
+    fun putBooleanBlocking(key: String, value: Boolean) {
         cache[key] = value
-        scope.launch {
+        runBlocking(Dispatchers.IO) {
             dataStore.edit { prefs ->
                 prefs[booleanPreferencesKey(key)] = value
-            }
-        }
-    }
-
-    fun putStringSetAsync(key: String, value: Set<String>) {
-        cache[key] = value
-        scope.launch {
-            dataStore.edit { prefs ->
-                prefs[stringSetPreferencesKey(key)] = value
             }
         }
     }

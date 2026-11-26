@@ -33,7 +33,7 @@ class DesktopUserAgentStore(
     fun refreshUserAgent(context: Context?): String {
         val newUserAgent = generateDesktopUserAgent()
         currentUserAgent = newUserAgent
-        appSettings.putStringAsync(preferenceKey, newUserAgent)
+        appSettings.putStringBlocking(preferenceKey, newUserAgent)
         return newUserAgent
     }
 
@@ -43,7 +43,7 @@ class DesktopUserAgentStore(
             return stored
         }
         val generated = generateDesktopUserAgent()
-        appSettings.putStringAsync(preferenceKey, generated)
+        appSettings.putStringBlocking(preferenceKey, generated)
         return generated
     }
 

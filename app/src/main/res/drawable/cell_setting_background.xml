@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 配色走主题 attr（issue#144：写死深色值导致白主题下右侧设置行不跟随变色） -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android" android:exitFadeDuration="@android:integer/config_shortAnimTime">
     <item android:state_pressed="true">
         <shape>
@@ -10,7 +11,7 @@
         <layer-list>
             <item>
                 <shape>
-                    <solid android:color="#3D3D3D"/>
+                    <solid android:color="?attr/thirdBackgroundColor"/>
                     <corners android:radius="@dimen/px15"/>
                 </shape>
             </item>
@@ -25,9 +26,9 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#2A2A2A"/>
+            <solid android:color="?attr/subBackgroundColor"/>
             <corners android:radius="@dimen/px15"/>
-            <stroke android:width="@dimen/px2" android:color="#444444"/>
+            <stroke android:width="@dimen/px2" android:color="?attr/dividerColor"/>
         </shape>
     </item>
 </selector>

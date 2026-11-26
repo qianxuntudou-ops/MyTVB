@@ -556,7 +556,7 @@ internal object CdnProfile {
             snapshot = gson.toJson(signals.toMap())
         }
         runCatching {
-            appSettings()?.putStringAsync(STORE_KEY, snapshot)
+            appSettings()?.putStringBlocking(STORE_KEY, snapshot)
         }.onFailure { error ->
             AppLog.w(TAG, "cdn_profile persist failed: ${error.javaClass.simpleName}:${error.message}")
         }

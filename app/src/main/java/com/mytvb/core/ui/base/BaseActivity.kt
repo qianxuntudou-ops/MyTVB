@@ -34,6 +34,14 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         (application as? MyBLBLApplication)?.ensureUiRuntimeReady("${this::class.java.simpleName}.onCreate")
+        // 设置缓存必须就绪后再读：ensureUiRuntimeReady 只启动**异步**读盘，而紧接着的
+        // UiTextScale/UiScale/UiCardSize/applyTheme 全走 getCachedXxx——cache miss 时
+        // 会静默返回默认值（主题默认 1=黑色），于是冷启动首个页面用错主题、字体档位，
+        // 等异步读盘完成后打开的页面才正常（issue#144 验收实测：同一进程主页黑、
+        // 随后打开的设置页白，正是读竞态而非写入丢失）。
+        // initCacheBlocking 内部若已有异步 job 在跑则 join 它（不重复读盘），
+        // 首次调用只等剩余读盘时间（本机 30~80ms），之后 AtomicBoolean 守卫零成本。
+        appSettings.initCacheBlocking("${this::class.java.simpleName}.onCreate")
         // 必须在 super.onCreate 之前安装：AppCompat 检测到已有 Factory 会跳过自装
         UiTextScale.refresh(appSettings)
         UiScale.refresh(

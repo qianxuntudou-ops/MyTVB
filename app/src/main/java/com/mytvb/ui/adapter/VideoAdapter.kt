@@ -21,6 +21,7 @@ import com.mytvb.core.common.time.TimeUtils
 import com.mytvb.core.ui.focus.VideoCardFocusHelper
 import com.mytvb.core.ui.video.VideoLightCardFactory
 import com.mytvb.core.ui.video.VideoCardViews
+import com.mytvb.core.ui.video.resolveThemedTextColor
 import com.mytvb.ui.dialog.VideoCardMenuDialog
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -207,7 +208,9 @@ class VideoAdapter(
         private var currentVideo: VideoModel? = null
         private var titleInPlayingMode = false
         private var titleColor = 0
-        private val defaultTitleColor: Int = ContextCompat.getColor(views.root.context, R.color.textColor)
+        // 标题默认色随主题文字色（issue#144：写死 R.color.textColor 白主题下白底白字不可见）
+        private val defaultTitleColor: Int =
+            resolveThemedTextColor(views.root.context, android.R.attr.textColorPrimary, fallback = 0xFFEEEEEE.toInt())
 
         companion object {
             // 封面的圆角半径来自 dimen，但每个 holder resources 一致，半径也一致；

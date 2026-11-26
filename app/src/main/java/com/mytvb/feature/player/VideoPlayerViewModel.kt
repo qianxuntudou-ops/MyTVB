@@ -2921,8 +2921,8 @@ class VideoPlayerViewModel(
                 val vVoucher = response.vVoucher.trim()
                 if (vVoucher.isNotBlank()) {
                     if (!suppressUiSignals) {
-                        appSettings.putStringAsync("gaia_vgate_v_voucher", vVoucher)
-                        appSettings.putStringAsync("gaia_vgate_v_voucher_saved_at_ms", System.currentTimeMillis().toString())
+                        appSettings.putStringBlocking("gaia_vgate_v_voucher", vVoucher)
+                        appSettings.putStringBlocking("gaia_vgate_v_voucher_saved_at_ms", System.currentTimeMillis().toString())
                         _riskControlVVoucher.value = vVoucher
                         _error.value = appContext.getString(R.string.player_risk_control_requesting_verify)
                     }

@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.view.View
 import android.view.ViewGroup
 import com.mytvb.R
+import com.mytvb.feature.player.controlbar.ControlBarOrderStore
 
 class MyPlayerControlViewLayoutManager(
     private val playerControlView: MyPlayerControlView,
@@ -35,53 +36,20 @@ class MyPlayerControlViewLayoutManager(
     private val extraControlsScrollView: ViewGroup = playerControlView.findViewById(R.id.exo_extra_controls_scroll_view)
     private val overflowShowButton: View = playerControlView.findViewById(R.id.exo_overflow_show)
     private val overflowHideButton: View = playerControlView.findViewById(R.id.exo_overflow_hide)
-    // 排列顺序按使用频率：上一个/暂停/下一个/更多(三连菜单)/评论/弹幕/字幕/倍速/选集/
+    // 排列顺序默认按使用频率：上一个/暂停/下一个/更多(三连菜单)/评论/弹幕/字幕/倍速/选集/
     // UP主/推荐/循环/总设置，其余低频按钮（刷新/快退快进/SC开关/镜像/直播设置/关闭）排尾。
     // 评论后移是 issue#128 反馈：评论区遮挡大且低频；用户三选一拍板「放三连菜单后面」
     // （方案①），issue#131 指出上版落在弹幕后差了一位，现紧跟三连菜单。
-    private val orderedButtons: List<View> = listOf(
-        playerControlView.findViewById(R.id.button_previous),
-        playerControlView.findViewById(R.id.button_play),
-        playerControlView.findViewById(R.id.button_next),
-        playerControlView.findViewById(R.id.button_more),
-        playerControlView.findViewById(R.id.button_comment),
-        playerControlView.findViewById(R.id.button_dm_switch),
-        playerControlView.findViewById(R.id.button_subtitle),
-        playerControlView.findViewById(R.id.button_play_speed),
-        playerControlView.findViewById(R.id.button_choose_episode),
-        playerControlView.findViewById(R.id.button_up_info),
-        playerControlView.findViewById(R.id.button_related),
-        playerControlView.findViewById(R.id.button_repeat),
-        playerControlView.findViewById(R.id.exo_settings),
-        playerControlView.findViewById(R.id.button_refresh),
-        playerControlView.findViewById(R.id.button_rewind),
-        playerControlView.findViewById(R.id.button_fast_forward),
-        playerControlView.findViewById(R.id.button_sc_switch),
-        playerControlView.findViewById(R.id.button_mirror),
-        playerControlView.findViewById(R.id.button_live_settings),
-        playerControlView.findViewById(R.id.button_close)
-    )
-    // 屏宽不足时先进 overflow 的顺序：非高频列表的按钮最先收起，然后按高频列表从尾往头收
-    private val overflowPriority = listOf(
-        R.id.button_live_settings,
-        R.id.button_mirror,
-        R.id.button_sc_switch,
-        R.id.button_fast_forward,
-        R.id.button_rewind,
-        R.id.button_refresh,
-        R.id.exo_settings,
-        R.id.button_repeat,
-        R.id.button_related,
-        R.id.button_up_info,
-        R.id.button_choose_episode,
-        R.id.button_play_speed,
-        R.id.button_subtitle,
-        R.id.button_dm_switch,
-        R.id.button_comment,
-        R.id.button_more,
-        R.id.button_next,
-        R.id.button_previous
-    )
+    // 用户可在设置→播放界面→「控制条按钮排序」自定义（issue#144 建议）：
+    // 存储顺序优先、未覆盖按钮按默认序补尾，重进播放页生效。
+    private val orderedButtons: List<View> =
+        ControlBarOrderStore.resolveOrder().map { playerControlView.findViewById<View>(it.viewId) }
+    // 屏宽不足时先进 overflow 的顺序=显示序倒序（从队尾往头收），播放/关闭恒驻留；
+    // 与旧硬编码表在默认顺序下逐项一致，用户重排后同样「从队尾先收」
+    private val overflowPriority: List<Int> =
+        orderedButtons.map { it.id }
+            .filter { it != R.id.button_play && it != R.id.button_close }
+            .reversed()
     private val hiddenTranslationY by lazy {
         playerControlView.resources.getDimension(R.dimen.px147)
     }

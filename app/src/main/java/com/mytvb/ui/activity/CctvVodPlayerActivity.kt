@@ -992,7 +992,7 @@ class CctvVodPlayerActivity : BaseActivity<ActivityCctvVodPlayerBinding>() {
                 setNativeQuality(url)
                 // 持久化画质偏好：下次播任意影视沿用（"auto"/档位数字；档位不在时回落最高档）
                 val saved = url?.let { vodQualityKey(it) } ?: VOD_QUALITY_AUTO
-                appSettings.putStringAsync(KEY_CCTV_VOD_QUALITY, saved)
+                appSettings.putStringBlocking(KEY_CCTV_VOD_QUALITY, saved)
                 AppLog.i(TAG, "nativeQuality -> ${options[index]} saved=$saved")
             }
             updateQualityButton(options[index])

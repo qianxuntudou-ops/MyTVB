@@ -594,7 +594,7 @@ object ContentFilter {
     fun addBlockedUpName(context: Context, name: String) {
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES).toMutableSet()
         existing.add(name)
-        appSettings.putStringSetAsync(KEY_BLOCKED_UP_NAMES, existing)
+        appSettings.putStringSetBlocking(KEY_BLOCKED_UP_NAMES, existing)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -609,7 +609,7 @@ object ContentFilter {
         if (keys.isEmpty()) return
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_VIDEO_KEYS).toMutableSet()
         existing.addAll(keys)
-        appSettings.putStringSetAsync(KEY_BLOCKED_VIDEO_KEYS, existing)
+        appSettings.putStringSetBlocking(KEY_BLOCKED_VIDEO_KEYS, existing)
     }
 
     @Suppress("unused")
@@ -627,7 +627,7 @@ object ContentFilter {
     fun removeBlockedUpName(context: Context, name: String) {
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES).toMutableSet()
         existing.remove(name)
-        appSettings.putStringSetAsync(KEY_BLOCKED_UP_NAMES, existing)
+        appSettings.putStringSetBlocking(KEY_BLOCKED_UP_NAMES, existing)
     }
 
     @Suppress("UNUSED_PARAMETER")
@@ -646,7 +646,7 @@ object ContentFilter {
         if (trimmed.isEmpty()) return
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_LIVE_ANCHORS).toMutableSet()
         if (existing.add(trimmed)) {
-            appSettings.putStringSetAsync(KEY_BLOCKED_LIVE_ANCHORS, existing)
+            appSettings.putStringSetBlocking(KEY_BLOCKED_LIVE_ANCHORS, existing)
         }
     }
 
@@ -654,7 +654,7 @@ object ContentFilter {
     fun removeBlockedLiveAnchor(context: Context, name: String) {
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_LIVE_ANCHORS).toMutableSet()
         if (existing.remove(name)) {
-            appSettings.putStringSetAsync(KEY_BLOCKED_LIVE_ANCHORS, existing)
+            appSettings.putStringSetBlocking(KEY_BLOCKED_LIVE_ANCHORS, existing)
         }
     }
 
@@ -669,7 +669,7 @@ object ContentFilter {
         if (trimmed.isEmpty()) return
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_LIVE_AREAS).toMutableSet()
         if (existing.add(trimmed)) {
-            appSettings.putStringSetAsync(KEY_BLOCKED_LIVE_AREAS, existing)
+            appSettings.putStringSetBlocking(KEY_BLOCKED_LIVE_AREAS, existing)
         }
     }
 
@@ -677,7 +677,7 @@ object ContentFilter {
     fun removeBlockedLiveArea(context: Context, areaName: String) {
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_LIVE_AREAS).toMutableSet()
         if (existing.remove(areaName)) {
-            appSettings.putStringSetAsync(KEY_BLOCKED_LIVE_AREAS, existing)
+            appSettings.putStringSetBlocking(KEY_BLOCKED_LIVE_AREAS, existing)
         }
     }
 

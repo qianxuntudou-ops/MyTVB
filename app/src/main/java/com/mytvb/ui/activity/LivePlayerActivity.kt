@@ -94,7 +94,7 @@ class LivePlayerActivity : BaseActivity<ActivityPlayerBinding>() {
     /** 开关型动作通用：落盘（中文"开/关"口径）+ 即时生效回调 + Toast 反馈。 */
     private fun toggleShortcutSwitch(key: String, title: String, current: Boolean, apply: (Boolean) -> Unit) {
         val newValue = !current
-        appSettings.putStringAsync(key, if (newValue) "开" else "关")
+        appSettings.putStringBlocking(key, if (newValue) "开" else "关")
         apply(newValue)
         AppToast.show(this, "$title：${getString(if (newValue) R.string.on else R.string.off)}")
     }

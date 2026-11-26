@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制条排序行：序号（重）+ 按钮名 + 移动态箭头。
+     状态由弹窗按键路由驱动（isSelected=键盘选中、isActivated=移动中），不依赖系统焦点。 -->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/click_view"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="@dimen/px80"
+    android:background="@drawable/cell_control_order_entry_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:longClickable="true"
+    android:paddingStart="@dimen/px40"
+    android:paddingTop="@dimen/px10"
+    android:paddingEnd="@dimen/px40"
+    android:paddingBottom="@dimen/px10">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/tv_index"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px30"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/tv_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px15"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px30"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/tv_arrow"
+        app:layout_constraintStart_toEndOf="@id/tv_index"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/tv_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/control_bar_order_arrow"
+        android:textColor="@color/colorAccent"
+        android:textSize="@dimen/px34"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

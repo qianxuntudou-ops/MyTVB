@@ -692,7 +692,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             PlayerShortcutAction.DEFAULT_SPEED -> showShortcutSpeedDialog()
             PlayerShortcutAction.ALWAYS_CLOCK -> {
                 val enabled = !PlayerSettingsStore.load(this).showAlwaysOnClock
-                appSettingsDataStore().putStringAsync(
+                appSettingsDataStore().putStringBlocking(
                     ShortcutSettingKeys.SHOW_ALWAYS_ON_CLOCK,
                     if (enabled) "开" else "关",
                 )
@@ -702,7 +702,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
             }
             PlayerShortcutAction.DOUBLE_BACK_EXIT -> {
                 val enabled = !ExitDoubleConfirm.enabled()
-                appSettingsDataStore().putStringAsync(
+                appSettingsDataStore().putStringBlocking(
                     ExitDoubleConfirm.KEY,
                     if (enabled) "开" else "关",
                 )
@@ -718,7 +718,7 @@ class HongguoPlayerActivity : AppCompatActivity() {
         val currentIndex = options.indexOf(speed.toString()).coerceAtLeast(0)
         showShortcutChoiceDialog(this, getString(R.string.default_play_speed), options, currentIndex) { index ->
             val picked = options.getOrNull(index)?.toFloatOrNull() ?: return@showShortcutChoiceDialog
-            appSettingsDataStore().putStringAsync(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, picked.toString())
+            appSettingsDataStore().putStringBlocking(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, picked.toString())
             speed = picked
             player?.playbackParameters = PlaybackParameters(speed)
             AppToast.show(this, "${getString(R.string.default_play_speed)}：${speed}x")

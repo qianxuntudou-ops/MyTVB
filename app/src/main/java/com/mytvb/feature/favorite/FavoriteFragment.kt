@@ -555,6 +555,6 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
         if (folderId <= 0L || coverUrl.isBlank()) {
             return
         }
-        appSettings.putStringAsync("fav$folderId", coverUrl)
+        appSettings.putStringBlocking("fav$folderId", coverUrl)
     }
 }

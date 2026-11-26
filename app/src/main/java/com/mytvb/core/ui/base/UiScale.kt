@@ -60,7 +60,7 @@ object UiScale {
             normalize(stored)
         } else {
             val recommended = recommendedPercent(screenW, screenH)
-            settings.putStringAsync(KEY_UI_SCALE, recommended.toString())
+            settings.putStringBlocking(KEY_UI_SCALE, recommended.toString())
             recommended
         }
     }

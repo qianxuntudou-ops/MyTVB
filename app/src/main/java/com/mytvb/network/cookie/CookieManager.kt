@@ -320,7 +320,7 @@ class CookieManager : CookieJar {
         if (blocking) {
             appSettings.putStringSetBlocking(KEY_COOKIES, cookieStrings)
         } else {
-            appSettings.putStringSetAsync(KEY_COOKIES, cookieStrings)
+            appSettings.putStringSetBlocking(KEY_COOKIES, cookieStrings)
         }
         persistProtectedCookieBackup(cookieStrings, blocking)
     }

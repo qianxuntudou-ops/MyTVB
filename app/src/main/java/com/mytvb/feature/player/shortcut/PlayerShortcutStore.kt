@@ -156,7 +156,7 @@ object PlayerShortcutStore {
             .put(KEY_VERSION, JSON_VERSION)
             .put(KEY_ITEMS, arr)
             .toString()
-        appSettings().putStringAsync(STORE_KEY, json)
+        appSettings().putStringBlocking(STORE_KEY, json)
         AppLog.d(TAG, "saved ${deduped.size} shortcuts")
     }
 

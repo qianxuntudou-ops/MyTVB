@@ -925,7 +925,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 releaseInfo = releaseInfo,
                 cancelTextRes = R.string.update_later,
                 onDismissedWithoutDownload = {
-                    appSettings.putStringAsync(ApkUpdater.KEY_IGNORED_VERSION, releaseInfo.versionName)
+                    appSettings.putStringBlocking(ApkUpdater.KEY_IGNORED_VERSION, releaseInfo.versionName)
                 },
             )
         } catch (e: Exception) {
@@ -1138,7 +1138,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (restoredFromSavedState) return
         if (appSettings.getCachedBoolean("usage_tip_shown")) return
         if (isFinishing || isDestroyed) return
-        appSettings.putBooleanAsync("usage_tip_shown", true)
+        appSettings.putBooleanBlocking("usage_tip_shown", true)
         UsageTipDialog(this).show()
     }
 

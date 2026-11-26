@@ -11,7 +11,7 @@
         <layer-list>
             <item>
                 <shape>
-                    <solid android:color="#3D3D3D"/>
+                    <solid android:color="?attr/thirdBackgroundColor"/>
                     <corners android:topLeftRadius="@dimen/px15" android:topRightRadius="@dimen/px15"/>
                 </shape>
             </item>
@@ -26,9 +26,9 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#2A2A2A"/>
+            <solid android:color="?attr/subBackgroundColor"/>
             <corners android:topLeftRadius="@dimen/px15" android:topRightRadius="@dimen/px15"/>
-            <stroke android:width="@dimen/px2" android:color="#444444"/>
+            <stroke android:width="@dimen/px2" android:color="?attr/dividerColor"/>
         </shape>
     </item>
 </selector>

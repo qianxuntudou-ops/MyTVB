@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制条按钮排序管理弹窗（issue#144 建议）：标题 + 提示行 + 恢复默认（次级）+ 按钮列表。
+     行内 OK 弹「上移/下移」菜单；同构 dialog_shortcut_manage。 -->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/dialog_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:focusableInTouchMode="false">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/top_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginTop="@dimen/px35"
+        android:layout_marginEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px20"
+        android:text="@string/control_bar_order_title"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px35"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/order_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px40"
+        android:layout_marginEnd="@dimen/px40"
+        android:textColor="@color/subTextColor"
+        android:textSize="@dimen/px24"
+        app:layout_constraintEnd_toStartOf="@id/btn_reset"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/btn_reset"
+        app:layout_constraintBottom_toBottomOf="@id/btn_reset" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/btn_reset"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/px18"
+        android:layout_marginTop="@dimen/px15"
+        android:background="@drawable/bg_control_order_reset"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="@dimen/px40"
+        android:paddingTop="@dimen/px15"
+        android:paddingEnd="@dimen/px40"
+        android:paddingBottom="@dimen/px15"
+        android:text="@string/control_bar_order_reset"
+        android:textColor="@color/textColor"
+        android:textSize="@dimen/px28"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/top_title" />
+
+    <View
+        android:id="@+id/list_divider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px2"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginTop="@dimen/px20"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="?attr/dividerColor"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_reset" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:descendantFocusability="afterDescendants"
+        android:paddingStart="@dimen/px18"
+        android:paddingTop="@dimen/px12"
+        android:paddingEnd="@dimen/px18"
+        android:paddingBottom="@dimen/px18"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/list_divider" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

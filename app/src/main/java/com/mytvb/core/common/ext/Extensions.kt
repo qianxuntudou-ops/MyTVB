@@ -81,7 +81,7 @@ fun getHomeDefaultStartPageIndex(
     if (mappedFromLabel != null) {
         val normalized = mappedFromLabel.coerceIn(0, safeMaxIndex)
         if (appSettings.getCachedInt("defaultStartPage", Int.MIN_VALUE) != normalized) {
-            appSettings.putIntAsync("defaultStartPage", normalized)
+            appSettings.putIntBlocking("defaultStartPage", normalized)
         }
         return normalized
     }

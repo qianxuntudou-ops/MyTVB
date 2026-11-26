@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 控制条排序行三态（弹窗恒深色系）：activated=移动中（accent 描边高亮）、
+     selected/pressed=键盘选中或触摸按下（中性亮底）、常态透明。
+     键盘交互不走系统焦点链，全部由弹窗 dispatchKeyEvent 接管，行状态用
+     isSelected/isActivated 驱动 selector。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true">
+        <shape>
+            <solid android:color="#337C4DFF"/>
+            <stroke android:width="@dimen/px3" android:color="@color/colorAccent"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="#3D3D3D"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="#3D3D3D"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="@android:color/transparent"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>

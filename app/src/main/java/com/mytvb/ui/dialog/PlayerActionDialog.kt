@@ -426,7 +426,7 @@ class PlayerActionDialog(
 
     private fun persistCoinMultiply(value: Int) {
         val normalized = value.coerceAtLeast(1)
-        appSettings.putStringAsync(KEY_GIVE_COIN_NUMBER_SETTINGS, normalized.toString())
+        appSettings.putStringBlocking(KEY_GIVE_COIN_NUMBER_SETTINGS, normalized.toString())
     }
 
     private fun checkLogin(): Boolean {

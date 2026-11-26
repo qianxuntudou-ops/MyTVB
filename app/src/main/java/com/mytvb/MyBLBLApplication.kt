@@ -184,7 +184,7 @@ class MyBLBLApplication : Application() {
 
     private fun cleanupLegacyDanmakuEngineSetting() {
         KoinPlatform.getKoin().get<AppSettingsDataStore>()
-            .removeAsync(LEGACY_KEY_DANMAKU_LITE_ENGINE)
+            .removeBlocking(LEGACY_KEY_DANMAKU_LITE_ENGINE)
     }
 
     private fun initFileCache() {

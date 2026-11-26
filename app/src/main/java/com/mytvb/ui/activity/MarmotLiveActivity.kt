@@ -415,7 +415,7 @@ class MarmotLiveActivity : BaseActivity<ActivityMarmotLiveBinding>() {
         // 播放UI若还显示着（刷新按钮触发），同步刷新控制栏标题
         if (isControllerShowing) updateControllerTitle()
         // 记录上次观看频道（IO 写入，不阻塞）
-        appSettings.putStringAsync(KEY_LAST_CHANNEL_URL, vod.url)
+        appSettings.putStringBlocking(KEY_LAST_CHANNEL_URL, vod.url)
     }
 
     // ==================== CCTV 原生直拉流（issue#106 阶段二） ====================
@@ -1257,7 +1257,7 @@ $scriptTags
             val switched = provider.switchTo(item) { AppLog.i(TAG, "画质切换：${item.name}") }
             if (switched && provider === cctvQualityProvider && item.name != null) {
                 // CCTV 档位持久化：下次进直播（任意频道）沿用用户手选档
-                appSettings.putStringAsync(KEY_CCTV_LIVE_QUALITY, item.name!!)
+                appSettings.putStringBlocking(KEY_CCTV_LIVE_QUALITY, item.name!!)
             }
             if (!switched) {
                 AppLog.w(TAG, "画质切换：${item.name} 无效或与当前相同")

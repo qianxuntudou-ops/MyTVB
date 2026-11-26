@@ -688,4 +688,14 @@
 <string name="shortcut_empty_hint">No shortcuts yet. Press Add shortcut to create one</string>
 <string name="shortcut_trigger_short">Short press</string>
     <string name="triple_action_success">Triple done!</string>
+    <!-- Control bar button order (issue#144 suggestion) -->
+    <string name="control_bar_order_title">Control bar button order</string>
+    <string name="control_bar_order_hint_normal">D-pad up/down to select, OK to start moving; long-press and drag on touch screen</string>
+    <string name="control_bar_order_hint_moving">D-pad up/down to move, press OK or Back to finish</string>
+    <string name="control_bar_order_arrow">↕</string>
+    <string name="control_bar_order_reset">Reset to default order</string>
+    <string name="control_bar_order_reset_confirm">Reset to default order?</string>
+    <string name="control_bar_order_custom">Customized</string>
+    <string name="control_bar_move_up">Move up</string>
+    <string name="control_bar_move_down">Move down</string>
 </resources>

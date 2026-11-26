@@ -110,7 +110,7 @@ object TeenModeTimer {
         val psasAccumulated = appSettings.getCachedInt(KEY_PSAS_ACCUMULATED_MS, 0)
         if (psasAccumulated < intervalMs) return false
         // 触发：清零广告累计，重新开始计
-        appSettings.putIntAsync(KEY_PSAS_ACCUMULATED_MS, 0)
+        appSettings.putIntBlocking(KEY_PSAS_ACCUMULATED_MS, 0)
         AppLog.i(TAG, "psas triggered, reset psas accumulated. psasAccumulated=$psasAccumulated intervalMs=$intervalMs")
         return true
     }
@@ -174,14 +174,14 @@ object TeenModeTimer {
         // 1) 休息累计
         val accumulated = appSettings.getCachedInt(KEY_ACCUMULATED_MS, 0) + deltaInt
         val limitMs = getWatchLimitMs()
-        appSettings.putIntAsync(KEY_ACCUMULATED_MS, accumulated)
+        appSettings.putIntBlocking(KEY_ACCUMULATED_MS, accumulated)
         // 2) 公益广告累计（独立计数器，和休息互不干扰）
         val psasAccumulated = appSettings.getCachedInt(KEY_PSAS_ACCUMULATED_MS, 0) + deltaInt
-        appSettings.putIntAsync(KEY_PSAS_ACCUMULATED_MS, psasAccumulated)
+        appSettings.putIntBlocking(KEY_PSAS_ACCUMULATED_MS, psasAccumulated)
         if (limitMs in 1..accumulated.toLong()) {
             // 达休息上限：写休息开始戳、触发休息状态，并清零广告累计（休息后重新计）
-            appSettings.putLongAsync(KEY_REST_START_MS, System.currentTimeMillis())
-            appSettings.putIntAsync(KEY_PSAS_ACCUMULATED_MS, 0)
+            appSettings.putLongBlocking(KEY_REST_START_MS, System.currentTimeMillis())
+            appSettings.putIntBlocking(KEY_PSAS_ACCUMULATED_MS, 0)
             _restingFlow.value = true
             AppLog.i(TAG, "watch limit reached, enter rest. accumulated=$accumulated")
         }
@@ -203,9 +203,9 @@ object TeenModeTimer {
         val elapsed = System.currentTimeMillis() - restStart
         if (elapsed >= restLimitMs) {
             // 休息到期：清零累计、清休息戳、清计时段起点、清广告累计，恢复观看从头计时。
-            appSettings.removeAsync(KEY_REST_START_MS)
-            appSettings.putIntAsync(KEY_ACCUMULATED_MS, 0)
-            appSettings.putIntAsync(KEY_PSAS_ACCUMULATED_MS, 0)
+            appSettings.removeBlocking(KEY_REST_START_MS)
+            appSettings.putIntBlocking(KEY_ACCUMULATED_MS, 0)
+            appSettings.putIntBlocking(KEY_PSAS_ACCUMULATED_MS, 0)
             segmentStartElapsedMs = null
             _restingFlow.value = false
             AppLog.i(TAG, "rest ended, reset accumulated. elapsed=$elapsed restLimitMs=$restLimitMs")
@@ -240,9 +240,9 @@ object TeenModeTimer {
      * 例如把上限调大后，旧累计值可能已超新上限，会立刻误触发休息。
      */
     fun resetForLimitChange() {
-        appSettings.putIntAsync(KEY_ACCUMULATED_MS, 0)
-        appSettings.putIntAsync(KEY_PSAS_ACCUMULATED_MS, 0)
-        appSettings.removeAsync(KEY_REST_START_MS)
+        appSettings.putIntBlocking(KEY_ACCUMULATED_MS, 0)
+        appSettings.putIntBlocking(KEY_PSAS_ACCUMULATED_MS, 0)
+        appSettings.removeBlocking(KEY_REST_START_MS)
         segmentStartElapsedMs = null
         _restingFlow.value = false
         AppLog.i(TAG, "reset for limit change")

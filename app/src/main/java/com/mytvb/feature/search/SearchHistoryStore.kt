@@ -50,7 +50,7 @@ class SearchHistoryStore(
     private fun persist(items: List<String>) {
         val array = JSONArray()
         items.forEach(array::put)
-        appSettings.putStringAsync(KEY_RECENT_SEARCH, array.toString())
+        appSettings.putStringBlocking(KEY_RECENT_SEARCH, array.toString())
     }
 }
 

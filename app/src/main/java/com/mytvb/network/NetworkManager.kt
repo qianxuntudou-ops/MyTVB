@@ -74,7 +74,7 @@ object NetworkManager {
             accept = { info: UserDetailInfoModel -> updateUserSession(info) },
             clear = { hardClearAndNotify("confirmed_session_expired") },
             lastChecked = { KoinPlatform.getKoin().get<AppSettingsDataStore>().getCachedLong(KEY_SESSION_HEALTH_CHECK_TS) },
-            markChecked = { time -> KoinPlatform.getKoin().get<AppSettingsDataStore>().putLongAsync(KEY_SESSION_HEALTH_CHECK_TS, time) }
+            markChecked = { time -> KoinPlatform.getKoin().get<AppSettingsDataStore>().putLongBlocking(KEY_SESSION_HEALTH_CHECK_TS, time) }
         )
     }
 
@@ -411,7 +411,7 @@ object NetworkManager {
     private fun saveRefreshToken(token: String) {
         runCatching {
             val stored = com.mytvb.network.security.SessionStorageCipher.encrypt(token) ?: token
-            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringAsync(KEY_REFRESH_TOKEN, stored)
+            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringBlocking(KEY_REFRESH_TOKEN, stored)
         }.onFailure {
             AppLog.e(TAG, "saveRefreshToken failed: ${it.message}")
         }
@@ -419,7 +419,7 @@ object NetworkManager {
 
     private fun clearRefreshToken() {
         runCatching {
-            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringAsync(KEY_REFRESH_TOKEN, null)
+            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringBlocking(KEY_REFRESH_TOKEN, null)
         }
     }
 
@@ -451,15 +451,15 @@ object NetworkManager {
             val store = KoinPlatform.getKoin().get<AppSettingsDataStore>()
             // 留 1 天提前量，避免拿临界有效 token 打请求
             val usableMs = (expiresInSec - 24L * 60 * 60) * 1000
-            store.putStringAsync(
+            store.putStringBlocking(
                 KEY_APP_ACCESS_TOKEN,
                 com.mytvb.network.security.SessionStorageCipher.encrypt(accessToken) ?: accessToken
             )
-            store.putStringAsync(
+            store.putStringBlocking(
                 KEY_APP_REFRESH_TOKEN,
                 com.mytvb.network.security.SessionStorageCipher.encrypt(refreshToken) ?: refreshToken
             )
-            store.putLongAsync(
+            store.putLongBlocking(
                 KEY_APP_TOKEN_EXPIRES_AT,
                 if (usableMs > 0) System.currentTimeMillis() + usableMs else 0L
             )
@@ -471,16 +471,16 @@ object NetworkManager {
     private fun clearAppToken() {
         runCatching {
             val store = KoinPlatform.getKoin().get<AppSettingsDataStore>()
-            store.putStringAsync(KEY_APP_ACCESS_TOKEN, null)
-            store.putStringAsync(KEY_APP_REFRESH_TOKEN, null)
-            store.putLongAsync(KEY_APP_TOKEN_EXPIRES_AT, 0L)
+            store.putStringBlocking(KEY_APP_ACCESS_TOKEN, null)
+            store.putStringBlocking(KEY_APP_REFRESH_TOKEN, null)
+            store.putLongBlocking(KEY_APP_TOKEN_EXPIRES_AT, 0L)
         }
     }
 
     suspend fun activateAfterLogin() {
         sessionOwnerVersion.incrementAndGet()
         com.mytvb.network.session.RequestSessionScope.invalidate()
-        KoinPlatform.getKoin().get<AppSettingsDataStore>().putLongAsync(KEY_SESSION_HEALTH_CHECK_TS, 0L)
+        KoinPlatform.getKoin().get<AppSettingsDataStore>().putLongBlocking(KEY_SESSION_HEALTH_CHECK_TS, 0L)
         securityCoordinator.activateAfterLogin()
         // 登录 cookie 已写入（扫码流程），立即从 LoggedOut 对齐到 CookieOnly，
         // 不必等首次 nav 请求返回

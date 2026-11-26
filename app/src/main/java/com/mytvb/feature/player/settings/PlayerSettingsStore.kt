@@ -303,7 +303,7 @@ object PlayerSettingsStore {
     }
 
     fun saveAfterPlayMode(mode: AfterPlayMode) {
-        appSettings.putStringAsync(KEY_AFTER_PLAY, mode.toSettingValue())
+        appSettings.putStringBlocking(KEY_AFTER_PLAY, mode.toSettingValue())
         cachedSettings = cachedSettings?.copy(afterPlayMode = mode)
         lastSettingsSnapshot = null
     }
@@ -313,7 +313,7 @@ object PlayerSettingsStore {
         val normalized = lan.trim()
         if (normalized.isBlank()) return
         if (cachedSettings?.subtitlePreferredLan == normalized) return
-        appSettings.putStringAsync(KEY_SUBTITLE_PREFERRED_LAN, normalized)
+        appSettings.putStringBlocking(KEY_SUBTITLE_PREFERRED_LAN, normalized)
         cachedSettings = cachedSettings?.copy(subtitlePreferredLan = normalized)
         lastSettingsSnapshot = null
     }
@@ -321,7 +321,7 @@ object PlayerSettingsStore {
     /** 播放页 SC 开关按钮切换即时落盘（存储值「开/关」，与设置页 toggle 同口径）。 */
     fun saveShowLiveSuperChat(enabled: Boolean) {
         if (cachedSettings?.showLiveSuperChat == enabled) return
-        appSettings.putStringAsync(KEY_SHOW_LIVE_SUPER_CHAT, if (enabled) "开" else "关")
+        appSettings.putStringBlocking(KEY_SHOW_LIVE_SUPER_CHAT, if (enabled) "开" else "关")
         cachedSettings = cachedSettings?.copy(showLiveSuperChat = enabled)
         lastSettingsSnapshot = null
     }
@@ -389,7 +389,7 @@ object PlayerSettingsStore {
         appSettings.getCachedString(KEY_SOFTWARE_VIDEO_DECODER) == "开"
 
     fun saveSoftwareDecoderEnabled(enabled: Boolean) {
-        appSettings.putStringAsync(KEY_SOFTWARE_VIDEO_DECODER, if (enabled) "开" else "关")
+        appSettings.putStringBlocking(KEY_SOFTWARE_VIDEO_DECODER, if (enabled) "开" else "关")
     }
 
     /**

@@ -10,7 +10,7 @@
         <layer-list>
             <item>
                 <shape>
-                    <solid android:color="#3D3D3D"/>
+                    <solid android:color="?attr/thirdBackgroundColor"/>
                 </shape>
             </item>
             <item android:left="@dimen/px8">
@@ -24,8 +24,8 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#2A2A2A"/>
-            <stroke android:width="@dimen/px2" android:color="#444444"/>
+            <solid android:color="?attr/subBackgroundColor"/>
+            <stroke android:width="@dimen/px2" android:color="?attr/dividerColor"/>
         </shape>
     </item>
 </selector>

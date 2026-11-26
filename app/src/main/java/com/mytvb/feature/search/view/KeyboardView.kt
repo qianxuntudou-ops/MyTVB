@@ -208,7 +208,7 @@ class KeyboardView @JvmOverloads constructor(
             setOnClickListener {
                 if (!isT9Keyboard) {
                     isT9Keyboard = true
-                    appSettings.putBooleanAsync(KEY_IS_T9_KEYBOARD, true)
+                    appSettings.putBooleanBlocking(KEY_IS_T9_KEYBOARD, true)
                     renderKeyboard()
                 }
             }
@@ -218,7 +218,7 @@ class KeyboardView @JvmOverloads constructor(
             setOnClickListener {
                 if (isT9Keyboard) {
                     isT9Keyboard = false
-                    appSettings.putBooleanAsync(KEY_IS_T9_KEYBOARD, false)
+                    appSettings.putBooleanBlocking(KEY_IS_T9_KEYBOARD, false)
                     renderKeyboard()
                 }
             }

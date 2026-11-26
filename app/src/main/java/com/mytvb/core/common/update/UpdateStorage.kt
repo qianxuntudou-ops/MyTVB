@@ -62,7 +62,7 @@ object UpdateStorage {
         appSettings.getCachedString(KEY_SAVE_LOCATION) ?: CHOICE_INTERNAL
 
     fun saveChoice(context: Context, value: String) {
-        appSettings.putStringAsync(KEY_SAVE_LOCATION, value)
+        appSettings.putStringBlocking(KEY_SAVE_LOCATION, value)
     }
 
     /**

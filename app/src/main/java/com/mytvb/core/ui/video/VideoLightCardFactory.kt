@@ -633,14 +633,26 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     }
 }
 
+/** 解析当前主题文字色（白主题黑字/深色系白字）；解析不到回落深色系旧值。 */
+internal fun resolveThemedTextColor(context: Context, attr: Int, fallback: Int): Int {
+    val value = TypedValue()
+    if (!context.theme.resolveAttribute(attr, value, true)) return fallback
+    return if (value.resourceId != 0) ContextCompat.getColor(context, value.resourceId) else value.data
+}
+
 class VideoCardTextLayerView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
     private var metrics = LightCardMetrics.get(context)
-    private val defaultTitleColor = ContextCompat.getColor(context, R.color.textColor)
-    private val ownerTextColor = ContextCompat.getColor(context, R.color.subTextColor)
+    // 标题/UP主行随主题文字色（issue#144：写死 R.color.textColor 在白主题下白底白字不可见）
+    private val defaultTitleColor =
+        resolveThemedTextColor(context, android.R.attr.textColorPrimary, fallback = 0xFFEEEEEE.toInt())
+    private val ownerTextColor =
+        resolveThemedTextColor(context, android.R.attr.textColorSecondary, fallback = 0xFFCCCCCC.toInt())
+    // 聚焦卡整卡铺 ?attr/colorControlHighlight 彩色底，文字恒白保证对比（对齐主钮白字惯例）
+    private val focusedTextColor = 0xFFFFFFFF.toInt()
     private var assets = TextLayerAssets.get(context, metrics, ownerTextColor)
     private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = defaultTitleColor
@@ -690,6 +702,7 @@ class VideoCardTextLayerView @JvmOverloads constructor(
 
     private val cardFocusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
         setTitleScrollEnabled(isFocusOnThisCard(newFocus))
+        applyFocusTextColor()
     }
 
     private val titleScrollRunnable = Runnable { tickTitleScroll() }
@@ -869,8 +882,24 @@ class VideoCardTextLayerView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        applyFocusTextColor()
         drawTitle(canvas)
         drawOwnerRow(canvas)
+    }
+
+    /** 标题/UP主行按焦点状态取色：聚焦=彩色高亮底上恒白，未聚焦=主题文字色；色值有变才重绘。 */
+    private fun applyFocusTextColor() {
+        // 焦点判断必须走 isFocusOnThisCard 的 parent 链遍历——isFocusedCardView() 的
+        // rootView.findFocus() 是全窗口查询（attach 后 rootView=DecorView），焦点在
+        // 页面任何位置时所有卡都会误判聚焦而画白字（白主题下白底白字不可见）
+        val focused = isFocusOnThisCard(rootView.findFocus())
+        val nextTitle = if (focused) focusedTextColor else titleColor
+        val nextOwner = if (focused) focusedTextColor else ownerTextColor
+        if (titlePaint.color != nextTitle || ownerPaint.color != nextOwner) {
+            titlePaint.color = nextTitle
+            ownerPaint.color = nextOwner
+            invalidate()
+        }
     }
 
     private fun drawTitle(canvas: Canvas) {

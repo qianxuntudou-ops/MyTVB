@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 排序弹窗「恢复默认排序」钮：键盘选中（selected）=中性亮底，与行选中态同色；
+     pressed=colorPrimary、常态淡灰底（同 bg_hongguo_btn_detail 常态）。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape>
+            <solid android:color="?attr/colorPrimary"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="#3D3D3D"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="#14FFFFFF"/>
+            <corners android:radius="@dimen/px15"/>
+        </shape>
+    </item>
+</selector>

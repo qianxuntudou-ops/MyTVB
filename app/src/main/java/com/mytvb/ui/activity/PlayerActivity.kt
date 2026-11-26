@@ -1570,7 +1570,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     /** 开关型动作通用：落盘（中文"开/关"口径）+ 即时生效回调 + Toast 反馈。 */
     private fun toggleShortcutSwitch(key: String, title: String, current: Boolean, apply: (Boolean) -> Unit) {
         val newValue = !current
-        appSettings.putStringAsync(key, if (newValue) "开" else "关")
+        appSettings.putStringBlocking(key, if (newValue) "开" else "关")
         apply(newValue)
         AppToast.show(this, "$title：${getString(if (newValue) R.string.on else R.string.off)}")
     }
@@ -1640,7 +1640,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val currentIndex = options.indexOf(playerSettings.defaultPlaybackSpeed.toString()).coerceAtLeast(0)
         showShortcutChoiceDialog(this, getString(R.string.default_play_speed), options, currentIndex) { index ->
             val speed = options.getOrNull(index)?.toFloatOrNull() ?: return@showShortcutChoiceDialog
-            appSettings.putStringAsync(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, speed.toString())
+            appSettings.putStringBlocking(ShortcutSettingKeys.DEFAULT_PLAY_SPEED, speed.toString())
             playerSettings = playerSettings.copy(defaultPlaybackSpeed = speed)
             // 音乐区 1 倍速开关不拦快捷键即时应用：用户显式调整优先
             playerView.setPlaySpeed(speed)
@@ -1659,7 +1659,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val displayOptions = storedOptions.map { localizedSettingLabel(it) }.toTypedArray()
         showShortcutChoiceDialog(this, getString(R.string.show_subtitle_default), displayOptions, storedOptions.indexOf(currentStored)) { index ->
             val stored = storedOptions.getOrElse(index) { storedOptions[2] }
-            appSettings.putStringAsync(ShortcutSettingKeys.SUBTITLE_DEFAULT_MODE, stored)
+            appSettings.putStringBlocking(ShortcutSettingKeys.SUBTITLE_DEFAULT_MODE, stored)
             val mode = when (stored) {
                 storedOptions[0] -> SubtitleDefaultMode.OFF
                 storedOptions[1] -> SubtitleDefaultMode.ON
