@@ -524,6 +524,12 @@ class VideoPlayerViewModel(
 
     /** 官方片头片尾：playinfo 就绪时暂存（开关关闭即清空），真正装载见 [applyPendingOfficialClips]。 */
     private fun applyOfficialClips(cid: Long, playInfo: PlayInfoModel) {
+        AppLog.i(
+            TAG,
+            "official_clips apply cid=$cid enabled=${currentSettings.skipOfficialOpEd} " +
+                "preview=$isPreviewPlayback raw=${playInfo.clipInfoList?.size ?: -1} " +
+                "duration=${playInfo.timeLength} from=${playInfo.from}"
+        )
         if (!currentSettings.skipOfficialOpEd) {
             pendingOfficialClips = emptyList()
             pendingOfficialClipsCid = 0L
@@ -543,6 +549,11 @@ class VideoPlayerViewModel(
 
     /** 首帧后装载官方片头片尾片段；cid 不匹配（预载的下一集）保持不动。 */
     private fun applyPendingOfficialClips(cid: Long) {
+        AppLog.i(
+            TAG,
+            "official_clips apply_pending cid=$cid pendingCid=$pendingOfficialClipsCid " +
+                "pending=${pendingOfficialClips.size}"
+        )
         if (pendingOfficialClipsCid <= 0L || pendingOfficialClipsCid != cid) return
         officialClipUseCase.loadSegments(pendingOfficialClips)
         officialClipsCid = cid
