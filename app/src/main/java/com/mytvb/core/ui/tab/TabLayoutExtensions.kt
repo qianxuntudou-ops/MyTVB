@@ -265,7 +265,9 @@ fun TabLayout.enableDirectTabNavigation(
             suppressLongPressTooltip(tabView)
             applyTabBackground(tabView)
             bindTabTouchTextColor(tabView)
-            bindTabFocusTextColor(tabView)
+            // scrollable tab 栏超一屏时（UP 主合集多，tab 可达几十个）屏外 tab 仍在焦点候选里，
+            // material 只在选中时才滚动：必须显式步进 + 获焦滚进视口，否则焦点跑出屏幕=丢焦
+            bindTabFocusTextColor(tabView, revealOnFocus = true)
             // tab 宽度随文字自适应的前提：文字永远单行（material 默认 maxLines=2，长合集名会换行被固定高度裁切）
             findFirstTextView(tabView)?.setSingleLine(true)
             tabView.setOnKeyListener { _, keyCode, event ->
@@ -276,9 +278,11 @@ fun TabLayout.enableDirectTabNavigation(
                     // 首/末 tab 的越界左右键：回调接管去向；未提供回调则一律消费——
                     // 放行会被 FocusFinder 几何搜索把焦点送到关注按钮等不可预期的位置
                     KeyEvent.KEYCODE_DPAD_LEFT ->
-                        if (index == 0) onEdgeLeft?.invoke() ?: true else false
+                        if (index == 0) onEdgeLeft?.invoke() ?: true
+                        else stepTabFocus(tabStrip, index - 1)
                     KeyEvent.KEYCODE_DPAD_RIGHT ->
-                        if (index == tabStrip.childCount - 1) onEdgeRight?.invoke() ?: true else false
+                        if (index == tabStrip.childCount - 1) onEdgeRight?.invoke() ?: true
+                        else stepTabFocus(tabStrip, index + 1)
                     else -> false
                 }
             }
@@ -382,6 +386,10 @@ private fun TabLayout.bindTabTouchTextColor(tabView: View) {
  * TabLayout 会按选中态重刷文字颜色，焦点 tab 的提亮可能被冲掉；选中变化后再校正一次。
  */
 private fun TabLayout.reapplyTextColorOnSelectionChange() {
+    // 幂等重装会反复进入这里（合集多的 UP 逐个追加 tab 时可达几十次），
+    // 监听器只注册一次，否则每次选中 tab 会堆积几十个 post 回调
+    if (getTag(R.id.tag_tab_selected_relabel_bound) == true) return
+    setTag(R.id.tag_tab_selected_relabel_bound, true)
     addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
         override fun onTabSelected(tab: TabLayout.Tab) {
             post { refreshFocusedTabTextColor() }

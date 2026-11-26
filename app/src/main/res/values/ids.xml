@@ -12,4 +12,5 @@
     <item type="id" name="tag_first_screen_render_token" />
     <item type="id" name="tag_first_screen_append_runnable" />
     <item type="id" name="tag_emote_text_key" />
+    <item type="id" name="tag_tab_selected_relabel_bound" />
 </resources>
