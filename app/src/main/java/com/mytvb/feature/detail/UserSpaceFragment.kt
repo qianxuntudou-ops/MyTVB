@@ -313,17 +313,20 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     }
 
     /**
-     * 探测 UP 主的系列与合集（x/polymer/web-space/home/seasons_series），
+     * 探测 UP 主的系列与合集（x/polymer/web-space/seasons_series_list，跨页聚合取全），
      * 每个系列/合集各建一个 tab：直播回放自动系列排最前，其后系列与合集（弹窗同款）。
      */
     private fun loadCollectionTabs() {
         if (mid == 0L) return
         lifecycleScope.launch {
-            userRepository.getSeasonsSeriesList(mid)
-                .onSuccess { response ->
-                    val data = response.data ?: return@onSuccess
-                    val seriesList = data.series.orEmpty()
-                    val seasonsList = data.seasons.orEmpty()
+            userRepository.getSeasonsSeriesAll(mid)
+                .onSuccess { bundle ->
+                    val seriesList = bundle.series
+                    val seasonsList = bundle.seasons
+                    AppLog.i(
+                        "UserSpace",
+                        "collections: total=${bundle.totalCount} seasons=${seasonsList.size} series=${seriesList.size}"
+                    )
                     val replay = seriesList.firstOrNull {
                         it.seriesId > 0 && it.name.contains(LIVE_REPLAY_SERIES_KEYWORD)
                     }
@@ -477,11 +480,18 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
             }
             TabKind.SEASON -> {
                 // seasons_archives_list 的 page 只带 total（无 has_more），按满页判定翻页
-                val data = userRepository.getSeasonArchives(
+                val response = userRepository.getSeasonArchives(
                     mid, seasonId = state.seasonId, page = page, pageSize = 20,
                     sortDesc = order != OwnerListOrder.OLDEST
-                ).getOrThrow().data
+                )
+                val base = response.getOrThrow()
+                val data = base.data
                 val videos = data?.archives.orEmpty()
+                AppLog.d(
+                    "UserSpace",
+                    "fetch season pn=$page seasonId=${state.seasonId} code=${base.code} " +
+                        "total=${data?.totalCount} archives=${videos.size}"
+                )
                 TabPage(videos, videos.size >= 20)
             }
         }
@@ -574,6 +584,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                 isLoading = false
                 state.loading = false
                 rollbackPage(state)
+                AppLog.w("UserSpace", "tab=${state.title} page=$pageToLoad load failed: ${e.message}")
                 AppToast.show(requireContext(), getString(R.string.load_failed_format, e.message))
                 maybeLoadActiveTabFirstPage()
             }

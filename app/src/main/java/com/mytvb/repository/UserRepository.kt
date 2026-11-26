@@ -14,6 +14,8 @@ import com.mytvb.model.video.LaterWatchWrapper
 import com.mytvb.model.video.UserDynamicResponse
 import com.mytvb.model.video.AllDynamicResponse
 import com.mytvb.model.series.SeasonArchivesResponse
+import com.mytvb.model.series.SeasonsSeriesBundle
+import com.mytvb.model.series.SeasonsSeriesItem
 import com.mytvb.model.series.SeasonsSeriesListResponse
 import com.mytvb.network.WbiGenerator
 import com.mytvb.network.api.ApiService
@@ -297,27 +299,93 @@ class UserRepository(
             )
         }
 
-    suspend fun getSeasonsSeriesList(
+    /** UP 主单页合集/系列列表（旧版接口，page_num 真翻页；page_size 上限 20，>20 返回 -400）。 */
+    suspend fun getSeasonsSeriesListPage(
         mid: Long,
         pageNum: Int = 1,
-        // 实测该接口 page_size 上限 20，>20 返回 -400（网页版用 10/20）
-        pageSize: Int = 20
-    ): Result<BaseResponse<SeasonsSeriesListResponse>> =
-        runCatching {
-            // 网页版新版接口（home/seasons_series）无需 WBI 签名；老 seasons_series_list 已实测 -400。
-            // Referer 必须是空间页，HeaderInterceptor 对 web-space 路径统一处理。
-            sessionGateway.syncAuthState(
+        pageSize: Int = SEASONS_SERIES_PAGE_SIZE
+    ): BaseResponse<SeasonsSeriesListResponse> =
+        // 网页版旧接口（seasons_series_list）无需 WBI 签名；Referer 必须是空间页，
+        // HeaderInterceptor 对 web-space 路径统一处理。
+        sessionGateway.syncAuthState(
+            apiService.getSeasonsSeriesListLegacy(
+                mapOf(
+                    "mid" to mid.toString(),
+                    "page_num" to pageNum.toString(),
+                    "page_size" to pageSize.toString(),
+                    "web_location" to "333.1387"
+                )
+            ),
+            source = "getSeasonsSeriesList"
+        )
+
+    /**
+     * UP 主的全部合集与系列（跨页聚合）。
+     *
+     * 单页上限 20 条（seasons+series 合计，接口 page.total 为总条数），合集多的 UP（实测 32 条）
+     * 必须翻页才能取全。新版 home/seasons_series 忽略 page_num、只返回第一页（合集 >20 个即缺），
+     * 因此主用旧版接口分页；旧版整体不可用时回落新版单页，保住原有的第一页合集。
+     *
+     * 停止条件：取满 total / 某页无新增（服务端不再翻页）/ 空页 / 页数上限。
+     */
+    suspend fun getSeasonsSeriesAll(mid: Long): Result<SeasonsSeriesBundle> = runCatching {
+        val seasons = LinkedHashMap<Long, SeasonsSeriesItem>()
+        val series = LinkedHashMap<Long, SeasonsSeriesItem>()
+        var total = 0
+        var fetchedPages = 0
+        var legacyWorked = false
+        var pageNum = 1
+        while (pageNum <= SEASONS_SERIES_MAX_PAGES) {
+            val response = getSeasonsSeriesListPage(mid, pageNum)
+            if (response.code != 0) {
+                AppLog.w("UserRepository", "seasons_series page=$pageNum code=${response.code} ${response.message}")
+                break
+            }
+            legacyWorked = true
+            val data = response.data ?: break
+            total = if (data.totalCount > 0) data.totalCount else total
+            val pageSeasons = data.seasons
+            val pageSeries = data.series
+            if (pageSeasons.isEmpty() && pageSeries.isEmpty()) break
+            val before = seasons.size + series.size
+            pageSeasons.forEach { item -> if (item.seasonId > 0) seasons.putIfAbsent(item.seasonId, item) }
+            pageSeries.forEach { item -> if (item.seriesId > 0) series.putIfAbsent(item.seriesId, item) }
+            fetchedPages++
+            val after = seasons.size + series.size
+            if (after == before) break // 服务端不认 page_num（同页重复），继续翻只会打空炮
+            if (total > 0 && after >= total) break
+            pageNum++
+        }
+        if (!legacyWorked) {
+            // 旧版接口不可用（下线/风控）：回落新版单页
+            val fallback = sessionGateway.syncAuthState(
                 apiService.getSeasonsSeriesList(
                     mapOf(
                         "mid" to mid.toString(),
-                        "page_num" to pageNum.toString(),
-                        "page_size" to pageSize.toString(),
+                        "page_num" to "1",
+                        "page_size" to SEASONS_SERIES_PAGE_SIZE.toString(),
                         "web_location" to "333.1387"
                     )
                 ),
                 source = "getSeasonsSeriesList"
             )
+            AppLog.w(
+                "UserRepository",
+                "seasons_series legacy unavailable, fallback new api code=${fallback.code} " +
+                    "seasons=${fallback.data?.seasons?.size ?: 0} series=${fallback.data?.series?.size ?: 0}"
+            )
+            fallback.data?.let { data ->
+                data.seasons.forEach { item -> if (item.seasonId > 0) seasons.putIfAbsent(item.seasonId, item) }
+                data.series.forEach { item -> if (item.seriesId > 0) series.putIfAbsent(item.seriesId, item) }
+            }
         }
+        AppLog.i(
+            "UserRepository",
+            "seasons_series all mid=$mid pages=$fetchedPages total=$total " +
+                "seasons=${seasons.size} series=${series.size}"
+        )
+        SeasonsSeriesBundle(seasons.values.toList(), series.values.toList(), total)
+    }
 
     suspend fun getSeriesArchives(
         mid: Long,
@@ -457,3 +525,9 @@ class UserRepository(
         }
     }
 }
+
+/** 合集/系列列表单页条数。接口硬上限 20，>20 返回 -400。 */
+private const val SEASONS_SERIES_PAGE_SIZE = 20
+
+/** 合集/系列翻页聚合的页数保护上限（20 页 × 20 条 = 400 条，远超正常 UP 主的合集数）。 */
+private const val SEASONS_SERIES_MAX_PAGES = 20

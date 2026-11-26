@@ -105,8 +105,15 @@ interface ApiService {
         @QueryMap params: Map<String, String>
     ): BaseResponse<UserDynamicResponse>
 
-    /** UP 主合集与系列列表（含"直播回放"自动系列），2025+ 网页版新版接口，无需 WBI 签名。
+    /** UP 主合集与系列列表（含"直播回放"自动系列），旧版网页版接口：page_num 真翻页、page.total 为总条数。
      *  Referer 由 HeaderInterceptor 对 web-space 路径统一置为 space.bilibili.com（必须，否则 -400）。 */
+    @GET("x/polymer/web-space/seasons_series_list")
+    suspend fun getSeasonsSeriesListLegacy(
+        @QueryMap params: Map<String, String>
+    ): BaseResponse<SeasonsSeriesListResponse>
+
+    /** 同上的新版接口（home/seasons_series）：实测忽略 page_num、只返回第一页（合集 >20 个即缺），
+     *  仅作旧版接口失效时的兜底。 */
     @GET("x/polymer/web-space/home/seasons_series")
     suspend fun getSeasonsSeriesList(
         @QueryMap params: Map<String, String>

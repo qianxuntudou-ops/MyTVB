@@ -73,6 +73,10 @@ class OwnerDetailDialog(
 
         // B 站把直播回放投稿归为 UP 主名下自动生成的系列，名字模板"{UP名}的直播回放"。
         const val LIVE_REPLAY_SERIES_KEYWORD = "直播回放"
+
+        // 打开弹窗时后台并行预载首屏的合集类 tab 上限。合集多的 UP 有几十个合集，
+        // 全铺会瞬间发出几十个请求触发风控；其余 tab 等用户切过去再按需加载。
+        const val COLLECTION_PARALLEL_PREFETCH_LIMIT = 8
     }
 
     private val binding = DialogOwnerDetailBinding.inflate(LayoutInflater.from(context))
@@ -279,24 +283,24 @@ class OwnerDetailDialog(
     }
 
     /**
-     * 探测 UP 主的系列与合集（x/polymer/web-space/home/seasons_series，2025+ 网页版新版接口），
+     * 探测 UP 主的系列与合集（x/polymer/web-space/seasons_series_list，跨页聚合取全），
      * 每个系列/合集各建一个 tab：series_list 里的直播回放自动系列（name 含"直播回放"）排最前，
      * 其后是其余系列与全部合集。探测失败静默（tab 栏只剩"视频"）。
      */
     private fun loadCollectionTabs() {
         scope.launch {
-            val result = userRepository.getSeasonsSeriesList(owner.mid)
-            result.onSuccess { response ->
-                val data = response.data
-                val seriesList = data?.series.orEmpty()
-                val seasonsList = data?.seasons.orEmpty()
+            val result = userRepository.getSeasonsSeriesAll(owner.mid)
+            result.onSuccess { bundle ->
+                val seriesList = bundle.series
+                val seasonsList = bundle.seasons
                 val replay = seriesList.firstOrNull {
                     it.seriesId > 0 && it.name.contains(LIVE_REPLAY_SERIES_KEYWORD)
                 }
                 AppLog.i(
                     TAG,
-                    "collections: code=${response.code} seasons=${seasonsList.joinToString("|") { it.name }} " +
-                        "series=${seriesList.joinToString("|") { it.name }} replay=${replay?.seriesId}"
+                    "collections: total=${bundle.totalCount} seasons=${seasonsList.size} series=${seriesList.size} " +
+                        "seasons_names=${seasonsList.joinToString("|") { it.name }} " +
+                        "series_names=${seriesList.joinToString("|") { it.name }} replay=${replay?.seriesId}"
                 )
                 var replayState: TabState? = null
                 if (replay != null && replay.seriesId > 0) {
@@ -321,27 +325,45 @@ class OwnerDetailDialog(
                     replayState.searching = true
                     selectTabIndex(tabStates.indexOf(replayState))
                 } else if (hasCurrentVideoToLocate() && !userEngagedContent) {
-                    // 后台并行预载回放+全部合集的第一页：命中即切（不用等视频流翻完 10 页）。
+                    // 后台并行预载回放+合集的第一页：命中即切（不用等视频流翻完 10 页）。
                     // 合集正序排列（老视频在前），从合集里点进来的老视频大概率第一页就命中；
                     // 不在任何合集/回放里的视频，由视频流搜索兜底。
-                    if (currentSeasonId > 0L) {
+                    val knownTarget = if (currentSeasonId > 0L) {
                         // 已知归属（播放页 ugcSeason.id）：该合集/系列 tab 直接并行翻页搜索，
                         // 不必等投稿流烧完 10 页——投稿按最新排序，老视频页数很深。
                         tabStates.drop(1).firstOrNull {
                             it.seasonId == currentSeasonId || it.seriesId == currentSeasonId
-                        }?.let { target ->
+                        }?.also { target ->
                             target.searching = true
                             AppLog.i(
                                 TAG,
                                 "locate: parallel search on known collection tab=${target.title} id=$currentSeasonId"
                             )
                         }
+                    } else {
+                        null
                     }
                     // UP 有直播回放系列时 fallback 链迟早要搜它：与投稿流并行翻页，
                     // 回放视频（不在投稿流里）的定位从"先烧完 10 页投稿"缩短为回放流自身翻页耗时。
                     replayState?.searching = true
+                    // 合集可能几十个，全部铺首屏会瞬间发出几十个请求触发风控：
+                    // 回放/已知目标优先，其余按顺序只铺前若干个，剩下的等用户切到该 tab 再按需加载。
+                    var prefetchedCount = 0
+                    listOfNotNull(replayState, knownTarget).distinct().forEach { state ->
+                        if (prefetchedCount < COLLECTION_PARALLEL_PREFETCH_LIMIT &&
+                            !state.loadedFirstPage && state.items.isEmpty()
+                        ) {
+                            loadTabPage(state)
+                            prefetchedCount++
+                        }
+                    }
                     tabStates.drop(1).forEach { state ->
-                        if (!state.loadedFirstPage && state.items.isEmpty()) loadTabPage(state)
+                        if (prefetchedCount >= COLLECTION_PARALLEL_PREFETCH_LIMIT) return@forEach
+                        if (state === replayState || state === knownTarget) return@forEach
+                        if (!state.loadedFirstPage && state.items.isEmpty()) {
+                            loadTabPage(state)
+                            prefetchedCount++
+                        }
                     }
                 }
             }.onFailure {
