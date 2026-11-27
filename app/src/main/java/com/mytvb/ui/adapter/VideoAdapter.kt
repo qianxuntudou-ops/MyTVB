@@ -1,5 +1,6 @@
 package com.mytvb.ui.adapter
 
+
 import android.annotation.SuppressLint
 import android.graphics.Outline
 import android.view.KeyEvent
@@ -315,7 +316,7 @@ class VideoAdapter(
             val title = resolveDisplayTitle(video)
             if (isCurrentlyPlaying) {
                 titleInPlayingMode = true
-                val accentColor = ContextCompat.getColor(views.root.context, R.color.colorAccent)
+                val accentColor = resolveThemedTextColor(views.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
                 views.textLayer.setTitle(title, lines = titleLines, isPlaying = true, color = accentColor)
             } else {
                 titleInPlayingMode = false

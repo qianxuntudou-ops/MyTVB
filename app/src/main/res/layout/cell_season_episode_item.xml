@@ -51,7 +51,7 @@
                     <androidx.appcompat.widget.AppCompatTextView
                         android:id="@+id/text_play_count"
                         android:textSize="@dimen/px18"
-                        android:textColor="@color/textColor"
+                        android:textColor="?android:attr/textColorPrimary"
                         android:singleLine="true"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -71,7 +71,7 @@
                     <androidx.appcompat.widget.AppCompatTextView
                         android:id="@+id/text_danmaku"
                         android:textSize="@dimen/px18"
-                        android:textColor="@color/textColor"
+                        android:textColor="?android:attr/textColorPrimary"
                         android:singleLine="true"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -81,7 +81,7 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_duration"
                 android:textSize="@dimen/px18"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:singleLine="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -103,7 +103,7 @@
                  （[GIF]165. 标题），标题区吃满整行不再被序号/图标列挤压 -->
             <com.mytvb.core.ui.view.TwoLineScrollTextView
                 android:textSize="@dimen/px30"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:ellipsize="end"
                 android:id="@+id/text_title"
                 android:layout_width="0dp"
@@ -114,7 +114,7 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
         <androidx.appcompat.widget.AppCompatTextView
             android:textSize="@dimen/px26"
-            android:textColor="@color/subTextColor"
+            android:textColor="?android:attr/textColorSecondary"
             android:id="@+id/text_pub_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

@@ -1,5 +1,7 @@
 package com.mytvb.feature.cctv.vod
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.util.TypedValue
@@ -355,7 +357,7 @@ class CctvVodFragment : BaseFragment<FragmentCctvVodBinding>(),
 
     private fun chipTextColors(): ColorStateList {
         val context = requireContext()
-        val accent = ContextCompat.getColor(context, R.color.colorAccent)
+        val accent = resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
         val primary = resolveThemeColor(android.R.attr.textColorPrimary)
         val secondary = resolveThemeColor(android.R.attr.textColorSecondary)
         return ColorStateList(

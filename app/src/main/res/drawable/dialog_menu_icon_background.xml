@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/backgroundColor" />
+    <solid android:color="?attr/backgroundColor" />
     <corners android:radius="@dimen/px18" />
     <stroke
         android:width="@dimen/px2"
-        android:color="@color/fourthBackgroundColor" />
+        android:color="?attr/fourthBackgroundColor" />
 </shape>

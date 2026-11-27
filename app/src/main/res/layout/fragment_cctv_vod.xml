@@ -41,7 +41,7 @@
             android:paddingEnd="@dimen/px25"
             android:paddingBottom="@dimen/px8"
             android:text="@string/search"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="@dimen/px26" />
     </LinearLayout>
 

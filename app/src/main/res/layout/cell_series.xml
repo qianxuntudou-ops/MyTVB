@@ -33,7 +33,7 @@
         android:paddingEnd="@dimen/px7"
         android:paddingBottom="@dimen/px3"
         android:text="@string/badge"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px22"
         app:layout_constraintEnd_toEndOf="@id/imageView"
         app:layout_constraintTop_toTopOf="@id/imageView" />

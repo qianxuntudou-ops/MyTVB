@@ -23,7 +23,7 @@
                 android:paddingTop="@dimen/px14"
                 android:paddingBottom="@dimen/px8"
                 android:text="@string/history_continuation_title"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/px26" />
 
             <androidx.recyclerview.widget.RecyclerView

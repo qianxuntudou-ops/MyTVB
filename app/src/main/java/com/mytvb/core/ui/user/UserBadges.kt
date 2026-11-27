@@ -1,5 +1,7 @@
 package com.mytvb.core.ui.user
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.widget.TextView
 import androidx.collection.LruCache
 import androidx.core.content.ContextCompat
@@ -86,7 +88,18 @@ object UserBadgeText {
 
     fun bind(textView: TextView, name: String, isVip: Boolean) {
         textView.text = name
-        val colorRes = if (isVip) R.color.biliPink else R.color.textColor
-        textView.setTextColor(ContextCompat.getColor(textView.context, colorRes))
+        if (isVip) {
+            // 三态 selector（vip_name_text）：列表行聚焦会把名字置 selected，
+            // 此时切主文字色——粉聚焦块上粉名不可读（白主题用户实测）
+            textView.setTextColor(
+                androidx.appcompat.content.res.AppCompatResources.getColorStateList(
+                    textView.context, R.color.vip_name_text
+                )
+            )
+        } else {
+            textView.setTextColor(
+                resolveThemedTextColor(textView.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+            )
+        }
     }
 }

@@ -18,7 +18,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginEnd="@dimen/px20"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px30"
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -37,7 +37,7 @@
         android:paddingEnd="@dimen/px15"
         android:paddingBottom="@dimen/px5"
         android:text="@string/adapter_current_selection"
-        android:textColor="@color/colorAccent"
+        android:textColor="?attr/colorAccent"
         android:textSize="@dimen/px22"
         android:textStyle="bold"
         android:visibility="gone"
@@ -54,5 +54,5 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/ic_check"
-        app:tint="@color/colorAccent" />
+        app:tint="?attr/colorAccent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

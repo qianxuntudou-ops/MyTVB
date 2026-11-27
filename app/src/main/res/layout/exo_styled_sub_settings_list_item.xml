@@ -16,7 +16,7 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="@dimen/px20"
         android:gravity="start|center_vertical"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textDirection="locale"
         android:textSize="@dimen/px30"
         android:textStyle="bold"
@@ -35,5 +35,5 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:tint="@color/colorAccent" />
+        app:tint="?attr/colorAccent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

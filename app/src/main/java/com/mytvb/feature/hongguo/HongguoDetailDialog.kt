@@ -46,6 +46,10 @@ class HongguoDetailDialog(
     private val hint: DramaUi? = null
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogHongguoDetailBinding
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var detail: HongguoWeb.SeriesDetail? = null
@@ -70,7 +74,7 @@ class HongguoDetailDialog(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        binding = DialogHongguoDetailBinding.inflate(layoutInflater)
+        binding = DialogHongguoDetailBinding.inflate(LayoutInflater.from(hostContext))
         DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,

@@ -29,7 +29,7 @@
         android:layout_marginTop="@dimen/px12"
         android:ellipsize="end"
         android:maxLines="2"
-        android:textColor="@color/colorAccent"
+        android:textColor="?attr/colorAccent"
         android:textSize="@dimen/px26" />
 
     <View
@@ -69,7 +69,7 @@
         android:paddingEnd="@dimen/px35"
         android:paddingBottom="@dimen/px12"
         android:text="@string/close"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px28" />
 
 </LinearLayout>

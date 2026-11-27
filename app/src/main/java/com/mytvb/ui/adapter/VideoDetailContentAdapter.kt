@@ -1,5 +1,7 @@
 package com.mytvb.ui.adapter
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.LayoutInflater
@@ -186,7 +188,7 @@ internal class VideoDetailContentAdapter(
                         parent.resources.getDimensionPixelSize(R.dimen.px30),
                         parent.resources.getDimensionPixelSize(R.dimen.px24)
                     )
-                    setTextColor(ContextCompat.getColor(context, R.color.subTextColor))
+                    setTextColor(resolveThemedTextColor(context, android.R.attr.textColorSecondary, 0xFFCCCCCC.toInt()))
                     setTextSize(0, parent.resources.getDimension(R.dimen.px28))
                     isFocusable = false
                     isClickable = false
@@ -362,7 +364,7 @@ internal class VideoDetailContentAdapter(
                 }
             }
 
-            val accentColor = ContextCompat.getColor(context, R.color.colorAccent)
+            val accentColor = resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
             val white = android.graphics.Color.WHITE
 
             binding.buttonPlay.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
@@ -556,7 +558,7 @@ internal class VideoDetailContentAdapter(
                 ContextCompat.getColor(context, R.color.pink)
             )
             val default = android.content.res.ColorStateList.valueOf(
-                ContextCompat.getColor(context, R.color.textColor)
+                resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             )
             binding.buttonLike.imageTintList = if (isLiked) pink else default
             binding.buttonCoin.imageTintList = if (isCoined) pink else default
@@ -1031,8 +1033,8 @@ internal class VideoDetailContentAdapter(
         /** 焦点 tab 文字提亮白（同首页惯例）；失焦按各自选中态取色。 */
         private fun applyTextColors() {
             val context = binding.root.context
-            val focusedColor = ContextCompat.getColor(context, R.color.textColor)
-            val unselectedColor = ContextCompat.getColor(context, R.color.subTextColor)
+            val focusedColor = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+            val unselectedColor = resolveThemedTextColor(context, android.R.attr.textColorSecondary, 0xFFCCCCCC.toInt())
             binding.textTabContent.setTextColor(
                 when {
                     binding.tabContent.hasFocus() -> focusedColor
@@ -1094,8 +1096,8 @@ internal class VideoDetailContentAdapter(
         }
 
         fun bind(sortNewSelected: Boolean) {
-            val selected = ContextCompat.getColor(binding.root.context, R.color.textColor)
-            val unselected = ContextCompat.getColor(binding.root.context, R.color.subTextColor)
+            val selected = resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+            val unselected = resolveThemedTextColor(binding.root.context, android.R.attr.textColorSecondary, 0xFFCCCCCC.toInt())
             binding.sortHot.isSelected = !sortNewSelected
             binding.sortNew.isSelected = sortNewSelected
             binding.sortHot.setTextColor(if (sortNewSelected) unselected else selected)

@@ -27,7 +27,7 @@
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_lane_count"
             android:textSize="@dimen/px20"
-            android:textColor="@color/grey"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_marginStart="@dimen/px12"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
@@ -42,7 +42,7 @@
             android:id="@+id/button_lane_more"
             android:text="@string/more"
             android:textSize="@dimen/px20"
-            android:textColor="@color/hongguo_btn_text"
+            android:textColor="@color/hongguo_neutral_btn_text"
             android:background="@drawable/bg_hongguo_btn_detail"
             android:gravity="center"
             android:focusable="true"
@@ -57,7 +57,7 @@
         android:id="@+id/text_lane_empty"
         android:text="@string/hongguo_empty"
         android:textSize="@dimen/px20"
-        android:textColor="@color/grey"
+        android:textColor="?android:attr/textColorSecondary"
         android:layout_marginTop="@dimen/px10"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>

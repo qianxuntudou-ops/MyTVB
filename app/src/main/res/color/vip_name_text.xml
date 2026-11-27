@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 大会员UP名三态（白主题用户实测：粉聚焦块上粉名不可读）：
+     行聚焦时列表把名字 TextView 置 selected（如 DynamicUpAdapter）→ 主文字色（白主题黑字/黑主题白字）；
+     常态=大会员粉 #FB7299。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="?android:attr/textColorPrimary" />
+    <item android:color="@color/biliPink" />
+</selector>

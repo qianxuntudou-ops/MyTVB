@@ -12,4 +12,4 @@
     android:focusable="true"
     android:clickable="true"
     android:textSize="@dimen/px24"
-    android:textColor="@color/textColor"/>
+    android:textColor="?android:attr/textColorPrimary"/>

@@ -1,5 +1,7 @@
 package com.mytvb.feature.player.comment
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -448,8 +450,8 @@ internal class CommentPanelDialog(
     }
 
     private fun updateSortUi() {
-        val selected = ContextCompat.getColor(activity, R.color.textColor)
-        val unselected = ContextCompat.getColor(activity, R.color.subTextColor)
+        val selected = resolveThemedTextColor(activity, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+        val unselected = resolveThemedTextColor(activity, android.R.attr.textColorSecondary, 0xFFCCCCCC.toInt())
 
         val hotSelected = commentSort == VIDEO_COMMENT_SORT_HOT
         binding.tabSortHot.isSelected = hotSelected

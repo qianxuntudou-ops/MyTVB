@@ -1,5 +1,7 @@
 package com.mytvb.ui.dialog
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -304,10 +306,8 @@ class PlayerActionDialog(
         iconView: androidx.appcompat.widget.AppCompatImageView,
         textView: androidx.appcompat.widget.AppCompatTextView
     ) {
-        val color = ContextCompat.getColor(
-            context,
-            if (enabled) R.color.pink else R.color.textColor
-        )
+        val color = if (enabled) ContextCompat.getColor(context, R.color.pink)
+        else resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
         iconView.imageTintList = android.content.res.ColorStateList.valueOf(color)
         textView.setTextColor(color)
     }

@@ -1,5 +1,7 @@
 package com.mytvb.feature.player.comment
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.graphics.drawable.GradientDrawable
 import android.text.Layout
 import android.text.SpannableStringBuilder
@@ -535,7 +537,7 @@ internal class VideoCommentsAdapter(
             if (likeCount <= 0L) return null
             val ctx = view.context
             val res = view.resources
-            val gray = ContextCompat.getColor(ctx, R.color.subTextColor)
+            val gray = resolveThemedTextColor(ctx, android.R.attr.textColorSecondary, 0xFFCCCCCC.toInt())
             val sepColor = 0x66CCCCCC.toInt()
             val icon = ContextCompat.getDrawable(ctx, R.drawable.ic_like)?.mutate() ?: return null
             icon.setTint(gray)

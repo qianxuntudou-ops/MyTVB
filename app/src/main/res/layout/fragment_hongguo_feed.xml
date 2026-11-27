@@ -35,7 +35,7 @@
             android:id="@+id/text_empty"
             android:text="@string/hongguo_empty"
             android:textSize="@dimen/px28"
-            android:textColor="@color/grey"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_gravity="center"
             android:visibility="gone"
             android:layout_width="wrap_content"

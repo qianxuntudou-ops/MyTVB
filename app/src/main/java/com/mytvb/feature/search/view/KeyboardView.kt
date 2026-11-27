@@ -1,5 +1,7 @@
 package com.mytvb.feature.search.view
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.SystemClock
@@ -408,8 +410,9 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun updateKeyboardToggleState() {
-        val activeColor = ContextCompat.getColor(context, R.color.colorAccent)
-        val inactiveColor = ContextCompat.getColor(context, R.color.white)
+        val activeColor = resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
+        // 非当前模式钮=主文字色（白主题黑字；黑主题=#eeeeee 白=原视觉），静态白在白主题浅灰钮底上不可读
+        val inactiveColor = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
         findViewById<AppCompatTextView>(R.id.button_t9)?.setTextColor(
             if (isT9Keyboard) activeColor else inactiveColor
         )

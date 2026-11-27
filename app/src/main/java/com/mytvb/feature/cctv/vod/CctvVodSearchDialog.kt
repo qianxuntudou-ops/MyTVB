@@ -1,5 +1,7 @@
 package com.mytvb.feature.cctv.vod
 
+import android.view.LayoutInflater
+
 import android.content.Context
 import android.os.Bundle
 import android.text.Editable
@@ -24,12 +26,16 @@ class CctvVodSearchDialog(
     private val onQueryChanged: (String) -> Unit
 ) : AppCompatDialog(context, R.style.DialogTheme), KeyboardView.KeySelectListener {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogCctvVodSearchBinding
     private var query = initialQuery
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = DialogCctvVodSearchBinding.inflate(layoutInflater)
+        binding = DialogCctvVodSearchBinding.inflate(LayoutInflater.from(hostContext))
         DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,

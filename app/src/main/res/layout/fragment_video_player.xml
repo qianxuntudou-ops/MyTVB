@@ -38,7 +38,7 @@
             android:layout_marginStart="@dimen/px10"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/grey"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="@dimen/px26"
             android:importantForAccessibility="no"/>
     </androidx.appcompat.widget.LinearLayoutCompat>

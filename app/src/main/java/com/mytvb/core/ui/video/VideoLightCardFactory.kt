@@ -158,7 +158,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private val gradientClipPath = Path()
     private val gradientClipRect = RectF()
     private val metaPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = ContextCompat.getColor(context, R.color.textColor)
+        color = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
         textSize = metrics.metaTextSize
     }
     private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -663,10 +663,14 @@ class VideoCardTextLayerView @JvmOverloads constructor(
         color = ownerTextColor
         textSize = metrics.ownerTextSize
     }
-    // 官方推荐理由标签配色（对齐官方 App：暖橙深底 + 橙红字，无描边）
+    // 官方推荐理由标签配色（对齐官方 App：暖橙深底 + 橙红字，无描边）。
+    // 聚焦卡=粉色高亮底：橙字与粉底相邻色不可读（用户实测），聚焦时标签切
+    // 「暗胶囊+白字」，applyFocusTextColor 按焦点态切换 fill/text 两支画笔。
     private val badgeAccentColor = 0xFFFF8024.toInt()
+    private val badgeFillColorNormal = 0x40FF8024.toInt()
+    private val badgeFillColorFocused = 0x33000000.toInt()
     private val badgeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x40FF8024
+        color = badgeFillColorNormal
     }
     private val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = badgeAccentColor
@@ -895,9 +899,16 @@ class VideoCardTextLayerView @JvmOverloads constructor(
         val focused = isFocusOnThisCard(rootView.findFocus())
         val nextTitle = if (focused) focusedTextColor else titleColor
         val nextOwner = if (focused) focusedTextColor else ownerTextColor
-        if (titlePaint.color != nextTitle || ownerPaint.color != nextOwner) {
+        // UP行标签（推荐理由/已关注）同切：粉底上橙字不可读，聚焦=白字+暗胶囊底
+        val nextBadgeText = if (focused) focusedTextColor else badgeAccentColor
+        val nextBadgeFill = if (focused) badgeFillColorFocused else badgeFillColorNormal
+        if (titlePaint.color != nextTitle || ownerPaint.color != nextOwner ||
+            badgeTextPaint.color != nextBadgeText || badgeFillPaint.color != nextBadgeFill
+        ) {
             titlePaint.color = nextTitle
             ownerPaint.color = nextOwner
+            badgeTextPaint.color = nextBadgeText
+            badgeFillPaint.color = nextBadgeFill
             invalidate()
         }
     }
@@ -986,7 +997,7 @@ class VideoCardTextLayerView @JvmOverloads constructor(
     private fun drawFollowedBadge(canvas: Canvas, left: Float, centerY: Float): Float {
         val iconSize = badgeTextPaint.textSize
         val iconTop = centerY - iconSize / 2f
-        val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeAccentColor }
+        val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = badgeFillPaint.color }
         canvas.drawCircle(left + iconSize / 2f, centerY, iconSize / 2f, circlePaint)
         // 白色对勾（含笔画宽度的外接框与圆同心：x±0.64s / y±0.50s，到圆周留白均匀）
         val check = Path().apply {

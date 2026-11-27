@@ -19,7 +19,7 @@
     <!-- 双行标题+焦点滚动（issue#140）：对齐主页视频卡阅读体验，字号不变 -->
     <com.mytvb.core.ui.view.TwoLineScrollTextView
         android:textSize="@dimen/px30"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:ellipsize="end"
         android:id="@+id/text_title"
         android:layout_width="0dp"

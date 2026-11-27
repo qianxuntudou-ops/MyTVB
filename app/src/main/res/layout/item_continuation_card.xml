@@ -23,7 +23,7 @@
         android:paddingStart="@dimen/px6"
         android:paddingTop="@dimen/px6"
         android:paddingEnd="@dimen/px6"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px22" />
 
     <TextView
@@ -36,6 +36,6 @@
         android:paddingStart="@dimen/px6"
         android:paddingEnd="@dimen/px6"
         android:paddingBottom="@dimen/px6"
-        android:textColor="@color/grey"
+        android:textColor="?android:attr/textColorSecondary"
         android:textSize="@dimen/px20" />
 </LinearLayout>

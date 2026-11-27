@@ -62,7 +62,7 @@
             android:layout_width="@dimen/px28"
             android:layout_height="@dimen/px28"
             app:srcCompat="@drawable/ic_order"
-            app:tint="@color/white" />
+            app:tint="@color/hongguo_neutral_btn_text" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/textOrder"
@@ -70,7 +70,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/px8"
             android:text="@string/model_search_order_pub_date"
-            android:textColor="@color/white"
+            android:textColor="@color/hongguo_neutral_btn_text"
             android:textSize="@dimen/px24" />
 
         <androidx.appcompat.widget.AppCompatImageView
@@ -78,7 +78,7 @@
             android:layout_height="@dimen/px18"
             android:layout_marginStart="@dimen/px6"
             app:srcCompat="@drawable/arrow_down"
-            app:tint="@color/white" />
+            app:tint="@color/hongguo_neutral_btn_text" />
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <!-- 列表 tab：视频/直播回放/系列/合集（与弹窗同款样式） -->

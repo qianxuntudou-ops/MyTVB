@@ -1,5 +1,7 @@
 package com.mytvb.feature.home
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -295,9 +297,10 @@ class HomeTabsDialog(
 
                 val highlighted = binding.root.isSelected || moving
                 val hiddenColor = ContextCompat.getColor(context, R.color.gray_600)
-                val normalColor = ContextCompat.getColor(context, R.color.textColor)
+                // 选中/移动高亮块=粉色，块上文字恒主文字色（白主题黑字），激活标识走 ✓ 粉色
+                val normalColor = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
                 val nameColor = when {
-                    highlighted -> NORMAL_TEXT_COLOR
+                    highlighted -> normalColor
                     entry.visible -> normalColor
                     else -> hiddenColor
                 }
@@ -306,10 +309,10 @@ class HomeTabsDialog(
 
                 if (entry.visible) {
                     binding.tvState.text = "✓"
-                    binding.tvState.setTextColor(ContextCompat.getColor(context, R.color.colorAccent))
+                    binding.tvState.setTextColor(resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt()))
                 } else {
                     binding.tvState.text = context.getString(R.string.home_tabs_state_hidden)
-                    binding.tvState.setTextColor(if (highlighted) NORMAL_TEXT_COLOR else hiddenColor)
+                    binding.tvState.setTextColor(if (highlighted) normalColor else hiddenColor)
                 }
             }
         }
@@ -357,9 +360,5 @@ class HomeTabsDialog(
             // 拖动中的 notifyItemMoved 不重绑，行首序号会停留旧值：全量刷新
             refreshVisual()
         }
-    }
-
-    private companion object {
-        const val NORMAL_TEXT_COLOR = 0xFFEEEEEE.toInt()
     }
 }

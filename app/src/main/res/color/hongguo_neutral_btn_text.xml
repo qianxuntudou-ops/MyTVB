@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 红果中性底按钮（bg_hongguo_btn_detail/btn_primary/episode 常态=buttonBackgroundColor
+     浅灰件，白主题浅灰/黑主题深灰）文字/图标色：常态跟主题主文字色（白主题深字浅灰底、
+     黑主题白字深灰底=原视觉），按压/聚焦/选中=强调实底（accent/tabBarHighlight）→ 白字。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:color="@color/grey" />
+    <item android:state_pressed="true" android:color="@color/white" />
+    <item android:state_focused="true" android:color="@color/white" />
+    <item android:state_selected="true" android:color="@color/white" />
+    <item android:color="?android:attr/textColorPrimary" />
+</selector>

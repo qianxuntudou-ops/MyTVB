@@ -31,7 +31,7 @@
         android:imeOptions="actionSearch"
         android:inputType="text"
         android:maxLines="1"
-        android:textColor="@color/colorAccent"
+        android:textColor="?attr/colorAccent"
         android:textColorHint="?android:attr/textColorSecondary"
         android:textSize="@dimen/px30" />
 
@@ -53,7 +53,7 @@
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px8"
             android:text="@string/search"
-            android:textColor="@color/colorAccent"
+            android:textColor="?attr/colorAccent"
             android:textSize="@dimen/px26" />
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -69,7 +69,7 @@
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px8"
             android:text="@string/clear"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="@dimen/px26" />
 
         <androidx.appcompat.widget.AppCompatTextView
@@ -85,7 +85,7 @@
             android:paddingEnd="@dimen/px30"
             android:paddingBottom="@dimen/px8"
             android:text="@string/cctv_vod_search_ime"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="@dimen/px26" />
     </LinearLayout>
 

@@ -5,20 +5,20 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape>
-            <solid android:color="#337C4DFF" />
-            <stroke android:width="@dimen/px3" android:color="@color/colorAccent" />
+            <solid android:color="#33FB7299" />
+            <stroke android:width="@dimen/px3" android:color="?attr/colorAccent" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>
     <item android:state_selected="true">
         <shape>
-            <solid android:color="#3D3D3D" />
+            <solid android:color="?attr/colorControlHighlight" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>
     <item android:state_pressed="true">
         <shape>
-            <solid android:color="#3D3D3D" />
+            <solid android:color="?attr/colorControlHighlight" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>

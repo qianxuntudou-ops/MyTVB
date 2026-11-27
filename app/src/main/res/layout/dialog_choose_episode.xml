@@ -9,7 +9,7 @@
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px30"
         android:textStyle="bold"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:id="@+id/top_title"
         android:focusable="false"
         android:paddingTop="@dimen/px20"
@@ -25,7 +25,7 @@
         app:layout_constraintTop_toTopOf="parent"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px28"
-        android:textColor="@color/colorAccent"
+        android:textColor="?attr/colorAccent"
         android:id="@+id/button_more_info"
         android:background="?attr/selectableItemBackground"
         android:paddingTop="@dimen/px20"

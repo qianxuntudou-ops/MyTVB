@@ -2,6 +2,9 @@
 
 package com.mytvb.ui.dialog
 
+import com.mytvb.core.common.log.AppLog
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -13,7 +16,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.mytvb.R
 import com.mytvb.core.common.content.ContentFilter
-import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.ui.decoration.LinearSpacingItemDecoration
 import com.mytvb.databinding.DialogVideoCardMenuBinding
 import com.mytvb.event.AppEventHub
@@ -565,7 +567,7 @@ class VideoCardMenuDialog(
         } else {
             binding.textFavoriteTitle.text = context.getString(R.string.menu_favorite)
             binding.textFavoriteTitle.setTextColor(
-                ContextCompat.getColor(context, R.color.textColor)
+                resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             )
         }
     }
@@ -580,7 +582,7 @@ class VideoCardMenuDialog(
         } else {
             binding.textWatchLaterTitle.text = context.getString(R.string.menu_add_watch_later)
             binding.textWatchLaterTitle.setTextColor(
-                ContextCompat.getColor(context, R.color.textColor)
+                resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             )
             binding.textWatchLaterSummary.text = context.getString(R.string.menu_watch_later_summary)
         }

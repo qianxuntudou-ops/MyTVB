@@ -1,5 +1,7 @@
 package com.mytvb.ui.dialog
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.util.TypedValue
 import android.view.Gravity
@@ -81,7 +83,7 @@ object UpdateFlowDialog {
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(context, R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
@@ -345,7 +347,7 @@ object UpdateFlowDialog {
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(context, R.style.DialogTheme)
         dialog.setCancelable(false)

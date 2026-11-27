@@ -37,7 +37,7 @@
         app:srcCompat="@drawable/ic_play"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px22"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:id="@+id/text_badge"
         android:background="@drawable/badge_background"
         android:paddingTop="@dimen/px3"

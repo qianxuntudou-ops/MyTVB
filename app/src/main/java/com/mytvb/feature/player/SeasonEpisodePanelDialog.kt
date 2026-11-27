@@ -1,5 +1,7 @@
 package com.mytvb.feature.player
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -161,11 +163,9 @@ fun showSeasonEpisodePanelDialog(
         val end = index * SEASON_GROUP_SIZE + group.size
         val tab = buildSeasonTab(activity, "$start-$end")
         tab.setOnFocusChangeListener { _, hasFocus ->
+            // 聚焦块=粉色（cell_background focused=colorControlHighlight），块上文字恒主文字色
             tab.setTextColor(
-                ContextCompat.getColor(
-                    activity,
-                    if (hasFocus) R.color.colorAccent else R.color.textColor
-                )
+                resolveThemedTextColor(activity, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             )
             // 焦点在 tab 间移动即联动切换对应分组列表
             if (hasFocus) selectSeasonGroup(index)
@@ -243,7 +243,7 @@ private fun buildSeasonTab(activity: AppCompatActivity, label: String): ScaledTe
     return ScaledTextView(activity).apply {
         text = label
         setTextSize(TypedValue.COMPLEX_UNIT_PX, res.getDimension(R.dimen.px24))
-        setTextColor(ContextCompat.getColor(activity, R.color.textColor))
+        setTextColor(resolveThemedTextColor(activity, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt()))
         setBackgroundResource(R.drawable.cell_background)
         setPadding(
             res.getDimensionPixelSize(R.dimen.px25),

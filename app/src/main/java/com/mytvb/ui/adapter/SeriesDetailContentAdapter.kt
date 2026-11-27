@@ -1,5 +1,7 @@
 package com.mytvb.ui.adapter
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
@@ -918,7 +920,7 @@ class SeriesDetailContentAdapter(
                     return
                 }
                 binding.textTitle.setTextColor(
-                    ContextCompat.getColor(binding.root.context, R.color.colorAccent)
+                    resolveThemedTextColor(binding.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
                 )
                 val drawable = ensurePlayingDrawable()
                 if (drawable == null) {

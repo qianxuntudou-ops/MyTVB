@@ -18,7 +18,7 @@
         android:paddingTop="@dimen/px20"
         android:paddingEnd="@dimen/px24"
         android:paddingBottom="@dimen/px12"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px32"
         android:textStyle="bold" />
 
@@ -29,7 +29,7 @@
         android:gravity="center"
         android:paddingTop="@dimen/px40"
         android:text="@string/hongguo_empty"
-        android:textColor="@color/subTextColor"
+        android:textColor="?android:attr/textColorSecondary"
         android:textSize="@dimen/px24"
         android:visibility="gone" />
 

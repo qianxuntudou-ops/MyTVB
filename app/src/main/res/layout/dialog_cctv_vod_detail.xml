@@ -61,7 +61,7 @@
                     android:paddingEnd="@dimen/px20"
                     android:paddingBottom="@dimen/px4"
                     android:text="@string/cctv_vod_favorite"
-                    android:textColor="@color/textColor"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="@dimen/px24" />
             </LinearLayout>
 
@@ -79,7 +79,7 @@
                     android:layout_weight="1"
                     android:ellipsize="end"
                     android:maxLines="1"
-                    android:textColor="@color/colorAccent"
+                    android:textColor="?attr/colorAccent"
                     android:textSize="@dimen/px26" />
 
                 <androidx.appcompat.widget.AppCompatTextView
@@ -95,7 +95,7 @@
                     android:paddingEnd="@dimen/px20"
                     android:paddingBottom="@dimen/px4"
                     android:text="@string/cctv_vod_detail_action"
-                    android:textColor="@color/textColor"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:textSize="@dimen/px24" />
             </LinearLayout>
 

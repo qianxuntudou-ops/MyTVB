@@ -44,7 +44,7 @@
                 android:visibility="gone"/>
             <androidx.appcompat.widget.AppCompatTextView
                 android:textSize="@dimen/px32"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:ellipsize="marquee"
                 android:id="@+id/text_title"
                 android:layout_width="0dp"
@@ -55,7 +55,7 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
         <androidx.appcompat.widget.AppCompatTextView
             android:textSize="@dimen/px26"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:id="@+id/text_range"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

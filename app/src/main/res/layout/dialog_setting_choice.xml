@@ -17,7 +17,7 @@
         android:layout_marginTop="@dimen/px35"
         android:layout_marginEnd="@dimen/px40"
         android:paddingBottom="@dimen/px20"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px35"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"

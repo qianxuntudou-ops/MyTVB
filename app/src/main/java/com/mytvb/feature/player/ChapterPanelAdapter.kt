@@ -1,5 +1,7 @@
 package com.mytvb.feature.player
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -53,7 +55,7 @@ class ChapterPanelAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val pinkColor = ContextCompat.getColor(binding.root.context, R.color.pink)
-        private val defaultTitleColor = ContextCompat.getColor(binding.root.context, R.color.textColor)
+        private val defaultTitleColor = resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         fun bind(
             item: ViewPoint,

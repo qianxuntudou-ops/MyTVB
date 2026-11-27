@@ -289,7 +289,7 @@
             android:layout_height="@dimen/px38"
             android:adjustViewBounds="true"
             app:srcCompat="@drawable/ic_video_play_count"
-            app:tint="@color/grey" />
+            app:tint="?android:attr/textColorSecondary" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_stat_view"
@@ -306,7 +306,7 @@
             android:adjustViewBounds="true"
             android:layout_marginStart="@dimen/px40"
             app:srcCompat="@drawable/ic_video_danmaku"
-            app:tint="@color/grey" />
+            app:tint="?android:attr/textColorSecondary" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_stat_reply"
@@ -331,7 +331,7 @@
             android:layout_marginStart="@dimen/px40"
             android:visibility="gone"
             app:srcCompat="@drawable/ic_player_watching"
-            app:tint="@color/grey" />
+            app:tint="?android:attr/textColorSecondary" />
 
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_stat_online"

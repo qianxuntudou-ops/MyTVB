@@ -28,11 +28,11 @@
                 android:layout_width="@dimen/px60"
                 android:layout_height="@dimen/px60"
                 app:srcCompat="@drawable/watch_later"
-                app:tint="@color/textColor"/>
+                app:tint="?android:attr/textColorPrimary"/>
             <androidx.appcompat.widget.AppCompatTextView
                 android:textSize="@dimen/px27"
                 android:textStyle="bold"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:id="@+id/text_watch_later"
@@ -57,11 +57,11 @@
                 android:layout_width="@dimen/px60"
                 android:layout_height="@dimen/px60"
                 app:srcCompat="@drawable/ic_like"
-                app:tint="@color/textColor"/>
+                app:tint="?android:attr/textColorPrimary"/>
             <androidx.appcompat.widget.AppCompatTextView
                 android:textSize="@dimen/px27"
                 android:textStyle="bold"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:id="@+id/text_like"
@@ -86,11 +86,11 @@
                 android:layout_width="@dimen/px60"
                 android:layout_height="@dimen/px60"
                 app:srcCompat="@drawable/ic_coin"
-                app:tint="@color/textColor"/>
+                app:tint="?android:attr/textColorPrimary"/>
             <androidx.appcompat.widget.AppCompatTextView
                 android:textSize="@dimen/px27"
                 android:textStyle="bold"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:id="@+id/text_coin"
@@ -115,11 +115,11 @@
                 android:layout_width="@dimen/px60"
                 android:layout_height="@dimen/px60"
                 app:srcCompat="@drawable/ic_favorite"
-                app:tint="@color/textColor"/>
+                app:tint="?android:attr/textColorPrimary"/>
             <androidx.appcompat.widget.AppCompatTextView
                 android:textSize="@dimen/px27"
                 android:textStyle="bold"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:id="@+id/text_collection"

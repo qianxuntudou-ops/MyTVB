@@ -62,7 +62,7 @@
                     android:id="@+id/text_uid"
                     android:text="@string/hongguo_login_sync_hint"
                     android:textSize="@dimen/px20"
-                    android:textColor="@color/grey"
+                    android:textColor="?android:attr/textColorSecondary"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:layout_marginTop="@dimen/px6"
@@ -86,7 +86,7 @@
                     <androidx.appcompat.widget.AppCompatTextView
                         android:id="@+id/text_stats"
                         android:textSize="@dimen/px20"
-                        android:textColor="@color/grey"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginStart="@dimen/px8"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"/>
@@ -106,7 +106,7 @@
                     android:id="@+id/button_logout"
                     android:text="@string/sign_out"
                     android:textSize="@dimen/px20"
-                    android:textColor="@color/hongguo_btn_text"
+                    android:textColor="@color/hongguo_neutral_btn_text"
                     android:background="@drawable/bg_hongguo_btn_detail"
                     android:paddingStart="@dimen/px20"
                     android:paddingEnd="@dimen/px20"
@@ -117,7 +117,7 @@
                     android:id="@+id/button_clear"
                     android:text="@string/hongguo_clear_local"
                     android:textSize="@dimen/px20"
-                    android:textColor="@color/hongguo_btn_text"
+                    android:textColor="@color/hongguo_neutral_btn_text"
                     android:background="@drawable/bg_hongguo_btn_detail"
                     android:layout_marginStart="@dimen/px12"
                     android:paddingStart="@dimen/px20"
@@ -186,14 +186,14 @@
                 android:layout_height="wrap_content"
                 android:text="@string/hongguo_mine_empty_guest"
                 android:textSize="@dimen/px24"
-                android:textColor="@color/grey"
+                android:textColor="?android:attr/textColorSecondary"
                 android:layout_marginTop="@dimen/px12"/>
 
             <androidx.appcompat.widget.AppCompatButton
                 android:id="@+id/button_login"
                 android:text="@string/hongguo_login"
                 android:textSize="@dimen/px28"
-                android:textColor="@color/hongguo_primary_btn_text"
+                android:textColor="@color/hongguo_neutral_btn_text"
                 android:background="@drawable/bg_hongguo_btn_primary"
                 android:paddingStart="@dimen/px40"
                 android:paddingEnd="@dimen/px40"

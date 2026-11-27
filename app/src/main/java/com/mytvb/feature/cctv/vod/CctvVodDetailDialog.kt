@@ -1,5 +1,9 @@
 package com.mytvb.feature.cctv.vod
 
+import android.view.LayoutInflater
+
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Typeface
@@ -45,6 +49,10 @@ class CctvVodDetailDialog(
     private val onFavoriteChanged: () -> Unit = {}
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogCctvVodDetailBinding
     private val episodeAdapter = EpisodeAdapter(::handleEpisodeClick)
     private var loadJob: Job? = null
@@ -56,7 +64,7 @@ class CctvVodDetailDialog(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = DialogCctvVodDetailBinding.inflate(layoutInflater)
+        binding = DialogCctvVodDetailBinding.inflate(LayoutInflater.from(hostContext))
         DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,
@@ -133,9 +141,9 @@ class CctvVodDetailDialog(
         )
         binding.buttonFavorite.setTextColor(
             if (favorite) {
-                ContextCompat.getColor(context, R.color.colorAccent)
+                resolveThemedTextColor(binding.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
             } else {
-                ContextCompat.getColor(context, R.color.textColor)
+                resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             }
         )
     }
@@ -297,7 +305,7 @@ class CctvVodDetailDialog(
                     TypedValue.COMPLEX_UNIT_PX,
                     context.resources.getDimension(R.dimen.px18)
                 )
-                setTextColor(ContextCompat.getColor(context, R.color.textColor))
+                setTextColor(resolveThemedTextColor(context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt()))
                 visibility = View.GONE
                 // 与封面卡片右上角标同款：粉色底+右上/左下圆角，贴角无缝隙
                 setBackgroundResource(R.drawable.badge_background)
@@ -382,7 +390,7 @@ class CctvVodDetailDialog(
 
 /** 集号文字色：选中=强调色，聚焦=主文字色，其余=次要文字色。 */
 private fun episodeTextColors(context: Context): ColorStateList {
-    val accent = ContextCompat.getColor(context, R.color.colorAccent)
+    val accent = resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
     val primary = resolveThemeColor(context, android.R.attr.textColorPrimary)
     val secondary = resolveThemeColor(context, android.R.attr.textColorSecondary)
     return ColorStateList(

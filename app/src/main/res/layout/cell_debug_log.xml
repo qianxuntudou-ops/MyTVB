@@ -21,7 +21,7 @@
             android:id="@+id/tv_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/subTextColor"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="@dimen/px22" />
 
         <TextView
@@ -40,7 +40,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:singleLine="true"
-            android:textColor="@color/subTextColor"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="@dimen/px22" />
     </LinearLayout>
 

@@ -22,7 +22,7 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#14ffffff" />
+            <solid android:color="?attr/buttonBackgroundColor" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>

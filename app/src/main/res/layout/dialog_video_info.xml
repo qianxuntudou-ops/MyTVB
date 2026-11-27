@@ -42,7 +42,7 @@
                 android:paddingStart="@dimen/px5"
                 android:paddingEnd="@dimen/px5"
                 android:text="@string/choose_episode"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/px35"
                 android:textStyle="bold" />
 
@@ -55,7 +55,7 @@
                 android:paddingStart="@dimen/px5"
                 android:paddingEnd="@dimen/px5"
                 android:text="@string/choose_episode"
-                android:textColor="@color/subTextColor"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/px30" />
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.core.widget.NestedScrollView>

@@ -26,7 +26,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:singleLine="true"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="@dimen/px35"
             tools:text="1080P" />
 

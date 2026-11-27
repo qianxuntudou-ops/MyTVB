@@ -1,5 +1,7 @@
 package com.mytvb.feature.hongguo
 
+import android.view.LayoutInflater
+
 import android.content.Context
 import android.os.Bundle
 import android.view.View
@@ -26,6 +28,10 @@ class HongguoDramaListDialog(
     private val items: List<HongguoClient.Drama>
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogHongguoDramaListBinding
     private val adapter = HongguoDramaAdapter(onItemClick = { item, _ ->
         dismiss()
@@ -35,7 +41,7 @@ class HongguoDramaListDialog(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        binding = DialogHongguoDramaListBinding.inflate(layoutInflater)
+        binding = DialogHongguoDramaListBinding.inflate(LayoutInflater.from(hostContext))
         com.mytvb.core.ui.base.DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,

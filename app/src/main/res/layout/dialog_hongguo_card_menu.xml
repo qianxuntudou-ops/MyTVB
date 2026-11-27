@@ -23,7 +23,7 @@
         android:gravity="start"
         android:maxLines="1"
         android:singleLine="true"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px30"
         android:textStyle="bold" />
 
@@ -38,14 +38,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/hongguo_menu_subtitle"
-            android:textColor="@color/subTextColor"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="@dimen/px20" />
 
         <View
             android:layout_width="match_parent"
             android:layout_height="@dimen/px2"
             android:layout_marginTop="@dimen/px8"
-            android:background="@color/fourthBackgroundColor" />
+            android:background="?attr/fourthBackgroundColor" />
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -75,7 +75,7 @@
                 android:layout_height="@dimen/px30"
                 android:layout_gravity="center"
                 app:srcCompat="@drawable/ic_hongguo_fn_heart"
-                app:tint="@color/textColor" />
+                app:tint="?android:attr/textColorPrimary" />
         </FrameLayout>
 
         <androidx.appcompat.widget.LinearLayoutCompat
@@ -93,7 +93,7 @@
                 android:maxLines="1"
                 android:singleLine="true"
                 android:text="@string/hongguo_favorite"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/px26"
                 android:textStyle="bold" />
 
@@ -103,7 +103,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/px4"
                 android:text="@string/hongguo_menu_favorite_summary"
-                android:textColor="@color/subTextColor"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/px18" />
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -136,7 +136,7 @@
                 android:layout_height="@dimen/px30"
                 android:layout_gravity="center"
                 app:srcCompat="@drawable/ic_user"
-                app:tint="@color/textColor" />
+                app:tint="?android:attr/textColorPrimary" />
         </FrameLayout>
 
         <androidx.appcompat.widget.LinearLayoutCompat
@@ -153,7 +153,7 @@
                 android:maxLines="1"
                 android:singleLine="true"
                 android:text="@string/hongguo_menu_creator"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/px26"
                 android:textStyle="bold" />
 
@@ -163,7 +163,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/px4"
                 android:text="@string/hongguo_menu_creator_summary"
-                android:textColor="@color/subTextColor"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/px18" />
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -195,7 +195,7 @@
                 android:layout_height="@dimen/px30"
                 android:layout_gravity="center"
                 app:srcCompat="@drawable/ic_list"
-                app:tint="@color/textColor" />
+                app:tint="?android:attr/textColorPrimary" />
         </FrameLayout>
 
         <androidx.appcompat.widget.LinearLayoutCompat
@@ -212,7 +212,7 @@
                 android:maxLines="1"
                 android:singleLine="true"
                 android:text="@string/hongguo_menu_related"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/px26"
                 android:textStyle="bold" />
 
@@ -222,7 +222,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/px4"
                 android:text="@string/hongguo_menu_related_summary"
-                android:textColor="@color/subTextColor"
+                android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/px18" />
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.appcompat.widget.LinearLayoutCompat>

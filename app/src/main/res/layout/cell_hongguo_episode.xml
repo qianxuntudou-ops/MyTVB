@@ -15,7 +15,7 @@
         android:id="@+id/text_hongguo_episode"
         android:gravity="center"
         android:textSize="@dimen/px26"
-        android:textColor="@color/white"
+        android:textColor="@color/hongguo_neutral_btn_text"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
@@ -23,7 +23,7 @@
         android:id="@+id/text_last_watched"
         android:text="@string/cctv_vod_last_watched"
         android:textSize="@dimen/px14"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:background="@drawable/badge_background"
         android:paddingStart="@dimen/px5"
         android:paddingTop="@dimen/px2"

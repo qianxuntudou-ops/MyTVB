@@ -1,5 +1,7 @@
 package com.mytvb.feature.settings
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import com.mytvb.core.common.format.NumberUtils
 import android.app.Activity
 import android.content.Intent
@@ -1039,7 +1041,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(context, R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
@@ -1170,7 +1172,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px20 = resources.getDimensionPixelSize(R.dimen.px20)
         val px18 = resources.getDimensionPixelSize(R.dimen.px18)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = androidx.appcompat.app.AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCancelable(false)
@@ -2170,7 +2172,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
@@ -2303,7 +2305,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
@@ -2459,7 +2461,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
         val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
@@ -2593,7 +2595,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         val px18 = resources.getDimensionPixelSize(R.dimen.px18)
         val px16 = resources.getDimensionPixelSize(R.dimen.px16)
         val px14 = resources.getDimensionPixelSize(R.dimen.px14)
-        val textColor = resources.getColor(R.color.textColor, null)
+        val textColor = resolveThemedTextColor(requireContext(), android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
 
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)

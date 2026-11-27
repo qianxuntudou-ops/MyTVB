@@ -1,5 +1,7 @@
 package com.mytvb.feature.hongguo
 
+import android.view.LayoutInflater
+
 import android.content.Context
 import android.os.Bundle
 import android.view.Gravity
@@ -41,6 +43,10 @@ class HongguoRightPanelDialog private constructor(
     private val onSelected: (Int) -> Unit
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogHongguoRightPanelBinding
     private val gridMode get() = spanCount > 1
     private val cellGapPx by lazy { context.resources.getDimensionPixelSize(R.dimen.px6) }
@@ -50,7 +56,7 @@ class HongguoRightPanelDialog private constructor(
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
-        binding = DialogHongguoRightPanelBinding.inflate(layoutInflater)
+        binding = DialogHongguoRightPanelBinding.inflate(LayoutInflater.from(hostContext))
         DialogWindowFit.overlay(
             dialog = this,
             content = binding.root,

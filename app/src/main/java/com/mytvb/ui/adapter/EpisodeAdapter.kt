@@ -1,5 +1,7 @@
 package com.mytvb.ui.adapter
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
@@ -228,7 +230,7 @@ class EpisodeAdapter(
                 }
                 return
             }
-            val accentColor = ContextCompat.getColor(binding.root.context, R.color.colorAccent)
+            val accentColor = resolveThemedTextColor(binding.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
             binding.textTitle.setTextColor(accentColor)
             binding.textPosition.setTextColor(accentColor)
             if (longTitle.isBlank()) {

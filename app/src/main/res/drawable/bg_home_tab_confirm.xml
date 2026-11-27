@@ -10,13 +10,13 @@
     </item>
     <item android:state_selected="true">
         <shape>
-            <solid android:color="#3D3D3D" />
+            <solid android:color="?attr/fourthBackgroundColor" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>
     <item>
         <shape>
-            <solid android:color="#14FFFFFF" />
+            <solid android:color="?attr/buttonBackgroundColor" />
             <corners android:radius="@dimen/px15" />
         </shape>
     </item>

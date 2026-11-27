@@ -80,7 +80,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/px12"
         android:text="@string/coin_number_"
-        android:textColor="@color/subTextColor"
+        android:textColor="?android:attr/textColorSecondary"
         android:textSize="@dimen/px24"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

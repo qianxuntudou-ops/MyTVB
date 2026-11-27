@@ -14,7 +14,7 @@
     </item>
     <item>
         <shape>
-            <solid android:color="#14FFFFFF" />
+            <solid android:color="?attr/buttonBackgroundColor" />
             <corners android:radius="@dimen/px20" />
         </shape>
     </item>

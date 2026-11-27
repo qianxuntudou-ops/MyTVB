@@ -68,7 +68,7 @@
                 <androidx.appcompat.widget.AppCompatTextView
                     android:id="@+id/text_tags"
                     android:textSize="@dimen/px24"
-                    android:textColor="@color/grey"
+                    android:textColor="?android:attr/textColorSecondary"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:layout_width="0dp"
@@ -90,7 +90,7 @@
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/text_meta"
                 android:textSize="@dimen/px24"
-                android:textColor="@color/grey"
+                android:textColor="?android:attr/textColorSecondary"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:layout_marginTop="@dimen/px12"
@@ -133,7 +133,7 @@
                 android:id="@+id/text_button_play"
                 android:text="@string/hongguo_play_continue"
                 android:textSize="@dimen/px28"
-                android:textColor="@color/textColor"
+                android:textColor="?android:attr/textColorPrimary"
                 android:singleLine="true"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"/>
@@ -142,7 +142,7 @@
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/button_favorite"
             android:textSize="@dimen/px28"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:background="@drawable/bg_hongguo_btn_detail"
             android:drawableStart="@drawable/ic_favorite"
             android:drawablePadding="@dimen/px12"
@@ -176,7 +176,7 @@
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_watching"
             android:textSize="@dimen/px24"
-            android:textColor="@color/grey"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_marginStart="@dimen/px20"
             android:layout_width="0dp"
             android:layout_weight="1"
@@ -185,7 +185,7 @@
         <androidx.appcompat.widget.AppCompatTextView
             android:id="@+id/text_page_range"
             android:textSize="@dimen/px24"
-            android:textColor="@color/grey"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
     </LinearLayout>

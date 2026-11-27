@@ -19,7 +19,7 @@
         android:layout_marginTop="@dimen/px35"
         android:layout_marginEnd="@dimen/px40"
         android:paddingBottom="@dimen/px12"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:textSize="@dimen/px35"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
@@ -92,7 +92,7 @@
             android:paddingEnd="@dimen/px35"
             android:paddingBottom="@dimen/px12"
             android:text="@string/confirm"
-            android:textColor="@color/textColor"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="@dimen/px28"
             android:textStyle="bold" />
     </LinearLayout>

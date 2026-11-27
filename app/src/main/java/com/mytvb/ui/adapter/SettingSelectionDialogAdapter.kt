@@ -1,5 +1,7 @@
 package com.mytvb.ui.adapter
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -113,10 +115,12 @@ class SettingSelectionDialogAdapter(
                 .setDuration(120L)
                 .start()
 
-            val titleColor = if (isSelected) {
-                ContextCompat.getColor(binding.root.context, R.color.colorAccent)
-            } else {
-                ContextCompat.getColor(binding.root.context, R.color.textColor)
+            // 弹窗行三态统一（用户裁决）：焦点块=粉色，块上文字恒主文字色（白主题黑字）；
+            // 非聚焦时激活项=强调粉字、其余=主文字色。粉底粉字不可读问题即缺此分支。
+            val titleColor = when {
+                isFocused -> resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+                isSelected -> resolveThemedTextColor(binding.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
+                else -> resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
             }
             binding.tvTitle.setTextColor(titleColor)
         }

@@ -47,7 +47,7 @@
         android:visibility="gone"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px24"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:id="@+id/tv_index"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

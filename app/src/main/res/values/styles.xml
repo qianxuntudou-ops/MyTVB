@@ -230,28 +230,32 @@
         <item name="android:textStyle">bold</item>
         <item name="android:background">@android:color/transparent</item>
     </style>
+    <!-- 白主题：B站官方配色（issue#144 后整体重做）。
+         页面底浅灰 #F6F7F8、卡片/设置行/弹窗纯白、强调色 B站粉 #FB7299（accent/colorPrimary/
+         焦点高亮/选中 tab 统一），焦点卡=饱和粉整卡+聚焦白字（textLayer 聚焦白字逻辑天然兼容）。 -->
     <style name="WhiteTheme" parent="@style/Theme.AppCompat.Light.NoActionBar">
         <item name="android:textColorPrimary">@color/textColorLight</item>
         <item name="android:textColorSecondary">@color/subTextColorLight</item>
         <item name="android:windowAnimationStyle">@style/WindowAnimationTransition</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/systemBackgroundColorLight</item>
         <item name="backgroundColor">@color/systemBackgroundColorLight</item>
-        <item name="buttonBackgroundColor">@color/subBackgroundColorLight</item>
-        <item name="colorAccent">@color/colorAccent</item>
-        <item name="colorControlHighlight">@color/colorAccent2</item>
+        <item name="buttonBackgroundColor">@color/buttonBackgroundLight</item>
+        <item name="colorAccent">@color/biliPink</item>
+        <item name="colorControlHighlight">@color/biliPink</item>
         <item name="colorOnPrimary">@color/white</item>
         <item name="colorOnSecondary">@color/black</item>
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorPrimary">@color/biliPink</item>
+        <item name="colorPrimaryVariant">@color/biliPink</item>
         <item name="colorSecondary">@color/teal_200</item>
         <item name="colorSecondaryVariant">@color/teal_700</item>
         <item name="dividerColor">@color/divideColorLight</item>
         <item name="fourthBackgroundColor">@color/fourthBackgroundColorLight</item>
         <item name="subBackgroundColor">@color/subBackgroundColorLight</item>
-        <item name="tabBarHighlight">@color/subBackgroundColorLight</item>
+        <item name="tabBarHighlight">@color/biliPink</item>
         <item name="tabBarNormal">@color/tab_normalLight</item>
-        <item name="tabBarSelected">@color/black</item>
+        <item name="tabBarSelected">@color/textColorLight</item>
         <item name="thirdBackgroundColor">@color/backgroundColorLight</item>
     </style>
     <style name="WindowAnimationTransition" parent="">

@@ -1,5 +1,7 @@
 package com.mytvb.feature.category
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.content.Context
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -242,10 +244,11 @@ object CategoryTabsDialog {
                     .scaleY(if (isFocused) 1.02f else 1f)
                     .setDuration(120L)
                     .start()
-                val titleColor = if (isChecked) {
-                    ContextCompat.getColor(binding.root.context, R.color.colorAccent)
-                } else {
-                    ContextCompat.getColor(binding.root.context, R.color.textColor)
+                // 三态统一：焦点块（粉色）上文字恒主文字色；非聚焦勾选项=强调粉字
+                val titleColor = when {
+                    isFocused -> resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
+                    isChecked -> resolveThemedTextColor(binding.root.context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
+                    else -> resolveThemedTextColor(binding.root.context, android.R.attr.textColorPrimary, 0xFFEEEEEE.toInt())
                 }
                 binding.tvTitle.setTextColor(titleColor)
             }

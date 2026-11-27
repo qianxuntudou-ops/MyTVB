@@ -1,5 +1,7 @@
 package com.mytvb.feature.cctv.vod
 
+import android.view.LayoutInflater
+
 import android.content.Context
 import android.os.Bundle
 import android.text.SpannableString
@@ -24,11 +26,15 @@ class CctvVodBriefDialog(
     private val album: CctvAlbum
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context，
+    // 主题化 attr 必须用宿主 Activity context 解析
+    private val hostContext = context
+
     private lateinit var binding: DialogCctvVodBriefBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = DialogCctvVodBriefBinding.inflate(layoutInflater)
+        binding = DialogCctvVodBriefBinding.inflate(LayoutInflater.from(hostContext))
         bindContent()
         applyScrollLimit()
         DialogWindowFit.overlay(

@@ -1,5 +1,7 @@
 package com.mytvb.ui.widget
 
+import com.mytvb.core.ui.video.resolveThemedTextColor
+
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
@@ -19,7 +21,7 @@ class TripleActionProgressView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = context.resources.getDimension(R.dimen.px6)
-        color = ContextCompat.getColor(context, R.color.colorAccent)
+        color = resolveThemedTextColor(context, androidx.appcompat.R.attr.colorAccent, 0xFFBB86FC.toInt())
         strokeCap = Paint.Cap.ROUND
     }
 

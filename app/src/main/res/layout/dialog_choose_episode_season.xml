@@ -9,7 +9,7 @@
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px28"
         android:textStyle="bold"
-        android:textColor="@color/textColor"
+        android:textColor="?android:attr/textColorPrimary"
         android:ellipsize="end"
         android:id="@+id/top_title"
         android:focusable="false"
