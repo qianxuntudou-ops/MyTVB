@@ -704,6 +704,8 @@
     <string name="triple_action_success">Triple done!</string>
     <!-- Control bar button order (issue#144 suggestion) -->
     <string name="control_bar_order_title">Control bar button order</string>
+    <!-- Controller wake focus target (issue#150 suggestion): initial focus button when the controller is shown -->
+    <string name="player_wake_focus_title">Controller wake focus target</string>
     <string name="control_bar_order_hint_normal">D-pad up/down to select, long-press OK to move; long-press and drag on touch screen</string>
     <string name="control_bar_order_hint_moving">D-pad up/down to move, press OK or Back to finish</string>
     <string name="control_bar_order_arrow">↕</string>

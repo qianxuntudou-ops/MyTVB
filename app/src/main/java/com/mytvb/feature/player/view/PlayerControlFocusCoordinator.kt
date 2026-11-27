@@ -63,6 +63,13 @@ internal class PlayerControlFocusCoordinator(
     private var focusRestoreTarget = FocusTarget.PLAY_PAUSE
     private var onVisibleFocusSettled: (() -> Unit)? = null
     private var isHostVisible: (() -> Boolean)? = null
+
+    /**
+     * 唤醒落点视图提供者（issue#150），由 MyPlayerControlView 注入：读设置
+     * [com.mytvb.feature.player.controlbar.PlayerWakeFocusStore] 并把按钮映射到
+     * 视图；返回 null=未配置/解析失败，落焦回落播放/暂停。
+     */
+    var wakeFocusViewProvider: (() -> View?)? = null
     private val focusStabilizeRunnable = Runnable {
         if (isHostVisible?.invoke() == true) {
             onVisibleFocusSettled?.invoke()
@@ -95,7 +102,7 @@ internal class PlayerControlFocusCoordinator(
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (focused == null) {
-                    requestPlayPauseFocus()
+                    requestWakeFocus()
                     return true
                 }
                 if (focused is PlayerControlButton || focused.parent == bottomBar) {
@@ -106,7 +113,7 @@ internal class PlayerControlFocusCoordinator(
 
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (focused == null) {
-                    requestPlayPauseFocus()
+                    requestWakeFocus()
                     return true
                 }
                 if (focused === timeBar) {
@@ -125,7 +132,7 @@ internal class PlayerControlFocusCoordinator(
 
             KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                 if (focused == null) {
-                    requestPlayPauseFocus()
+                    requestWakeFocus()
                     return true
                 }
                 if (focused is PlayerControlButton) {
@@ -141,7 +148,7 @@ internal class PlayerControlFocusCoordinator(
 
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                 if (focused == null) {
-                    requestPlayPauseFocus()
+                    requestWakeFocus()
                     return true
                 }
                 if (focused === timeBar) {
@@ -168,7 +175,8 @@ internal class PlayerControlFocusCoordinator(
             KeyEvent.KEYCODE_DPAD_DOWN,
             KeyEvent.KEYCODE_DPAD_CENTER,
             KeyEvent.KEYCODE_ENTER -> {
-                requestPlayPauseFocus()
+                // 落焦位置随设置（issue#150）；OK/ENTER 仍触发播放/暂停动作，遥控习惯不变
+                requestWakeFocus()
                 if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER) {
                     onPlayPauseClick()
                 }
@@ -182,6 +190,21 @@ internal class PlayerControlFocusCoordinator(
     fun requestPlayPauseFocus() {
         if (buttonPlay.visibility == View.VISIBLE) {
             buttonPlay.requestFocus()
+        }
+    }
+
+    /**
+     * 控制栏隐藏时按键唤醒（[focusButtonByKeyDown]）与控制栏可见但焦点丢失兜底
+     * （[handleDpadWhenSuperNotHandled] focused==null）的初始落点（issue#150）：
+     * 按设置「控制条唤醒焦点落点」落到用户常用按钮（如三连菜单）；无配置或目标
+     * 不可见（溢出收起、宿主无此按钮）回落播放/暂停保持旧行为。
+     */
+    fun requestWakeFocus() {
+        val target = wakeFocusViewProvider?.invoke()
+        if (target != null && target.visibility == View.VISIBLE) {
+            target.requestFocus()
+        } else {
+            requestPlayPauseFocus()
         }
     }
 

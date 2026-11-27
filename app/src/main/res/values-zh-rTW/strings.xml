@@ -706,6 +706,8 @@
     <string name="triple_action_success">三連成功</string>
     <!-- 控制列按鈕排序（issue#144 建議） -->
     <string name="control_bar_order_title">控制列按鈕排序</string>
+    <!-- 控制列喚醒焦點落點（issue#150 建議）：控制列隱藏時按鍵喚醒的初始焦點按鈕 -->
+    <string name="player_wake_focus_title">控制列喚醒焦點落點</string>
     <string name="control_bar_order_hint_normal">上下鍵選擇按鈕，長按 OK 進入移動；觸控長按可拖曳排序</string>
     <string name="control_bar_order_hint_moving">上下鍵移動位置，按 OK 或返回鍵完成</string>
     <string name="control_bar_order_arrow">↕</string>

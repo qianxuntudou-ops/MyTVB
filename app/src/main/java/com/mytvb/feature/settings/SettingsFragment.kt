@@ -66,8 +66,10 @@ import com.mytvb.core.ui.system.ScreenUtils
 import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
+import com.mytvb.feature.player.controlbar.ControlBarButton
 import com.mytvb.feature.player.controlbar.ControlBarOrderManageDialog
 import com.mytvb.feature.player.controlbar.ControlBarOrderStore
+import com.mytvb.feature.player.controlbar.PlayerWakeFocusStore
 import com.mytvb.feature.player.settings.AudioBalanceSettings
 import com.mytvb.feature.player.settings.PlayerSettingsStore
 import com.mytvb.feature.player.shortcut.PlayerShortcutStore
@@ -131,6 +133,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_PLAYER_SHORTCUTS = "action_player_shortcuts"
         // 控制条按钮排序（issue#144 建议）：动作型条目，显示值=默认/自定义
         private const val KEY_CONTROL_BAR_ORDER = "action_control_bar_order"
+        // 控制条唤醒焦点落点（issue#150 建议）：存储值=ControlBarButton 显示名，
+        // 与 PlayerWakeFocusStore.STORE_KEY 同键；空=默认落播放/暂停
+        private const val KEY_PLAYER_WAKE_FOCUS = PlayerWakeFocusStore.STORE_KEY
         private const val KEY_CCTV_LIVE_ENTRY = "cctv_live_entry"
         private const val KEY_CCTV_VOD_ENTRY = "cctv_vod_entry"
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
@@ -470,7 +475,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_SHOW_PLAY_SPEED_BUTTON, R.string.show_play_speed_button, "关"),
                 stored(KEY_SHOW_PLAYBACK_RATE, R.string.show_playback_rate, "关"),
                 // 控制条按钮排序（issue#144 建议）：点击进管理弹窗调整按钮相对顺序
-                plain(KEY_CONTROL_BAR_ORDER, R.string.control_bar_order_title, controlBarOrderLabel())
+                plain(KEY_CONTROL_BAR_ORDER, R.string.control_bar_order_title, controlBarOrderLabel()),
+                // 控制条唤醒焦点落点（issue#150 建议）：控制栏隐藏时按键唤醒的初始焦点按钮
+                stored(KEY_PLAYER_WAKE_FOCUS, R.string.player_wake_focus_title, wakeFocusLabel())
             ))
         )
 
@@ -866,6 +873,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_CONTROL_BAR_ORDER -> ControlBarOrderManageDialog(requireContext()) {
                 updateInfo(KEY_CONTROL_BAR_ORDER, controlBarOrderLabel())
             }.show()
+            KEY_PLAYER_WAKE_FOCUS -> showCommonChoiceDialog(key, wakeFocusOptions())
             // —— 电视直播 ——
             KEY_CCTV_LIVE_ENTRY -> toggle(key) {
                 appSettings.putStringBlocking(key, it)
@@ -1941,6 +1949,18 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         } else {
             getString(R.string.setting_value_default)
         }
+
+    // ================= 控制条唤醒焦点落点（issue#150 建议） =================
+
+    /** 选项=全部控制条按钮显示名（与 PlayerWakeFocusStore.resolve 同一解析口径）。 */
+    private fun wakeFocusOptions(): Array<String> =
+        ControlBarButton.entries.map { getString(it.labelRes) }.toTypedArray()
+
+    /** 显示值：未配置回落「播放/暂停」默认；旧文本无法识别时原样显示，行为仍回落默认。 */
+    private fun wakeFocusLabel(): String =
+        appSettings.getCachedString(KEY_PLAYER_WAKE_FOCUS)
+            ?.takeIf { it.isNotBlank() }
+            ?: getString(R.string.play_pause)
 
 
     private fun showChoiceDialog(

@@ -1083,7 +1083,7 @@ class MyPlayerView @JvmOverloads constructor(
         pauseIndicatorView?.visibility = if (isPaused) VISIBLE else GONE
     }
 
-    private fun maybeShowController(isForced: Boolean) {
+    private fun maybeShowController(isForced: Boolean, focusPlayPause: Boolean = true) {
         if (!useController() || player == null) return
         if (seekOverlayView?.isOverlayShowing() == true) return
 
@@ -1102,7 +1102,7 @@ class MyPlayerView @JvmOverloads constructor(
 
         if (!isForced && !shouldShowIndefinitely) return
 
-        showController(shouldShowIndefinitely)
+        showController(shouldShowIndefinitely, focusPlayPause)
     }
 
     private fun shouldShowControllerIndefinitely(): Boolean {
@@ -1650,15 +1650,20 @@ class MyPlayerView @JvmOverloads constructor(
                 onEpisodePanelRequestListener?.invoke()
                 return
             }
-            maybeShowController(true)
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
                 event.keyCode == KeyEvent.KEYCODE_ENTER
             ) {
+                // 确定键唤醒：show(focusPlayPause=true) post 落焦暂停（旧行为不变）
+                maybeShowController(true)
                 AppLog.d("DpadCenter", "calling togglePlayPauseFromKey code=${event.keyCode}")
                 controller?.togglePlayPauseFromKey()
                 // DOWN 已切换，标记吞掉对应 UP，防止 UP 触发 buttonPlay.performClick 二次切换
                 consumedOkKeyUp = true
             } else {
+                // 非确定键唤醒（下键等，issue#150）：显示不抢焦——show(focusPlayPause=true)
+                // 的 post 落焦会下一帧把 focusButtonByKeyDown 刚落的焦点抢回暂停按钮；
+                // focusPlayPause=false 后落焦全权交给 focusButtonByKeyDown（按设置落点）
+                maybeShowController(true, focusPlayPause = false)
                 AppLog.d("DpadCenter", "calling focusButtonByKeyDown code=${event.keyCode}")
                 controller?.focusButtonByKeyDown(event)
             }

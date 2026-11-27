@@ -24,6 +24,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TimeBar
 import com.mytvb.R
 import com.mytvb.core.common.log.AppLog
+import com.mytvb.feature.player.controlbar.ControlBarButton
+import com.mytvb.feature.player.controlbar.PlayerWakeFocusStore
 
 import com.mytvb.feature.player.sponsor.SponsorSegment
 import com.mytvb.feature.player.viewpoint.NormalizedViewPointSegment
@@ -248,6 +250,12 @@ class MyPlayerControlView @JvmOverloads constructor(
             timeBar = timeBar,
             bottomBar = bottomBar
         )
+        // 控制条唤醒焦点落点（issue#150）：设置存按钮显示名，这里做名字→视图映射
+        // （含 coordinator 未持有的 SC 开关按钮）；目标不可见由 coordinator 回落播放/暂停
+        focusCoordinator.wakeFocusViewProvider = {
+            PlayerWakeFocusStore.currentTarget { context.getString(it.labelRes) }
+                ?.let(::viewForWakeFocusTarget)
+        }
         focusCoordinator.setupFocusTracking(
             handler,
             ::isVisible,
@@ -917,6 +925,30 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun requestPlayPauseFocus() {
         focusCoordinator.requestPlayPauseFocus()
+    }
+
+    /** 唤醒落点按钮（issue#150）→ 控制栏视图；覆盖 [ControlBarButton] 全部枚举项。 */
+    private fun viewForWakeFocusTarget(button: ControlBarButton): View? = when (button) {
+        ControlBarButton.PREVIOUS -> buttonPrevious
+        ControlBarButton.PLAY -> buttonPlay
+        ControlBarButton.NEXT -> buttonNext
+        ControlBarButton.MORE -> buttonMore
+        ControlBarButton.COMMENT -> buttonComment
+        ControlBarButton.DANMAKU -> buttonDmSwitch
+        ControlBarButton.SUBTITLE -> buttonSubtitle
+        ControlBarButton.SPEED -> buttonPlaySpeed
+        ControlBarButton.EPISODE -> buttonChooseEpisode
+        ControlBarButton.UP_INFO -> buttonUpInfo
+        ControlBarButton.RELATED -> buttonRelated
+        ControlBarButton.REPEAT -> buttonRepeat
+        ControlBarButton.SETTINGS -> buttonSettings
+        ControlBarButton.REFRESH -> buttonRefresh
+        ControlBarButton.REWIND -> buttonRewind
+        ControlBarButton.FORWARD -> buttonFastForward
+        ControlBarButton.SC_SWITCH -> buttonScSwitch
+        ControlBarButton.MIRROR -> buttonMirror
+        ControlBarButton.LIVE_SETTINGS -> buttonLiveSettings
+        ControlBarButton.CLOSE -> buttonClose
     }
 
     fun requestSettingButtonFocus() {
