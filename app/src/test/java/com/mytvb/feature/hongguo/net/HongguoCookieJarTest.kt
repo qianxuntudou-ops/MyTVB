@@ -99,4 +99,32 @@ class HongguoCookieJarTest {
         assertTrue(jar.snapshot().isEmpty())
         assertTrue(jar.value("sessionid").isEmpty())
     }
+
+    @Test
+    fun `domain cookie from register host is sent to passport host`() {
+        val jar = HongguoCookieJar()
+        // 注册响应（log5-applog）下发的设备级 cookie 带 Domain=.fqnovel.com
+        jar.put("log5-applog.fqnovel.com", "odin_tt", "odin", "fqnovel.com")
+        val loaded = jar.loadForRequest(
+            "https://api5-normal-lq.fqnovel.com/passport/mobile/sms_login/".toHttpUrl()
+        )
+        assertTrue("跨子域设备 cookie 必须随 sms_login 回发（1202 根因）",
+            loaded.any { it.name == "odin_tt" && it.value == "odin" })
+    }
+
+    @Test
+    fun `host-only cookie does not cross subdomains`() {
+        val jar = HongguoCookieJar()
+        // 无 Domain 属性 = host-only（put 缺省形态），只在同 host 请求回发
+        jar.put("log5-applog.fqnovel.com", "ttreq", "req-only")
+        val toPassport = jar.loadForRequest(
+            "https://api5-normal-lq.fqnovel.com/passport/mobile/sms_login/".toHttpUrl()
+        )
+        assertTrue("host-only cookie 不得跨子域回发",
+            toPassport.none { it.name == "ttreq" })
+        val toSelf = jar.loadForRequest(
+            "https://log5-applog.fqnovel.com/service/2/device_register/".toHttpUrl()
+        )
+        assertTrue(toSelf.any { it.name == "ttreq" })
+    }
 }

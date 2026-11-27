@@ -38,7 +38,7 @@ class HongguoAccount(private val session: HongguoSession) {
      * 输入正确验证码也永远报「会话票据」失败。官方（HGTV C0163h2/Y.java）正是逐段解析
      * 响应 Set-Cookie 收会话，此处对齐。
      */
-    private val cookieJar = HongguoCookieJar()
+    private val cookieJar = HongguoCookieJarHolder.jar
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -821,6 +821,15 @@ internal object HongguoCookieStoreParser {
  * （同一进程里先扫码再短信登录），取值与落盘都优先它，否则 ConcurrentHashMap 的遍历
  * 顺序会让收口读到上一条登录的旧票据。纯 JVM 实现（不依赖 android.util.Log），可直接单测。
  */
+/**
+ * 全红果共享的单例 cookie 容器：账号通道（扫码/短信/导入）与设备注册响应灌入共用。
+ * 官方是全局收集+按 Domain 匹配回发（HGTV Y.java case2 单 map 同语义），
+ * 分散在各 client 的私有实例会造成跨域 cookie 互不可见（1202 根因之一）。
+ */
+internal object HongguoCookieJarHolder {
+    val jar: HongguoCookieJar = HongguoCookieJar()
+}
+
 internal class HongguoCookieJar : CookieJar {
 
     private val store = ConcurrentHashMap<String, MutableMap<String, Cookie>>()
@@ -842,8 +851,20 @@ internal class HongguoCookieJar : CookieJar {
         }
     }
 
-    override fun loadForRequest(url: HttpUrl): List<Cookie> =
-        store[url.host]?.values?.toList() ?: emptyList()
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        // 标准 Cookie 语义：Domain=.fqnovel.com 的 cookie 匹配任意 *.fqnovel.com 请求。
+        // 旧实现按 url.host 精确取桶——设备注册（log5-applog）下发的设备级 cookie 不会随
+        // 短信登录（api5-normal-lq）回发，passport 收不到设备 cookie 触发风控（issue#139
+        // 报告人复现 1202；tsukiyo 实证「不带 cookie 回 1202」同款）。同名跨域以登录域优先。
+        val loginMap = loginHost.takeIf { it.isNotEmpty() }?.let { store[it] }
+        val out = LinkedHashMap<String, Cookie>()
+        loginMap?.values?.forEach { c -> if (c.matches(url)) out.putIfAbsent(c.name, c) }
+        for ((_, m) in store) {
+            if (m === loginMap) continue
+            m.values.forEach { c -> if (c.matches(url)) out.putIfAbsent(c.name, c) }
+        }
+        return out.values.toList()
+    }
 
     /** 取 cookie 值：登录域优先，其它域兜底。 */
     fun value(name: String): String {
@@ -863,10 +884,16 @@ internal class HongguoCookieJar : CookieJar {
         return out
     }
 
-    /** 导入通道直接写入（没有响应头可解析）；sessionid 即视为本次登录域。 */
-    fun put(host: String, name: String, value: String) {
+    /**
+     * 导入/注册响应通道直接写入（没有 OkHttp 自动 jar 可走）；sessionid 即视为本次登录域。
+     * [domain] 非空时按该域存储（跨子域匹配，如注册响应的 Domain=.fqnovel.com 设备 cookie），
+     * 缺省 host-only（只在同 host 请求回发）。
+     */
+    fun put(host: String, name: String, value: String, domain: String? = null) {
         val map = store[host] ?: ConcurrentHashMap<String, Cookie>().also { store[host] = it }
-        map[name] = Cookie.Builder().name(name).value(value).domain(host).path("/").build()
+        val builder = Cookie.Builder().name(name).value(value).path("/")
+        if (domain != null) builder.domain(domain) else builder.domain(host)
+        map[name] = builder.build()
         if (name == "sessionid" || name == "sessionid_ss") loginHost = host
     }
 

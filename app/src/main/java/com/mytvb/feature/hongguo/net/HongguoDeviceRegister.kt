@@ -302,6 +302,19 @@ object HongguoDeviceRegister {
             .build()
         http.newCall(req).execute().use { resp ->
             require(resp.isSuccessful) { "设备注册返回 HTTP ${resp.code}" }
+            // 注册 client 是共享裸 OkHttp（不挂 jar：播放请求形态不能多出 Cookie 头），
+            // 注册下发的设备级 Set-Cookie（odin_tt/ttreq 等，Domain=.fqnovel.com）在这里手动
+            // 灌进共享 jar——否则短信登录（api5-normal-lq）收不到设备 cookie 触发风控 1202
+            // （issue#139 报告人复现；官方 Y.java case2 全局收集+跨子域回发同语义）。
+            resp.headers("Set-Cookie").forEach { line ->
+                val first = line.substringBefore(';')
+                val name = first.substringBefore('=').trim()
+                val value = first.substringAfter('=', "").trim()
+                if (name.isEmpty() || value.isEmpty()) return@forEach
+                val d = Regex("domain=([^;]+)", RegexOption.IGNORE_CASE).find(line)
+                    ?.groupValues?.get(1)?.trim()?.removePrefix(".")
+                HongguoCookieJarHolder.jar.put(resp.request.url.host, name, value, d)
+            }
             val bytes = resp.body?.bytes() ?: throw IllegalStateException("设备注册响应为空")
             val jsonText = if (bytes.size > 6 && bytes[0] == 0x74.toByte() && bytes[1] == 0x63.toByte()) {
                 String(ttDecrypt(bytes), Charsets.UTF_8)
