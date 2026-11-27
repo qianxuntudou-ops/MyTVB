@@ -524,6 +524,7 @@
     <string name="ipv4_only">僅使用IPv4</string>
     <string name="cdn_health_routing">CDN智慧選線</string>
     <string name="douyin_mode">抖音模式（遙控上下切換影片）</string>
+    <string name="comment_splitscreen_title">評論面板分割顯示</string>
     <string name="video_info">影片資訊</string>
     <string name="video_order">影片排序</string>
     <string name="video_quality">畫質</string>

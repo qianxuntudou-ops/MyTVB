@@ -666,6 +666,7 @@
     <string name="ipv4_only">仅使用IPv4</string>
     <string name="cdn_health_routing">CDN智能选线</string>
     <string name="douyin_mode">抖音模式（遥控上下切换视频）</string>
+    <string name="comment_splitscreen_title">评论面板分屏显示</string>
     <string name="video_info">视频信息</string>
     <string name="video_order">视频排序</string>
     <string name="video_quality">画质</string>

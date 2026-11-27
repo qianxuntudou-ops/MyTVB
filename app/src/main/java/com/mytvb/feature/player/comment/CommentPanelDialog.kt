@@ -210,6 +210,9 @@ internal class CommentPanelDialog(
         window?.setGravity(Gravity.END or Gravity.CENTER_VERTICAL)
         // 右侧抽屉动画：开=右缘快速滑入，关=往右快速飞出
         window?.setWindowAnimations(R.style.CommentPanelWindowAnimation)
+        // 去掉 DialogTheme 的全屏半透明蒙版（issue#150 需求2 用户反馈）：分屏/全屏
+        // 都要看得清背后视频，只保留右缘面板本体（仅本面板，不动全局 Dialog 主题）
+        window?.setDimAmount(0f)
         show()
         // 宽度钳 92% 屏宽，高度贴满全屏（上下不留空隙）
         val dm = activity.resources.displayMetrics

@@ -110,6 +110,10 @@ class MyPlayerView @JvmOverloads constructor(
         private const val KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT = 282
         private const val KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT = 283
         private const val STARTUP_BUFFERING_INDICATOR_DELAY_MS = 700L
+        // 评论面板分屏（issue#150）：小窗宽度占比与过渡时长（时长对齐评论面板右缘抽屉动画 200ms）。
+        // 占比 0.61：评论面板宽≈38.5% 屏宽（px740/1920 基准，UiScale 等比），仅留 ~0.5% 缝隙
+        private const val COMMENT_SPLITSCREEN_WIDTH_RATIO = 0.61f
+        private const val COMMENT_SPLITSCREEN_ANIM_DURATION_MS = 200L
         // 对齐 blbl DEFAULT_BUFFERING_OVERLAY_SHOW_DELAY_MS：播放中 BUFFERING 满 1s
         // 才弹遮罩，seek 后几百 ms 的正常缓冲不打扰画面（原 150ms 近乎立弹）
         private const val REBUFFER_BUFFERING_INDICATOR_DELAY_MS = 1_000L
@@ -216,6 +220,8 @@ class MyPlayerView @JvmOverloads constructor(
 
     private var touchInterceptListener: ((MotionEvent) -> Boolean)? = null
     private var isDouyinDragging = false
+    // 评论面板分屏（issue#150 建议）：面板打开期间视频缩小为左侧居中的 16:9 小窗
+    private var commentSplitscreenActive = false
     private var douyinDragDirection: DouyinSwipeDirection? = null
     private var douyinDragHasTarget = false
     private var douyinTransitionRunning = false
@@ -2417,6 +2423,121 @@ class MyPlayerView @JvmOverloads constructor(
         douyinDragHasTarget = false
         douyinTouchStartedInInteractiveArea = false
         douyinFirstFrameWaitRegistered = false
+    }
+
+    // ==================== 评论面板分屏（issue#150 建议）====================
+    // 打开评论面板时视频缩小为左侧垂直居中的 16:9 小窗，评论面板（独立 Dialog Window）
+    // 从右缘划入，两侧拼成分屏。布局切换一步到位（AspectRatioFrameLayout FIT 等比、
+    // 弹幕 viewport 重建、控制栏溢出收纳全自动跟随），过渡用 pivot 左上角的 scale+
+    // translation 变换呈现「全屏↔小窗」：不能逐帧改 LayoutParams 做动画——每帧
+    // requestLayout 会让弹幕 viewport 每帧重建、控制栏每帧重排收纳，弹幕抖动不可接受。
+
+    fun isCommentSplitscreenActive(): Boolean = commentSplitscreenActive
+
+    /**
+     * 分屏激活时输出视频小窗在父容器中的 frame（布局已是小窗真实位置，动画只是
+     * 视觉变换），供 Activity 根层的字幕/进度条等兄弟浮层钳位到视频区域。返回 false=未分屏。
+     */
+    fun commentSplitscreenVideoFrame(out: Rect): Boolean {
+        if (!commentSplitscreenActive || width <= 0) return false
+        out.set(left, top, left + width, top + height)
+        return true
+    }
+
+    fun enterCommentSplitscreen() {
+        if (commentSplitscreenActive || width <= 0 || height <= 0) return
+        val host = parent as? ViewGroup ?: return
+        val fullW = width
+        val fullH = height
+        val smallW = (fullW * COMMENT_SPLITSCREEN_WIDTH_RATIO).toInt().coerceAtLeast(1)
+        val smallH = (smallW * 9f / 16f).toInt().coerceAtLeast(1)
+        val offsetY = (fullH - smallH) / 2
+        commentSplitscreenActive = true
+        // 上一次退出动画可能仍在跑（快速关面板再开），先停掉避免它把下面的呈现变换拉向全屏
+        animate().cancel()
+        // 1) 布局切到小窗并同步 layout（防闪一帧中间态），子树（弹幕/控制栏/蒙版）同步重排
+        applyCommentSplitscreenLayout(host, smallW, smallH, offsetY)
+        // 2) 变换呈现旧全屏视觉：pivot 固定左上，放大 small→full 并平移回原位
+        pivotX = 0f
+        pivotY = 0f
+        scaleX = fullW.toFloat() / smallW
+        scaleY = fullH.toFloat() / smallH
+        translationY = -offsetY.toFloat()
+        // 3) 动画回到单位变换 = 小窗真实位置；结束清干净变换与 pivot
+        animateCommentSplitscreenTransform()
+    }
+
+    fun exitCommentSplitscreen() {
+        if (!commentSplitscreenActive) return
+        commentSplitscreenActive = false
+        animate().cancel()
+        val host = parent as? ViewGroup
+        val smallW = width
+        val smallH = height
+        if (host == null || smallW <= 0 || smallH <= 0 || host.width <= 0 || host.height <= 0) {
+            resetCommentSplitscreenTransform()
+            return
+        }
+        val fullW = host.width
+        val fullH = host.height
+        val offsetY = (fullH - smallH) / 2
+        // 1) 布局先切回全屏（恢复 match_parent 原语义）并同步 layout，随后立刻用
+        //    变换呈现旧小窗视觉，避免跳变
+        applyCommentSplitscreenLayout(
+            host,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            0
+        )
+        pivotX = 0f
+        pivotY = 0f
+        scaleX = smallW.toFloat() / fullW
+        scaleY = smallH.toFloat() / fullH
+        translationY = offsetY.toFloat()
+        // 2) 动画放大回全屏
+        animateCommentSplitscreenTransform()
+    }
+
+    /** 改 LayoutParams 到目标 frame 并同步 layout（系统后续 layout pass 结果一致，稳定）。 */
+    private fun applyCommentSplitscreenLayout(host: ViewGroup, w: Int, h: Int, offsetY: Int) {
+        val lp = layoutParams as? FrameLayout.LayoutParams ?: FrameLayout.LayoutParams(w, h)
+        lp.width = w
+        lp.height = h
+        if (w == ViewGroup.LayoutParams.MATCH_PARENT && h == ViewGroup.LayoutParams.MATCH_PARENT) {
+            // 恢复 fragment_video_player.xml 原始形态：无 gravity（默认左上、撑满父容器）
+            lp.gravity = Gravity.NO_GRAVITY
+        } else {
+            lp.gravity = Gravity.CENTER_VERTICAL or Gravity.START
+        }
+        layoutParams = lp
+        val resolvedW = if (w == ViewGroup.LayoutParams.MATCH_PARENT) host.width else w
+        val resolvedH = if (h == ViewGroup.LayoutParams.MATCH_PARENT) host.height else h
+        layout(0, offsetY, resolvedW, offsetY + resolvedH)
+    }
+
+    private fun animateCommentSplitscreenTransform() {
+        animate().cancel()
+        animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .translationY(0f)
+            .setDuration(COMMENT_SPLITSCREEN_ANIM_DURATION_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                resetCommentSplitscreenTransform()
+            }
+            .start()
+    }
+
+    /** 清掉分屏过渡用的变换（scale/translation/pivot 归位，视觉回到布局真实 frame）。 */
+    private fun resetCommentSplitscreenTransform() {
+        animate().cancel()
+        pivotX = width / 2f
+        pivotY = height / 2f
+        scaleX = 1f
+        scaleY = 1f
+        translationX = 0f
+        translationY = 0f
     }
 
     @SuppressLint("ClickableViewAccessibility")

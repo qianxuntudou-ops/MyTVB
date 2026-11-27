@@ -28,6 +28,7 @@ import com.mytvb.feature.detail.UserSpaceFragment
 import com.mytvb.core.ui.base.VideoRecyclerViewTuning
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
 import com.mytvb.feature.player.comment.CommentPanelDialog
+import com.mytvb.feature.player.comment.CommentSplitscreenStore
 import com.mytvb.feature.player.view.MyPlayerView
 import com.mytvb.model.player.ViewPoint
 import com.mytvb.core.ui.base.DialogWindowFit
@@ -57,7 +58,13 @@ class VideoPlayerOverlayController(
      * 评论区开着时视频播完，返回后焦点会落在播放器而不是结束页的重播按钮
      * （issue#119 追加反馈）。
      */
-    private val onPanelDismissedFocusIntercept: (() -> Boolean)? = null
+    private val onPanelDismissedFocusIntercept: (() -> Boolean)? = null,
+    /**
+     * 评论面板分屏（issue#150 建议，默认关）开关打开时，面板打开/关闭伴随视频
+     * 缩小为左侧小窗/恢复全屏；宿主用它把根层的字幕、进度条等兄弟浮层钳到
+     * 小窗或还原（PlayerActivity.applyCommentSplitscreenChrome）。
+     */
+    private val onCommentSplitscreenChanged: ((Boolean) -> Unit)? = null
 ) {
 
     private companion object {
@@ -65,10 +72,16 @@ class VideoPlayerOverlayController(
 
         /** 面板关闭后控制栏多停留的时长：让「焦点已回到打开前的按钮」看得见 */
         const val CONTROLLER_HOLD_AFTER_OVERLAY_MS = 5_000L
+
+        /** 评论面板打开期间控制栏的停留时长，到点自动隐藏（用户反馈 2026-11-27） */
+        const val CONTROLLER_VISIBLE_WHILE_COMMENT_PANEL_MS = 5_000L
     }
 
     /** 当前面板打开时控制栏处于隐藏态且未强制拉起（隐藏态 UP 直达），关闭后应保持隐藏。 */
     private var controllerWasHiddenForOverlay: Boolean = false
+
+    /** 评论面板打开期间的控制栏隐藏定时：到点藏控制栏，关面板时取消。 */
+    private var hideControllerWhileCommentPanelRunnable: Runnable? = null
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -566,7 +579,14 @@ class VideoPlayerOverlayController(
         }
         AppLog.i(TAG, "comment panel open aid=${video.aid} bvid=${video.bvid} cid=${video.cid}")
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.COMMENT_BUTTON)
+        // 分屏（issue#150 建议，开关默认关）：面板划入前先把视频缩到左侧 16:9 小窗，
+        // 面板从右缘划入，两侧拼成分屏；同步 layout 后再拉起控制栏，落点即小窗内布局
+        if (CommentSplitscreenStore.isEnabled()) {
+            playerView.enterCommentSplitscreen()
+            onCommentSplitscreenChanged?.invoke(true)
+        }
         keepControllerVisibleForOverlay()
+        scheduleHideControllerWhileCommentPanel()
         uiCoordinator.transition(UiEvent.PanelOpened(PanelType.COMMENT))
         CommentPanelDialog(
             activity = activity,
@@ -580,6 +600,11 @@ class VideoPlayerOverlayController(
                 )
             },
             onDismissed = {
+                // 先恢复全屏布局（同步 layout）再走焦点恢复链：restoreFocus 落点按
+                // 全屏位置算，焦点框随退出动画缩放滑回，视觉自然
+                playerView.exitCommentSplitscreen()
+                onCommentSplitscreenChanged?.invoke(false)
+                cancelHideControllerWhileCommentPanel()
                 uiCoordinator.transition(UiEvent.PanelClosed)
                 if (isViewActive()) {
                     restoreControllerAfterOverlay()
@@ -595,8 +620,7 @@ class VideoPlayerOverlayController(
      * @param forceShowController false=控制栏隐藏态直达面板（控制栏隐藏时按 UP
      * 直达选集/合集）：不强制拉起控制栏，面板关闭后也保持隐藏（v2.1.14 反馈）。
      */
-    private fun keepControllerVisibleForOverlay(forceShowController: Boolean = true) {
-        // 新面板打开：取消上一个面板关闭时安排的「延迟解除挂起」
+    private fun keepControllerVisibleForOverlay(forceShowController: Boolean = true) {        // 新面板打开：取消上一个面板关闭时安排的「延迟解除挂起」
         releaseHideCallbacksRunnable?.let { handler.removeCallbacks(it) }
         releaseHideCallbacksRunnable = null
         controllerWasHiddenForOverlay =
@@ -605,6 +629,27 @@ class VideoPlayerOverlayController(
             playerView.showController()
         }
         playerView.setControllerHideCallbacksSuspended(true)
+    }
+
+    /**
+     * 评论面板打开期间控制栏只停留 [CONTROLLER_VISIBLE_WHILE_COMMENT_PANEL_MS]：
+     * 到点手动隐藏（挂起挡的是「自动隐藏调度」，不拦手动 hide），面板开着时画面
+     * 保持干净（用户反馈 2026-11-27）；挂起本身保持，隐藏后不会被自动调度拉回。
+     */
+    private fun scheduleHideControllerWhileCommentPanel() {
+        cancelHideControllerWhileCommentPanel()
+        val runnable = Runnable {
+            hideControllerWhileCommentPanelRunnable = null
+            playerView.hideController()
+        }
+        hideControllerWhileCommentPanelRunnable = runnable
+        handler.postDelayed(runnable, CONTROLLER_VISIBLE_WHILE_COMMENT_PANEL_MS)
+    }
+
+    /** 关面板即取消：避免面板关闭刚拉起的控制栏（restoreControllerAfterOverlay）被残余定时藏掉。 */
+    private fun cancelHideControllerWhileCommentPanel() {
+        hideControllerWhileCommentPanelRunnable?.let { handler.removeCallbacks(it) }
+        hideControllerWhileCommentPanelRunnable = null
     }
 
     private fun restoreControllerAfterOverlay() {

@@ -521,6 +521,7 @@
     <string name="ipv4_only">IPv4 only</string>
     <string name="cdn_health_routing">Smart CDN routing</string>
     <string name="douyin_mode">Douyin mode (switch videos with remote up/down)</string>
+    <string name="comment_splitscreen_title">Comment panel splitscreen</string>
     <string name="video_info">Video info</string>
     <string name="video_order">Video order</string>
     <string name="video_quality">Quality</string>

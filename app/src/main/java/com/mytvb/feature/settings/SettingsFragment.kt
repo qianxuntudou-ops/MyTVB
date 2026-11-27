@@ -66,6 +66,7 @@ import com.mytvb.core.ui.system.ScreenUtils
 import com.mytvb.feature.player.PlayerInstancePool
 import com.mytvb.feature.player.VideoPlayerViewModel
 import com.mytvb.feature.player.cache.PlayerMediaCache
+import com.mytvb.feature.player.comment.CommentSplitscreenStore
 import com.mytvb.feature.player.controlbar.ControlBarButton
 import com.mytvb.feature.player.controlbar.ControlBarOrderManageDialog
 import com.mytvb.feature.player.controlbar.ControlBarOrderStore
@@ -214,6 +215,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_IPV4_ONLY = "ipv4_only"
         private const val KEY_CDN_HEALTH_ROUTING = "cdn_health_routing"
         private const val KEY_DOUYIN_MODE = "douyin_mode"
+        // 评论面板分屏（issue#150 建议，存储值"开/关"，默认关）：开启后播放页打开评论面板时
+        // 视频缩小到左侧居中（16:9 小窗+动画），评论从右缘划入；与 CommentSplitscreenStore.STORE_KEY 同键
+        private const val KEY_COMMENT_SPLITSCREEN = CommentSplitscreenStore.STORE_KEY
         private const val KEY_RESUME_PLAYBACK = "resume_playback"
         private const val KEY_SPONSOR_BLOCK_ENABLED = "sponsor_block_enabled"
         private const val KEY_SKIP_OFFICIAL_OP_ED = "skip_official_op_ed"
@@ -446,7 +450,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_AUTO_NEXT_REMINDER, R.string.auto_next_reminder, "开", R.string.auto_next_reminder_desc),
                 stored(KEY_PLAY_FINISH_EXIT_PLAYER, R.string.play_finish_exit_player, "开"),
                 // 抖音模式是播放器内遥控上下切视频，从「通用·交互」归入播放行为
-                stored(KEY_DOUYIN_MODE, R.string.douyin_mode, "关")
+                stored(KEY_DOUYIN_MODE, R.string.douyin_mode, "关"),
+                // 评论面板分屏（issue#150 建议）：打开评论面板时视频缩小到左侧，边看边读评论
+                stored(KEY_COMMENT_SPLITSCREEN, R.string.comment_splitscreen_title, "关")
             )),
             // 空降助手：总开关 + 逐类跳过开关（默认总开关开，跳过类型只开赞助/恰饭，其余默认关）
             SettingGroup(R.string.setting_group_sponsor_skip, listOf(
@@ -911,6 +917,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 }
             }
             KEY_DOUYIN_MODE -> toggle(key)
+            // 分屏每次打开评论面板实时读缓存，改开关即时生效，无需额外回调
+            KEY_COMMENT_SPLITSCREEN -> toggle(key)
             KEY_GIVE_COIN_NUMBER -> showCommonChoiceDialog(key, arrayOf("1", "2"))
             KEY_COIN_ALSO_LIKE -> toggle(key)
             // —— 通用·网络与账号 ——
@@ -1563,6 +1571,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         updateRiskControlStatus()
         applyStored(KEY_SHOW_VIDEO_DETAIL)
         applyStored(KEY_DOUYIN_MODE)
+        // 评论面板分屏（issue#150）：恢复显示已存值（stored() 构建的是默认值快照，不读存储）
+        applyStored(KEY_COMMENT_SPLITSCREEN)
         applyStored(KEY_GIVE_COIN_NUMBER)
         applyStored(KEY_COIN_ALSO_LIKE)
         applyStored(KEY_IPV4_ONLY)

@@ -12,9 +12,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.os.SystemClock
+import android.graphics.Rect
 import android.util.Printer
 import android.util.TypedValue
 import android.view.Choreographer
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -1155,7 +1157,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 } else {
                     false
                 }
-            }
+            },
+            onCommentSplitscreenChanged = { active -> applyCommentSplitscreenChrome(active) }
         )
         resumeHintController = VideoPlayerResumeHintController(
             activity = this,
@@ -2507,7 +2510,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             else -> R.dimen.px60
         }
         (textSubtitle.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-            val targetMargin = resources.getDimensionPixelSize(subtitleBottomMarginRes)
+            // 评论面板分屏（issue#150）时叠加视频小窗下方黑区高度，字幕贴小窗底
+            val targetMargin = resources.getDimensionPixelSize(subtitleBottomMarginRes) +
+                commentSplitscreenBottomInset
             if (params.bottomMargin != targetMargin) {
                 params.bottomMargin = targetMargin
                 textSubtitle.layoutParams = params
@@ -2515,6 +2520,99 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         }
         renderBottomProgressBar()
         renderOnlineWatching()
+    }
+
+    /** 评论面板分屏时视频小窗下方的黑区高度，叠加在字幕让位高度上（0=未分屏）。 */
+    private var commentSplitscreenBottomInset = 0
+
+    /** 字幕进分屏前的原布局值备忘（width, layoutGravity, textGravity），退出还原；null=未进分屏。 */
+    private var subtitleSplitscreenSaved: Triple<Int, Int, Int>? = null
+
+    /** 字幕进分屏前的原字号（px），退出还原。 */
+    private var subtitleSavedTextSizePx: Float = 0f
+
+    /**
+     * 评论面板分屏（issue#150）开启时，把 Activity 根层不随播放器缩小的兄弟浮层
+     * 钳到视频小窗或还原（幂等，可重复调用）：
+     * - 字幕：限宽到小窗（超长字幕在小窗内换行，不再横贯屏幕）、文本水平居中、
+     *   整体按小窗/全屏比例 view 缩放（锚点=中心/底，字号视觉随画面等比）；
+     *   纵向让位由 [renderControllerChrome] 统一叠加 [commentSplitscreenBottomInset]
+     *   贴小窗底（控制栏状态变化重渲时不丢增量）。
+     * - 空降细进度条/章节分段条：钳宽到小窗（保留功能，只是变短），退出恢复全宽。
+     * 「N人正在看」显示时机=控制栏完全收起，面板期间控制栏常显本就不可见；下一集
+     * 卡片被评论面板（独立窗口）覆盖，均无需处理。
+     */
+    private fun applyCommentSplitscreenChrome(active: Boolean) {
+        if (active) {
+            val fullW = binding.root.width
+            val fullH = binding.root.height
+            val frame = Rect()
+            if (fullW <= 0 || fullH <= 0 || !playerView.commentSplitscreenVideoFrame(frame)) return
+            commentSplitscreenBottomInset = fullH - frame.bottom
+            applySubtitleSplitscreenTransform(frame, fullW)
+            clampBarsToSplitscreen(frame.width())
+        } else {
+            // 退出还原不能读 frame：dismiss 链里 exitCommentSplitscreen 已先把 active
+            // 置回 false、布局恢复全屏，此时 commentSplitscreenVideoFrame 恒为 false
+            commentSplitscreenBottomInset = 0
+            applySubtitleSplitscreenTransform(null, 0)
+            clampBarsToSplitscreen(0)
+        }
+        renderControllerChrome()
+    }
+
+    /**
+     * 字幕的分屏变换/还原。[frame]=null 表示退出。只缩字号不缩视图：字幕框保持
+     * 小窗满宽（左右贴边，用户反馈 2026-11-27），文本在满宽内居中换行；view scale
+     * 方案会把字幕框也缩成小窗的 60% 宽（两侧大片留白），故弃用。textSize 走
+     * COMPLEX_UNIT_PX（字幕已 ScaledTextView.exempt，px 值即真实渲染值）。
+     */
+    private fun applySubtitleSplitscreenTransform(frame: Rect?, fullW: Int) {
+        val subtitle = binding.textSubtitle
+        val lp = subtitle.layoutParams as? FrameLayout.LayoutParams
+        if (lp == null) {
+            subtitleSplitscreenSaved = null
+            return
+        }
+        if (frame != null) {
+            if (subtitleSplitscreenSaved == null) {
+                subtitleSplitscreenSaved = Triple(lp.width, lp.gravity, subtitle.gravity)
+                subtitleSavedTextSizePx = subtitle.textSize
+            }
+            lp.width = frame.width()
+            lp.gravity = Gravity.BOTTOM or Gravity.START
+            subtitle.layoutParams = lp
+            subtitle.gravity = Gravity.CENTER_HORIZONTAL
+            subtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, subtitleSavedTextSizePx * frame.width() / fullW)
+        } else {
+            val saved = subtitleSplitscreenSaved
+            subtitleSplitscreenSaved = null
+            if (subtitleSavedTextSizePx > 0f) {
+                subtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, subtitleSavedTextSizePx)
+            }
+            subtitleSavedTextSizePx = 0f
+            if (saved != null) {
+                lp.width = saved.first
+                lp.gravity = saved.second
+                subtitle.layoutParams = lp
+                subtitle.gravity = saved.third
+            }
+        }
+    }
+
+    /** 细进度条/章节条钳宽到小窗（width<=0=恢复全宽原语义），两者互斥显示，一起处理无副作用。 */
+    private fun clampBarsToSplitscreen(widthPx: Int) {
+        listOf(binding.bottomProgressBar, binding.chapterSegmentBar).forEach { bar ->
+            val lp = bar.layoutParams as? FrameLayout.LayoutParams ?: return@forEach
+            if (widthPx > 0) {
+                lp.width = widthPx
+                lp.gravity = Gravity.BOTTOM or Gravity.START
+            } else {
+                lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+                lp.gravity = Gravity.BOTTOM
+            }
+            bar.layoutParams = lp
+        }
     }
 
     /**
