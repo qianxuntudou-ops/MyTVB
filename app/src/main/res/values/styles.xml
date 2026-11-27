@@ -198,7 +198,10 @@
         <item name="tabBarHighlight">@color/fourthBackgroundColor</item>
         <item name="tabBarNormal">@color/tab_normal</item>
         <item name="tabBarSelected">@color/white</item>
-        <item name="thirdBackgroundColor">@color/backgroundColor</item>
+        <!-- 黑主题第三层（弹窗壳/设置行聚焦底）：原指 backgroundColor(#050505 近纯黑)，
+             弹窗壳 dialog_background 改走 attr 后黑主题弹窗变纯黑不可读（用户实测）；
+             归位到 thirdBackgroundColor(#454545)，与 issue#144 前静态 #3D3D3D 同语义 -->
+        <item name="thirdBackgroundColor">@color/thirdBackgroundColor</item>
     </style>
     <style name="Theme.MyBLBL" parent="@style/Theme.Blbl">
     </style>
