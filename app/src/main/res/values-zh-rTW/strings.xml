@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="after_play">播放完成後</string>
+    <string name="auto_next_reminder">連播提醒卡</string>
+    <string name="auto_next_reminder_desc">片尾彈出「即將播放」提醒卡並倒數；關閉後播完直接連播下一集</string>
     <string name="allWeb">全站</string>
     <string name="all_dynamic">全部動態</string>
     <string name="all_series_title_format">%1$s · 全部</string>

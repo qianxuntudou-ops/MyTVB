@@ -2669,6 +2669,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
      */
     private fun maybePrequeueAutoNext(positionMs: Long, durationMs: Long) {
         if (durationMs <= 0L) return
+        // 连播提醒卡关闭（issue#149）：不提前弹卡不倒计时，播完由 [handlePlaybackEnded] 直接切集
+        if (!playerSettings.autoNextReminder) return
         val remainingMs = durationMs - positionMs
         if (remainingMs <= 0L) return
         val speed = player?.playbackParameters?.speed ?: 1f
@@ -2744,7 +2746,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 // 否则新 UUID 会让 controller 判定目标变化而清零重数。
                 val session = viewModel.findReusableContinuationSession(intent.mode, intent.target)
                     ?: viewModel.prepareContinuation(intent)
-                if (session != null) autoPlayController.queueNextSession(intent.title, intent.coverUrl, session.id)
+                if (session != null) {
+                    if (playerSettings.autoNextReminder) {
+                        autoPlayController.queueNextSession(intent.title, intent.coverUrl, session.id)
+                    } else {
+                        // 提醒卡关闭：不弹卡不倒计时，播完直接切集；
+                        // 登记与公益锁守卫与控制器执行路径（onExecutePendingSession）同款
+                        if (!psasLocked) {
+                            viewModel.playContinuation(session.id)?.let(sessionCoordinator::updateCurrentVideo)
+                        }
+                    }
+                }
             },
             showRecommendations = { playbackEndPanelController.show() },
             exit = { finish() },

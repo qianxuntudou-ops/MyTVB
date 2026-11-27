@@ -62,7 +62,10 @@ data class PlayerSettings(
     // 无缝切清晰度：满足条件时用多清晰度 DASH MPD 源替代单档源，切档不重建播放器。默认开启。
     val seamlessQualitySwitch: Boolean = true,
     // 时间常驻显示：开启后播放画面右上角常驻显示时间（控制栏呼出时避让，控制栏本身带时钟）。默认关。
-    val showAlwaysOnClock: Boolean = false
+    val showAlwaysOnClock: Boolean = false,
+    // 片尾连播提醒卡（issue#149）：开=片尾提前弹「即将播放」卡倒计时后切集（原行为）；
+    // 关=不弹卡不倒计时，播完（STATE_ENDED）直接连播下一集。默认开。
+    val autoNextReminder: Boolean = true
 )
 
 private object VideoQualityDefaults {
@@ -94,6 +97,8 @@ object PlayerSettingsStore {
     const val KEY_BLOCK_LOTTERY_DANMAKU = "dm_block_lottery"
     private const val KEY_AFTER_PLAY = "after_play"
     private const val KEY_PLAY_FINISH_EXIT_PLAYER = "play_finish_exit_player"
+    // 与 SettingsFragment.KEY_AUTO_NEXT_REMINDER 同键；存储值"开/关"（parseToggle 口径），默认开。
+    private const val KEY_AUTO_NEXT_REMINDER = "auto_next_reminder"
     private const val KEY_SUBTITLE_DEFAULT_MODE = "subtitle_default_mode"
     private const val KEY_SUBTITLE_PREFERRED_LAN = "subtitle_preferred_lan"
     private const val KEY_SUBTITLE_TEXT_SIZE = "subtitle_text_size"
@@ -131,6 +136,8 @@ object PlayerSettingsStore {
             append(readSetting(KEY_AFTER_PLAY).orEmpty())
             append("|")
             append(readSetting(KEY_PLAY_FINISH_EXIT_PLAYER).orEmpty())
+            append("|")
+            append(readSetting(KEY_AUTO_NEXT_REMINDER).orEmpty())
             append("|")
             append(readSetting(KEY_SUBTITLE_DEFAULT_MODE).orEmpty())
             append("|")
@@ -206,6 +213,10 @@ object PlayerSettingsStore {
             },
             exitPlayerWhenPlaybackFinished = parseToggle(
                 readSetting(KEY_PLAY_FINISH_EXIT_PLAYER),
+                defaultValue = true
+            ),
+            autoNextReminder = parseToggle(
+                readSetting(KEY_AUTO_NEXT_REMINDER),
                 defaultValue = true
             ),
             subtitleDefaultMode = parseSubtitleDefaultMode(

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="after_play">After playback</string>
+    <string name="auto_next_reminder">Up-next reminder card</string>
+    <string name="auto_next_reminder_desc">Show an up-next card with countdown near the end; when off, the next video starts right after this one ends</string>
     <string name="allWeb">All</string>
     <string name="all_dynamic">All posts</string>
     <string name="all_series_title_format">%1$s · All</string>

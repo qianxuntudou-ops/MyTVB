@@ -160,6 +160,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         private const val KEY_DEFAULT_AUDIO_TRACK = "default_audio_track"
         private const val KEY_DEFAULT_PLAY_SPEED = "default_play_speed"
         private const val KEY_AFTER_PLAY = "after_play"
+        // 连播提醒卡（issue#149）：与 PlayerSettingsStore.KEY_AUTO_NEXT_REMINDER 同键
+        private const val KEY_AUTO_NEXT_REMINDER = "auto_next_reminder"
         private const val KEY_PLAY_FINISH_EXIT_PLAYER = "play_finish_exit_player"
         private const val KEY_VIDEO_CODEC = "video_codec"
         // 与 PlayerSettingsStore.KEY_SOFTWARE_VIDEO_DECODER 同键（存储值"开/关"）。
@@ -428,6 +430,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                 stored(KEY_RESUME_PLAYBACK, R.string.resume_playback, "开"),
                 stored(KEY_SKIP_OFFICIAL_OP_ED, R.string.skip_official_op_ed, "开"),
                 stored(KEY_AFTER_PLAY, R.string.after_play, "播推荐视频"),
+                // 连播提醒卡（issue#149）：关闭后片尾不弹「即将播放」提醒，播完直接连播下一集
+                stored(KEY_AUTO_NEXT_REMINDER, R.string.auto_next_reminder, "开", R.string.auto_next_reminder_desc),
                 stored(KEY_PLAY_FINISH_EXIT_PLAYER, R.string.play_finish_exit_player, "开"),
                 // 抖音模式是播放器内遥控上下切视频，从「通用·交互」归入播放行为
                 stored(KEY_DOUYIN_MODE, R.string.douyin_mode, "关")
@@ -919,6 +923,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_RESUME_PLAYBACK -> toggle(key)
             KEY_SKIP_OFFICIAL_OP_ED -> toggle(key)
             KEY_AFTER_PLAY -> showPlayerChoiceDialog(key, arrayOf("什么都不做", "播推荐视频", "播列表中的下一个", "播放合集中的下一个"))
+            KEY_AUTO_NEXT_REMINDER -> toggle(key)
             KEY_PLAY_FINISH_EXIT_PLAYER -> toggle(key)
             KEY_SPONSOR_BLOCK_ENABLED -> toggleSponsorBlock()
             in SponsorCategoryPrefs.KEYS -> toggle(key)
@@ -1579,6 +1584,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // —— 播放：播放行为 ——
         applyStored(KEY_RESUME_PLAYBACK)
         applyStored(KEY_AFTER_PLAY)
+        // 片头片尾跳过此前漏了恢复调用：条目恒显默认值，落盘「关」时首击方向会判反
+        applyStored(KEY_SKIP_OFFICIAL_OP_ED)
+        applyStored(KEY_AUTO_NEXT_REMINDER)
         applyStored(KEY_PLAY_FINISH_EXIT_PLAYER)
         applyStored(KEY_SPONSOR_BLOCK_ENABLED)
         SponsorCategoryPrefs.OPTIONS.forEach { applyStored(it.key) }

@@ -6,6 +6,8 @@
     <string name="abc_search_hint">Search…</string>
     <string name="abc_toolbar_collapse_description">Collapse</string>
     <string name="after_play">播放完成后</string>
+    <string name="auto_next_reminder">连播提醒卡</string>
+    <string name="auto_next_reminder_desc">片尾弹出“即将播放”提醒卡并倒计时；关闭后播完直接连播下一集</string>
     <string name="allWeb">全站</string>
     <string name="all_dynamic">全部动态</string>
     <string name="all_series_title_format">%1$s · 全部</string>
