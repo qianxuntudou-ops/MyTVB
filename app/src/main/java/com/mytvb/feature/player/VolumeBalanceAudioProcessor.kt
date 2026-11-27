@@ -4,6 +4,7 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import com.mytvb.core.common.log.AppLog
 import com.mytvb.feature.player.settings.AudioBalanceLevel
 import com.mytvb.feature.player.settings.AudioBalanceSettings
 import java.nio.ByteBuffer
@@ -43,7 +44,7 @@ internal class VolumeBalanceAudioProcessor : BaseAudioProcessor() {
     private var currentGain: Float = 1.0f
 
     init {
-        resetAdaptiveState()
+        resetAdaptiveState(keepPrior = false)
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -52,7 +53,7 @@ internal class VolumeBalanceAudioProcessor : BaseAudioProcessor() {
         if (globalLevel != level) {
             level = globalLevel
             params = paramsFor(level)
-            resetAdaptiveState()
+            resetAdaptiveState(keepPrior = false)
         }
 
         if (!inputBuffer.hasRemaining()) return
@@ -187,10 +188,17 @@ internal class VolumeBalanceAudioProcessor : BaseAudioProcessor() {
             C.ENCODING_PCM_16BIT,
             C.ENCODING_PCM_FLOAT,
             -> {
+                // 流重配诊断（低频，仅换流时一条）：gainBefore 可判重置行为——
+                // keepPrior 生效时等于上一流稳态增益，未保留则等于 startup
+                AppLog.d(
+                    "AudioBalance",
+                    "onConfigure sr=${inputAudioFormat.sampleRate} ch=${inputAudioFormat.channelCount} " +
+                        "gainBefore=$currentGain"
+                )
                 inputEncoding = inputAudioFormat.encoding
                 sampleRateHz = inputAudioFormat.sampleRate.takeIf { it > 0 } ?: 48_000
                 channelCount = inputAudioFormat.channelCount.takeIf { it > 0 } ?: 2
-                resetAdaptiveState()
+                resetAdaptiveState(keepPrior = programMeanSquare != null)
                 return inputAudioFormat
             }
 
@@ -199,19 +207,31 @@ internal class VolumeBalanceAudioProcessor : BaseAudioProcessor() {
     }
 
     override fun onFlush(streamMetadata: AudioProcessor.StreamMetadata) {
-        resetAdaptiveState()
+        AppLog.d("AudioBalance", "onFlush gainBefore=$currentGain")
+        resetAdaptiveState(keepPrior = programMeanSquare != null)
     }
 
     override fun onReset() {
-        resetAdaptiveState()
+        AppLog.d("AudioBalance", "onReset gainBefore=$currentGain")
+        resetAdaptiveState(keepPrior = false)
     }
 
-    private fun resetAdaptiveState() {
+    /**
+     * [keepPrior]=true（跨流切换：上一节目已校准出响度）时保留 [programMeanSquare] 与
+     * [currentGain]，只清校准/积分计数——消除切集瞬间「稳态压低增益 → startup」的音量
+     * 跳变（用户反馈「切下一集音量突然变大然后逐渐恢复」：稳态被压 -9dB 的节目切集后
+     * 校准期以 startup -1.5dB 播 2 秒，突跳 ~8dB，校准完 attack 再花 2 秒降回）。
+     * 新集响度差异由 programIntegrationSec 积分快速收敛，峰值限幅（[LIMITER_CEILING]）
+     * 兜底防削波。keepPrior=false（首次配置/档位切换/sink 释放）保持原 startup 行为。
+     */
+    private fun resetAdaptiveState(keepPrior: Boolean) {
         signalAccumulatedSec = 0.0
         calibrationSumSquares = 0.0
         calibrationSampleCount = 0L
-        programMeanSquare = null
-        currentGain = if (level == AudioBalanceLevel.OFF) 1.0f else params.startupGainLinear
+        if (!keepPrior) {
+            programMeanSquare = null
+            currentGain = if (level == AudioBalanceLevel.OFF) 1.0f else params.startupGainLinear
+        }
     }
 
     private data class Params(
