@@ -22,6 +22,12 @@ object HomeTabPrefs {
 
     const val KEY = "home_tabs_config"
 
+    /**
+     * 个人内容页签 id 集（历史/稍后观看/收藏，id 沿用旧静态表）。
+     * 「侧栏『我的』入口」开关关闭且本集页签全部隐藏时三者无任何入口，用于设置侧的提示。
+     */
+    val PERSONAL_ENTRY_IDS = setOf(4L, 5L, 6L)
+
     /** 一个首页页签项。id 与 HomeFragmentStateAdapter 的 itemId 一致。 */
     data class HomeTabEntry(
         val id: Long,

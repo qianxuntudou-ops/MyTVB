@@ -290,6 +290,8 @@
     <string name="live">Live</string>
     <string name="live_entry">Bilibili Live</string>
     <string name="home_tabs_display">Home tabs</string>
+    <string name="me_entry_visible">Show \"Me\" tab in sidebar</string>
+    <string name="toast_personal_entries_both_off">History, watch later and favorites now have no entry</string>
     <string name="home_tabs_dialog_title">Home tabs</string>
     <string name="home_tabs_dialog_hint">Up/Down to select · OK toggles visibility · long-press then Up/Down to reorder (touch: long-press to drag)</string>
     <string name="home_tabs_drag_hint">Reordering: Up/Down to move · OK to drop</string>

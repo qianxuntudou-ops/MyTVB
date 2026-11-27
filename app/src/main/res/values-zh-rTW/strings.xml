@@ -290,6 +290,8 @@
     <string name="live">直播</string>
     <string name="live_entry">B站直播入口</string>
     <string name="home_tabs_display">首頁分頁</string>
+    <string name="me_entry_visible">側欄顯示「我的」入口</string>
+    <string name="toast_personal_entries_both_off">「歷史/稍後觀看/收藏」已無任何入口</string>
     <string name="home_tabs_dialog_title">首頁分頁</string>
     <string name="home_tabs_dialog_hint">上下鍵選擇 · 單擊切換顯示 · 長按後上下鍵調整順序（觸屏可長按拖動）</string>
     <string name="home_tabs_drag_hint">調整中：上下鍵移動 · 單擊放下</string>

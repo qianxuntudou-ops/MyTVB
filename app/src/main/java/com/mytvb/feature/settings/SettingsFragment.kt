@@ -134,6 +134,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         // 红果短剧入口开关（存储值"开/关"，默认关）：开启后侧栏功能区出现红果按钮；
         // 红果账号/设备身份与 B 站完全隔离（独立 DataStore + 独立网络栈）
         private const val KEY_HONGGUO_ENTRY = "hongguo_entry"
+        // 侧栏「我的」入口开关（issue#147 后续，存储值"开/关"，默认关；与 MainActivity
+        // applyMeEntryVisibility 同键）：历史/稍后观看/收藏已固定并入首页页签，本开关供需要「我的」页的用户
+        private const val KEY_ME_ENTRY = "me_entry_visible"
         // 红果推荐受众（存储值"不限/男频/女频"，默认不限；对照 HGTV recommendGender）：
         // 推荐流首拉注入 gender 筛选面板，设置后下次进推荐生效
         private const val KEY_HONGGUO_RECOMMEND_GENDER = "hongguo_recommend_gender"
@@ -395,6 +398,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
                     R.string.home_tabs_display,
                     HomeTabPrefs.summaryText(requireContext())
                 ),
+                // 侧栏「我的」入口开关（issue#147 后续，默认关，保持「我的」入口常隐现状）
+                stored(KEY_ME_ENTRY, R.string.me_entry_visible, "关"),
                 // 打开方式：点卡片直接播放 / 先进详情页
                 stored(KEY_SHOW_VIDEO_DETAIL, R.string.show_video_detail_page, "关"),
                 // 分类页顶部分区 tab 按需显示（issue#117），默认全部
@@ -887,6 +892,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
             KEY_SHOW_VIDEO_DETAIL -> toggle(key)
             KEY_CATEGORY_TABS -> showCategoryTabsDialog()
             KEY_HOME_TABS -> showHomeTabsDialog()
+            KEY_ME_ENTRY -> toggle(key) {
+                appSettings.putStringBlocking(key, it)
+                (activity as? MainActivity)?.applyMeEntryVisibility()
+                // 仅提示不拦（用户拍板）：关掉后若首页页签里历史/稍后/收藏也全隐藏，三者将无任何入口
+                if (it == "关" && personalEntriesAllHidden()) {
+                    AppToast.show(requireContext(), getString(R.string.toast_personal_entries_both_off), Toast.LENGTH_LONG)
+                }
+            }
             KEY_DOUYIN_MODE -> toggle(key)
             KEY_GIVE_COIN_NUMBER -> showCommonChoiceDialog(key, arrayOf("1", "2"))
             KEY_COIN_ALSO_LIKE -> toggle(key)
@@ -1523,6 +1536,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         applyStored(KEY_CCTV_VOD_ENTRY)
         applyStored(KEY_CCTV_NATIVE_VOD)
         applyStored(KEY_HONGGUO_ENTRY)
+        // 侧栏「我的」入口开关：恢复显示已存值
+        applyStored(KEY_ME_ENTRY)
         applyStored(KEY_HONGGUO_RECOMMEND_GENDER)
         applyStored(KEY_HONGGUO_SEARCH_SOURCE)
         applyStored(KEY_HONGGUO_QUALITY)
@@ -2268,8 +2283,16 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>(), OnBackPressedH
         HomeTabsDialog(requireContext()) {
             updateInfo(KEY_HOME_TABS, HomeTabPrefs.summaryText(requireContext()))
             (activity as? MainActivity)?.applyHomeTabsConfig()
+            // 仅提示不拦：历史/稍后/收藏全部隐藏且「我的」入口也关时，三者将无任何入口
+            if (appSettings.getCachedString(KEY_ME_ENTRY, "关") != "开" && personalEntriesAllHidden()) {
+                AppToast.show(requireContext(), getString(R.string.toast_personal_entries_both_off), Toast.LENGTH_LONG)
+            }
         }.show()
     }
+
+    /** 历史/稍后观看/收藏三个个人页签是否在首页页签配置中全部隐藏。 */
+    private fun personalEntriesAllHidden(): Boolean =
+        HomeTabPrefs.loadEntries().none { it.id in HomeTabPrefs.PERSONAL_ENTRY_IDS && it.visible }
 
     /** 投屏设备名输入弹窗：保存后立即重播 SSDP 通知，手机投屏列表无需重启即更新。 */
     private fun showCastDeviceNameDialog() {

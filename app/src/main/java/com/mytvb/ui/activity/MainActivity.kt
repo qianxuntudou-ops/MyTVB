@@ -523,12 +523,13 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     /**
-     * 侧栏「我的」入口永久隐藏（历史/稍后观看/收藏已固定并入首页页签，见 HomeTabPrefs）。
-     * 冷启动由 initView 重放。
+     * 侧栏「我的」入口开关（issue#147 后续：默认关——历史/稍后观看/收藏已固定并入
+     * 首页页签，见 HomeTabPrefs；需要「我的」页的用户可在设置打开）。冷启动由 initView 重放。
      */
     fun applyMeEntryVisibility() {
-        binding.myTabView.setMeButtonVisible(false)
-        if (currentFragmentIndex == ME_TAB_INDEX) {
+        val show = appSettings.getCachedString("me_entry_visible", "关") == "开"
+        binding.myTabView.setMeButtonVisible(show)
+        if (!show && currentFragmentIndex == ME_TAB_INDEX) {
             binding.myTabView.selectTab(0)
         }
     }
