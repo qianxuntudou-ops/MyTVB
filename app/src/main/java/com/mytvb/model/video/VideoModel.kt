@@ -76,6 +76,13 @@ data class VideoModel(
     /** 推荐理由文案（官方挑的最显著互动数："4万点赞"/"1万投币"/"已关注"），卡片角标显示 */
     @SerializedName("rcmd_reason")
     val rcmdReason: String = "",
+
+    /**
+     * 动态页右上角标文案（issue#151）：单 UP 动态流条目的 badge.text（「投稿视频/
+     * 动态视频」）。B 站不下发同名 JSON 键，由 polymer feed/space 映射层运行时赋值，
+     * 其余接口条目恒为空串不显角标。
+     */
+    val dynamicBadgeText: String = "",
     
     @SerializedName("tname")
     val typeName: String = "",

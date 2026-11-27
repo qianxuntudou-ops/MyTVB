@@ -20,6 +20,7 @@ import com.mytvb.event.AppEventHub
 import com.mytvb.model.user.CheckRelationModel
 import com.mytvb.model.user.UserSpaceInfo
 import com.mytvb.model.video.VideoModel
+import com.mytvb.model.video.toVideoModel
 import com.mytvb.network.session.NetworkSessionGateway
 import com.mytvb.repository.UserRepository
 import com.mytvb.ui.adapter.UserSpaceHeaderAdapter
@@ -70,6 +71,9 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
         // 客户端拉全排序（合集/系列最多播放）的翻页上限
         private const val MAX_SEARCH_PAGES = 10
 
+        // 动态视频 tab 单次加载最多翻的原始动态页数（issue#151，feed/space 一页 12 条）
+        private const val MAX_RAW_PAGES_PER_FETCH = 4
+
         // B 站把直播回放投稿归为 UP 主名下自动生成的系列，名字模板"{UP名}的直播回放"
         private const val LIVE_REPLAY_SERIES_KEYWORD = "直播回放"
 
@@ -98,8 +102,8 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     private var tvFocusController: TvListFocusController? = null
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
 
-    /** 列表 tab 类型：投稿视频 / 系列（直播回放同此）/ 合集 —— 与弹窗（OwnerDetailDialog）同款 */
-    private enum class TabKind { VIDEO, SERIES, SEASON }
+    /** 列表 tab 类型：投稿视频 / 动态视频 / 系列（直播回放同此）/ 合集 —— 与弹窗（OwnerDetailDialog）同款 */
+    private enum class TabKind { VIDEO, DYNAMIC_VIDEO, SERIES, SEASON }
 
     /**
      * 全局排序（弹窗同款四项）：
@@ -127,6 +131,8 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
         var loadedFirstPage: Boolean = false
         // 投稿 tab「最早发布」倒翻模式缓存的总投稿数
         var totalCount: Int = 0
+        // 动态视频 tab（issue#151）的 feed/space 翻页游标：接口只认 offset，page 不参与
+        var dynamicOffset: Long? = null
     }
 
     private val tabStates = mutableListOf<TabState>()
@@ -140,7 +146,8 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     private fun activeState(): TabState = tabStates.getOrNull(currentIndex) ?: videoTabState
 
     private fun needsClientSideSort(state: TabState): Boolean =
-        state.kind != TabKind.VIDEO && order == OwnerListOrder.MOST_VIEWED
+        state.kind != TabKind.VIDEO && state.kind != TabKind.DYNAMIC_VIDEO &&
+            order == OwnerListOrder.MOST_VIEWED
 
     private fun oldestMode(state: TabState): Boolean =
         state.kind == TabKind.VIDEO && order == OwnerListOrder.OLDEST
@@ -304,7 +311,8 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
 
     override fun initData() {
         tabStates.add(TabState(TabKind.VIDEO, getString(R.string.video)))
-        headerAdapter.submitTabs(listOf(videoTabState.title))
+        tabStates.add(TabState(TabKind.DYNAMIC_VIDEO, getString(R.string.dynamic_video)))
+        headerAdapter.submitTabs(listOf(videoTabState.title, tabStates[1].title))
         loadUserInfo()
         loadUserStat()
         loadTabPage(videoTabState)
@@ -379,6 +387,10 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     /** 空 tab 提示：当前 tab 首屏加载完成且无内容时显示（加载中/失败/客户端排序拉全中/有内容都隐藏）。 */
     private fun updateEmptyState() {
         val state = activeState()
+        // 动态视频 tab 用专属文案（「暂无内容」在该语境下会让人分不清是没视频还是加载失败）
+        binding.tvEmpty.setText(
+            if (state.kind == TabKind.DYNAMIC_VIDEO) R.string.no_dynamic_video else R.string.empty
+        )
         binding.tvEmpty.visibility = if (
             state.loadedFirstPage && state.items.isEmpty() &&
             !(needsClientSideSort(state) && state.hasMore)
@@ -469,6 +481,33 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                     val data = userRepository.getUserDynamic(mid, page, 20, orderValue).getOrThrow().data
                     TabPage(data?.archives.orEmpty(), data?.hasMore ?: false, data?.totalCount ?: 0)
                 }
+            }
+            TabKind.DYNAMIC_VIDEO -> {
+                // 动态视频稀疏（动态流里图文/转发占绝大多数）：单次调用内连续翻原始页，
+                // 直到命中一批或吸收 MAX_RAW_PAGES_PER_FETCH 页；游标存 state.dynamicOffset
+                // 供触底续翻（feed/space 只认 offset，state.page 不参与请求）
+                var collected: List<VideoModel> = emptyList()
+                var hasMore = true
+                var rawPages = 0
+                while (rawPages < MAX_RAW_PAGES_PER_FETCH) {
+                    val offset = state.dynamicOffset
+                    if (rawPages > 0 && (offset == null || offset <= 0L)) {
+                        // 游标缺失即到头：不带 offset 的请求会重复下发第一页
+                        hasMore = false
+                        break
+                    }
+                    val data = userRepository.getUpDynamicFeed(mid, page = state.page, offset = offset)
+                        .getOrThrow().data ?: break
+                    rawPages++
+                    val hits = data.items.mapNotNull { it.toVideoModel() }
+                        .filter { it.dynamicBadgeText.isNotBlank() }
+                    collected = collected + hits
+                    hasMore = data.hasMore && data.offset > 0L
+                    if (hasMore) state.dynamicOffset = data.offset
+                    if (collected.isNotEmpty()) break
+                }
+                AppLog.d(TAG, "fetch dynamic-video rawPages=$rawPages hits=${collected.size} hasMore=$hasMore")
+                TabPage(collected, hasMore)
             }
             TabKind.SERIES -> {
                 val data = userRepository.getSeriesArchives(
@@ -641,6 +680,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
             s.hasMore = true
             s.loadedFirstPage = false
             s.totalCount = 0
+            s.dynamicOffset = null
         }
         // 清空旧列表：倒翻首批页码非 1，首批判定依赖列表已清空（否则末页数据被追加到旧列表尾部）
         videoAdapter.setData(emptyList())

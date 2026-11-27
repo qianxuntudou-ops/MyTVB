@@ -13,6 +13,7 @@ import com.mytvb.model.video.HistoryVideoModel
 import com.mytvb.model.video.LaterWatchWrapper
 import com.mytvb.model.video.UserDynamicResponse
 import com.mytvb.model.video.AllDynamicResponse
+import com.mytvb.model.video.UpDynamicFeedResponse
 import com.mytvb.model.series.SeasonArchivesResponse
 import com.mytvb.model.series.SeasonsSeriesBundle
 import com.mytvb.model.series.SeasonsSeriesItem
@@ -296,6 +297,19 @@ class UserRepository(
             sessionGateway.syncAuthState(
                 apiService.getAllDynamic(page, offset),
                 source = "getAllDynamic"
+            )
+        }
+
+    /** 单 UP 动态流（issue#151）：投稿视频+动态视频混合时间线，替代仅投稿列表的 arc/list。 */
+    suspend fun getUpDynamicFeed(
+        hostMid: Long,
+        page: Int,
+        offset: Long? = null
+    ): Result<BaseResponse<UpDynamicFeedResponse>> =
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getUpDynamicFeed(hostMid, page, offset),
+                source = "getUpDynamicFeed"
             )
         }
 

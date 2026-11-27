@@ -294,6 +294,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             onUgcEpisodeClick = { v, model -> onUgcEpisodeClicked(v, model) },
             onUgcOrderToggle = { toggleUgcOrder() },
             onRelatedVideoClick = { model -> onRelatedVideoClicked(model) },
+            onStaffMemberClick = { staff -> showStaffMemberDialog(staff) },
             onDescriptionClick = { desc -> showDescriptionDialog(desc) },
             onBackFocus = {
                 val before = binding.root.findFocus()
@@ -557,6 +558,13 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 favoriteDelta = favoriteCountDelta
             )
         )
+
+        // 创作团队 lane（issue#151 联合投稿）：staff 非空=联合投稿，紧跟 Header 展示
+        // 全员+角色（UP主/参演/配音…）；非联合投稿保持原样不插行
+        val staffMembers = view.staff.orEmpty()
+        if (staffMembers.isNotEmpty()) {
+            rows.add(VideoDetailContentAdapter.Row.Staff(members = staffMembers))
+        }
 
         val hasSeason = ugcEpisodes.isNotEmpty()
         rows.add(
@@ -1116,6 +1124,37 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         ownerDetailDialog = OwnerDetailDialog(
             context = requireContext(),
             owner = owner,
+            onPlayVideo = { video, playQueue ->
+                VideoRouteNavigator.openVideo(
+                    context = requireContext(),
+                    video = video,
+                    playQueue = playQueue
+                )
+            },
+            currentAid = currentAid,
+            currentVideoId = currentBvid,
+            currentSeasonId = videoView?.ugcSeason?.id ?: 0L
+        ).apply {
+            show()
+        }
+    }
+
+    /**
+     * 创作团队成员点击（issue#151 联合投稿）：staff → Owner 复用 UP 详情弹窗
+     * （投稿流/关注按钮全量能力）；Staff 不带 official_verify/认证字段，按无认证渲染。
+     */
+    private fun showStaffMemberDialog(staff: com.mytvb.model.video.detail.Staff) {
+        val currentAid = videoView?.aid ?: videoModel?.aid ?: 0L
+        val currentBvid = videoView?.bvid ?: videoModel?.bvid ?: ""
+
+        ownerDetailDialog?.dismiss()
+        ownerDetailDialog = OwnerDetailDialog(
+            context = requireContext(),
+            owner = com.mytvb.model.video.Owner(
+                mid = staff.mid,
+                name = staff.name,
+                face = staff.face
+            ),
             onPlayVideo = { video, playQueue ->
                 VideoRouteNavigator.openVideo(
                     context = requireContext(),

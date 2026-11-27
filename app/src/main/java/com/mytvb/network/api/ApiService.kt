@@ -27,6 +27,7 @@ import com.mytvb.model.video.LaterWatchWrapper
 import com.mytvb.model.video.RegionVideoListWrapper
 import com.mytvb.model.video.UserDynamicResponse
 import com.mytvb.model.video.AllDynamicResponse
+import com.mytvb.model.video.UpDynamicFeedResponse
 import com.mytvb.model.video.GetVideoByChannelWrapper
 import com.mytvb.model.player.OnlineTotalModel
 import com.mytvb.model.player.PgcV2Result
@@ -146,6 +147,15 @@ interface ApiService {
         @Query("page") page: Int,
         @Query("offset") offset: Long? = null
     ): BaseResponse<AllDynamicResponse>
+
+    /** 单 UP 动态流（issue#151）：含投稿视频+动态视频（同为 DYNAMIC_TYPE_AV），
+     *  免 WBI 签名；翻页 page+offset 游标，返回 polymer 嵌套结构由映射层转 VideoModel */
+    @GET("x/polymer/web-dynamic/desktop/v1/feed/space")
+    suspend fun getUpDynamicFeed(
+        @Query("host_mid") hostMid: Long,
+        @Query("page") page: Int,
+        @Query("offset") offset: Long? = null
+    ): BaseResponse<UpDynamicFeedResponse>
 
     @GET("x/space/wbi/acc/info")
     suspend fun getUserSpace(@QueryMap params: Map<String, String>): BaseResponse<UserSpaceInfo>

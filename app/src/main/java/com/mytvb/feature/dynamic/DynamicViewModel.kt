@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.model.user.FollowingModel
 import com.mytvb.model.video.VideoModel
+import com.mytvb.model.video.toVideoModel
 import com.mytvb.repository.UserRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +46,9 @@ class DynamicViewModel(
         private const val UP_SORT_MOST_VISITED = "最常访问"
         // x/relation/followings 的 order_type=attention 即「最常访问」，留空/缺省为关注顺序
         private const val ORDER_TYPE_ATTENTION = "attention"
+
+        // 单UP动态流起始页全被图文/转发占满时最多自动续翻的空页数（issue#151）
+        private const val MAX_EMPTY_PAGE_SKIPS = 2
     }
 
     private val _followingList = MutableStateFlow<List<FollowingModel>>(emptyList())
@@ -73,6 +77,8 @@ class DynamicViewModel(
 
     private var currentUpId: String = ""
     private var currentAllDynamicOffset: Long? = null
+    // 单UP动态流翻页游标（issue#151）：feed/space 按 offset 续页，page 参数仅作请求序号
+    private var currentUpDynamicOffset: Long? = null
     private var currentPage = 0
     private var currentUserMid: Long = 0L
     private var hasFollowingUsers = false
@@ -86,7 +92,9 @@ class DynamicViewModel(
     private data class CachedUpVideos(
         val videos: List<VideoModel>,
         val page: Int,
-        val hasMore: Boolean
+        val hasMore: Boolean,
+        /** 单UP动态流翻页游标（issue#151）：缓存命中恢复后加载下一页必须续用 */
+        val offset: Long? = null
     )
 
     private val videoCache = LruCache<String, CachedUpVideos>(15)
@@ -125,6 +133,7 @@ class DynamicViewModel(
             currentVideoItems = emptyList()
             currentUpId = ""
             currentAllDynamicOffset = null
+            currentUpDynamicOffset = null
             currentPage = 0
             currentUserMid = 0L
             hasFollowingUsers = false
@@ -278,6 +287,7 @@ class DynamicViewModel(
         currentUpId = upId
         currentPage = 0
         currentAllDynamicOffset = null
+        currentUpDynamicOffset = null
         _loadedPage.value = 0
         _hasMoreVideos.value = true
         _screenState.value = ScreenState.Content
@@ -289,6 +299,7 @@ class DynamicViewModel(
                 loadJob = null
                 currentVideoItems = cached.videos
                 currentPage = cached.page
+                currentUpDynamicOffset = cached.offset
                 _hasMoreVideos.value = cached.hasMore
                 _loadedPage.value = cached.page
                 _status.value = resolveStatus(upId, cached.videos)
@@ -373,52 +384,89 @@ class DynamicViewModel(
                     return@launch
                 }
 
-                userRepository.getUserDynamic(currentUpId.toLongOrNull() ?: 0L, nextPage, pageSize)
-                    .onSuccess { response ->
-                        val items = response.data?.archives.orEmpty()
-                        AppLog.i(TAG, "DYN D5 getUserDynamic end elapsed=${SystemClock.elapsedRealtime() - startMs}ms items=${items.size} hasMore=${response.data?.hasMore}")
-
-                        if (response.isSuccess) {
-                            currentVideoItems = if (nextPage == 1) {
-                                items
-                            } else {
-                                currentVideoItems + items
-                            }
-                            lastLoadedAt = System.currentTimeMillis()
-                            _hasMoreVideos.value = response.data?.hasMore == true
-                            currentPage = nextPage
-                            _loadedPage.value = nextPage
-                            _videos.value = items
-                            _status.value = resolveStatus(currentUpId, currentVideoItems)
-                            _screenState.value = ScreenState.Content
-                            if (nextPage == 1) {
-                                videoCache.put(currentUpId, CachedUpVideos(items, 1, response.data?.hasMore == true))
-                                schedulePreload()
-                            }
-                        } else {
-                            if (nextPage == 1) {
-                                currentVideoItems = emptyList()
-                                _videos.value = emptyList()
-                            }
-                            _hasMoreVideos.value = false
-                            _error.value = response.errorMessage
-                            _status.value = resolveStatus(currentUpId, currentVideoItems)
-                        }
-                    }
-                    .onFailure { exception ->
-                        if (nextPage == 1) {
-                            currentVideoItems = emptyList()
-                            _videos.value = emptyList()
-                        }
-                        _hasMoreVideos.value = false
-                        _error.value = exception.message
-                        _status.value = resolveStatus(currentUpId, currentVideoItems)
-                    }
+                loadUpDynamicFeedPages(nextPage, startMs)
             } finally {
                 if (gen == loadGeneration) {
                     _loading.value = false
                 }
             }
+        }
+    }
+
+    /**
+     * 单UP动态流加载（issue#151）：feed/space 是投稿+图文+转发混合流，按「只渲染
+     * DYNAMIC_TYPE_AV」过滤后可能出现整页无视频动态（图文占满一页）。起始页空且
+     * 还有游标时自动续翻，最多吞掉 [MAX_EMPTY_PAGE_SKIPS] 页空页，防止「看似空态
+     * 实际后面有视频」；续页游标缺失时禁止继续——不带 offset 的 feed/space 请求
+     * 会重复下发第一页，宁可少翻一页不能重复刷。
+     */
+    private suspend fun loadUpDynamicFeedPages(nextPage: Int, startMs: Long) {
+        var page = nextPage
+        var offset: Long? = if (nextPage > 1) currentUpDynamicOffset else null
+        var emptyPagesSkipped = 0
+        while (true) {
+            val result = userRepository.getUpDynamicFeed(
+                hostMid = currentUpId.toLongOrNull() ?: 0L,
+                page = page,
+                offset = offset
+            )
+            if (result.isFailure) {
+                if (page == nextPage) {
+                    currentVideoItems = emptyList()
+                    _videos.value = emptyList()
+                }
+                _hasMoreVideos.value = false
+                _error.value = result.exceptionOrNull()?.message
+                _status.value = resolveStatus(currentUpId, currentVideoItems)
+                return
+            }
+            val response = result.getOrNull() ?: return
+            if (!response.isSuccess) {
+                if (page == nextPage) {
+                    currentVideoItems = emptyList()
+                    _videos.value = emptyList()
+                }
+                _hasMoreVideos.value = false
+                _error.value = response.errorMessage
+                _status.value = resolveStatus(currentUpId, currentVideoItems)
+                return
+            }
+            val data = response.data
+            val rawItems = data?.items.orEmpty()
+            // 只渲染视频类动态：投稿视频+动态视频一起收录，图文/转发/文字按
+            // 「TV 版不做图文动态」的产品决定过滤掉
+            val items = rawItems.mapNotNull { it.toVideoModel() }
+            AppLog.i(
+                TAG,
+                "DYN D5 getUpDynamicFeed end elapsed=${SystemClock.elapsedRealtime() - startMs}ms page=$page raw=${rawItems.size} items=${items.size} hasMore=${data?.hasMore} offset=${data?.offset}"
+            )
+            // 游标缺失即视为到头（见 KDoc）
+            val hasMore = data?.hasMore == true && data.offset > 0L
+            if (items.isEmpty() && hasMore && emptyPagesSkipped < MAX_EMPTY_PAGE_SKIPS) {
+                emptyPagesSkipped++
+                offset = data.offset
+                page++
+                continue
+            }
+            currentVideoItems = if (nextPage == 1) items else currentVideoItems + items
+            lastLoadedAt = System.currentTimeMillis()
+            _hasMoreVideos.value = hasMore
+            if (hasMore) {
+                currentUpDynamicOffset = data.offset
+            }
+            currentPage = page
+            _loadedPage.value = page
+            _videos.value = items
+            _status.value = resolveStatus(currentUpId, currentVideoItems)
+            _screenState.value = ScreenState.Content
+            if (nextPage == 1) {
+                videoCache.put(
+                    currentUpId,
+                    CachedUpVideos(items, page, hasMore, data?.offset?.takeIf { hasMore })
+                )
+                schedulePreload()
+            }
+            return
         }
     }
 
@@ -437,12 +485,16 @@ class DynamicViewModel(
             for (up in candidates) {
                 val upId = up.mid.toString()
                 if (upId == ALL_DYNAMIC_ID || videoCache.get(upId) != null) continue
-                userRepository.getUserDynamic(up.mid, 1, lastPageSize)
+                userRepository.getUpDynamicFeed(up.mid, 1)
                     .onSuccess { response ->
                         if (response.isSuccess) {
-                            val items = response.data?.archives.orEmpty()
+                            val items = response.data?.items.orEmpty().mapNotNull { it.toVideoModel() }
                             if (items.isNotEmpty()) {
-                                videoCache.put(upId, CachedUpVideos(items, 1, response.data?.hasMore == true))
+                                val hasMore = response.data?.hasMore == true && (response.data?.offset ?: 0L) > 0L
+                                videoCache.put(
+                                    upId,
+                                    CachedUpVideos(items, 1, hasMore, response.data?.offset?.takeIf { hasMore })
+                                )
                             }
                         }
                     }

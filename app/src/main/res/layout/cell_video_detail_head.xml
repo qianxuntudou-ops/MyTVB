@@ -216,6 +216,22 @@
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/px22" />
         </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <!-- 联合投稿「合作」标（issue#151）：view.staff 非空时显示，评论区 UP 标同款粉胶囊 -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_coop_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px12"
+            android:background="@drawable/bg_comment_up_badge"
+            android:paddingStart="@dimen/px10"
+            android:paddingTop="@dimen/px4"
+            android:paddingEnd="@dimen/px10"
+            android:paddingBottom="@dimen/px4"
+            android:text="@string/detail_coop_badge"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/px22"
+            android:visibility="gone" />
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.appcompat.widget.LinearLayoutCompat

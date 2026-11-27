@@ -28,6 +28,7 @@ import com.mytvb.event.AppEventHub
 import com.mytvb.model.user.CheckRelationModel
 import com.mytvb.model.video.Owner
 import com.mytvb.model.video.VideoModel
+import com.mytvb.model.video.toVideoModel
 import com.mytvb.network.session.SessionStateRepository
 import com.mytvb.repository.UserRepository
 import com.mytvb.ui.activity.PlayerActivity
@@ -71,6 +72,9 @@ class OwnerDetailDialog(
         // 定位当前视频的翻页搜索上限（页）。超过即放弃，走直播回放 fallback 或默认焦点。
         const val MAX_SEARCH_PAGES = 10
 
+        // 动态视频 tab 单次加载最多翻的原始动态页数（issue#151，feed/space 一页 12 条）
+        private const val MAX_RAW_PAGES_PER_FETCH = 4
+
         // B 站把直播回放投稿归为 UP 主名下自动生成的系列，名字模板"{UP名}的直播回放"。
         const val LIVE_REPLAY_SERIES_KEYWORD = "直播回放"
 
@@ -99,7 +103,7 @@ class OwnerDetailDialog(
         it.currentPlayingAid = currentAid
     }
 
-    private enum class TabKind { VIDEO, SERIES, SEASON }
+    private enum class TabKind { VIDEO, DYNAMIC_VIDEO, SERIES, SEASON }
 
     /**
      * 全局列表排序（对所有 tab 生效）：
@@ -140,6 +144,9 @@ class OwnerDetailDialog(
 
         // 视频 tab「最早发布」倒翻模式缓存的总投稿数（末页跳转用）
         var totalCount: Int = 0
+
+        // 动态视频 tab（issue#151）的 feed/space 翻页游标：接口只认 offset，page 不参与
+        var dynamicOffset: Long? = null
     }
 
     /** 一页数据的解析结果：过滤后的视频 + 翻页判定。 */
@@ -444,7 +451,8 @@ class OwnerDetailDialog(
 
     /** 合集/系列接口只支持时间方向：最多播放时改由客户端拉全量后按 stat.view 排序。 */
     private fun needsClientSideSort(state: TabState): Boolean =
-        state.kind != TabKind.VIDEO && order == OwnerListOrder.MOST_VIEWED
+        state.kind != TabKind.VIDEO && state.kind != TabKind.DYNAMIC_VIDEO &&
+            order == OwnerListOrder.MOST_VIEWED
 
     /**
      * 视频 tab「最早发布」：投稿接口无正序参数，改为跳到末页（最老的一页）倒着翻、
@@ -507,6 +515,33 @@ class OwnerDetailDialog(
                     ).getOrThrow().data ?: error("empty data")
                     TabPage(data.archives, data.hasMore)
                 }
+            }
+            TabKind.DYNAMIC_VIDEO -> {
+                // 动态视频稀疏（动态流里图文/转发占绝大多数）：单次调用内连续翻原始页，
+                // 直到命中一批或吸收 MAX_RAW_PAGES_PER_FETCH 页；游标存 state.dynamicOffset
+                // 供触底续翻（feed/space 只认 offset，state.page 不参与请求）
+                var collected: List<VideoModel> = emptyList()
+                var hasMore = true
+                var rawPages = 0
+                while (rawPages < MAX_RAW_PAGES_PER_FETCH) {
+                    val offset = state.dynamicOffset
+                    if (rawPages > 0 && (offset == null || offset <= 0L)) {
+                        // 游标缺失即到头：不带 offset 的请求会重复下发第一页
+                        hasMore = false
+                        break
+                    }
+                    val data = userRepository.getUpDynamicFeed(owner.mid, page = state.page, offset = offset)
+                        .getOrThrow().data ?: break
+                    rawPages++
+                    val hits = data.items.mapNotNull { it.toVideoModel() }
+                        .filter { it.dynamicBadgeText.isNotBlank() }
+                    collected = collected + hits
+                    hasMore = data.hasMore && data.offset > 0L
+                    if (hasMore) state.dynamicOffset = data.offset
+                    if (collected.isNotEmpty()) break
+                }
+                AppLog.d(TAG, "fetch dynamic-video rawPages=$rawPages hits=${collected.size} hasMore=$hasMore")
+                TabPage(collected, hasMore)
             }
             TabKind.SERIES -> {
                 val data = userRepository.getSeriesArchives(
@@ -863,6 +898,10 @@ class OwnerDetailDialog(
     /** 空 tab 提示：当前 tab 首屏加载完成且无内容时显示（加载中/失败/客户端排序拉全中/有内容都隐藏）。 */
     private fun updateEmptyState() {
         val state = activeState()
+        // 动态视频 tab 用专属文案（「暂无内容」在该语境下会让人分不清是没视频还是加载失败）
+        binding.tvEmpty.setText(
+            if (state.kind == TabKind.DYNAMIC_VIDEO) R.string.no_dynamic_video else R.string.empty
+        )
         binding.tvEmpty.visibility = if (
             state.loadedFirstPage && state.items.isEmpty() &&
             !(needsClientSideSort(state) && state.hasMore)
@@ -889,7 +928,9 @@ class OwnerDetailDialog(
     private fun setupTabBar() {
         val tabLayout = binding.tabLayout
         tabStates.add(TabState(TabKind.VIDEO, context.getString(R.string.video)))
+        tabStates.add(TabState(TabKind.DYNAMIC_VIDEO, context.getString(R.string.dynamic_video)))
         tabLayout.addTab(tabLayout.newTab().setText(tabStates[0].title))
+        tabLayout.addTab(tabLayout.newTab().setText(tabStates[1].title))
         tabLayout.getTabAt(0)?.select()
         tabLayout.visibility = View.VISIBLE
         tabLayout.enableDirectTabNavigation(
@@ -933,6 +974,7 @@ class OwnerDetailDialog(
             s.searchDone = false
             s.scrollPos = -1
             s.totalCount = 0
+            s.dynamicOffset = null
             s.prefetchJob?.cancel()
             s.prefetchJob = null
         }

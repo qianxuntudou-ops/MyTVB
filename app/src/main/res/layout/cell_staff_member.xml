@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 创作团队成员竖卡（issue#151 联合投稿）：头像+名字+角色（UP主/参演/配音…），
+     焦点态走通用 cell_background，点击弹 UP 详情（与头部 UP 行同款弹窗）。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/px240"
+    android:layout_height="wrap_content"
+    android:background="@drawable/cell_background"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="@dimen/px15">
+
+    <com.mytvb.core.ui.image.AvatarBadgeView
+        android:id="@+id/image_avatar"
+        android:layout_width="@dimen/px120"
+        android:layout_height="@dimen/px120"
+        app:srcCompat="@drawable/default_avatar"
+        xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_member_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px10"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:singleLine="true"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="@dimen/px26" />
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_member_role"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px6"
+        android:background="@drawable/bg_comment_up_badge"
+        android:paddingStart="@dimen/px12"
+        android:paddingTop="@dimen/px3"
+        android:paddingEnd="@dimen/px12"
+        android:paddingBottom="@dimen/px3"
+        android:textColor="@android:color/white"
+        android:textSize="@dimen/px20" />
+</LinearLayout>

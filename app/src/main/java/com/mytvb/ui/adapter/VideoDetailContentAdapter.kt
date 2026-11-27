@@ -50,6 +50,7 @@ internal class VideoDetailContentAdapter(
     private val onUgcEpisodeClick: (View, VideoModel) -> Unit,
     private val onUgcOrderToggle: () -> Unit,
     private val onRelatedVideoClick: (VideoModel) -> Unit,
+    private val onStaffMemberClick: (com.mytvb.model.video.detail.Staff) -> Unit = {},
     private val onDescriptionClick: (CharSequence) -> Unit,
     private val onBackFocus: () -> Boolean,
     private val onFollowClick: () -> Unit,
@@ -78,6 +79,9 @@ internal class VideoDetailContentAdapter(
         ) : Row
 
         data class Pages(val items: List<VideoModel>) : Row
+
+        /** 创作团队 lane（issue#151 联合投稿）：view.staff 全员，含角色（UP主/参演/…） */
+        data class Staff(val members: List<com.mytvb.model.video.detail.Staff>) : Row
 
         data class UgcSeason(
             val title: String,
@@ -109,6 +113,7 @@ internal class VideoDetailContentAdapter(
         return when (getItem(position)) {
             is Row.Header -> VIEW_TYPE_HEADER
             is Row.Pages -> VIEW_TYPE_PAGES
+            is Row.Staff -> VIEW_TYPE_STAFF
             is Row.UgcSeason -> VIEW_TYPE_UGC_SEASON
             is Row.Related -> VIEW_TYPE_RELATED
             is Row.TabBar -> VIEW_TYPE_TAB_BAR
@@ -139,6 +144,11 @@ internal class VideoDetailContentAdapter(
             VIEW_TYPE_PAGES -> PagesLaneViewHolder(
                 CellSeriesLaneBinding.inflate(inflater, parent, false),
                 onPageClick
+            )
+
+            VIEW_TYPE_STAFF -> StaffLaneViewHolder(
+                CellSeriesLaneBinding.inflate(inflater, parent, false),
+                onStaffMemberClick
             )
 
             VIEW_TYPE_UGC_SEASON -> UgcSeasonLaneViewHolder(
@@ -215,6 +225,7 @@ internal class VideoDetailContentAdapter(
                 row.likeDelta, row.coinDelta, row.favoriteDelta
             )
             is Row.Pages -> (holder as PagesLaneViewHolder).bind(row.items)
+            is Row.Staff -> (holder as StaffLaneViewHolder).bind(row.members)
             is Row.UgcSeason -> (holder as UgcSeasonLaneViewHolder).bind(row.title, row.items, row.isReverse, row.currentAid)
             is Row.Related -> (holder as RelatedLaneViewHolder).bind(row.items)
             is Row.TabBar -> (holder as TabBarViewHolder).bind(row.contentTabText, row.commentTabSelected, row.commentCountText)
@@ -416,6 +427,10 @@ internal class VideoDetailContentAdapter(
             )
 
             binding.textTitle.text = view.title
+
+            // 联合投稿「合作」标（issue#151）：staff 非空即联合投稿，紧跟 UP 名块右侧
+            binding.textCoopBadge.visibility =
+                if (view.staff.isNullOrEmpty()) View.GONE else View.VISIBLE
 
             // 数据行：官方手机端样式（播放数/弹幕数/发布时间/正在看），图标+数字组合；
             // 第二位图标是弹幕（ic_video_danmaku），数字须取 stat.danmaku（旧代码误取 reply 评论数）
@@ -822,6 +837,54 @@ internal class VideoDetailContentAdapter(
         }
     }
 
+    /**
+     * 创作团队横滑 lane（issue#151 联合投稿）：成员竖卡（头像+名字+角色），点击弹
+     * UP 详情（与头部 UP 行同款弹窗）。位于 Header 之后 Tab 栏之前，上/下键均放行
+     * 系统几何搜索（正上方=Header 元素、正下方=Tab 栏，无同列 lane 干扰）。
+     */
+    class StaffLaneViewHolder(
+        private val binding: CellSeriesLaneBinding,
+        onMemberClick: (com.mytvb.model.video.detail.Staff) -> Unit
+    ) : RecyclerView.ViewHolder(binding.root) {
+
+        val innerRecyclerView: RecyclerView get() = binding.recyclerView
+
+        private var tvFocusController: TvListFocusController? = null
+        private var lastMembers: List<com.mytvb.model.video.detail.Staff>? = null
+        private val memberAdapter = StaffMemberAdapter(onMemberClick)
+
+        init {
+            memberAdapter.setShowLoadMore(false)
+            binding.recyclerView.layoutManager =
+                LinearLayoutManager(binding.root.context, RecyclerView.HORIZONTAL, false)
+            binding.recyclerView.adapter = memberAdapter
+            VideoRecyclerViewTuning.apply(binding.recyclerView, memberAdapter)
+            tvFocusController = TvListFocusController(
+                recyclerView = binding.recyclerView,
+                adapter = memberAdapter,
+                strategy = LinearTvFocusStrategy(RecyclerView.HORIZONTAL),
+                canLoadMore = { false },
+                loadMore = {},
+                restoreAppendFocusFromOutside = true,
+                restoreFocusOnFocusedDetach = true,
+                debugName = "detail-staff"
+            )
+            binding.recyclerView.isFocusable = false
+            binding.buttonOrder.visibility = View.GONE
+            bindBackButtonOnScroll(binding.recyclerView)
+        }
+
+        fun bind(members: List<com.mytvb.model.video.detail.Staff>) {
+            binding.topTitle.text = binding.root.context.getString(R.string.detail_creation_team)
+            if (lastMembers === members) return
+            lastMembers = members
+            val reason = dataChangeReasonFor(memberAdapter.contentCount(), members.size)
+            memberAdapter.setData(members) {
+                tvFocusController?.onDataChanged(reason)
+            }
+        }
+    }
+
     /** 评论条按"上"回排序行：聚焦当前选中的排序按钮（热门/最新），几何搜索会飞 Header 标签区。
      *  排序行在屏外未布局时必须滚动后异步聚焦——UP 已被 keyListener 消费，
      *  静默返回会让焦点卡死在第一条评论（列表深滚后回顶场景）。 */
@@ -890,6 +953,7 @@ internal class VideoDetailContentAdapter(
 
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_PAGES = 1
+        private const val VIEW_TYPE_STAFF = 8
         private const val VIEW_TYPE_UGC_SEASON = 2
         private const val VIEW_TYPE_RELATED = 3
         private const val VIEW_TYPE_TAB_BAR = 4
@@ -936,6 +1000,7 @@ internal class VideoDetailContentAdapter(
                 return when (row) {
                     is Row.Header -> "header"
                     is Row.Pages -> "pages"
+                    is Row.Staff -> "staff"
                     is Row.UgcSeason -> "ugc_season"
                     is Row.Related -> "related"
                     is Row.TabBar -> "tab_bar"

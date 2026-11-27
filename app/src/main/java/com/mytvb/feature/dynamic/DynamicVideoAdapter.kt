@@ -225,6 +225,10 @@ class DynamicVideoAdapter(
                 danmakuText = NumberUtils.formatCount(views.root.context, item.danmakuCount),
                 showDanmakuCount = true,
                 durationText = NumberUtils.formatDuration(item.durationValue.coerceAtLeast(0L)),
+                // 单UP动态流角标（issue#151）：「动态视频」右上粉标（badge.text 只对
+                // 动态视频下发；普通投稿动态为空串不显标）。ViewHolder 复用必须每次
+                // 显式传值清旧态，防角标跨卡片残留
+                typeBadgeText = item.dynamicBadgeText,
                 showChargeBadge = item.isChargingExclusive,
                 showInteractionBadge = false
             )
