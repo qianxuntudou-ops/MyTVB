@@ -3,6 +3,7 @@
     android:gravity="center"
     android:orientation="vertical"
     android:background="@drawable/dialog_background"
+    android:clipToOutline="true"
     android:clickable="true"
     android:focusable="true"
     android:layout_width="match_parent"

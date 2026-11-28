@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/dialog_background_right_panel"
+    android:clipToOutline="true"
     android:clickable="true"
     android:orientation="vertical">
 

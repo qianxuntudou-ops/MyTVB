@@ -8,7 +8,12 @@
             <corners android:radius="@dimen/px16" />
         </shape>
     </item>
-    <item android:drawable="?attr/dialogCardImage" />
+    <!-- 底图层钉死 0dp + gravity=fill，理由见 dialog_background.xml -->
+    <item
+        android:width="0dp"
+        android:height="0dp"
+        android:gravity="fill"
+        android:drawable="?attr/dialogCardImage" />
     <item>
         <shape>
             <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor" />

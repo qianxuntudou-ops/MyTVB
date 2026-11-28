@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/dialog_root"
     android:background="@drawable/dialog_background_right_panel"
+    android:clipToOutline="true"
     android:clickable="true"
     android:focusable="true"
     android:layout_width="match_parent"

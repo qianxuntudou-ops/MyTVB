@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/dialog_background"
+    android:clipToOutline="true"
     android:defaultFocusHighlightEnabled="false"
     android:descendantFocusability="afterDescendants"
     android:focusable="true"

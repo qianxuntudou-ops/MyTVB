@@ -12,7 +12,15 @@
             <corners android:radius="@dimen/px20" />
         </shape>
     </item>
-    <item android:drawable="?attr/dialogCardImage" />
+    <!-- 底图层的 width/height 钉成 0dp + gravity=fill：LayerDrawable 的固有尺寸取各层
+         最大，webp 是 1000×640，会让 View.getSuggestedMinimumHeight() 把 wrap_content
+         弹窗从内容高 ~418 撑到 640（底部一大片空白）。显式尺寸覆盖固有尺寸(API23+)，
+         gravity=fill 保证绘制仍铺满 bounds。 -->
+    <item
+        android:width="0dp"
+        android:height="0dp"
+        android:gravity="fill"
+        android:drawable="?attr/dialogCardImage" />
     <item>
         <shape>
             <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor" />

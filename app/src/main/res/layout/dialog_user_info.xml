@@ -8,6 +8,7 @@
     <!-- 卡片背景：顶边压在头像中线（官网同款悬浮头像），高度锚定按钮行下方留白，内容自适应 -->
     <View
         android:background="@drawable/bg_user_dialog_card"
+        android:clipToOutline="true"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="@dimen/px100"
