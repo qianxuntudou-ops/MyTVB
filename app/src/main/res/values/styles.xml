@@ -202,6 +202,7 @@
              弹窗壳 dialog_background 改走 attr 后黑主题弹窗变纯黑不可读（用户实测）；
              归位到 thirdBackgroundColor(#454545)，与 issue#144 前静态 #3D3D3D 同语义 -->
         <item name="thirdBackgroundColor">@color/thirdBackgroundColor</item>
+        <item name="buttonStrokeColor">@color/buttonStrokeDark</item>
     </style>
     <style name="Theme.MyBLBL" parent="@style/Theme.Blbl">
     </style>
@@ -260,6 +261,7 @@
         <item name="tabBarNormal">@color/tab_normalLight</item>
         <item name="tabBarSelected">@color/textColorLight</item>
         <item name="thirdBackgroundColor">@color/backgroundColorLight</item>
+        <item name="buttonStrokeColor">@color/divideColorLight</item>
     </style>
     <style name="WindowAnimationTransition" parent="">
         <item name="android:windowEnterAnimation">@android:anim/fade_in</item>

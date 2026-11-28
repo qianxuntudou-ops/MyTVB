@@ -1,7 +1,6 @@
 package com.mytvb.feature.hongguo
 
 import android.content.Context
-import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -234,8 +233,9 @@ class HongguoDetailDialog(
                 throw e
             } catch (e: Exception) {
                 if (hint != null) {
-                    // 预约未开播剧：video_detail 无选集、SSR 回退 404（2026-11-14 MuMu 实证）。
-                    // 保留乐观渲染的剧名/封面，按钮置灰提示即将上线（不关弹窗）
+                    // 有乐观渲染数据（入口卡片）：详情获取失败保留剧名/封面，按钮置灰
+                    // 提示即将上线（不关弹窗）。未开播剧正常路径已走 bindNotYetOnline，
+                    // 落到这里是接口异常（2026-11-28 起 SSR 回退已删，video_detail 直抛）。
                     binding.buttonPlay.isEnabled = false
                     binding.textButtonPlay.text = hint.subtitle.ifBlank { context.getString(R.string.hongguo_coming_soon_btn) }
                     binding.buttonFavorite.isEnabled = false
@@ -530,7 +530,8 @@ class HongguoDetailDialog(
             val current = pageStart == range.first
             holder.chip.text = "${range.first + 1}-${range.second}"
             holder.chip.isSelected = current
-            holder.chip.setTextColor(Color.WHITE)
+            // 文字色走 cell_hongguo_page_chip 的按态 CSL（常态主题字色/聚焦选中白字），
+            // 硬编码白字在白主题浅灰底上不可读（2026-11-28 用户反馈）
             holder.chip.setOnClickListener { showPage(range.first) }
             // 顶行 ↑ 回按钮行
             holder.chip.setOnKeyListener { _, keyCode, event ->

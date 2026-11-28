@@ -59,6 +59,9 @@
     <color name="design_fab_stroke_top_inner_color">#1affffff</color>
     <color name="design_fab_stroke_top_outer_color">#2effffff</color>
     <color name="divideColor">#444444</color>
+    <!-- 黑主题中性按钮描边（buttonStrokeColor）：在页面底 #303030 / 弹窗底 #454545
+         上都可见的中性灰；白主题描边复用 divideColorLight #e3e5e7 -->
+    <color name="buttonStrokeDark">#666666</color>
     <color name="divideColorBlue">#254db4</color>
     <color name="divideColorClassic">#444444</color>
     <color name="divideColorLight">#e3e5e7</color>

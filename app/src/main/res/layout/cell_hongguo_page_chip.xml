@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 红果详情选集分页 chip（1-20 / 21-40 …）：选中白底黑字（官方详情同款），
+<!-- 红果详情选集分页 chip（1-20 / 21-40 …）：按态文字色（常态=主题主文字色，
+     聚焦/选中白字配高亮底）——硬编码白字在白主题浅灰底上不可读（2026-11-28 用户反馈）。
      聚焦高亮块，默认暗底。 -->
 <androidx.appcompat.widget.AppCompatTextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/text_hongguo_page_chip"
     android:background="@drawable/bg_hongguo_page_chip"
+    android:textColor="@color/hongguo_neutral_btn_text"
     android:focusable="true"
     android:clickable="true"
     android:gravity="center"

@@ -57,6 +57,9 @@
     <item>
         <shape>
             <solid android:color="?attr/buttonBackgroundColor"/>
+            <!-- 常态描边出框：黑主题弹窗底(#454545)与 chip 底(#444444)肉眼无法区分
+                 （2026-11-28 用户反馈），中性灰描边黑白两主题都可见 -->
+            <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>

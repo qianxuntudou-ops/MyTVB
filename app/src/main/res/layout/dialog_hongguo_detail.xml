@@ -127,6 +127,7 @@
                 android:layout_height="@dimen/px30"
                 android:layout_marginEnd="@dimen/px12"
                 android:contentDescription="@string/hongguo_play_continue"
+                app:tint="@color/hongguo_neutral_btn_text"
                 app:srcCompat="@drawable/ic_play"/>
 
             <androidx.appcompat.widget.AppCompatTextView
@@ -145,6 +146,7 @@
             android:textColor="?android:attr/textColorPrimary"
             android:background="@drawable/bg_hongguo_btn_detail"
             android:drawableStart="@drawable/ic_favorite"
+            android:drawableTint="@color/hongguo_neutral_btn_text"
             android:drawablePadding="@dimen/px12"
             android:gravity="center"
             android:focusable="true"

@@ -27,6 +27,10 @@
     <item>
         <shape>
             <solid android:color="?attr/buttonBackgroundColor"/>
+            <!-- 常态描边出框：黑主题弹窗底(#454545)与按钮底(#444444)肉眼无法区分，
+                 2026-11-28 用户反馈"看不出来是按钮"；此前用户否决过纯白描边扎眼，
+                 此处中性灰柔和可见，页面/弹窗两种底色环境都成立 -->
+            <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor"/>
             <corners android:radius="@dimen/px15"/>
         </shape>
     </item>

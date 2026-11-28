@@ -10,6 +10,11 @@
         <enum name="stretch" value="4" />
     </attr>
     <attr name="buttonBackgroundColor" format="color|reference" />
+    <!-- 中性按钮描边色：黑主题弹窗底(#454545)与按钮底(buttonBackgroundColor=#444444)
+         仅差一档肉眼无法区分（2026-11-28 用户反馈"看不出来是按钮"），
+         红果系四态 bg_hongguo_* 默认态描此色出框；填充不变避免页面/弹窗两种
+         底色环境（#303030/#454545）下回归 -->
+    <attr name="buttonStrokeColor" format="color|reference" />
     <attr name="flexWrap">
         <enum name="nowrap" value="0" />
         <enum name="wrap" value="1" />
