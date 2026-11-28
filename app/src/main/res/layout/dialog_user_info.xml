@@ -251,14 +251,14 @@
             android:layout_height="@dimen/px34"
             android:duplicateParentState="true"
             app:srcCompat="@drawable/ic_logout"
-            app:tint="@color/text_color_sign_out" />
+            app:tint="@color/text_color_user_btn" />
         <androidx.appcompat.widget.AppCompatTextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/px18"
             android:duplicateParentState="true"
             android:text="@string/sign_out"
-            android:textColor="@color/text_color_sign_out"
+            android:textColor="@color/text_color_user_btn"
             android:textSize="@dimen/px27" />
     </LinearLayout>
     <Space

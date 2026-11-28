@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="?attr/thirdBackgroundColor" />
-    <corners android:radius="@dimen/px16" />
-</shape>
+<!-- 用户信息弹窗卡片底：结构同 dialog_background，圆角 px16（头像从顶边出格，
+     只露出两侧与底部一半边框） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <solid android:color="?attr/thirdBackgroundColor" />
+            <corners android:radius="@dimen/px16" />
+        </shape>
+    </item>
+    <item android:drawable="?attr/dialogCardImage" />
+    <item>
+        <shape>
+            <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor" />
+            <corners android:radius="@dimen/px16" />
+        </shape>
+    </item>
+</layer-list>

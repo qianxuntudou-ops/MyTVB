@@ -1,5 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="?attr/thirdBackgroundColor" />
-    <corners android:radius="@dimen/px20" />
-</shape>
+<!-- 弹窗壳底（26 个弹窗布局共用）：底色 + 主题底图 + 中性描边。
+     issue#156：经典主题壁纸本身就是粉紫插画，弹窗只铺纯色(thirdBackgroundColorClassic)
+     与整页割裂，且与壁纸亮度接近、圆角边界糊在一起（用户反馈「背景色太丑」「融合」）。
+     现在中间层叠加 ?attr/dialogCardImage：经典主题 = 壁纸同源暗化图（四边圆角渐隐，
+     不会露出直角边），其余主题 = dialog_card_image_empty 全透明，观感仍是原来的纯色底。
+     描边复用各主题既有 buttonStrokeColor（黑/经典 #666666、白 #e3e5e7），柔和不扎眼 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <solid android:color="?attr/thirdBackgroundColor" />
+            <corners android:radius="@dimen/px20" />
+        </shape>
+    </item>
+    <item android:drawable="?attr/dialogCardImage" />
+    <item>
+        <shape>
+            <stroke android:width="@dimen/px2" android:color="?attr/buttonStrokeColor" />
+            <corners android:radius="@dimen/px20" />
+        </shape>
+    </item>
+</layer-list>

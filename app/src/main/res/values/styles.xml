@@ -11,6 +11,7 @@
         <item name="tabBarHighlight">@color/tab_highlightBlue</item>
         <item name="tabBarNormal">@color/tab_normalBlue</item>
         <item name="thirdBackgroundColor">@color/thirdBackgroundColorBlue</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="ClassicsTheme" parent="@style/Theme.Blbl">
         <item name="backgroundColor">@color/transparent</item>
@@ -24,8 +25,15 @@
         <item name="tabBarHighlight">@color/tab_highlightClassic</item>
         <item name="tabBarNormal">@color/divideColorPink</item>
         <item name="thirdBackgroundColor">@color/thirdBackgroundColorClassic</item>
+        <!-- 经典主题补按钮描边：弹窗白底/页面壁纸底上给按钮勾出边界，
+             焦点框配合实色粉焦点底可辨（issue#156） -->
+        <item name="buttonStrokeColor">@color/buttonStrokeDark</item>
+        <!-- 弹窗壳铺壁纸同源暗化图（由 background_image.webp 裁切压暗、四边圆角渐隐生成），
+             让弹窗与整页壁纸同一质感，取代原来与壁纸割裂的纯色 #2E1A24 -->
+        <item name="dialogCardImage">@drawable/dialog_card_image_classic</item>
     </style>
     <style name="DarkTheme" parent="@style/Theme.Blbl">
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="DialogTheme" parent="@style/Theme.Blbl">
         <item name="android:windowBackground">@android:color/transparent</item>
@@ -147,6 +155,7 @@
         <item name="tabBarHighlight">@color/tab_highlightPink</item>
         <item name="tabBarNormal">@color/fourthBackgroundColor</item>
         <item name="thirdBackgroundColor">@color/thirdBackgroundColorPink</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="PurpleTheme" parent="@style/Theme.Blbl">
         <item name="backgroundColor">@color/systemBackgroundColorPurple</item>
@@ -157,6 +166,7 @@
         <item name="tabBarHighlight">@color/tab_highlightPurple</item>
         <item name="tabBarNormal">@color/tab_normalPurple</item>
         <item name="thirdBackgroundColor">@color/thirdBackgroundColorPurple</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="RedTheme" parent="@style/Theme.Blbl">
         <item name="backgroundColor">@color/systemBackgroundColorRed</item>
@@ -167,6 +177,7 @@
         <item name="tabBarHighlight">@color/tab_highlightRed</item>
         <item name="tabBarNormal">@color/tab_normalRed</item>
         <item name="thirdBackgroundColor">@color/thirdBackgroundColorRed</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="SearchPageTabText" parent="@android:style/TextAppearance.Widget.TabWidget">
         <item name="android:textSize">@dimen/px32</item>
@@ -204,13 +215,18 @@
         <item name="thirdBackgroundColor">@color/thirdBackgroundColor</item>
         <item name="buttonStrokeColor">@color/buttonStrokeDark</item>
     </style>
+    <!-- 以下三个 manifest 主题直接作为 Activity/Application 主题，兜底 dialogCardImage，
+         避免冷启动/启动页阶段 inflate 弹窗布局时 ?attr/dialogCardImage 解析不到而抛
+         NotFoundException（弹窗生效值仍由 Activity 运行期的六套主题决定） -->
     <style name="Theme.MyBLBL" parent="@style/Theme.Blbl">
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="Theme.MyBLBL.Main" parent="@style/Theme.Blbl">
         <item name="android:windowAnimationStyle">@style/WindowAnimationNone</item>
         <item name="android:windowNoTitle">true</item>
         <item name="windowNoTitle">true</item>
         <item name="windowActionBar">false</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="Theme.MyBLBL.Launcher" parent="@style/Theme.Blbl">
         <item name="android:windowBackground">@drawable/bg_splash</item>
@@ -221,6 +237,7 @@
         <item name="windowNoTitle">true</item>
         <item name="windowActionBar">false</item>
         <item name="backgroundColor">@color/systemBackgroundColor</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="TopPageTabText" parent="@android:style/TextAppearance.Widget.TabWidget">
         <item name="android:textSize">@dimen/px40</item>
@@ -262,6 +279,7 @@
         <item name="tabBarSelected">@color/textColorLight</item>
         <item name="thirdBackgroundColor">@color/backgroundColorLight</item>
         <item name="buttonStrokeColor">@color/divideColorLight</item>
+        <item name="dialogCardImage">@drawable/dialog_card_image_empty</item>
     </style>
     <style name="WindowAnimationTransition" parent="">
         <item name="android:windowEnterAnimation">@android:anim/fade_in</item>

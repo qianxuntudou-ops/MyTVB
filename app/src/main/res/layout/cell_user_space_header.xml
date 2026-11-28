@@ -102,6 +102,7 @@
         app:tabPaddingStart="@dimen/px20"
         app:tabPaddingEnd="@dimen/px20"
         app:tabRippleColor="@android:color/transparent"
+        app:tabTextColor="?android:attr/textColorSecondary"
         app:tabSelectedTextColor="?android:attr/textColorPrimary"
         app:tabTextAppearance="@style/OwnerDetailTabText"
         app:tabSelectedTextAppearance="@style/OwnerDetailTabText"

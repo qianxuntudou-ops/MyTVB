@@ -36,6 +36,12 @@
     <attr name="tabBarSelected" format="color|reference" />
     <attr name="dividerColor" format="color|reference" />
     <attr name="thirdBackgroundColor" format="color|reference" />
+    <!-- 弹窗壳底图（叠加在 thirdBackgroundColor 之上、描边之下）。
+         经典主题壁纸本身就是粉紫插画，弹窗只铺纯色 #2E1A24 与整页割裂，
+         由 ClassicsTheme 指向壁纸同源暗化图，其余主题指 dialog_card_image_empty（全透明）。
+         注意：不要在 Theme.Blbl 定义它——DialogTheme 是叠加在 Activity 主题之上解析的，
+         祖先样式一旦定义会盖掉各主题自己的值，经典主题弹窗就拿不到图。 -->
+    <attr name="dialogCardImage" format="reference" />
 
     <declare-styleable name="FlexboxLayout">
         <attr name="alignItems" />

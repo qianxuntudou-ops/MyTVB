@@ -80,14 +80,20 @@
     <color name="foreground_material_light">@android:color/black</color>
     <color name="fourthBackgroundColor">#626262</color>
     <color name="fourthBackgroundColorBlue">#00237c</color>
-    <color name="fourthBackgroundColorClassic">#00000000</color>
+    <!-- 经典主题第四层（CCTV 选集选中底/评论回复预览底/卡片菜单分隔线）：
+         同 thirdBackgroundColorClassic 情形，原 #00000000 全透明导致这些元素隐形（issue#156）；
+         取比 third(#2E1A24) 亮一档的暗紫，保持「层数越深越亮」的既有层级关系 -->
+    <color name="fourthBackgroundColorClassic">#3A2430</color>
     <color name="fourthBackgroundColorLight">#e3e5e7</color>
     <color name="fourthBackgroundColorPink">#bb9dab</color>
     <color name="fourthBackgroundColorPurple">#392b42</color>
     <color name="fourthBackgroundColorRed">#5f0018</color>
     <color name="gray_600">#757575</color>
     <color name="grey">#cccccc</color>
-    <color name="highlightClassic">#88FB7299</color>
+    <!-- 经典主题焦点/按压反馈（colorControlHighlight）：原 #88FB7299 半透明粉与按钮常态底
+         #aaFB7299 仅差一档透明度，焦点落点肉眼无法分辨（issue#156）；提为实色粉对齐
+         白主题做法（colorControlHighlight=biliPink 实色），消费方均为焦点态指示器 -->
+    <color name="highlightClassic">#FB7299</color>
     <color name="highlighted_text_material_dark">#6680cbc4</color>
     <color name="highlighted_text_material_light">#66009688</color>
     <color name="material_deep_teal_200">#80cbc4</color>
@@ -159,7 +165,11 @@
     <color name="textColorLight">#18191c</color>
     <color name="thirdBackgroundColor">#454545</color>
     <color name="thirdBackgroundColorBlue">#00288e</color>
-    <color name="thirdBackgroundColorClassic">#00000000</color>
+    <!-- 经典主题第三层（弹窗壳/用户卡片/设置行焦点底）：原为 #00000000 全透明，
+         issue#144(ccbbd12c) 把 dialog_background 等从静态色改成 ?attr/thirdBackgroundColor 后，
+         经典主题弹窗整块隐形、文字直接压在壁纸和列表上（issue#156 反馈「弹窗背景框呢」）。
+         其余五套主题此值均为不透明实色，此处补同语义暗紫黑，文字对比与主题色调兼顾 -->
+    <color name="thirdBackgroundColorClassic">#2E1A24</color>
     <color name="thirdBackgroundColorPink">#c4a6b4</color>
     <color name="thirdBackgroundColorPurple">#3c2d45</color>
     <color name="thirdBackgroundColorRed">#640019</color>
