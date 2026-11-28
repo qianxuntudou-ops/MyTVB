@@ -23,6 +23,10 @@
     <string name="player_risk_control_hint">Account under risk control. Complete verification in Settings.</string>
     <string name="player_minor_protection_blocked">Teen mode blocked this video</string>
 
+    <!-- Player: charge-exclusive hints (issue#152) -->
+    <string name="player_charge_exclusive_hint">Charge-exclusive video. Charge to unlock full playback.</string>
+    <string name="player_charge_ended_hint">Preview ended. Charge to continue watching.</string>
+
     <!-- Player: recommendations / autoplay / episodes -->
     <string name="player_loading_recommendations">Loading recommendations...</string>
     <string name="player_repeat_mode_one">Repeat one</string>

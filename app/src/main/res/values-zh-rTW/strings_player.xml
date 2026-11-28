@@ -23,6 +23,10 @@
     <string name="player_risk_control_hint">帳號被風控了，請到設定中完成驗證</string>
     <string name="player_minor_protection_blocked">青少年模式已攔截該影片</string>
 
+    <!-- 播放器：充電專屬提示（issue#152） -->
+    <string name="player_charge_exclusive_hint">充電專屬影片，充電後可觀看完整內容</string>
+    <string name="player_charge_ended_hint">試看結束，充電後可繼續觀看</string>
+
     <!-- 播放器：推薦/連播/選集 -->
     <string name="player_loading_recommendations">載入推薦中...</string>
     <string name="player_repeat_mode_one">單集循環</string>

@@ -650,6 +650,16 @@ class VideoPlayerViewModel(
     private var interactionLoadingEdgeId: Long = -1L
     private var isSteinsGateVideo = false
 
+    /**
+     * 当前视频是否为充电专属且未解锁（详情 is_upower_exclusive=true 且 is_upower_play=false）。
+     * 未解锁时 playurl 只下发试看片段，完整时长≫试看长度，ENDED 即试看到点。
+     * 跟随各详情应用点刷新，换到普通/PGC 视频自动复位；same-video replay 跳过详情时
+     * 沿用上一会话值（同一视频充电状态不会中途变化）。详情接口实测下发该字段
+     * （推荐/历史接口不下发，issue#152）。
+     */
+    var isChargeExclusiveTrial: Boolean = false
+        private set
+
     fun getInteractionEngine(): InteractionEngine = interactionEngine
 
     val dmMaskRepository = DmMaskRepository()
@@ -2189,6 +2199,8 @@ class VideoPlayerViewModel(
             fallbackBvid = currentBvid.orEmpty(),
             fallbackCid = currentCid
         )
+        // PGC 走的是会员/登录试看体系，与 UGC 充电专属无关，换到 PGC 时显式复位
+        isChargeExclusiveTrial = false
         _episodes.value = episodeItems
         _selectedEpisodeIndex.value = selectedIndex
         _relatedVideos.value = emptyList()
@@ -2381,6 +2393,7 @@ class VideoPlayerViewModel(
                     if (detailResponse.isSuccess && detailResponse.data != null) {
                         val detail = detailResponse.data
                         _videoInfo.value = detail
+                        isChargeExclusiveTrial = detail.view?.isUpowerExclusive == true && detail.view?.isUpowerPlay == false
                         currentAid = detail.view?.aid ?: currentAid
                         currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
                         val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
@@ -2466,6 +2479,7 @@ class VideoPlayerViewModel(
                     if (detailResponse.isSuccess && detailResponse.data != null) {
                         val detail = detailResponse.data
                         _videoInfo.value = detail
+                        isChargeExclusiveTrial = detail.view?.isUpowerExclusive == true && detail.view?.isUpowerPlay == false
                         currentAid = detail.view?.aid ?: currentAid
                         currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
                         val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
@@ -2544,6 +2558,7 @@ class VideoPlayerViewModel(
 
         val detail = detailResponse.data
         _videoInfo.value = detail
+        isChargeExclusiveTrial = detail.view?.isUpowerExclusive == true && detail.view?.isUpowerPlay == false
         currentAid = detail.view?.aid ?: currentAid
         currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
         isSteinsGateVideo = detail.view?.steinsGate == true

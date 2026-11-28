@@ -23,6 +23,10 @@
     <string name="player_risk_control_hint">账号被风控了，请到设置中完成验证</string>
     <string name="player_minor_protection_blocked">青少年模式已拦截该视频</string>
 
+    <!-- 播放器：充电专属提示（issue#152，详情接口 is_upower_* 字段） -->
+    <string name="player_charge_exclusive_hint">充电专属视频，充电后可观看完整内容</string>
+    <string name="player_charge_ended_hint">试看结束，充电后可继续观看</string>
+
     <!-- 播放器：推荐/连播/选集 -->
     <string name="player_loading_recommendations">加载推荐中...</string>
     <string name="player_repeat_mode_one">单集循环</string>

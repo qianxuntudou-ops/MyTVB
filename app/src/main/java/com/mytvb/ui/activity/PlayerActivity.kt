@@ -767,6 +767,14 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                         playerView.showController()
                         return
                     }
+                    // 充电专属未解锁（issue#152）：playurl 只下发试看片段，完整时长≫试看长度，
+                    // 未解锁不可能播完——ENDED 即试看到点，同 PGC 试看停控制器不连播
+                    if (viewModel.isChargeExclusiveTrial) {
+                        AppLog.i(TAG, "charge exclusive trial ended, show controller instead of autoplay")
+                        AppToast.show(applicationContext, R.string.player_charge_ended_hint, Toast.LENGTH_LONG)
+                        playerView.showController()
+                        return
+                    }
                     handlePlaybackEnded()
                 }
                 Player.STATE_IDLE -> {
@@ -1828,6 +1836,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         lifecycleScope.launch {
             viewModel.videoInfo.collect { info ->
                 latestVideoInfo = info
+                maybeShowChargeExclusiveHint(info)
                 sessionCoordinator.updateVideoInfo(info)
                 douyinCoordinator.resetIfNeeded()
                 douyinCoordinator.ensureQueueStarted()
@@ -2888,6 +2897,22 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         if (cid == previewHintShownCid) return
         previewHintShownCid = cid
         AppToast.show(applicationContext,R.string.activity_preview_start_hint,Toast.LENGTH_LONG)
+    }
+
+    /** 充电专属提示已弹过的 bvid，避免 _videoInfo 重发（fallback 重建/重进同视频）重复 Toast。 */
+    private var chargeHintShownBvid: String? = null
+
+    /**
+     * 详情数据到位：充电专属且未解锁时提示一次（issue#152）。解锁（is_upower_play=true）
+     * 不提示直接完整播放；推荐/历史接口不下发充电字段，详情接口是唯一可靠数据源。
+     */
+    private fun maybeShowChargeExclusiveHint(info: VideoDetailModel?) {
+        val view = info?.view ?: return
+        if (!view.isUpowerExclusive || view.isUpowerPlay) return
+        val bvid = view.bvid
+        if (bvid.isBlank() || bvid == chargeHintShownBvid) return
+        chargeHintShownBvid = bvid
+        AppToast.show(applicationContext, R.string.player_charge_exclusive_hint, Toast.LENGTH_LONG)
     }
 
     private fun hideContentPanel() {
