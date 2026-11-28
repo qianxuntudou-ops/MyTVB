@@ -36,6 +36,12 @@ class HongguoCardMenuDialog(
     private val repository: HongguoRepository
 ) : AppCompatDialog(context, R.style.DialogTheme) {
 
+    // Dialog.getContext()（ContextThemeWrapper→DialogTheme 恒黑）会遮蔽构造参数 context：
+    // 属性初始化器里裸 context=构造参数，但实例方法/回调里裸 context=getContext() 恒黑
+    // （白主题下创作者/相关作品列表弹窗黑底的根因，2026-11-28 用户复现实锤）——
+    // 方法体内一律用本字段
+    private val hostContext = context
+
     override fun show() {
         super.show()
         // 提示浮层默认挂 Activity decor，会被 z 序更高的弹窗窗口压住
@@ -90,7 +96,7 @@ class HongguoCardMenuDialog(
         // fill 全屏窗口 + 居中卡片，宽度与 VideoCardMenuDialog 同款 45% 屏宽
         DialogWindowFit.overlay(
             this, binding.root,
-            (context.resources.displayMetrics.widthPixels * 0.45).toInt(),
+            (hostContext.resources.displayMetrics.widthPixels * 0.45).toInt(),
             tag = "hongguoMenu"
         )
         setCanceledOnTouchOutside(true)
@@ -158,19 +164,19 @@ class HongguoCardMenuDialog(
                 val load = creatorWorksDeferred.await() ?: loadCreatorWorks()
                 val creator = load.creator
                 if (creator == null || creator.name.isBlank()) {
-                    toast(context.getString(R.string.hongguo_menu_creator_unknown))
+                    toast(hostContext.getString(R.string.hongguo_menu_creator_unknown))
                     return@launch
                 }
                 binding.textCreatorSummary.text = creator.name
                 when {
                     load.works.isEmpty() ->
-                        toast(context.getString(R.string.hongguo_menu_creator_only_one))
+                        toast(hostContext.getString(R.string.hongguo_menu_creator_only_one))
                     else -> {
                         dismiss()
                         HongguoDramaListDialog(
-                            context = context,
+                            context = hostContext,
                             repository = repository,
-                            title = context.getString(R.string.hongguo_menu_creator),
+                            title = hostContext.getString(R.string.hongguo_menu_creator),
                             items = load.works
                         ).show()
                     }
@@ -178,7 +184,7 @@ class HongguoCardMenuDialog(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                toast(context.getString(R.string.hongguo_menu_creator_failed))
+                toast(hostContext.getString(R.string.hongguo_menu_creator_failed))
             } finally {
                 actionInProgress = false
             }
@@ -202,20 +208,20 @@ class HongguoCardMenuDialog(
                 val related = relatedDeferred.await()
                     ?: repository.related(item.seriesId, item.title)
                 if (related.isEmpty()) {
-                    toast(context.getString(R.string.hongguo_menu_related_empty))
+                    toast(hostContext.getString(R.string.hongguo_menu_related_empty))
                     return@launch
                 }
                 dismiss()
                 HongguoDramaListDialog(
-                    context = context,
+                    context = hostContext,
                     repository = repository,
-                    title = context.getString(R.string.hongguo_menu_related),
+                    title = hostContext.getString(R.string.hongguo_menu_related),
                     items = related
                 ).show()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                toast(context.getString(R.string.hongguo_menu_related_failed))
+                toast(hostContext.getString(R.string.hongguo_menu_related_failed))
             } finally {
                 actionInProgress = false
             }
@@ -232,7 +238,7 @@ class HongguoCardMenuDialog(
     }
 
     private fun toast(message: String) {
-        AppToast.show(context, message)
+        AppToast.show(hostContext, message)
     }
 
     override fun dismiss() {
