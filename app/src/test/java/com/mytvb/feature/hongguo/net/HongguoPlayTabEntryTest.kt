@@ -54,10 +54,16 @@ class HongguoPlayTabEntryTest {
     }
 
     @Test
-    fun fallsBackToFirstRowWhenVidMissing() {
-        // 行键与本集 vid 不符时取首行（服务端偶发改键），不直接判无片源
+    fun rejectsRowForOtherVid() {
+        // 行键与本集 vid 不符时拒绝「取首行兜底」（2026-11-28 删：响应里没有本集模型
+        // 说明服务端回了别的集/剧的数据，静默取首行会播错集），直接 MISSING_MODEL
         val rows = JSONObject().put("7700000000000000000", entryOf(modelText))
-        assertEquals(modelText, HongguoPlay().tabEntryOf(vid, payload(rows).toString()).getString("video_model"))
+        try {
+            HongguoPlay().tabEntryOf(vid, payload(rows).toString())
+            fail("expected PlayException")
+        } catch (e: HongguoPlay.PlayException) {
+            assertEquals("MISSING_MODEL", e.code)
+        }
     }
 
     @Test

@@ -124,10 +124,11 @@ class HongguoCryptoTest {
 
     @Test
     fun endToEndPlaySmoke() {
-        // 端到端：feed → 网页详情（选集）→ 播放地址解析
+        // 端到端：feed → 原生详情（选集）→ 播放地址解析
+        // （2026-11-28 起 SSR 网页详情回退已删：11-27 后网页 vid_list 只回前 3 集且播放接口不认）
         val feed = HongguoClient().category("/category/short-drama", 0, "")
         val drama = feed.items.firstOrNull { it.episodeCount > 0 } ?: return
-        val detail = HongguoWeb().seriesDetail(drama.seriesId)
+        val detail = HongguoClient().videoDetail(drama.seriesId)
         println("HG-E2E detail=${detail.drama.title} episodes=${detail.episodes.size} related=${detail.related.size}")
         val ep = detail.episodes.firstOrNull { !it.locked } ?: detail.episodes.first()
         // 假固定身份即可通过（中继实验 C1 证实），避免注册后立即请求的联动风控

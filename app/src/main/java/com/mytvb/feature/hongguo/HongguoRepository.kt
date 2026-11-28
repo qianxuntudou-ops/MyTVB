@@ -277,20 +277,14 @@ class HongguoRepository private constructor(context: Context) {
 
     // ---- 详情 ----
     // 内存缓存(30min 倒计时过期) → 原生 video_detail/v1（~18KB/170ms，2026-11-14 替换
-    // SSR 网页主通道——450KB HTML 冷路径 0.8~1.7s）→ SSR 回退兜底。30 分钟对齐 HGTV，
-    // 短于追更感知周期，集数更新不受影响。
+    // SSR 网页主通道——450KB HTML 冷路径 0.8~1.7s）。30 分钟对齐 HGTV，短于追更感知
+    // 周期，集数更新不受影响。2026-11-28 删 SSR 回退：11-27 网页详情 vid_list 渐进
+    // 加载只回前 3 集且 vid 变 v1_xxx（播放接口不认），坏兜底静默返回坏数据不如明确报错。
     suspend fun detail(seriesId: String): HongguoWeb.SeriesDetail {
         val cacheKey = "detail|$seriesId"
         contentCacheGet<HongguoWeb.SeriesDetail>(cacheKey, ttlMs = DETAIL_TTL_MS)?.let { return it }
         val d = withContext(Dispatchers.IO) {
-            try {
-                client.videoDetail(seriesId)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                AppLog.d("Hongguo", "video_detail fail, fallback SSR: ${e.message}")
-                web.seriesDetail(seriesId)
-            }
+            client.videoDetail(seriesId)
         }
         contentCachePut(cacheKey, d)
         return d

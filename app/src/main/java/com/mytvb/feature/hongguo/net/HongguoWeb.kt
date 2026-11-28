@@ -7,8 +7,10 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * 红果网页端详情：hongguoduanju.com/detail?series_id=（免签名端点）。
- * 从 HTML 的 _ROUTER_DATA 抠出 seriesDetail（对照 Go 版 SeriesDetail/extractRouterData）。
+ * 红果网页端通道（hongguoduanju.com，免签名端点）：排行榜网页路由 + SeriesDetail/Episode
+ * 数据类宿主。剧集详情主链路走原生 video_detail/v1（HongguoClient.videoDetail），
+ * 2026-11-28 起 SSR 网页详情回退已删（11-27 接口变更后 vid_list 渐进加载只回前 3 集
+ * 且 vid 变 v1_xxx 播放接口不认，坏兜底静默返回坏数据不如明确报错）。
  */
 class HongguoWeb(
     private val webBase: String = "https://hongguoduanju.com"
@@ -78,67 +80,6 @@ class HongguoWeb(
         )
     }
 
-    private fun findObjectByKeyDeep(root: JSONObject, key: String, depth: Int = 0): JSONObject? {
-        if (depth > 6) return null
-        root.optJSONObject(key)?.let { return it }
-        for (k in root.keys()) {
-            when (val child = root.opt(k)) {
-                is JSONObject -> findObjectByKeyDeep(child, key, depth + 1)?.let { return it }
-                is org.json.JSONArray ->
-                    for (i in 0 until child.length()) {
-                        (child.opt(i) as? JSONObject)
-                            ?.let { findObjectByKeyDeep(it, key, depth + 1) }
-                            ?.let { return it }
-                    }
-            }
-        }
-        return null
-    }
-
-    fun seriesDetail(seriesId: String): SeriesDetail {
-        require(seriesId.matches(Regex("\\d{1,30}"))) { "series_id 无效" }
-        val req = Request.Builder()
-            .url("$webBase/detail?series_id=$seriesId")
-            // 浏览器 UA 会返回 stream 渲染版（无 _ROUTER_DATA，2026-11-09 实证）；
-            // Googlebot UA 返回 SSR 完整版（_ROUTER_DATA 含 seriesDetail/vid_list）
-            .header("User-Agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
-            .header("Accept", "text/html")
-            .build()
-        val html = http.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("详情页 HTTP ${resp.code}")
-            resp.body?.string() ?: throw IllegalStateException("详情页响应为空")
-        }
-        val router = extractRouterData(html)
-        val detailObj = findObjectByKey(router, "seriesDetail")
-            ?: throw IllegalStateException("详情响应缺少 seriesDetail")
-        val drama = normalizeDrama(detailObj)
-            ?: throw IllegalStateException("详情响应缺少剧集信息")
-        require(drama.seriesId == seriesId) { "详情返回的剧集与请求不一致" }
-
-        val vidList = stringList(detailObj.optJSONArray("vid_list"))
-        var accessible = detailObj.optInt("accessible_episode_cnt", 0)
-        if (accessible <= 0 || accessible > vidList.size) accessible = vidList.size
-        // 选集集数口径日志：视频详情四个来源各记一条，便于排查「共N集」与实际分集不一致
-        android.util.Log.d(
-            "Hongguo",
-            "detail eps series=$seriesId episode_cnt=${detailObj.optInt("episode_cnt")} " +
-                "episode_total_cnt=${detailObj.optInt("episode_total_cnt")} " +
-                "accessible=$accessible vid_list=${vidList.size} " +
-                "drama.episodeCount=${drama.episodeCount}"
-        )
-        val episodes = ArrayList<Episode>(vidList.size)
-        for ((i, vid) in vidList.withIndex()) {
-            episodes.add(Episode(i + 1, vid, "第${i + 1}集", i >= accessible))
-        }
-
-        val detailPage = findObjectByKey(router, "detail_page")
-        val related = ArrayList<HongguoClient.Drama>()
-        for (source in listOfNotNull(detailPage)) {
-            collectRelated(source, seriesId, related)
-        }
-        return SeriesDetail(drama, episodes, related)
-    }
-
     // ---- HTML 内嵌 _ROUTER_DATA 提取（对照 extractRouterData/balancedJSONEnd） ----
     private fun extractRouterData(html: String): JSONObject {
         val marker = "_ROUTER_DATA"
@@ -174,36 +115,22 @@ class HongguoWeb(
         throw IllegalStateException("_ROUTER_DATA JSON 未闭合")
     }
 
-    private fun findObjectByKey(root: JSONObject, key: String): JSONObject? {
-        if (root.has(key)) {
-            val v = root.optJSONObject(key)
-            if (v != null) return v
-        }
-        // BFS 一层常用容器：loaderData / routerData / 任意子对象
+    /** 深度优先找键（榜单 content 嵌在多层容器内，浅层 BFS 不够用）。 */
+    private fun findObjectByKeyDeep(root: JSONObject, key: String, depth: Int = 0): JSONObject? {
+        if (depth > 6) return null
+        root.optJSONObject(key)?.let { return it }
         for (k in root.keys()) {
-            val child = root.optJSONObject(k) ?: continue
-            if (child === root) continue
-            val hit = child.optJSONObject(key)
-            if (hit != null) return hit
-            for (k2 in child.keys()) {
-                val grand = child.optJSONObject(k2) ?: continue
-                val hit2 = grand.optJSONObject(key)
-                if (hit2 != null) return hit2
+            when (val child = root.opt(k)) {
+                is JSONObject -> findObjectByKeyDeep(child, key, depth + 1)?.let { return it }
+                is org.json.JSONArray ->
+                    for (i in 0 until child.length()) {
+                        (child.opt(i) as? JSONObject)
+                            ?.let { findObjectByKeyDeep(it, key, depth + 1) }
+                            ?.let { return it }
+                    }
             }
         }
         return null
-    }
-
-    private fun collectRelated(obj: JSONObject, excludeId: String, out: MutableList<HongguoClient.Drama>) {
-        for (key in listOf("related_works", "recommend", "recommendations", "more_like_this", "hot_drama")) {
-            val arr = obj.optJSONArray(key) ?: continue
-            for (i in 0 until arr.length()) {
-                val d = normalizeDrama(arr.opt(i)) ?: continue
-                if (d.seriesId != excludeId && out.none { it.seriesId == d.seriesId }) {
-                    out.add(d)
-                }
-            }
-        }
     }
 
     private fun normalizeDrama(value: Any?): HongguoClient.Drama? {

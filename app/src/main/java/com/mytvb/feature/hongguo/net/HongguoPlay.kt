@@ -256,7 +256,9 @@ class HongguoPlay {
 
     /**
      * video_tab 响应 → 本集 entry（含 `video_model` 键，交 [parseEntry] 二跳）。
-     * 行在 `data.video_model_data[vid]`，少数形态直接 `data[vid]`；都没有则取首行兜底。
+     * 行在 `data.video_model_data[vid]`，少数形态直接 `data[vid]`。只接受目标剧集的
+     * 行：2026-11-28 删「取首行兜底」——响应键与本集 vid 不符说明服务端回了别的集/
+     * 剧的模型（果映TV 33e4aa94 同款串集教训），静默取首行会播错集，直接 MISSING_MODEL。
      * 纯函数，可单测。
      */
     internal fun tabEntryOf(vid: String, text: String): JSONObject {
@@ -268,7 +270,6 @@ class HongguoPlay {
         val rows = data.optJSONObject("video_model_data") ?: data
         return rows.optJSONObject(vid)
             ?: data.optJSONObject(vid)
-            ?: runCatching { rows.optJSONObject(rows.keys().next()) }.getOrNull()
             ?: throw PlayException("播放接口未返回本集片源", "MISSING_MODEL")
     }
 
