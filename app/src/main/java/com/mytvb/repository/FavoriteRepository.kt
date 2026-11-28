@@ -15,4 +15,7 @@ class FavoriteRepository(
     suspend fun addFavorite(rid: Long, addMediaIds: String) = delegate.addFavorite(rid, addMediaIds)
 
     suspend fun removeFavorite(rid: Long, delMediaIds: String) = delegate.removeFavorite(rid, delMediaIds)
+
+    suspend fun updateFavorite(rid: Long, addMediaIds: String?, delMediaIds: String?) =
+        delegate.updateFavorite(rid, addMediaIds, delMediaIds)
 }

@@ -16,6 +16,7 @@ import com.mytvb.R
 import com.mytvb.databinding.FragmentFavoriteBinding
 import com.mytvb.event.AppEventHub
 import com.mytvb.network.session.SessionStateRepository
+import com.mytvb.network.userHttpMessage
 import com.mytvb.repository.UserRepository
 import com.mytvb.repository.FavoriteRepository
 import com.mytvb.ui.adapter.FavoriteFolderAdapter
@@ -39,6 +40,7 @@ import com.mytvb.core.ui.refresh.SwipeRefreshHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -48,6 +50,9 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     companion object {
         private const val ARG_EMBEDDED = "embedded"
         private const val FOLDERS_CACHE_TTL_MS = 10 * 60 * 1000L
+
+        /** 补封面走 fav/resource/list（正是风控 412 命中的接口），多夹时串行且留间隔，避免瞬间连发 */
+        private const val FOLDER_COVER_HYDRATE_INTERVAL_MS = 250L
 
         fun newInstance() = FavoriteFragment()
 
@@ -323,10 +328,10 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
                 }
             }.onFailure { e ->
                 binding.tvEmpty.visibility = View.VISIBLE
-                binding.tvEmpty.text = e.message ?: getString(R.string.net_error)
+                binding.tvEmpty.text = e.userHttpMessage(requireContext())
                 binding.recyclerViewFavorite.visibility = View.GONE
                 requestFallbackFocus()
-                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.message))
+                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.userHttpMessage(requireContext())))
             }
         }
     }
@@ -349,10 +354,11 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             return
         }
         coverHydrationJob = lifecycleScope.launch {
-            pendingFolders.forEach { folder ->
+            pendingFolders.forEachIndexed { index, folder ->
                 if (!isActive) {
                     return@launch
                 }
+                if (index > 0) delay(FOLDER_COVER_HYDRATE_INTERVAL_MS)
                 favoriteRepository.getFavoriteFolderDetail(folder.id, 1, 1)
                     .onSuccess { response ->
                         if (!response.isSuccess) {

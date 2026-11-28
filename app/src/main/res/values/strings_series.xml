@@ -2,6 +2,7 @@
 <resources>
     <!-- ===== 浏览/内容域：通用提示 ===== -->
     <string name="load_failed_format">加载失败: %1$s</string>
+    <string name="error_risk_control_412">B站安全校验未通过(HTTP 412),通常约1小时后自动恢复,请稍后再试</string>
     <string name="detail_load_failed">加载失败</string>
     <string name="toast_operation_failed">操作失败</string>
     <string name="toast_operation_failed_format">操作失败: %1$s</string>

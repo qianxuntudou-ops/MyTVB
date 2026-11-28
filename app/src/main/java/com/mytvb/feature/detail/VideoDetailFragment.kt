@@ -26,6 +26,7 @@ import com.mytvb.core.navigation.VideoRouteNavigator
 import com.mytvb.core.ui.navigation.navigateBackFromUi
 import com.mytvb.databinding.FragmentSeriesDetailBinding
 import com.mytvb.event.AppEventHub
+import com.mytvb.model.favorite.planFavoriteDeal
 import com.mytvb.model.video.VideoModel
 import com.mytvb.model.video.VideoPvModel
 import com.mytvb.model.video.detail.Tag
@@ -1267,22 +1268,28 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 toast(getString(R.string.toast_favorite_folder_not_ready))
                 return@launch
             }
-            val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid)
+            val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid, rid = currentAid)
             val folders = folderResult.getOrNull()?.data?.list.orEmpty()
-            val defaultFolder = folders.firstOrNull()
-            if (defaultFolder == null) {
+            if (folders.isEmpty()) {
                 toast(getString(R.string.toast_no_available_folder))
                 return@launch
             }
-            val folderId = defaultFolder.id.toString()
-            val result = if (isFavorited) {
-                favoriteRepository.removeFavorite(currentAid, folderId)
-            } else {
-                favoriteRepository.addFavorite(currentAid, folderId)
+            // 取消收藏必须删视频真实所在的夹（fav_state==1），不能固定删默认夹：
+            // 默认夹里没有这个视频时服务端对「删除不存在的收藏」幂等返回成功，客户端误判，
+            // 用户反复重试会让同一 rid 连续 deal，触发收藏接口账号级风控（issue#156 HTTP 412）
+            val plan = planFavoriteDeal(folders)
+            if (plan.isEmpty) {
+                toast(getString(R.string.toast_no_available_folder))
+                return@launch
             }
+            val result = favoriteRepository.updateFavorite(
+                currentAid,
+                addMediaIds = plan.addMediaIds,
+                delMediaIds = plan.delMediaIds
+            )
             result.onSuccess { response ->
                 if (response.isSuccess) {
-                    isFavorited = !isFavorited
+                    isFavorited = plan.favoritedAfter
                     favoriteCountDelta += if (isFavorited) 1 else -1
                     updateActionButtonsDirectly()
                     toast(

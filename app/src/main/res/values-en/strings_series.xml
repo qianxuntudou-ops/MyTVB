@@ -2,6 +2,7 @@
 <resources>
     <!-- ===== Browse/content: common toasts ===== -->
     <string name="load_failed_format">Load failed: %1$s</string>
+    <string name="error_risk_control_412">Bilibili security check failed (HTTP 412). It usually recovers automatically within an hour, please try again later</string>
     <string name="detail_load_failed">Load failed</string>
     <string name="toast_operation_failed">Action failed</string>
     <string name="toast_operation_failed_format">Action failed: %1$s</string>

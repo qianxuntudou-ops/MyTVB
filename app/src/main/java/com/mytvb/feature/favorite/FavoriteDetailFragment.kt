@@ -15,6 +15,7 @@ import com.mytvb.R
 import com.mytvb.databinding.FragmentFavoriteDetailBinding
 import com.mytvb.event.AppEventHub
 import com.mytvb.network.session.NetworkSessionGateway
+import com.mytvb.network.userHttpMessage
 import com.mytvb.repository.FavoriteRepository
 import com.mytvb.ui.adapter.FavoriteHistoryAdapter
 import com.mytvb.core.ui.base.BaseFragment
@@ -385,7 +386,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                 }
             }.onFailure { e ->
                 rollbackPage()
-                handleLoadError(getString(R.string.load_failed_format, e.message))
+                handleLoadError(getString(R.string.load_failed_format, e.userHttpMessage(requireContext())))
             }
         }
     }

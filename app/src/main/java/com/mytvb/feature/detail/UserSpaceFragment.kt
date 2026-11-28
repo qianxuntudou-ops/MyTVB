@@ -23,6 +23,7 @@ import com.mytvb.model.video.VideoModel
 import com.mytvb.model.video.DynamicVideoClassifier
 import com.mytvb.model.video.toVideoModel
 import com.mytvb.network.session.NetworkSessionGateway
+import com.mytvb.network.userHttpMessage
 import com.mytvb.repository.UserRepository
 import com.mytvb.ui.adapter.UserSpaceHeaderAdapter
 import com.mytvb.ui.adapter.VideoAdapter
@@ -466,7 +467,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                 }
             } catch (e: Exception) {
                 binding.progressBar.visibility = View.GONE
-                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.message))
+                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.userHttpMessage(requireContext())))
             }
         }
     }
@@ -655,7 +656,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                 state.loading = false
                 rollbackPage(state)
                 AppLog.w("UserSpace", "tab=${state.title} page=$pageToLoad load failed: ${e.message}")
-                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.message))
+                AppToast.show(requireContext(), getString(R.string.load_failed_format, e.userHttpMessage(requireContext())))
                 maybeLoadActiveTabFirstPage()
             }
         }

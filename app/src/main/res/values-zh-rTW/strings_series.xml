@@ -2,6 +2,7 @@
 <resources>
     <!-- ===== 瀏覽/內容域：通用提示 ===== -->
     <string name="load_failed_format">載入失敗: %1$s</string>
+    <string name="error_risk_control_412">B站安全校驗未通過(HTTP 412),通常約1小時後自動恢復,請稍後再試</string>
     <string name="detail_load_failed">載入失敗</string>
     <string name="toast_operation_failed">操作失敗</string>
     <string name="toast_operation_failed_format">操作失敗: %1$s</string>

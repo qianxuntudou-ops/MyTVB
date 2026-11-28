@@ -20,6 +20,7 @@ import com.mytvb.core.ui.decoration.LinearSpacingItemDecoration
 import com.mytvb.databinding.DialogVideoCardMenuBinding
 import com.mytvb.event.AppEventHub
 import com.mytvb.model.favorite.FavoriteFolderModel
+import com.mytvb.model.favorite.planFavoriteDeal
 import com.mytvb.model.video.VideoModel
 import com.mytvb.network.session.ActionError
 import com.mytvb.network.session.SessionStateRepository
@@ -404,26 +405,23 @@ class VideoCardMenuDialog(
                 setActionInProgress(false)
                 return@launch
             }
-            val actualIsFavorited = folders.any { it.favState == 1 }
-            val targetFolder = if (actualIsFavorited) {
-                folders.firstOrNull { it.favState == 1 }
-            } else {
-                folders.firstOrNull()
-            }
-            if (targetFolder == null) {
+            // 按服务端返回的 fav_state 计算真实加/减夹：取消收藏必须删视频实际所在的夹，
+            // 不能拿「默认夹」或「用户点的夹」冒充（issue#156：删不存在的夹会幂等成功，
+            // 客户端误判为操作成功、用户反复重试，短时间内连续 deal 触发账号级风控 HTTP 412）
+            val plan = planFavoriteDeal(folders)
+            if (plan.isEmpty) {
                 toast(context.getString(R.string.dialog_no_available_favorite_folder))
                 setActionInProgress(false)
                 return@launch
             }
-            val folderId = targetFolder.id.toString()
-            val result = if (actualIsFavorited) {
-                favoriteRepository.removeFavorite(video.aid, folderId)
-            } else {
-                favoriteRepository.addFavorite(video.aid, folderId)
-            }
+            val result = favoriteRepository.updateFavorite(
+                video.aid,
+                addMediaIds = plan.addMediaIds,
+                delMediaIds = plan.delMediaIds
+            )
             result.onSuccess { response ->
                 if (response.isSuccess) {
-                    isFavorited = !actualIsFavorited
+                    isFavorited = plan.favoritedAfter
                     renderFavoriteState()
                     toast(
                         if (isFavorited) context.getString(R.string.collection_)
@@ -497,24 +495,32 @@ class VideoCardMenuDialog(
             val folder = folders.getOrNull(position) ?: return@FavoriteFolderDialogAdapter
             dialog.dismiss()
             scope.launch {
-                val result = if (isFavorited) {
-                    favoriteRepository.removeFavorite(video.aid, folder.id.toString())
-                } else {
-                    favoriteRepository.addFavorite(video.aid, folder.id.toString())
+                // 点的是未收藏的夹 → 加入它并从其它夹移除（一次 deal 完成换夹）；
+                // 点的是已收藏的夹 → 只从该夹移除。绝不能拿「目标夹」当删除目标。
+                val plan = planFavoriteDeal(folders, folder.id)
+                if (plan.isEmpty) {
+                    toast(context.getString(R.string.dialog_no_available_favorite_folder))
+                    return@launch
                 }
+                val result = favoriteRepository.updateFavorite(
+                    video.aid,
+                    addMediaIds = plan.addMediaIds,
+                    delMediaIds = plan.delMediaIds
+                )
                 result.onSuccess { response ->
                     if (response.isSuccess) {
-                        val wasFavorited = isFavorited
-                        isFavorited = !isFavorited
+                        isFavorited = plan.favoritedAfter
                         renderFavoriteState()
                         toast(
-                            if (isFavorited) {
+                            if (plan.addMediaIds != null) {
                                 context.getString(R.string.dialog_favorited_to_format, folder.title)
                             } else {
                                 context.getString(R.string.dialog_unfavorited_from_format, folder.title)
                             }
                         )
-                        if (wasFavorited && !isFavorited) {
+                        // 只要有「移出夹」的动作，当前收藏夹列表里的这张卡就必须移除：
+                        // 换夹时 favoritedAfter 仍为 true，不能再用「是否已收藏」判断
+                        if (plan.delMediaIds != null) {
                             onFavoriteRemoved?.invoke()
                         }
                     } else {

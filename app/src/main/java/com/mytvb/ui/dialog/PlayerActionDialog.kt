@@ -18,6 +18,7 @@ import com.mytvb.R
 import com.mytvb.core.ui.decoration.LinearSpacingItemDecoration
 import com.mytvb.databinding.DialogActionBinding
 import com.mytvb.model.favorite.FavoriteFolderModel
+import com.mytvb.model.favorite.planFavoriteDeal
 import com.mytvb.network.session.ActionError
 import com.mytvb.network.session.SessionStateRepository
 import com.mytvb.repository.FavoriteRepository
@@ -142,22 +143,26 @@ class PlayerActionDialog(
                     toast(context.getString(R.string.dialog_favorite_folder_not_loaded))
                     return@launch
                 }
-                val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid)
+                val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid, rid = aid)
                 val folders = folderResult.getOrNull()?.data?.list.orEmpty()
-                val defaultFolder = folders.firstOrNull()
-                if (defaultFolder == null) {
+                if (folders.isEmpty()) {
                     toast(context.getString(R.string.dialog_no_available_favorite_folder))
                     return@launch
                 }
-                val folderId = defaultFolder.id.toString()
-                val result = if (isFavorited) {
-                    favoriteRepository.removeFavorite(aid, folderId)
-                } else {
-                    favoriteRepository.addFavorite(aid, folderId)
+                // 取消收藏必须删视频真实所在的夹（fav_state==1），不能固定删默认夹
+                val plan = planFavoriteDeal(folders)
+                if (plan.isEmpty) {
+                    toast(context.getString(R.string.dialog_no_available_favorite_folder))
+                    return@launch
                 }
+                val result = favoriteRepository.updateFavorite(
+                    aid,
+                    addMediaIds = plan.addMediaIds,
+                    delMediaIds = plan.delMediaIds
+                )
                 result.onSuccess { response ->
                     if (response.isSuccess) {
-                        isFavorited = !isFavorited
+                        isFavorited = plan.favoritedAfter
                         renderState()
                         toast(
                         if (isFavorited) context.getString(R.string.collection_)
@@ -339,7 +344,8 @@ class PlayerActionDialog(
             return
         }
         scope.launch {
-            favoriteRepository.getFavoriteFolders(currentUserMid)
+            // 必须带 rid 查询，否则 fav_state 全为 0，无法判断视频当前在哪些夹里
+            favoriteRepository.getFavoriteFolders(currentUserMid, rid = aid)
                 .onSuccess { response ->
                     if (!response.isSuccess) {
                         toast(response.errorMessage)
@@ -378,17 +384,23 @@ class PlayerActionDialog(
             val folder = folders.getOrNull(position) ?: return@FavoriteFolderDialogAdapter
             dialog.dismiss()
             scope.launch {
-                val result = if (isFavorited) {
-                    favoriteRepository.removeFavorite(aid, folder.id.toString())
-                } else {
-                    favoriteRepository.addFavorite(aid, folder.id.toString())
+                // 目标夹未收藏 → add 目标夹 + del 其它已收藏夹（换夹，一次请求）
+                val plan = planFavoriteDeal(folders, folder.id)
+                if (plan.isEmpty) {
+                    toast(context.getString(R.string.dialog_no_available_favorite_folder))
+                    return@launch
                 }
+                val result = favoriteRepository.updateFavorite(
+                    aid,
+                    addMediaIds = plan.addMediaIds,
+                    delMediaIds = plan.delMediaIds
+                )
                 result.onSuccess { response ->
                     if (response.isSuccess) {
-                        isFavorited = !isFavorited
+                        isFavorited = plan.favoritedAfter
                         renderState()
                         toast(
-                            if (isFavorited) {
+                            if (plan.addMediaIds != null) {
                                 context.getString(R.string.dialog_favorited_to_format, folder.title)
                             } else {
                                 context.getString(R.string.dialog_unfavorited_from_format, folder.title)
