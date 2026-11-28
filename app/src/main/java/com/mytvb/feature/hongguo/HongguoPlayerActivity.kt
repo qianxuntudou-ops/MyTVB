@@ -93,6 +93,8 @@ class HongguoPlayerActivity : AppCompatActivity() {
     private var currentPlay: com.mytvb.feature.hongguo.net.HongguoPlay.PlayUrl? = null
     /** 换源互斥：画质切换/切集进行中时拦截再入，防止并发起播错乱。 */
     private var switchingSource = false
+    /** runtime 类错误自动重试预算（成功出流即清零，见 attachPlaybackListener 的重试块）。 */
+    private var runtimeRetryCount = 0
     /** OK 键按下时刻（长按弹画质弹窗、短按播放暂停）。 */
     private var okDownAt = 0L
     /** 本次 OK 键序列是否被路由接管（false = 焦点按钮自身 click，放行框架分发）。 */
@@ -584,7 +586,10 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 binding.progressBuffering.visibility =
                     if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
                 updatePauseBigIcon()
-                if (state == Player.STATE_READY) saveProgress(p.currentPosition)
+                if (state == Player.STATE_READY) {
+                    saveProgress(p.currentPosition)
+                    runtimeRetryCount = 0
+                }
                 if (state == Player.STATE_ENDED) {
                     saveProgress(durationMs())
                     playNext()
@@ -631,6 +636,19 @@ class HongguoPlayerActivity : AppCompatActivity() {
                 }
                 // ClearKey 源失败先回落整集下载解密（每源一次），仍失败才报错退出
                 if (maybeFallbackFromClearKey(error)) return
+                // runtime 类内部错误（2026-11-28 MuMu 实证：切集瞬间 audio codec 已 Released
+                // 又被 flush → ERROR_CODE_FAILED_RUNTIME_CHECK，ExoPlayer 停 IDLE 黑屏死寂且
+                // 不自动恢复）：re-prepare 重建解码器重试，每集最多 2 次，仍跪才报错退出。
+                // 偶发竞态，重建 codec 即愈；重试期间 STATE_BUFFERING 转圈已有 UI。
+                if (error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_FAILED_RUNTIME_CHECK &&
+                    runtimeRetryCount < 2
+                ) {
+                    runtimeRetryCount++
+                    AppLog.w("Hongguo", "runtime error retry #$runtimeRetryCount re-prepare")
+                    p.prepare()
+                    p.play()
+                    return
+                }
                 AppToast.show(this@HongguoPlayerActivity, getString(R.string.hongguo_play_error, error.errorCodeName))
             }
         })
