@@ -25,6 +25,7 @@ import com.mytvb.databinding.FragmentHongguoRankBinding
 import com.mytvb.feature.hongguo.net.HongguoClient
 import com.mytvb.ui.activity.MainActivity
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -218,7 +219,12 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
         // 首屏中央圈，翻页静默追加（对齐历史/分类页与 B 站列表）
         if (adapter.contentCount() == 0) showLoading(true)
         loadJob?.cancel()
-        val job = viewLifecycleOwner.lifecycleScope.launch {
+        // LAZY 启动（HongguoFeedPage 同款定案）：Main.immediate 下普通 launch 的协程体会在
+        // launch 调用点同步执行到第一个挂起点；缓存命中时 repository.rank 全程无挂起点，
+        // 协程体（含 finally 的代际校验）一口气跑完才轮到下面的 loadJob = job——gen 判
+        // false 收尾全跳过，loading 永挂中央圈不复位（切主题 recreate 后榜单一直转圈的
+        // 实锤根因，2026-11-28 探针 gen=false 日志）。LAZY 保证先登记 loadJob 再 start。
+        val job = viewLifecycleOwner.lifecycleScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val page = repository.rank(board, offset, sessionId)
                 sessionId = page.sessionId
@@ -251,6 +257,7 @@ class HongguoRankPage : Fragment(), HongguoPageFocus {
             }
         }
         loadJob = job
+        job.start()
     }
 
     /** 中央加载圈显隐（load_data.gif 帧动画自驱动，不依赖系统动画设置）。 */
