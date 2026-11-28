@@ -133,6 +133,13 @@ data class UpDynamicFeedStat(
  * 新版竖屏/通用视频类型（DYNAMIC_TYPE_COMMON_VERTICAL 等），只要 module_dynamic 里
  * 能取到稿件信息（dyn_archive 或 legacy major.archive）且有 bvid 即视为视频动态。
  * 这样动态视频改版换类型时页签不会整体变空。
+ *
+ * 注意本函数**不判断是否为动态视频**：2026-11-27 用真样本（UP「亿点点不一样」
+ * BV171e76NE2E/BV1aza76HERk/BV1ffpY6nEZR）实测，动态视频条目的 badge.text 同样
+ * 是「投稿视频」、pub_text 同样「投稿了视频」、条目结构与普通投稿完全一致，入口
+ * 字段无任何区分标记。唯一可靠判据是「不在该 UP 投稿列表里」或 view 接口
+ * is_story=true，故动态视频判定由调用方（[com.mytvb.model.video.DynamicVideoClassifier]）
+ * 结合投稿列表集合完成。
  */
 fun UpDynamicFeedItem.toVideoModel(): VideoModel? {
     val dynamicModule = modules.firstOrNull { it.moduleDynamic != null }?.moduleDynamic ?: return null
@@ -155,19 +162,9 @@ fun UpDynamicFeedItem.toVideoModel(): VideoModel? {
                 view = it.play.parseFormattedCount(),
                 danmaku = it.danmaku.parseFormattedCount()
             )
-        },
-        // 动态视频判据（issue#151）：动态流里视频动态只有两种 badge——「投稿视频」
-        // 与动态视频（官方文案随版本可能变，2021 年升级公告称「通过动态发布的视频不
-        // 再进入空间投稿栏」，故「有 badge 且非投稿视频」即动态视频）。这里只对动态
-        // 视频回填 badge 原文当角标，投稿视频置空不显标（对齐官方 App 卡片不标投稿）。
-        dynamicBadgeText = archive.badge?.text
-            ?.takeIf { it.isNotBlank() && it != BADGE_TEXT_UPLOAD }
-            .orEmpty()
+        }
     )
 }
-
-/** 投稿视频条目的 badge 文案（2026-11-27 匿名实测 feed/space 值；动态视频条目文案不同）。 */
-private const val BADGE_TEXT_UPLOAD = "投稿视频"
 
 
 /** "00:46"→46、"01:02:03"→3723；解析失败返回 0（时长显示层对 0 有兜底）。 */

@@ -58,32 +58,6 @@ class UpDynamicFeedMappingTest {
     }
 
     @Test
-    fun `普通投稿视频动态不亮角标`() {
-        val item = avItem(badgeText = "投稿视频")
-        assertEquals("", item.toVideoModel()!!.dynamicBadgeText)
-    }
-
-    @Test
-    fun `动态视频亮角标且显示官方原文`() {
-        val item = avItem(badgeText = "动态视频")
-        assertEquals("动态视频", item.toVideoModel()!!.dynamicBadgeText)
-    }
-
-    @Test
-    fun `角标判据只排除投稿视频_官方文案变更也能命中`() {
-        // 动态视频文案随官方版本可能变（判据为「有 badge 且非投稿视频」），
-        // 避免把过滤钉死在一个没见过的字面量上导致页签永远为空
-        val item = avItem(badgeText = "动态投稿")
-        assertEquals("动态投稿", item.toVideoModel()!!.dynamicBadgeText)
-    }
-
-    @Test
-    fun `无badge的AV条目不亮角标`() {
-        val item = avItem(badgeText = null)
-        assertEquals("", item.toVideoModel()!!.dynamicBadgeText)
-    }
-
-    @Test
     fun `非AV类型过滤为null`() {
         // 图文/转发动态没有稿件信息（module_dynamic 为空或只有 draw），映射为 null
         val draw = """
@@ -124,7 +98,8 @@ class UpDynamicFeedMappingTest {
         """.trimIndent()
         val video = gson.fromJson(json, UpDynamicFeedItem::class.java).toVideoModel()
         assertEquals("BV1o61HzWE79", video?.bvid)
-        assertEquals("动态视频", video?.dynamicBadgeText)
+        // 角标不在映射层判定（见 DynamicVideoClassifierTest），映射只保证取到稿件
+        assertEquals("", video?.dynamicBadgeText)
     }
 
     @Test
@@ -148,7 +123,8 @@ class UpDynamicFeedMappingTest {
         """.trimIndent()
         val video = gson.fromJson(json, UpDynamicFeedItem::class.java).toVideoModel()
         assertEquals("BV1o61HzWE79", video?.bvid)
-        assertEquals("动态视频", video?.dynamicBadgeText)
+        // 角标不在映射层判定（见 DynamicVideoClassifierTest），映射只保证取到稿件
+        assertEquals("", video?.dynamicBadgeText)
     }
 
     @Test

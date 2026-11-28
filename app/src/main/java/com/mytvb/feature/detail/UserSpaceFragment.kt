@@ -20,6 +20,7 @@ import com.mytvb.event.AppEventHub
 import com.mytvb.model.user.CheckRelationModel
 import com.mytvb.model.user.UserSpaceInfo
 import com.mytvb.model.video.VideoModel
+import com.mytvb.model.video.DynamicVideoClassifier
 import com.mytvb.model.video.toVideoModel
 import com.mytvb.network.session.NetworkSessionGateway
 import com.mytvb.repository.UserRepository
@@ -73,6 +74,9 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
 
         // 动态视频 tab 单次加载最多翻的原始动态页数（issue#151，feed/space 一页 12 条）
         private const val MAX_RAW_PAGES_PER_FETCH = 4
+
+        /** 投稿列表 bvid 集合（动态视频比对基准）的内存缓存时长。 */
+        private const val ARCHIVE_BVIDS_TTL_MS = 10 * 60 * 1000L
 
         // B 站把直播回放投稿归为 UP 主名下自动生成的系列，名字模板"{UP名}的直播回放"
         private const val LIVE_REPLAY_SERIES_KEYWORD = "直播回放"
@@ -136,6 +140,8 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
     }
 
     private val tabStates = mutableListOf<TabState>()
+    // 动态视频比对基准：mid → (缓存时刻, 投稿列表 bvid 集合)，见 resolveArchiveBvids
+    private var archiveBvidsCache: Pair<Long, Set<String>>? = null
     private val videoTabState: TabState get() = tabStates[0]
     private var currentIndex = 0
     private var order = OwnerListOrder.NEWEST
@@ -384,6 +390,26 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
         maybeLoadActiveTabFirstPage()
     }
 
+    /**
+     * 取投稿列表 bvid 集合（动态视频比对基准）。按 mid + 10 分钟缓存；
+     * 拉取失败返回空集，分类器此时不标任何动态视频（宁可少标也不误标投稿）。
+     */
+    private suspend fun resolveArchiveBvids(feedVideos: List<VideoModel>): Set<String> {
+        if (mid <= 0L || feedVideos.isEmpty()) return emptySet()
+        val now = android.os.SystemClock.elapsedRealtime()
+        archiveBvidsCache?.let { (cachedAt, bvids) ->
+            if (now - cachedAt < ARCHIVE_BVIDS_TTL_MS && bvids.isNotEmpty()) return bvids
+        }
+        val oldestFeedPubdate = feedVideos.minOfOrNull { it.pubDate } ?: 0L
+        val bvids = userRepository.getUpArchiveBvids(mid, minPubdate = oldestFeedPubdate)
+            .getOrNull().orEmpty()
+        AppLog.d(TAG, "archiveBvids mid=$mid count=${bvids.size} minPubdate=$oldestFeedPubdate")
+        if (bvids.isNotEmpty()) {
+            archiveBvidsCache = now to bvids
+        }
+        return bvids
+    }
+
     /** 空 tab 提示：当前 tab 首屏加载完成且无内容时显示（加载中/失败/客户端排序拉全中/有内容都隐藏）。 */
     private fun updateEmptyState() {
         val state = activeState()
@@ -486,7 +512,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                 // 动态视频稀疏（动态流里图文/转发占绝大多数）：单次调用内连续翻原始页，
                 // 直到命中一批或吸收 MAX_RAW_PAGES_PER_FETCH 页；游标存 state.dynamicOffset
                 // 供触底续翻（feed/space 只认 offset，state.page 不参与请求）
-                var collected: List<VideoModel> = emptyList()
+                var feedVideos: List<VideoModel> = emptyList()
                 var hasMore = true
                 var rawPages = 0
                 while (rawPages < MAX_RAW_PAGES_PER_FETCH) {
@@ -499,15 +525,20 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.mytvb.ui
                     val data = userRepository.getUpDynamicFeed(mid, page = state.page, offset = offset)
                         .getOrThrow().data ?: break
                     rawPages++
-                    val hits = data.items.mapNotNull { it.toVideoModel() }
-                        .filter { it.dynamicBadgeText.isNotBlank() }
-                    collected = collected + hits
+                    feedVideos = feedVideos + data.items.mapNotNull { it.toVideoModel() }
                     hasMore = data.hasMore && data.offset > 0L
                     if (hasMore) state.dynamicOffset = data.offset
-                    if (collected.isNotEmpty()) break
+                    // 已凑出一批动态视频候选就停（判定要等投稿列表回来）
+                    if (feedVideos.isNotEmpty()) break
                 }
-                AppLog.d(TAG, "fetch dynamic-video rawPages=$rawPages hits=${collected.size} hasMore=$hasMore")
-                TabPage(collected, hasMore)
+                // 动态视频判定：与投稿列表比对（条目自身 badge/pub_text/结构都不可区分）
+                val archiveBvids = resolveArchiveBvids(feedVideos)
+                val hits = DynamicVideoClassifier.filterDynamicVideos(feedVideos, archiveBvids)
+                AppLog.d(
+                    TAG,
+                    "fetch dynamic-video rawPages=$rawPages feedVideos=${feedVideos.size} archive=${archiveBvids.size} hits=${hits.size} hasMore=$hasMore"
+                )
+                TabPage(hits, hasMore)
             }
             TabKind.SERIES -> {
                 val data = userRepository.getSeriesArchives(

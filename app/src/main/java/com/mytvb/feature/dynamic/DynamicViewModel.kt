@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.mytvb.core.common.settings.AppSettingsDataStore
 import com.mytvb.model.user.FollowingModel
 import com.mytvb.model.video.VideoModel
+import com.mytvb.model.video.DynamicVideoClassifier
 import com.mytvb.model.video.toVideoModel
 import com.mytvb.repository.UserRepository
 import kotlinx.coroutines.Job
@@ -49,6 +50,9 @@ class DynamicViewModel(
 
         // 单UP动态流起始页全被图文/转发占满时最多自动续翻的空页数（issue#151）
         private const val MAX_EMPTY_PAGE_SKIPS = 2
+
+        /** 投稿列表 bvid 集合（动态视频比对基准）的内存缓存时长。 */
+        private const val ARCHIVE_BVIDS_TTL_MS = 10 * 60 * 1000L
     }
 
     private val _followingList = MutableStateFlow<List<FollowingModel>>(emptyList())
@@ -98,6 +102,8 @@ class DynamicViewModel(
     )
 
     private val videoCache = LruCache<String, CachedUpVideos>(15)
+    // 动态视频比对基准：mid → (缓存时刻, 投稿列表 bvid 集合)，见 resolveArchiveBvids
+    private val archiveBvidsCache = HashMap<Long, Pair<Long, Set<String>>>()
     private var loadJob: Job? = null
     private var preloadJob: Job? = null
     private var followingLoadJob: Job? = null
@@ -435,10 +441,17 @@ class DynamicViewModel(
             val rawItems = data?.items.orEmpty()
             // 只渲染视频类动态：投稿视频+动态视频一起收录，图文/转发/文字按
             // 「TV 版不做图文动态」的产品决定过滤掉
-            val items = rawItems.mapNotNull { it.toVideoModel() }
+            val feedVideos = rawItems.mapNotNull { it.toVideoModel() }
+            // 动态视频角标（issue#151）：动态流条目自身无法区分（badge/pub_text/结构
+            // 与普通投稿一致，真样本实测），只能与该 UP 投稿列表比对——不在投稿列表
+            // 的即动态视频。投稿集合按 mid 缓存，翻页时不重复拉。
+            val items = DynamicVideoClassifier.markDynamicVideos(
+                videos = feedVideos,
+                archiveBvids = resolveArchiveBvids(feedVideos)
+            )
             AppLog.i(
                 TAG,
-                "DYN D5 getUpDynamicFeed end elapsed=${SystemClock.elapsedRealtime() - startMs}ms page=$page raw=${rawItems.size} items=${items.size} hasMore=${data?.hasMore} offset=${data?.offset}"
+                "DYN D5 getUpDynamicFeed end elapsed=${SystemClock.elapsedRealtime() - startMs}ms page=$page raw=${rawItems.size} items=${items.size} dynamic=${items.count { it.dynamicBadgeText.isNotBlank() }} hasMore=${data?.hasMore} offset=${data?.offset}"
             )
             // 游标缺失即视为到头（见 KDoc）
             val hasMore = data?.hasMore == true && data.offset > 0L
@@ -468,6 +481,29 @@ class DynamicViewModel(
             }
             return
         }
+    }
+
+    /**
+     * 取该 UP 投稿列表 bvid 集合（识别动态视频的比对基准），按 mid 缓存
+     * [ARCHIVE_BVIDS_TTL_MS]；拉取失败返回空集，分类器此时不标任何动态视频
+     * （宁可少标也不能把投稿误标成动态视频）。
+     */
+    private suspend fun resolveArchiveBvids(feedVideos: List<VideoModel>): Set<String> {
+        val mid = currentUpId.toLongOrNull() ?: 0L
+        if (mid <= 0L || feedVideos.isEmpty()) return emptySet()
+        val now = SystemClock.elapsedRealtime()
+        archiveBvidsCache[mid]?.let { (cachedAt, bvids) ->
+            if (now - cachedAt < ARCHIVE_BVIDS_TTL_MS && bvids.isNotEmpty()) return bvids
+        }
+        // 动态流本页最老一条的时间：投稿列表翻到这个时间点即可覆盖本页全部条目
+        val oldestFeedPubdate = feedVideos.minOfOrNull { it.pubDate } ?: 0L
+        val bvids = userRepository.getUpArchiveBvids(mid, minPubdate = oldestFeedPubdate)
+            .getOrNull().orEmpty()
+        AppLog.i(TAG, "DYN D6 archiveBvids mid=$mid count=${bvids.size} minPubdate=$oldestFeedPubdate")
+        if (bvids.isNotEmpty()) {
+            archiveBvidsCache[mid] = now to bvids
+        }
+        return bvids
     }
 
     private fun schedulePreload() {
@@ -541,6 +577,7 @@ class DynamicViewModel(
         preloadJob?.cancel()
         followingLoadJob?.cancel()
         videoCache.evictAll()
+        archiveBvidsCache.clear()
         AppLog.i(TAG, "onCleared: keep global ImageLoader memory cache, only clear dynamic page cache")
         _followingList.value = emptyList()
         _videos.value = emptyList()

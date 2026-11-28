@@ -313,6 +313,44 @@ class UserRepository(
             )
         }
 
+    /**
+     * UP 投稿列表的 bvid 集合，用于识别动态视频（issue#151）。
+     *
+     * 识别动态视频的唯一可靠判据：动态视频按 B 站规则不进空间投稿栏，所以「出现在
+     * 动态流但不在投稿列表」的稿件即动态视频。动态流条目的 badge 文案（实测动态视频
+     * 也标「投稿视频」）、pub_text、条目结构都与普通投稿完全一致，无法从条目本身区分；
+     * view 接口的 is_story 虽准但需逐条请求，代价过高。
+     *
+     * 按 pubdate 倒序翻页，翻到最老一条早于 [minPubdate] 即停（动态流翻到的条目都
+     * 比它新，集合已覆盖），最多 [maxPages] 页防长列表拉爆。
+     */
+    suspend fun getUpArchiveBvids(
+        mid: Long,
+        minPubdate: Long = 0L,
+        maxPages: Int = ARCHIVE_SCAN_MAX_PAGES
+    ): Result<Set<String>> =
+        runCatching {
+            val bvids = linkedSetOf<String>()
+            var page = 1
+            while (page <= maxPages) {
+                val response = sessionGateway.syncAuthState(
+                    apiService.getUserDynamic(mid, page, ARCHIVE_SCAN_PAGE_SIZE),
+                    source = "getUpArchiveBvids"
+                )
+                val pageData = response.data ?: break
+                val archives = pageData.archives
+                if (archives.isEmpty()) break
+                archives.mapNotNullTo(bvids) { it.bvid.takeIf(String::isNotBlank) }
+                val oldest = archives.minOfOrNull { it.pubDate } ?: 0L
+                // 已覆盖到比调用方要求更老的时间点，无需再翻
+                if (minPubdate > 0L && oldest in 1 until minPubdate) break
+                if (!pageData.hasMore) break
+                page++
+            }
+            bvids
+        }
+
+
     /** UP 主单页合集/系列列表（旧版接口，page_num 真翻页；page_size 上限 20，>20 返回 -400）。 */
     suspend fun getSeasonsSeriesListPage(
         mid: Long,
@@ -545,3 +583,10 @@ private const val SEASONS_SERIES_PAGE_SIZE = 20
 
 /** 合集/系列翻页聚合的页数保护上限（20 页 × 20 条 = 400 条，远超正常 UP 主的合集数）。 */
 private const val SEASONS_SERIES_MAX_PAGES = 20
+
+/** 投稿列表扫描（识别动态视频用）单页条数，取接口常用上限。 */
+private const val ARCHIVE_SCAN_PAGE_SIZE = 50
+
+/** 投稿列表扫描页数上限（4 页 × 50 条 = 200 条，覆盖动态流首屏数月的投稿量）。 */
+private const val ARCHIVE_SCAN_MAX_PAGES = 4
+
