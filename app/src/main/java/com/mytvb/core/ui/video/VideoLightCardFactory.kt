@@ -180,6 +180,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
     private var useHeatIcon = false
     private var showInteractionBadge = false
     private var showChargeBadge = false
+
+    /** 联合投稿「合作」胶囊标（issue#157）：仅搜索/UP 空间投稿等原生下发合作字段的列表传 true */
+    private var showCoopBadge = false
     private var typeBadgeText: String = ""
     private var typeBadgeColor: Int = TYPE_BADGE_COLOR_DEFAULT
 
@@ -278,6 +281,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         durationText: CharSequence? = this.durationText,
         showInteractionBadge: Boolean = this.showInteractionBadge,
         showChargeBadge: Boolean = this.showChargeBadge,
+        showCoopBadge: Boolean = this.showCoopBadge,
         typeBadgeText: CharSequence? = this.typeBadgeText,
         typeBadgeColor: Int = this.typeBadgeColor,
         rankBadgeText: CharSequence? = this.rankBadgeText,
@@ -313,6 +317,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
             this.showDanmakuCount == showDanmakuCount &&
             this.showInteractionBadge == showInteractionBadge &&
             this.showChargeBadge == showChargeBadge &&
+            this.showCoopBadge == showCoopBadge &&
             this.useHeatIcon == useHeatIcon
         ) {
             return
@@ -334,6 +339,7 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         this.showDanmakuCount = showDanmakuCount
         this.showInteractionBadge = showInteractionBadge
         this.showChargeBadge = showChargeBadge
+        this.showCoopBadge = showCoopBadge
         this.useHeatIcon = useHeatIcon
         badgeFitDirty = true
         invalidate()
@@ -468,6 +474,10 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         if (showInteractionBadge) {
             right = drawBadge(canvas, context.getString(R.string.core_badge_interaction), right, top, 0xFFFB7299.toInt()) - metrics.badgeGap
         }
+        // 联合投稿「合作」胶囊标（issue#157）：与详情页/评论区 UP 标同款粉胶囊
+        if (showCoopBadge) {
+            right = drawBadgePill(canvas, context.getString(R.string.core_badge_coop), right, top, COOP_BADGE_COLOR) - metrics.badgeGap
+        }
         // 类型角标（历史记录「国创/电视剧/番剧…」与直播「直播中/未开播」），
         // 对齐官方：粉底白字（未开播灰底），排在功能角标左侧
         if (typeBadgeText.isNotBlank()) {
@@ -545,8 +555,24 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         return left
     }
 
-    /** 左上角标变体：锚定 [left] 从左往右画，返回右边界。 */
-    private fun drawBadgeLeft(canvas: Canvas, text: String, left: Float, top: Float, color: Int): Float {
+    /**
+     * 全圆角胶囊标（issue#157 联合投稿「合作」）：与详情页/评论区 UP 标同款粉胶囊；
+     * 不同于 [drawBadge] 的 px5 小圆角，胶囊半径取半高。
+     */
+    private fun drawBadgePill(canvas: Canvas, text: String, right: Float, top: Float, color: Int): Float {
+        val fm = badgeTextPaint.fontMetrics
+        val textWidth = badgeTextPaint.measureText(text)
+        val w = textWidth + metrics.px8 * 2
+        val h = ceil((fm.bottom - fm.top).toDouble()).toFloat() + metrics.px3 * 2
+        val left = right - w
+        badgeRect.set(left, top, right, top + h)
+        badgePaint.color = color
+        canvas.drawRoundRect(badgeRect, h / 2f, h / 2f, badgePaint)
+        canvas.drawText(text, left + metrics.px8, top + metrics.px3 - fm.top, badgeTextPaint)
+        return left
+    }
+
+    /** 左上角标变体：锚定 [left] 从左往右画，返回右边界。 */    private fun drawBadgeLeft(canvas: Canvas, text: String, left: Float, top: Float, color: Int): Float {
         val fm = badgeTextPaint.fontMetrics
         val textWidth = badgeTextPaint.measureText(text)
         val badgeWidth = textWidth + metrics.px8 * 2
@@ -590,6 +616,9 @@ class VideoCoverMetaOverlayView @JvmOverloads constructor(
         // 官方历史记录观看进度条同款 B 站粉
         private const val PLAYER_PROGRESS_COLOR = 0xFFFB7299.toInt()
         private val TYPE_BADGE_COLOR_DEFAULT = 0xFFFB7299.toInt()
+
+        /** 「合作」胶囊标底色：与详情页/评论区 UP 标（@color/pink）同款 */
+        private val COOP_BADGE_COLOR = 0xFFE9618D.toInt()
     }
 
     private class OverlayAssets(

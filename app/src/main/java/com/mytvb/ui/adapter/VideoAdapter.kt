@@ -405,7 +405,9 @@ class VideoAdapter(
                 showDanmakuCount = video.danmakuCount > 0L,
                 durationText = durationText,
                 showChargeBadge = video.isChargingExclusive,
-                showInteractionBadge = video.isSteinsGate
+                showInteractionBadge = video.isSteinsGate,
+                // 联合投稿「合作」胶囊（issue#157）：只有搜索/UP 空间投稿接口原生下发该字段
+                showCoopBadge = video.isUnionVideo
             )
         }
 
@@ -444,7 +446,9 @@ class VideoAdapter(
                 showDanmakuCount = false,
                 durationText = durationText,
                 showChargeBadge = video.isChargingExclusive,
-                showInteractionBadge = video.isSteinsGate
+                showInteractionBadge = video.isSteinsGate,
+                // 历史接口无合作标识；ViewHolder 跨历史/普通路径复用，必须显式清零防残留
+                showCoopBadge = false
             )
         }
 

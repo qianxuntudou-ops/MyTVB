@@ -2,8 +2,10 @@ package com.mytvb.model.search
 
 import androidx.annotation.StringRes
 import androidx.core.text.HtmlCompat
+import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import com.mytvb.R
+import com.mytvb.model.adapter.FlexibleBooleanAdapter
 import com.mytvb.model.user.OfficialVerifySimple
 import com.mytvb.model.video.Dimension
 import java.io.Serializable
@@ -135,6 +137,11 @@ data class SearchItemModel(
 
     @SerializedName("official_verify")
     val officialVerify: OfficialVerifySimple? = null,
+
+    /** 联合投稿（合作视频，issue#157）：搜索接口原生下发 is_union_video(0/1)，封面打「合作」胶囊标 */
+    @SerializedName("is_union_video")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val isUnionVideo: Boolean = false,
 
     @SerializedName("dimension")
     val dimension: Dimension? = null

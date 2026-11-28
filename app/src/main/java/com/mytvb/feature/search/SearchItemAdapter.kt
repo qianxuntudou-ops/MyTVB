@@ -257,7 +257,9 @@ class SearchItemAdapter(
                 showDanmakuCount = item.danmaku > 0L,
                 durationText = item.duration,
                 showChargeBadge = false,
-                showInteractionBadge = false
+                showInteractionBadge = false,
+                // 联合投稿「合作」胶囊（issue#157）：搜索接口原生下发 is_union_video
+                showCoopBadge = item.isUnionVideo
             )
 
             ImageLoader.loadVideoCover(

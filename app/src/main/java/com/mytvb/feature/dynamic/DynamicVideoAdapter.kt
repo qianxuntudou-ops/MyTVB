@@ -230,7 +230,10 @@ class DynamicVideoAdapter(
                 // 显式传值清旧态，防角标跨卡片残留
                 typeBadgeText = item.dynamicBadgeText,
                 showChargeBadge = item.isChargingExclusive,
-                showInteractionBadge = false
+                showInteractionBadge = false,
+                // 联合投稿「合作」胶囊（issue#157）：关注动态（desktop feed/video）原生下发
+                // is_cooperation；单 UP 动态流没有该字段，恒 false 不显标
+                showCoopBadge = item.isUnionVideo
             )
         }
     }

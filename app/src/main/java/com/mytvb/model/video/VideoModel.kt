@@ -168,6 +168,18 @@ data class VideoModel(
     @JsonAdapter(FlexibleBooleanAdapter::class)
     val isSteinsGate: Boolean = false,
 
+    /**
+     * 联合投稿（合作视频）标记（issue#157）。字段位置随接口而异，两路取或：
+     * - 顶层：搜索（is_union_video）、UP 空间投稿（is_union_video）、关注动态
+     *   （desktop feed/video，is_cooperation）；
+     * - rights.is_cooperation：稍后观看（x/v2/history/toview）放在 rights 子对象里。
+     * 首页推荐、热门、排行、相关推荐、历史、收藏、单 UP 动态流都没有该字段，恒
+     * false 不显示角标——不做逐卡请求 view 换 staff 的兜底。
+     */
+    @SerializedName(value = "is_union_video", alternate = ["is_cooperation"])
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    private val isUnionVideoFlag: Boolean = false,
+
     @SerializedName("privilege_type")
     val privilegeType: Int = 0,
 
@@ -179,6 +191,10 @@ data class VideoModel(
                 || elecArcType == 1 || elecArcBadge == "充电专属"
     }
     val isChargingExclusive: Boolean get() = _cachedIsChargingExclusive
+
+    /** 联合投稿（合作视频）合并判定：顶层 flag（搜索/空间/关注动态）或 rights.is_cooperation（稍后观看） */
+    val isUnionVideo: Boolean
+        get() = isUnionVideoFlag || rights?.isCooperation == 1
 
     val isPortrait: Boolean
         get() = dimension?.isPortrait == true
@@ -473,7 +489,10 @@ data class VideoRights(
     @SerializedName("ugc_pay")
     val ugcPay: Int = 0,
     @SerializedName("arc_pay")
-    val arcPay: Int = 0
+    val arcPay: Int = 0,
+    /** 联合投稿标记（issue#157）：稍后观看 toview 等接口把 is_cooperation 放在 rights 子对象 */
+    @SerializedName("is_cooperation")
+    val isCooperation: Int = 0
 ) {
     companion object {
         fun fromJson(obj: JSONObject): VideoRights {
@@ -482,7 +501,8 @@ data class VideoRights(
                 autoplay = obj.optInt("autoplay", 1),
                 pay = obj.optInt("pay", 0),
                 ugcPay = obj.optInt("ugc_pay", 0),
-                arcPay = obj.optInt("arc_pay", 0)
+                arcPay = obj.optInt("arc_pay", 0),
+                isCooperation = obj.optInt("is_cooperation", 0)
             )
         }
     }

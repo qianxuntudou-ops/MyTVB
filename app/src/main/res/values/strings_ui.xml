@@ -115,6 +115,7 @@
     <!-- ===== core：通用基础设施文案（时间/数字/徽章/青少年模式） ===== -->
     <string name="core_badge_charge_exclusive">充电专属</string>
     <string name="core_badge_interaction">互动</string>
+    <string name="core_badge_coop">合作</string>
     <string name="core_time_just_now">刚刚</string>
     <string name="core_time_minutes_ago_format">%1$d分钟前</string>
     <string name="core_time_hours_ago_format">%1$d小时前</string>

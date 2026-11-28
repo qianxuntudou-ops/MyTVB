@@ -112,6 +112,7 @@
     <!-- ===== core: common infra texts (time / numbers / badges / teen mode) ===== -->
     <string name="core_badge_charge_exclusive">Supporters only</string>
     <string name="core_badge_interaction">Interactive</string>
+    <string name="core_badge_coop">Collab</string>
     <string name="core_time_just_now">Just now</string>
     <string name="core_time_minutes_ago_format">%1$d min ago</string>
     <string name="core_time_hours_ago_format">%1$d hr ago</string>
