@@ -432,6 +432,11 @@ internal class VideoDetailContentAdapter(
             binding.textCoopBadge.visibility =
                 if (view.staff.isNullOrEmpty()) View.GONE else View.VISIBLE
 
+            // 充电专属角标（issue#152）：详情接口下发 is_upower_* 字段（推荐/历史接口不下发），
+            // 与解锁状态无关——它是视频属性标示，已充电用户也显示
+            binding.badgeChargeExclusive.visibility =
+                if (view.isChargingExclusive) View.VISIBLE else View.GONE
+
             // 数据行：官方手机端样式（播放数/弹幕数/发布时间/正在看），图标+数字组合；
             // 第二位图标是弹幕（ic_video_danmaku），数字须取 stat.danmaku（旧代码误取 reply 评论数）
             val stat = view.stat

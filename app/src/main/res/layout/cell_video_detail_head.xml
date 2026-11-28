@@ -47,6 +47,22 @@
             android:layout_height="@dimen/px50"
             android:layout_gravity="center"
             app:srcCompat="@drawable/ic_play" />
+
+        <!-- 充电专属角标（issue#152）：详情接口下发 is_upower_* 字段，贴封面右上角 -->
+        <TextView
+            android:id="@+id/badge_charge_exclusive"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:background="@drawable/bg_charge_exclusive_badge"
+            android:paddingStart="@dimen/px10"
+            android:paddingTop="@dimen/px4"
+            android:paddingEnd="@dimen/px10"
+            android:paddingBottom="@dimen/px4"
+            android:text="@string/core_badge_charge_exclusive"
+            android:textColor="@android:color/white"
+            android:textSize="@dimen/px18"
+            android:visibility="gone" />
     </com.google.android.material.card.MaterialCardView>
 
     <View

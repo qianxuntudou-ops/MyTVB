@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 充电专属角标底（issue#152）：橙底同卡片角标 0xFFF6A11B，小圆角贴封面右上角 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#F6A11B" />
+    <corners
+        android:bottomLeftRadius="@dimen/px8"
+        android:radius="@dimen/px4" />
+</shape>
