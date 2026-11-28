@@ -596,7 +596,7 @@
     <string name="check_update">檢查更新</string>
     <string name="startup_update_check">啟動檢測更新</string>
     <string name="usage_tips">使用技巧</string>
-    <string name="usage_tips_content">· 快轉快退輕按一次 10 秒、可連按累積;長按直接快速走完全片\n· 進度條上按「上/OK」呼出章節看點條,一鍵跳轉高能片段(播放介面設定中開啟)\n· 直播卡片長按可封鎖不想看的主播或分區\n· 連播倒數時按返回鍵,可取消自動播下一個\n· 花屏或黑屏:「影片編碼」切到 AVC,不行再開「軟解影片」\n· 回報問題開「區域網路日誌」,掃碼即可在手機看即時日誌</string>
+    <string name="usage_tips_content">· 快轉快退輕按一次 10 秒、可連按累積;長按直接快速走完全片\n· 進度條上按「上/OK」呼出章節看點條,一鍵跳轉高能片段(播放介面設定中開啟)\n· 直播卡片長按可封鎖不想看的主播或分區\n· 動態頁左側 UP 列表:點按篩選該 UP 動態,長按開啟 UP 主主頁\n· 連播倒數時按返回鍵,可取消自動播下一個\n· 花屏或黑屏:「影片編碼」切到 AVC,不行再開「軟解影片」\n· 回報問題開「區域網路日誌」,掃碼即可在手機看即時日誌</string>
     <string name="device_model">裝置型號</string>
     <string name="system_version">系統版本</string>
     <string name="sdk_version">SDK版本</string>

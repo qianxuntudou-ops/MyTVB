@@ -593,7 +593,7 @@
     <string name="check_update">Check for updates</string>
     <string name="startup_update_check">Check updates on startup</string>
     <string name="usage_tips">Tips</string>
-    <string name="usage_tips_content">• Press left/right once to seek 10s (stackable); hold to race through the video\n• Focus the progress bar and press Up/OK to open the chapter bar for quick jumps (enable in player UI settings)\n• Long-press a live card to block unwanted streamers or categories\n• Press Back during the auto-play countdown to cancel\n• Black screen or garbled playback: switch "Video codec" to AVC, or enable "Software decoding"\n• To report an issue, enable "LAN log" and scan the code to view live logs on your phone</string>
+    <string name="usage_tips_content">• Press left/right once to seek 10s (stackable); hold to race through the video\n• Focus the progress bar and press Up/OK to open the chapter bar for quick jumps (enable in player UI settings)\n• Long-press a live card to block unwanted streamers or categories\n• In the UP list on the dynamic page: press OK to filter videos by that UP, long-press to open the space page\n• Press Back during the auto-play countdown to cancel\n• Black screen or garbled playback: switch "Video codec" to AVC, or enable "Software decoding"\n• To report an issue, enable "LAN log" and scan the code to view live logs on your phone</string>
     <string name="device_model">Device model</string>
     <string name="system_version">System version</string>
     <string name="sdk_version">SDK version</string>

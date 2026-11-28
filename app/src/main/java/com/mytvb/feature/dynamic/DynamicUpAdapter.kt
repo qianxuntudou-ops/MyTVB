@@ -14,6 +14,8 @@ import com.mytvb.core.ui.user.UserBadgesStore
 
 class DynamicUpAdapter(
     private val onItemClick: (FollowingModel) -> Unit,
+    // 长按 OK 打开 UP 主主页（issue#158）；「全部动态」条目（mid=0）无主页不响应
+    private val onItemLongClick: ((FollowingModel) -> Unit)? = null,
     private val onItemFocused: (() -> Unit)? = null,
     private val onLeftEdge: () -> Boolean = { false },
     private val onRightEdge: () -> Boolean = { false },
@@ -90,6 +92,18 @@ class DynamicUpAdapter(
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     items.getOrNull(position)?.let(onItemClick)
+                }
+            }
+            binding.root.setOnLongClickListener {
+                val position = bindingAdapterPosition
+                val up = position.takeIf { it != RecyclerView.NO_POSITION }
+                    ?.let { items.getOrNull(it) }
+                if (up != null && up.mid > 0L && onItemLongClick != null) {
+                    onItemLongClick.invoke(up)
+                    true
+                } else {
+                    // 不消费（含「全部动态」）：长按落空时回退为普通点击筛选
+                    false
                 }
             }
             binding.root.setOnFocusChangeListener { _, hasFocus ->

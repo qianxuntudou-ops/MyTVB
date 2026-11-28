@@ -738,7 +738,7 @@
     <string name="check_update">检查更新</string>
     <string name="startup_update_check">启动检测更新</string>
     <string name="usage_tips">使用技巧</string>
-    <string name="usage_tips_content">· 快进快退轻按一次 10 秒、可连按累积;长按直接快速走完全片\n· 进度条上按「上/OK」呼出章节看点条,跳转高能片段(播放界面设置中开启)\n· 直播卡片长按可屏蔽不想看的主播或分区\n· 连播倒计时时按返回键,可取消自动播下一个\n· 花屏或黑屏:「视频编码」切到 AVC,不行再开「软解视频」\n· 反馈问题开「局域网日志」,扫码即可在手机看实时日志</string>
+    <string name="usage_tips_content">· 快进快退轻按一次 10 秒、可连按累积;长按直接快速走完全片\n· 进度条上按「上/OK」呼出章节看点条,跳转高能片段(播放界面设置中开启)\n· 直播卡片长按可屏蔽不想看的主播或分区\n· 动态页左侧 UP 列表:点按筛选该 UP 动态,长按打开 UP 主主页\n· 连播倒计时时按返回键,可取消自动播下一个\n· 花屏或黑屏:「视频编码」切到 AVC,不行再开「软解视频」\n· 反馈问题开「局域网日志」,扫码即可在手机看实时日志</string>
     <string name="device_model">设备型号</string>
     <string name="system_version">系统版本</string>
     <string name="sdk_version">SDK版本</string>

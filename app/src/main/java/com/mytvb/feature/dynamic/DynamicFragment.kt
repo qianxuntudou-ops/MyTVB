@@ -28,6 +28,7 @@ import android.os.SystemClock
 import com.mytvb.core.common.log.AppLog
 import com.mytvb.core.common.log.PagePerfLogger
 import com.mytvb.ui.fragment.main.MainTabFocusTarget
+import com.mytvb.feature.detail.UserSpaceFragment
 import com.mytvb.feature.settings.SignInFragment
 import com.mytvb.ui.activity.MainActivity
 import com.mytvb.core.ui.layout.WrapContentGridLayoutManager
@@ -112,6 +113,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private fun setupUpList() {
         upAdapter = DynamicUpAdapter(
             onItemClick = { up -> onUpClick(up) },
+            onItemLongClick = { up -> onUpLongClick(up) },
             onItemFocused = {
                 if (!pendingVideoFocusRestoreOnResume) {
                     preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
@@ -198,6 +200,16 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             swipeRefreshLayout?.isRefreshing = true
         }
         viewModel.selectUp(currentUpId.toString(), pageSize, forceRefresh = wasSelected)
+    }
+
+    /**
+     * 长按 UP 条目打开其空间页（issue#158）。点击（短按 OK）保持官网同款的筛选动态
+     * 语义不变；返回时焦点由 MainActivity 的弹出锚点恢复到长按的那一条。
+     */
+    private fun onUpLongClick(up: FollowingModel) {
+        if (up.mid > 0L) {
+            openInHostContainer(UserSpaceFragment.newInstance(up.mid))
+        }
     }
 
     private fun onVideoClick(video: VideoModel) {
