@@ -85,12 +85,13 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget, OnBack
             onNavigateDown = ::focusCurrentPageNearestContent,
             onNavigateLeft = ::focusLeftFunctionArea,
             onTabReselected = {
-                // 重选当前 tab = 回顶聚焦第一卡（与首页一致）；刷新只留 MENU 键。
+                // 重选当前 tab = 刷新（对齐首页 HomeFragment 同款行为，issue#154）：
+                // 此前只回顶聚焦不刷新，用户从播放器回到「我的」后页签本就停在原 tab，
+                // 再点一次想看新进度只会回顶——三个子 tab 全部表现为「点了不刷新」。
+                // MeListFragment.onTabReselected()=refresh() 自带回顶聚焦首项，
+                // FavoriteFragment=回顶+重拉收藏夹，原回顶语义都在刷新内保留。
                 // 未登录时 tab 栏不可见不会触发，无需登录判断。
-                val page = getCurrentTabPage()
-                if (page != null && !page.scrollToTopAndFocus()) {
-                    page.scrollToTop()
-                }
+                getCurrentTabPage()?.onTabReselected()
             }
         )
         tabSelectedListener = object : TabLayout.OnTabSelectedListener {
